@@ -4,36 +4,42 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
-  ArrowLeft,
-  ArrowRight,
   ArrowUp,
   Cloud,
+  CloudRain,
+  CloudSnow,
   CloudSun,
   Compass,
   Lock,
   Moon,
-  Plus,
-  RotateCw,
+  Music,
   Search,
   Send,
   Shield,
   Sparkle,
   Sun,
   X,
-  CloudRain,
-  CloudSnow,
 } from "lucide-react";
 
 import newsArchitecture from "@/assets/news-architecture.jpg";
 import newsSpace from "@/assets/news-space.jpg";
 import newsDesign from "@/assets/news-design.jpg";
 import newsTravel from "@/assets/news-travel.jpg";
+import { AtlasSidebar } from "@/components/atlas/Sidebar";
+import { DownloadsView } from "@/components/atlas/DownloadsView";
+import { SettingsView } from "@/components/atlas/SettingsView";
+import { MiniPlayer } from "@/components/atlas/MiniPlayer";
+import { hostOf, useAtlasTabs } from "@/lib/atlas-tabs";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Atlas — A calmer browser" },
-      { name: "description", content: "Atlas is a beautiful native-feeling browser with a built-in AI assistant, daily weather, and a Paper-inspired news feed." },
+      {
+        name: "description",
+        content:
+          "Atlas is a beautiful native-feeling browser with a built-in AI assistant, vertical tabs, stacks, downloads, and an Arc-style mini player.",
+      },
     ],
   }),
   component: Browser,
@@ -96,13 +102,6 @@ const ARTICLES: NewsArticle[] = [
   },
 ];
 
-const SPACES = [
-  { id: "general", name: "General", color: "from-sky-400 to-indigo-500" },
-  { id: "research", name: "Research", color: "from-amber-400 to-orange-500" },
-  { id: "design", name: "Design", color: "from-emerald-400 to-teal-500" },
-  { id: "personal", name: "Personal", color: "from-pink-400 to-rose-500" },
-];
-
 const SUGGESTED_PROMPTS = [
   "Summarize today's headlines",
   "Open GitHub",
@@ -111,7 +110,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 // ────────────────────────────────────────────────────────────────────────────
-// Weather (Open-Meteo, no key required)
+// Weather
 // ────────────────────────────────────────────────────────────────────────────
 
 type Weather = {
@@ -150,7 +149,6 @@ function WeatherIcon({ code }: { code: number }) {
 
 function useWeather() {
   const [weather, setWeather] = useState<Weather | null>(null);
-
   useEffect(() => {
     let cancelled = false;
     async function load(lat: number, lon: number, city: string) {
@@ -188,32 +186,11 @@ function useWeather() {
           });
       }
     }
-
-    // Default to San Francisco; try geolocation but don't block
     load(37.7749, -122.4194, "San Francisco");
-    if (typeof navigator !== "undefined" && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          try {
-            const r = await fetch(
-              `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&count=1`
-            );
-            const j = await r.json();
-            const city = j.results?.[0]?.name ?? "Nearby";
-            load(pos.coords.latitude, pos.coords.longitude, city);
-          } catch {
-            load(pos.coords.latitude, pos.coords.longitude, "Nearby");
-          }
-        },
-        () => {},
-        { timeout: 4000 }
-      );
-    }
     return () => {
       cancelled = true;
     };
   }, []);
-
   return weather;
 }
 
@@ -221,68 +198,62 @@ function useWeather() {
 // Browser shell
 // ────────────────────────────────────────────────────────────────────────────
 
-type ViewState = { kind: "home" } | { kind: "web"; url: string; title: string };
-
 function Browser() {
-  const [view, setView] = useState<ViewState>({ kind: "home" });
-  const [history, setHistory] = useState<ViewState[]>([{ kind: "home" }]);
+  const t = useAtlasTabs();
+  const [history, setHistory] = useState<string[]>([t.active?.url ?? "atlas://home"]);
   const [historyIdx, setHistoryIdx] = useState(0);
-  const [activeSpace, setActiveSpace] = useState("general");
   const [addressInput, setAddressInput] = useState("");
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [miniPlayerOpen, setMiniPlayerOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
+
+  // Keep history aligned with active tab url
+  useEffect(() => {
+    const url = t.active?.url;
+    if (!url) return;
+    if (history[historyIdx] === url) return;
+    const next = [...history.slice(0, historyIdx + 1), url];
+    setHistory(next);
+    setHistoryIdx(next.length - 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t.active?.url]);
 
   const weather = useWeather();
 
   const navigateTo = (url: string, title?: string) => {
     let normalized = url.trim();
     if (!normalized) return;
-    if (!/^https?:\/\//i.test(normalized)) {
+    if (!normalized.startsWith("atlas://") && !/^https?:\/\//i.test(normalized)) {
       if (normalized.includes(".") && !normalized.includes(" ")) {
         normalized = `https://${normalized}`;
       } else {
         normalized = `https://www.google.com/search?q=${encodeURIComponent(normalized)}`;
       }
     }
-    const next: ViewState = {
-      kind: "web",
-      url: normalized,
-      title: title ?? new URL(normalized).hostname.replace(/^www\./, ""),
-    };
-    const newHistory = [...history.slice(0, historyIdx + 1), next];
-    setHistory(newHistory);
-    setHistoryIdx(newHistory.length - 1);
-    setView(next);
+    t.navigateActive(normalized, title);
     setAddressInput("");
-  };
-
-  const goHome = () => {
-    const home: ViewState = { kind: "home" };
-    const newHistory = [...history.slice(0, historyIdx + 1), home];
-    setHistory(newHistory);
-    setHistoryIdx(newHistory.length - 1);
-    setView(home);
   };
 
   const goBack = () => {
     if (historyIdx === 0) return;
     const idx = historyIdx - 1;
     setHistoryIdx(idx);
-    setView(history[idx]);
+    t.navigateActive(history[idx]);
   };
   const goForward = () => {
     if (historyIdx >= history.length - 1) return;
     const idx = historyIdx + 1;
     setHistoryIdx(idx);
-    setView(history[idx]);
+    t.navigateActive(history[idx]);
   };
 
+  const url = t.active?.url ?? "atlas://home";
   const addressDisplay =
-    view.kind === "home" ? "atlas.new/home" : view.url.replace(/^https?:\/\//, "");
+    url.startsWith("atlas://") ? `atlas · ${url.replace("atlas://", "")}` : hostOf(url);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
@@ -293,118 +264,91 @@ function Browser() {
         <div className="absolute bottom-[-20%] left-[20%] size-[50vw] rounded-full bg-rose-200/20 blur-[140px] dark:bg-fuchsia-500/10" />
       </div>
 
-      {/* Top chrome */}
-      <header className="fixed inset-x-0 top-0 z-40 flex h-20 items-center justify-between gap-4 px-6">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={goBack}
-            disabled={historyIdx === 0}
-            className="liquid-glass specular grid size-10 place-items-center rounded-full ring-1 ring-black/5 transition active:scale-95 disabled:opacity-40 dark:ring-white/10"
-            aria-label="Back"
-          >
-            <ArrowLeft className="size-4" strokeWidth={2} />
-          </button>
-          <button
-            onClick={goForward}
-            disabled={historyIdx >= history.length - 1}
-            className="liquid-glass specular grid size-10 place-items-center rounded-full ring-1 ring-black/5 transition active:scale-95 disabled:opacity-40 dark:ring-white/10"
-            aria-label="Forward"
-          >
-            <ArrowRight className="size-4" strokeWidth={2} />
-          </button>
-          <button
-            onClick={() => view.kind === "web" && navigateTo(view.url)}
-            className="liquid-glass specular grid size-10 place-items-center rounded-full ring-1 ring-black/5 transition active:scale-95 dark:ring-white/10"
-            aria-label="Reload"
-          >
-            <RotateCw className="size-4" strokeWidth={2} />
-          </button>
-        </div>
+      {/* Vertical sidebar */}
+      <AtlasSidebar
+        tabs={t.tabs}
+        stacks={t.stacks}
+        activeId={t.activeId}
+        onSelect={t.setActiveId}
+        onClose={t.closeTab}
+        onPinToggle={t.togglePin}
+        onMoveToStack={t.moveToStack}
+        onToggleStack={t.toggleStack}
+        onAddStack={t.addStack}
+        onNewTab={() => t.openTab("atlas://home", "New Tab")}
+        onBack={goBack}
+        onForward={goForward}
+        onReload={() => t.navigateActive(url)}
+        onOpenDownloads={() => t.navigateActive("atlas://downloads", "Downloads")}
+        onOpenSettings={() => t.navigateActive("atlas://settings", "Settings")}
+        canBack={historyIdx > 0}
+        canForward={historyIdx < history.length - 1}
+      />
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (addressInput.trim()) navigateTo(addressInput);
-          }}
-          className="flex flex-1 justify-center"
-        >
-          <div className="liquid-glass specular flex h-12 w-full max-w-2xl items-center gap-3 rounded-full px-5 ring-1 ring-black/5 dark:ring-white/10">
-            <Lock className="size-3.5 shrink-0 text-zinc-500" />
-            <Search className="size-4 shrink-0 text-zinc-400" />
-            <input
-              value={addressInput}
-              onChange={(e) => setAddressInput(e.target.value)}
-              placeholder={addressDisplay}
-              className="flex-1 bg-transparent text-sm font-medium text-zinc-800 placeholder:font-normal placeholder:text-zinc-500 focus:outline-none dark:text-zinc-100"
-            />
-            <div className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 sm:flex dark:text-emerald-400">
-              <Shield className="size-3" />
-              Private
+      {/* Content area (offset by sidebar) */}
+      <div className="pl-[17.5rem]">
+        {/* Top address bar */}
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 px-6 pt-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (addressInput.trim()) navigateTo(addressInput);
+            }}
+            className="flex flex-1 justify-center"
+          >
+            <div className="liquid-glass specular flex h-11 w-full max-w-2xl items-center gap-3 rounded-full px-5 ring-1 ring-black/5 dark:ring-white/10">
+              <Lock className="size-3.5 shrink-0 text-zinc-500" />
+              <Search className="size-4 shrink-0 text-zinc-400" />
+              <input
+                value={addressInput}
+                onChange={(e) => setAddressInput(e.target.value)}
+                placeholder={addressDisplay}
+                className="flex-1 bg-transparent text-sm font-medium text-zinc-800 placeholder:font-normal placeholder:text-zinc-500 focus:outline-none dark:text-zinc-100"
+              />
+              <div className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 sm:flex dark:text-emerald-400">
+                <Shield className="size-3" />
+                Private
+              </div>
             </div>
-          </div>
-        </form>
+          </form>
 
-        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMiniPlayerOpen((v) => !v)}
+            className="liquid-glass specular grid size-10 place-items-center rounded-full ring-1 ring-black/5 dark:ring-white/10"
+            aria-label="Mini player"
+            title="Mini player"
+          >
+            <Music className="size-4" />
+          </button>
           <button
             onClick={() => setDarkMode((v) => !v)}
-            className="liquid-glass specular grid size-10 place-items-center rounded-full ring-1 ring-black/5 transition active:scale-95 dark:ring-white/10"
+            className="liquid-glass specular grid size-10 place-items-center rounded-full ring-1 ring-black/5 dark:ring-white/10"
             aria-label="Toggle theme"
           >
-            <Moon className="size-4" strokeWidth={2} />
+            {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
-          <button
-            onClick={goHome}
-            className="liquid-glass specular grid size-10 place-items-center rounded-full ring-1 ring-black/5 transition active:scale-95 dark:ring-white/10"
-            aria-label="New tab"
-          >
-            <Plus className="size-4" strokeWidth={2} />
-          </button>
-        </div>
-      </header>
+        </header>
 
-      {/* Main viewport */}
-      <main className="pb-32 pt-28">
-        {view.kind === "home" ? (
-          <HomeView
-            weather={weather}
-            articles={ARTICLES}
-            onOpenArticle={(a) => navigateTo(a.url, a.title)}
-            onSearch={(q) => navigateTo(q)}
-          />
-        ) : (
-          <WebView view={view} />
-        )}
-      </main>
-
-      {/* Bottom space picker */}
-      <div className="fixed bottom-8 left-1/2 z-30 -translate-x-1/2">
-        <div className="liquid-glass specular flex items-center gap-1 rounded-full px-2 py-2 ring-1 ring-black/5 dark:ring-white/10">
-          {SPACES.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setActiveSpace(s.id)}
-              className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                activeSpace === s.id
-                  ? "bg-zinc-900/10 text-zinc-900 dark:bg-white/10 dark:text-white"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              <span
-                className={`size-2 rounded-full bg-gradient-to-br ${s.color}`}
-              />
-              {s.name}
-            </button>
-          ))}
-          <div className="mx-1 h-4 w-px bg-zinc-900/10 dark:bg-white/10" />
-          <button
-            onClick={goHome}
-            className="grid size-7 place-items-center rounded-full text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-            aria-label="New space"
-          >
-            <Plus className="size-3.5" />
-          </button>
-        </div>
+        <main className="pb-32 pt-6">
+          {url === "atlas://home" ? (
+            <HomeView
+              weather={weather}
+              articles={ARTICLES}
+              onOpenArticle={(a) => navigateTo(a.url, a.title)}
+              onSearch={(q) => navigateTo(q)}
+            />
+          ) : url === "atlas://downloads" ? (
+            <DownloadsView downloads={t.downloads} onClear={t.clearDownloads} />
+          ) : url === "atlas://settings" ? (
+            <SettingsView darkMode={darkMode} onDarkModeChange={setDarkMode} />
+          ) : (
+            <WebView url={url} title={t.active?.title ?? ""} />
+          )}
+        </main>
       </div>
+
+      {/* Mini player */}
+      {miniPlayerOpen && <MiniPlayer onClose={() => setMiniPlayerOpen(false)} />}
 
       {/* AI assistant */}
       <AssistantOverlay
@@ -417,7 +361,7 @@ function Browser() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Home (weather hero + Paper-style feed + spaces)
+// Home
 // ────────────────────────────────────────────────────────────────────────────
 
 function HomeView({
@@ -453,20 +397,18 @@ function HomeView({
   const rest = articles.filter((a) => a.id !== lead.id);
 
   return (
-    <div className="mx-auto max-w-7xl px-8">
-      {/* Greeting */}
+    <div className="mx-auto max-w-6xl px-8">
       <div className="mb-8 flex items-baseline justify-between animate-float-up">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
             {dateStr} · {greeting}
           </p>
-          <h1 className="font-serif text-5xl italic tracking-tight text-zinc-900 dark:text-zinc-100">
+          <h1 className="font-serif text-5xl italic tracking-tight">
             Atlas — A calmer browsing experience
           </h1>
         </div>
       </div>
 
-      {/* Weather hero */}
       <section className="mb-14 animate-float-up" style={{ animationDelay: "60ms" }}>
         <div className="liquid-glass specular relative flex flex-col gap-8 overflow-hidden rounded-[28px] p-8 ring-1 ring-black/5 sm:flex-row sm:items-end sm:justify-between dark:ring-white/10">
           <div className="absolute -right-20 -top-20 size-64 rounded-full bg-gradient-to-br from-orange-300/40 via-rose-200/30 to-sky-300/40 blur-3xl" />
@@ -474,10 +416,8 @@ function HomeView({
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Local Conditions
             </p>
-            <h2 className="mb-6 max-w-md text-balance font-serif text-3xl leading-tight text-zinc-900 sm:text-4xl dark:text-zinc-100">
-              {weather
-                ? `${weather.description} over ${weather.city}`
-                : "Loading current conditions…"}
+            <h2 className="mb-6 max-w-md text-balance font-serif text-3xl leading-tight sm:text-4xl">
+              {weather ? `${weather.description} over ${weather.city}` : "Loading…"}
             </h2>
             <div className="flex items-end gap-8">
               <div>
@@ -518,29 +458,23 @@ function HomeView({
         </div>
       </section>
 
-      {/* Paper-style horizontal feed */}
       <section className="mb-14 animate-float-up" style={{ animationDelay: "120ms" }}>
         <div className="mb-6 flex items-baseline justify-between px-1">
-          <h3 className="font-serif text-2xl italic text-zinc-800 dark:text-zinc-200">
-            The Daily Digest
-          </h3>
+          <h3 className="font-serif text-2xl italic">The Daily Digest</h3>
           <button className="text-xs font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400">
             Customize Feed
           </button>
         </div>
 
         <div className="no-scrollbar -mx-8 flex snap-x snap-mandatory gap-6 overflow-x-auto px-8 pb-6">
-          {/* Lead card */}
           <article
             onClick={() => onOpenArticle(lead)}
-            className="group flex-none w-[480px] cursor-pointer snap-start"
+            className="group w-[480px] flex-none cursor-pointer snap-start"
           >
             <div className="relative mb-5 aspect-[3/4] overflow-hidden rounded-[24px] ring-1 ring-black/5 dark:ring-white/10">
               <img
                 src={lead.image}
                 alt={lead.title}
-                width={896}
-                height={1152}
                 loading="lazy"
                 className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
               />
@@ -550,12 +484,8 @@ function HomeView({
               <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-sky-600 dark:text-sky-400">
                 {lead.category}
               </p>
-              <h4 className="mb-3 text-balance font-serif text-2xl leading-tight text-zinc-900 dark:text-zinc-100">
-                {lead.title}
-              </h4>
-              <p className="text-pretty text-sm leading-relaxed text-zinc-500">
-                {lead.excerpt}
-              </p>
+              <h4 className="mb-3 text-balance font-serif text-2xl leading-tight">{lead.title}</h4>
+              <p className="text-pretty text-sm leading-relaxed text-zinc-500">{lead.excerpt}</p>
             </div>
           </article>
 
@@ -563,14 +493,12 @@ function HomeView({
             <article
               key={a.id}
               onClick={() => onOpenArticle(a)}
-              className="group flex-none w-[420px] cursor-pointer snap-start"
+              className="group w-[420px] flex-none cursor-pointer snap-start"
             >
               <div className="relative mb-5 aspect-[3/4] overflow-hidden rounded-[24px] ring-1 ring-black/5 dark:ring-white/10">
                 <img
                   src={a.image}
                   alt={a.title}
-                  width={896}
-                  height={1152}
                   loading="lazy"
                   className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
                 />
@@ -580,19 +508,14 @@ function HomeView({
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-sky-600 dark:text-sky-400">
                   {a.category}
                 </p>
-                <h4 className="mb-3 text-balance font-serif text-xl leading-tight text-zinc-900 dark:text-zinc-100">
-                  {a.title}
-                </h4>
-                <p className="text-pretty text-sm leading-relaxed text-zinc-500">
-                  {a.excerpt}
-                </p>
+                <h4 className="mb-3 text-balance font-serif text-xl leading-tight">{a.title}</h4>
+                <p className="text-pretty text-sm leading-relaxed text-zinc-500">{a.excerpt}</p>
               </div>
             </article>
           ))}
         </div>
       </section>
 
-      {/* Quick spaces / shortcuts (from option 1 article layout) */}
       <section className="mb-10 animate-float-up" style={{ animationDelay: "180ms" }}>
         <h3 className="mb-6 px-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
           Active Spaces
@@ -602,14 +525,12 @@ function HomeView({
             { label: "Product Design", icon: Compass, color: "bg-indigo-500/15 text-indigo-600" },
             { label: "Research Notes", icon: Sparkle, color: "bg-orange-500/15 text-orange-600" },
             { label: "Social Feed", icon: Cloud, color: "bg-emerald-500/15 text-emerald-600" },
-            { label: "Atlas AI", icon: Sparkle, color: "bg-sky-500/15 text-sky-600", accent: true },
+            { label: "Atlas AI", icon: Sparkle, color: "bg-sky-500/15 text-sky-600" },
           ].map((s) => (
             <button
               key={s.label}
               onClick={() => onSearch(s.label)}
-              className={`liquid-glass specular flex items-center gap-4 rounded-2xl px-4 py-4 ring-1 ring-black/5 transition hover:-translate-y-0.5 dark:ring-white/10 ${
-                s.accent ? "ring-sky-400/40 dark:ring-sky-400/30" : ""
-              }`}
+              className="liquid-glass specular flex items-center gap-4 rounded-2xl px-4 py-4 ring-1 ring-black/5 transition hover:-translate-y-0.5 dark:ring-white/10"
             >
               <div className={`grid size-10 place-items-center rounded-xl ${s.color}`}>
                 <s.icon className="size-5" />
@@ -620,7 +541,6 @@ function HomeView({
         </div>
       </section>
 
-      {/* Suggested AI prompts */}
       <section className="animate-float-up" style={{ animationDelay: "240ms" }}>
         <h3 className="mb-4 px-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
           Ask Atlas
@@ -642,24 +562,24 @@ function HomeView({
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Web view (sandboxed iframe; many sites disallow framing — fallback link)
+// Web view
 // ────────────────────────────────────────────────────────────────────────────
 
-function WebView({ view }: { view: Extract<ViewState, { kind: "web" }> }) {
+function WebView({ url, title }: { url: string; title: string }) {
   return (
-    <div className="mx-auto max-w-7xl px-8">
-      <div className="liquid-glass specular relative h-[calc(100vh-12rem)] overflow-hidden rounded-[28px] ring-1 ring-black/5 dark:ring-white/10">
+    <div className="mx-auto max-w-6xl px-8">
+      <div className="liquid-glass specular relative h-[calc(100vh-9rem)] overflow-hidden rounded-[28px] ring-1 ring-black/5 dark:ring-white/10">
         <iframe
-          key={view.url}
-          src={view.url}
-          title={view.title}
+          key={url}
+          src={url}
+          title={title}
           className="h-full w-full bg-white"
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           referrerPolicy="no-referrer"
         />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-3">
           <a
-            href={view.url}
+            href={url}
             target="_blank"
             rel="noreferrer"
             className="liquid-glass specular pointer-events-auto rounded-full px-4 py-2 text-xs font-medium text-zinc-700 ring-1 ring-black/5 dark:text-zinc-200 dark:ring-white/10"
@@ -691,14 +611,16 @@ function AssistantOverlay({
     onError: (e) => console.error("chat error", e),
   });
 
-  // Watch for navigate_to tool calls and execute them in the browser
   const handledToolCallsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     for (const m of messages) {
       if (m.role !== "assistant") continue;
       for (const part of m.parts) {
-        // AI SDK v5: tool parts are typed as `tool-${toolName}` with toolCallId
-        const anyPart = part as { type: string; toolCallId?: string; input?: { url?: string; reason?: string } };
+        const anyPart = part as {
+          type: string;
+          toolCallId?: string;
+          input?: { url?: string; reason?: string };
+        };
         if (anyPart.type === "tool-navigate_to" && anyPart.toolCallId) {
           if (handledToolCallsRef.current.has(anyPart.toolCallId)) continue;
           const url = anyPart.input?.url;
@@ -734,7 +656,6 @@ function AssistantOverlay({
 
   return (
     <>
-      {/* Floating orb */}
       <button
         onClick={() => onOpenChange(!open)}
         className="fixed bottom-8 right-8 z-50 grid size-16 place-items-center rounded-full transition active:scale-95"
@@ -748,20 +669,18 @@ function AssistantOverlay({
         </span>
       </button>
 
-      {/* Chat sheet */}
       {open && (
         <div
           className="liquid-glass specular fixed bottom-28 right-8 z-50 flex w-[26rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px] shadow-2xl ring-1 ring-black/5 animate-float-up dark:ring-white/10"
           style={{ height: "min(38rem, calc(100vh - 10rem))" }}
         >
-          {/* Header */}
           <div className="flex items-center justify-between border-b border-black/5 px-5 py-4 dark:border-white/10">
             <div className="flex items-center gap-3">
               <div className="orb-glow grid size-8 place-items-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-white">
                 <Sparkle className="size-3.5 fill-white" strokeWidth={2} />
               </div>
               <div>
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Atlas AI</p>
+                <p className="text-sm font-semibold">Atlas AI</p>
                 <p className="text-[11px] text-zinc-500">Your browsing companion</p>
               </div>
             </div>
@@ -774,12 +693,12 @@ function AssistantOverlay({
             </button>
           </div>
 
-          {/* Messages */}
           <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
             {messages.length === 0 && (
               <div className="space-y-4">
                 <p className="text-pretty text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
-                  Hi — I'm Atlas. I can answer questions, summarize what you're reading, or open sites and run searches for you. Try one:
+                  Hi — I'm Atlas. I can answer questions, summarize what you're reading, or open
+                  sites and run searches for you. Try one:
                 </p>
                 <div className="flex flex-col gap-2">
                   {SUGGESTED_PROMPTS.map((p) => (
@@ -815,7 +734,6 @@ function AssistantOverlay({
             )}
           </div>
 
-          {/* Composer */}
           <div className="border-t border-black/5 p-4 dark:border-white/10">
             <div className="relative flex items-end gap-2 rounded-3xl bg-white/60 px-4 py-2.5 ring-1 ring-black/5 focus-within:ring-sky-400/40 dark:bg-white/5 dark:ring-white/10">
               <textarea
@@ -853,42 +771,17 @@ function MessageBubble({ message }: { message: UIMessage }) {
   const text = message.parts
     .map((p) => (p.type === "text" ? (p as { type: "text"; text: string }).text : ""))
     .join("");
-
-  const toolParts = message.parts.filter((p) =>
-    (p as { type: string }).type.startsWith("tool-")
-  ) as Array<{
-    type: string;
-    toolCallId?: string;
-    input?: { url?: string; reason?: string };
-    state?: string;
-  }>;
-
+  if (!text) return null;
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[88%] space-y-2 ${isUser ? "items-end" : "items-start"}`}>
-        {text && (
-          <div
-            className={
-              isUser
-                ? "rounded-3xl rounded-tr-md bg-sky-500 px-4 py-2.5 text-sm text-white shadow-sm"
-                : "prose-chat text-sm leading-relaxed text-zinc-800 dark:text-zinc-200"
-            }
-          >
-            {isUser ? text : <ReactMarkdown>{text}</ReactMarkdown>}
-          </div>
-        )}
-        {toolParts.map((tp) => (
-          <div
-            key={tp.toolCallId}
-            className="rounded-2xl bg-sky-500/10 px-3 py-2 text-xs text-sky-700 ring-1 ring-sky-500/20 dark:text-sky-300"
-          >
-            <div className="mb-0.5 flex items-center gap-1.5 font-semibold uppercase tracking-wider">
-              <Compass className="size-3" />
-              {tp.input?.reason ?? "Navigating"}
-            </div>
-            <div className="truncate text-[11px] opacity-70">{tp.input?.url}</div>
-          </div>
-        ))}
+      <div
+        className={`prose-chat max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+          isUser
+            ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+            : "bg-white/60 text-zinc-800 ring-1 ring-black/5 dark:bg-white/5 dark:text-zinc-100 dark:ring-white/10"
+        }`}
+      >
+        <ReactMarkdown>{text}</ReactMarkdown>
       </div>
     </div>
   );
