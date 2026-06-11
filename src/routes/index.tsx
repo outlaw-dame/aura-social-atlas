@@ -458,10 +458,10 @@ function HomeView({
       <div className="mb-8 flex items-baseline justify-between animate-float-up">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-            {dateStr}
+            {dateStr} · {greeting}
           </p>
           <h1 className="font-serif text-5xl italic tracking-tight text-zinc-900 dark:text-zinc-100">
-            {greeting}.
+            Atlas — A calmer browsing experience
           </h1>
         </div>
       </div>

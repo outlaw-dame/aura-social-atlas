@@ -1,0 +1,7 @@
+# Atlas
+
+> A beautiful native-feeling browser with a built-in AI assistant, live weather, and a Paper-inspired daily news feed.
+
+## Pages
+
+- [Home](/): Weather, daily digest, and the Atlas AI assistant.
