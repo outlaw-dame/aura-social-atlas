@@ -39,42 +39,49 @@ export function SettingsView({
   const [section, setSection] = useState<Section>("account");
 
   return (
-    <div className="mx-auto flex max-w-5xl gap-6 px-8 py-4">
-      {/* Settings nav */}
-      <nav className="liquid-glass specular sticky top-4 h-fit w-56 shrink-0 rounded-3xl p-3 ring-1 ring-black/5 dark:ring-white/10">
-        <p className="px-3 pb-3 pt-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-          Settings
-        </p>
-        <ul className="space-y-0.5">
-          {NAV.map((n) => (
-            <li key={n.id}>
-              <button
-                onClick={() => setSection(n.id)}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
-                  section === n.id
-                    ? "bg-white/80 text-zinc-900 ring-1 ring-sky-400/30 dark:bg-white/10 dark:text-white"
-                    : "text-zinc-600 hover:bg-white/50 dark:text-zinc-300 dark:hover:bg-white/5"
-                }`}
-              >
-                <n.icon className="size-4" />
-                {n.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
+    <div className="mx-auto max-w-5xl px-4 py-4 sm:px-8">
+      <h1 className="sr-only">Atlas settings</h1>
+      <div className="flex flex-col gap-6 md:flex-row">
+        {/* Settings nav */}
+        <nav
+          aria-label="Settings sections"
+          className="liquid-glass specular sticky top-4 h-fit w-full shrink-0 rounded-3xl p-3 ring-1 ring-black/5 md:w-56 dark:ring-white/10"
+        >
+          <p className="px-3 pb-3 pt-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            Settings
+          </p>
+          <ul className="flex gap-1 overflow-x-auto md:block md:space-y-0.5">
+            {NAV.map((n) => (
+              <li key={n.id} className="shrink-0 md:shrink">
+                <button
+                  onClick={() => setSection(n.id)}
+                  aria-current={section === n.id ? "page" : undefined}
+                  className={`flex w-full items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2 text-sm transition ${
+                    section === n.id
+                      ? "bg-white/80 text-zinc-900 ring-1 ring-sky-400/30 dark:bg-white/10 dark:text-white"
+                      : "text-zinc-600 hover:bg-white/50 dark:text-zinc-300 dark:hover:bg-white/5"
+                  }`}
+                >
+                  <n.icon className="size-4" aria-hidden="true" />
+                  {n.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
-      {/* Section */}
-      <div className="liquid-glass specular flex-1 rounded-3xl p-8 ring-1 ring-black/5 dark:ring-white/10">
-        {section === "account" && <Account />}
-        {section === "tabs" && <Tabs />}
-        {section === "privacy" && <Privacy />}
-        {section === "profiles" && <Profiles />}
-        {section === "apps" && <Apps />}
-        {section === "appearance" && (
-          <Appearance darkMode={darkMode} onDarkModeChange={onDarkModeChange} />
-        )}
-        {section === "search" && <SearchSettings />}
+        {/* Section */}
+        <div className="liquid-glass specular flex-1 rounded-3xl p-6 ring-1 ring-black/5 sm:p-8 dark:ring-white/10">
+          {section === "account" && <Account />}
+          {section === "tabs" && <Tabs />}
+          {section === "privacy" && <Privacy />}
+          {section === "profiles" && <Profiles />}
+          {section === "apps" && <Apps />}
+          {section === "appearance" && (
+            <Appearance darkMode={darkMode} onDarkModeChange={onDarkModeChange} />
+          )}
+          {section === "search" && <SearchSettings />}
+        </div>
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import {
   CloudSun,
   Compass,
   Lock,
+  Menu,
   Moon,
   Music,
   Search,
@@ -206,6 +207,7 @@ function Browser() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [miniPlayerOpen, setMiniPlayerOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -283,30 +285,42 @@ function Browser() {
         onOpenSettings={() => t.navigateActive("atlas://settings", "Settings")}
         canBack={historyIdx > 0}
         canForward={historyIdx < history.length - 1}
+        mobileOpen={sidebarOpen}
+        onMobileClose={() => setSidebarOpen(false)}
       />
 
-      {/* Content area (offset by sidebar) */}
-      <div className="pl-[17.5rem]">
+      {/* Content area (offset by sidebar on desktop) */}
+      <div className="lg:pl-[17.5rem]">
         {/* Top address bar */}
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 px-6 pt-4">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-2 px-3 pt-3 sm:gap-3 sm:px-6 sm:pt-4">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open tabs sidebar"
+            className="liquid-glass specular grid size-10 shrink-0 place-items-center rounded-full ring-1 ring-black/5 lg:hidden dark:ring-white/10"
+          >
+            <Menu className="size-4" />
+          </button>
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
               if (addressInput.trim()) navigateTo(addressInput);
             }}
-            className="flex flex-1 justify-center"
+            className="flex min-w-0 flex-1 justify-center"
           >
-            <div className="liquid-glass specular flex h-11 w-full max-w-2xl items-center gap-3 rounded-full px-5 ring-1 ring-black/5 dark:ring-white/10">
-              <Lock className="size-3.5 shrink-0 text-zinc-500" />
-              <Search className="size-4 shrink-0 text-zinc-400" />
+            <div className="liquid-glass specular flex h-11 w-full max-w-2xl items-center gap-2 rounded-full px-4 ring-1 ring-black/5 sm:gap-3 sm:px-5 dark:ring-white/10">
+              <Lock className="size-3.5 shrink-0 text-zinc-500" aria-hidden="true" />
+              <Search className="size-4 shrink-0 text-zinc-400" aria-hidden="true" />
+              <label htmlFor="atlas-address" className="sr-only">Address bar</label>
               <input
+                id="atlas-address"
                 value={addressInput}
                 onChange={(e) => setAddressInput(e.target.value)}
                 placeholder={addressDisplay}
-                className="flex-1 bg-transparent text-sm font-medium text-zinc-800 placeholder:font-normal placeholder:text-zinc-500 focus:outline-none dark:text-zinc-100"
+                className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-800 placeholder:font-normal placeholder:text-zinc-500 focus:outline-none dark:text-zinc-100"
               />
               <div className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 sm:flex dark:text-emerald-400">
-                <Shield className="size-3" />
+                <Shield className="size-3" aria-hidden="true" />
                 Private
               </div>
             </div>
@@ -314,16 +328,16 @@ function Browser() {
 
           <button
             onClick={() => setMiniPlayerOpen((v) => !v)}
-            className="liquid-glass specular grid size-10 place-items-center rounded-full ring-1 ring-black/5 dark:ring-white/10"
-            aria-label="Mini player"
+            className="liquid-glass specular hidden size-10 shrink-0 place-items-center rounded-full ring-1 ring-black/5 sm:grid dark:ring-white/10"
+            aria-label="Toggle mini player"
             title="Mini player"
           >
             <Music className="size-4" />
           </button>
           <button
             onClick={() => setDarkMode((v) => !v)}
-            className="liquid-glass specular grid size-10 place-items-center rounded-full ring-1 ring-black/5 dark:ring-white/10"
-            aria-label="Toggle theme"
+            className="liquid-glass specular grid size-10 shrink-0 place-items-center rounded-full ring-1 ring-black/5 dark:ring-white/10"
+            aria-label={darkMode ? "Switch to light theme" : "Switch to dark theme"}
           >
             {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
@@ -397,13 +411,13 @@ function HomeView({
   const rest = articles.filter((a) => a.id !== lead.id);
 
   return (
-    <div className="mx-auto max-w-6xl px-8">
+    <div className="mx-auto max-w-6xl px-4 sm:px-8">
       <div className="mb-8 flex items-baseline justify-between animate-float-up">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
             {dateStr} · {greeting}
           </p>
-          <h1 className="font-serif text-5xl italic tracking-tight">
+          <h1 className="font-serif text-3xl italic tracking-tight sm:text-5xl">
             Atlas — A calmer browsing experience
           </h1>
         </div>
@@ -466,10 +480,10 @@ function HomeView({
           </button>
         </div>
 
-        <div className="no-scrollbar -mx-8 flex snap-x snap-mandatory gap-6 overflow-x-auto px-8 pb-6">
+        <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-6 sm:-mx-8 sm:gap-6 sm:px-8">
           <article
             onClick={() => onOpenArticle(lead)}
-            className="group w-[480px] flex-none cursor-pointer snap-start"
+            className="group w-[82vw] max-w-[480px] flex-none cursor-pointer snap-start sm:w-[480px]"
           >
             <div className="relative mb-5 aspect-[3/4] overflow-hidden rounded-[24px] ring-1 ring-black/5 dark:ring-white/10">
               <img
@@ -493,7 +507,7 @@ function HomeView({
             <article
               key={a.id}
               onClick={() => onOpenArticle(a)}
-              className="group w-[420px] flex-none cursor-pointer snap-start"
+              className="group w-[78vw] max-w-[420px] flex-none cursor-pointer snap-start sm:w-[420px]"
             >
               <div className="relative mb-5 aspect-[3/4] overflow-hidden rounded-[24px] ring-1 ring-black/5 dark:ring-white/10">
                 <img
@@ -567,8 +581,8 @@ function HomeView({
 
 function WebView({ url, title }: { url: string; title: string }) {
   return (
-    <div className="mx-auto max-w-6xl px-8">
-      <div className="liquid-glass specular relative h-[calc(100vh-9rem)] overflow-hidden rounded-[28px] ring-1 ring-black/5 dark:ring-white/10">
+    <div className="mx-auto max-w-6xl px-4 sm:px-8">
+      <div className="liquid-glass specular relative h-[calc(100dvh-9rem)] overflow-hidden rounded-[28px] ring-1 ring-black/5 dark:ring-white/10">
         <iframe
           key={url}
           src={url}
@@ -658,21 +672,23 @@ function AssistantOverlay({
     <>
       <button
         onClick={() => onOpenChange(!open)}
-        className="fixed bottom-8 right-8 z-50 grid size-16 place-items-center rounded-full transition active:scale-95"
-        aria-label="Open AI assistant"
+        className="fixed bottom-5 right-5 z-50 grid size-14 place-items-center rounded-full transition active:scale-95 sm:bottom-8 sm:right-8 sm:size-16"
+        aria-label={open ? "Close AI assistant" : "Open AI assistant"}
       >
-        <span className="absolute inset-0 animate-orb-pulse rounded-full bg-sky-400/35 blur-xl" />
-        <span className="liquid-glass specular relative grid size-16 place-items-center rounded-full ring-1 ring-white/60 dark:ring-white/10">
+        <span className="absolute inset-0 animate-orb-pulse rounded-full bg-sky-400/35 blur-xl" aria-hidden="true" />
+        <span className="liquid-glass specular relative grid size-full place-items-center rounded-full ring-1 ring-white/60 dark:ring-white/10">
           <span className="orb-glow grid size-9 place-items-center rounded-full bg-gradient-to-br from-sky-400 via-sky-500 to-indigo-500 text-white">
-            <Sparkle className="size-4 fill-white" strokeWidth={2} />
+            <Sparkle className="size-4 fill-white" strokeWidth={2} aria-hidden="true" />
           </span>
         </span>
       </button>
 
       {open && (
         <div
-          className="liquid-glass specular fixed bottom-28 right-8 z-50 flex w-[26rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px] shadow-2xl ring-1 ring-black/5 animate-float-up dark:ring-white/10"
-          style={{ height: "min(38rem, calc(100vh - 10rem))" }}
+          role="dialog"
+          aria-label="Atlas AI assistant"
+          className="liquid-glass specular fixed inset-x-3 bottom-24 z-50 flex max-h-[calc(100dvh-7rem)] flex-col overflow-hidden rounded-[28px] shadow-2xl ring-1 ring-black/5 animate-float-up sm:inset-x-auto sm:bottom-28 sm:right-8 sm:w-[26rem] dark:ring-white/10"
+          style={{ height: "min(38rem, calc(100dvh - 7rem))" }}
         >
           <div className="flex items-center justify-between border-b border-black/5 px-5 py-4 dark:border-white/10">
             <div className="flex items-center gap-3">
