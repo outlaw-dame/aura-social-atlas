@@ -9,7 +9,7 @@ export function DownloadsView({
   onClear: () => void;
 }) {
   return (
-    <div className="mx-auto max-w-3xl px-8 py-4">
+    <div className="mx-auto max-w-3xl px-4 py-4 sm:px-8">
       <div className="mb-8 flex items-end justify-between">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
