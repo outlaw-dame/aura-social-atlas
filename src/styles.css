@@ -162,3 +162,28 @@
 }
 .prose-chat ul, .prose-chat ol { margin: 0.25rem 0 0.25rem 1.1rem; }
 .prose-chat a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+/* Open social web surfaces keep the established editorial glass language. */
+:root {
+  --social-selected: color-mix(in oklab, var(--card) 82%, transparent);
+  --social-avatar: color-mix(in oklab, var(--accent) 12%, var(--secondary));
+  --social-overlay: oklch(0.18 0.01 260 / 25%);
+  --social-image-surface: oklch(1 0 0 / 85%);
+  --social-image-ink: oklch(0.22 0.02 260);
+  --social-glass-dark: linear-gradient(135deg, oklch(0.27 0.01 260 / 85%), oklch(0.2 0.01 260 / 70%));
+  --social-status: oklch(0.65 0.14 160);
+}
+.social-app { min-height: 100dvh; letter-spacing: 0; }
+.social-selected { background: var(--social-selected); box-shadow: inset 0 0 0 1px var(--border); }
+.social-avatar { display: inline-grid; place-items: center; border-radius: 50%; background: var(--social-avatar); color: var(--foreground); font-weight: 600; }
+.social-topic-dot, .social-status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.social-status-dot { background: var(--social-status); }
+.social-topic-dot { margin-right: 4px; }
+.social-header { background: color-mix(in oklab, var(--background) 80%, transparent); backdrop-filter: blur(20px); }
+.social-backdrop { background: var(--social-overlay); backdrop-filter: blur(5px); }
+.social-image-label { background: var(--social-image-surface); color: var(--social-image-ink); backdrop-filter: blur(12px); }
+.dark .liquid-glass { background: var(--social-glass-dark); }
+.social-sidebar { overflow-y: auto; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

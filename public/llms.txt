@@ -1,7 +1,9 @@
 # Atlas
 
-> A beautiful native-feeling browser with a built-in AI assistant, live weather, and a Paper-inspired daily news feed.
+> Atlas is an editorial search and discovery experience for the Open Social Web, with sample creators, a Following feed, saved stories, and an AI assistant.
 
 ## Pages
 
-- [Home](/): Weather, daily digest, and the Atlas AI assistant.
+- [Discover](/): Search sample creators and topics across Bluesky, Mastodon, and RSS.
+- [Following](/following): Stories from voices selected during the current session.
+- [Saved](/saved): Stories saved during the current session.

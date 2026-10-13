@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { SocialProvider } from "@/components/social/SocialState";
 
 function NotFoundComponent() {
   return (
@@ -77,11 +78,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Atlas — A calmer browser" },
-      { name: "description", content: "Atlas is a beautiful native-feeling browser with a built-in AI assistant, daily weather, and a Paper-inspired news feed." },
+      { title: "Atlas — Discover the Open Social Web" },
+      { name: "description", content: "Discover independent creators, stories, and conversations across the open social web with Atlas." },
       { name: "author", content: "Atlas" },
-      { property: "og:title", content: "Atlas — A calmer browser" },
-      { property: "og:description", content: "A beautiful browser with built-in AI, weather, and a Paper-inspired news feed." },
+      { property: "og:title", content: "Atlas — Discover the Open Social Web" },
+      { property: "og:description", content: "Independent voices and fresh perspectives from the open social web." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -142,7 +143,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <SocialProvider><Outlet /></SocialProvider>
     </QueryClientProvider>
   );
 }
