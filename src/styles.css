@@ -184,6 +184,7 @@
 .social-status-dot { background: var(--social-status); }
 .social-topic-dot { margin-right: 4px; }
 .social-header { background: color-mix(in oklab, var(--background) 80%, transparent); backdrop-filter: blur(20px); }
+.social-header > button { color: var(--foreground); }
 .social-backdrop { background: var(--social-overlay); backdrop-filter: blur(5px); }
 .social-image-label { background: var(--social-image-surface); color: var(--social-image-ink); backdrop-filter: blur(12px); }
 .dark .liquid-glass { background: var(--social-glass-dark); }
