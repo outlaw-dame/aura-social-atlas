@@ -174,12 +174,17 @@
   --social-status: oklch(0.65 0.14 160);
 }
 .social-app { min-height: 100dvh; letter-spacing: 0; }
+.dark {
+  --social-selected: color-mix(in oklab, var(--card) 82%, transparent);
+  --social-avatar: color-mix(in oklab, var(--accent) 12%, var(--secondary));
+}
 .social-selected { background: var(--social-selected); box-shadow: inset 0 0 0 1px var(--border); }
 .social-avatar { display: inline-grid; place-items: center; border-radius: 50%; background: var(--social-avatar); color: var(--foreground); font-weight: 600; }
 .social-topic-dot, .social-status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .social-status-dot { background: var(--social-status); }
 .social-topic-dot { margin-right: 4px; }
 .social-header { background: color-mix(in oklab, var(--background) 80%, transparent); backdrop-filter: blur(20px); }
+.social-header > button { color: var(--foreground); }
 .social-backdrop { background: var(--social-overlay); backdrop-filter: blur(5px); }
 .social-image-label { background: var(--social-image-surface); color: var(--social-image-ink); backdrop-filter: blur(12px); }
 .dark .liquid-glass { background: var(--social-glass-dark); }
