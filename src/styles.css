@@ -198,8 +198,9 @@
    icon toward the middle. Restore menu icon left, page name centred, actions right. */
 .navbar .navbar-inner > .left { order: -1; }
 .navbar .navbar-inner > .right { order: 1; }
-.navbar .navbar-inner > .title {
+.navbar .navbar-inner > .title.title {
   order: 0;
+
   position: absolute;
   left: 0;
   right: 0;
