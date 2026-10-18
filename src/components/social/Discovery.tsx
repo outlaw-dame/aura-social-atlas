@@ -6,6 +6,7 @@ import { creators, matchesCreator, networks, posts, topics, type Creator } from 
 import { useSocial } from './SocialState';
 import { Composer } from './Composer';
 import { Preferences } from './Preferences';
+import { AccountButton } from './AccountButton';
 
 export function Discovery({ view = 'discover' }: { view?: 'discover' | 'following' | 'saved' | 'settings' | 'intelligence' | 'appearance' }) {
   const state = useSocial();
@@ -52,7 +53,7 @@ export function Discovery({ view = 'discover' }: { view?: 'discover' | 'followin
           </section>}
         </div>
         <Button variant="ghost" size="icon" className="liquid-glass specular shrink-0 rounded-full sm:hidden" aria-label="Activity and notifications" title="Activity"><Bell /></Button>
-        <Button size="sm" className="shrink-0 rounded-full">Sign in</Button>
+        <AccountButton />
       </header>
       <main className="mx-auto max-w-[1400px] px-5 pb-28 pt-7 sm:px-9">
         {settingsView ? <Preferences page={view === 'intelligence' ? 'intelligence' : view === 'appearance' ? 'appearance' : 'settings'} /> : <>
