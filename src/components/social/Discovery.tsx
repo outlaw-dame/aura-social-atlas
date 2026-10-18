@@ -36,13 +36,23 @@ export function Discovery({ view = 'discover' }: { view?: 'discover' | 'followin
       <div className="mt-auto border-t border-border pt-4"><span className="flex items-center gap-2 text-xs text-muted-foreground"><Rss className="size-3" />Open web. Human voices.</span><span className="mt-2 block text-[10px] text-muted-foreground">Sample edition · session-only selections</span></div>
     </aside>
     <div className="lg:pl-[16.5rem]">
-      <header className="social-header sticky top-0 z-20 flex h-20 items-center gap-3 px-5 sm:px-9">
+      <header className="social-header sticky top-0 z-20 flex h-16 items-center gap-2 px-5 sm:gap-3 sm:px-9">
         <Button variant="ghost" size="icon" className="liquid-glass specular shrink-0 rounded-full lg:hidden" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu /></Button>
-        <form role="search" onSubmit={e => { e.preventDefault(); setSubmitted(query.trim()); }} className="liquid-glass specular flex h-11 min-w-0 flex-1 items-center gap-3 rounded-full border border-border px-4">
-          <Search className="size-4 shrink-0 text-muted-foreground" /><label htmlFor="social-search" className="sr-only">Search creators and topics</label><input id="social-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search voices, ideas, and interests…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
-          {(query || submitted) && <Button type="button" variant="ghost" size="icon" className="size-7" aria-label="Clear search" onClick={() => { setQuery(''); setSubmitted(''); }}><X /></Button>}
-          <Button variant="ghost" type="submit" size="icon" className="size-7" aria-label="Search"><ArrowUpRight /></Button>
+        <form role="search" onSubmit={e => { e.preventDefault(); setSubmitted(query.trim()); }} className="liquid-glass specular flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-border px-3">
+          <Search className="size-3.5 shrink-0 text-muted-foreground" /><label htmlFor="social-search" className="sr-only">Search creators and topics</label><input id="social-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search voices, ideas, and interests…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+          {(query || submitted) && <Button type="button" variant="ghost" size="icon" className="size-6" aria-label="Clear search" onClick={() => { setQuery(''); setSubmitted(''); }}><X /></Button>}
+          <Button variant="ghost" type="submit" size="icon" className="size-6" aria-label="Search"><ArrowUpRight /></Button>
         </form>
+        <div className="relative hidden sm:block">
+          <Button variant="ghost" size="icon" className="liquid-glass specular rounded-full" aria-label="Open composer" aria-expanded={headerCompose} title="Compose" onClick={() => setHeaderCompose(v => !v)}><PenLine /></Button>
+          {headerCompose && <section role="dialog" aria-label="Compose" className="absolute right-0 top-12 z-50 w-80 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3"><h2 className="flex items-center gap-2 text-sm font-semibold"><PenLine className="size-4" />Compose</h2><Button variant="ghost" size="icon" aria-label="Close composer" onClick={() => setHeaderCompose(false)}><X /></Button></div>
+            <div className="p-4"><label htmlFor="header-compose-draft" className="sr-only">Your draft</label><textarea id="header-compose-draft" value={headerDraft} onChange={e => { setHeaderDraft(e.target.value); setHeaderCopied(false); }} placeholder="What’s on your mind?" className="h-32 w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-muted-foreground" /><p className="text-xs text-muted-foreground">Draft only · no social account connected</p></div>
+            <div className="flex items-center justify-end border-t border-border p-3"><Button size="sm" disabled={!headerDraft.trim()} onClick={async () => { try { await navigator.clipboard.writeText(headerDraft); setHeaderCopied(true); } catch { /* clipboard unavailable */ } }}>{headerCopied ? <Check /> : <Copy />}{headerCopied ? 'Copied' : 'Copy draft'}</Button></div>
+          </section>}
+        </div>
+        <Button variant="ghost" size="icon" className="liquid-glass specular shrink-0 rounded-full sm:hidden" aria-label="Activity and notifications" title="Activity"><Bell /></Button>
+        <Button size="sm" className="shrink-0 rounded-full">Sign in</Button>
       </header>
       <main className="mx-auto max-w-[1400px] px-5 pb-28 pt-7 sm:px-9">
         {settingsView ? <Preferences page={view === 'intelligence' ? 'intelligence' : view === 'appearance' ? 'appearance' : 'settings'} /> : <>
