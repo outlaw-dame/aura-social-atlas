@@ -13,8 +13,12 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as FollowingRouteImport } from './routes/following'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as SavedRouteImport } from './routes/saved'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as SettingsIndexRouteImport } from './routes/settings.index'
+import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
+import { Route as SettingsIntelligenceRouteImport } from './routes/settings.intelligence'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -36,6 +40,11 @@ const SavedRoute = SavedRouteImport.update({
   path: '/saved',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
@@ -46,14 +55,33 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
+  id: '/appearance',
+  path: '/appearance',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsIntelligenceRoute = SettingsIntelligenceRouteImport.update({
+  id: '/intelligence',
+  path: '/intelligence',
+  getParentRoute: () => SettingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/following': typeof FollowingRoute
   '/intelligence': typeof IntelligenceRoute
   '/saved': typeof SavedRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/intelligence': typeof SettingsIntelligenceRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +90,9 @@ export interface FileRoutesByTo {
   '/saved': typeof SavedRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/intelligence': typeof SettingsIntelligenceRoute
+  '/settings': typeof SettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -69,8 +100,12 @@ export interface FileRoutesById {
   '/following': typeof FollowingRoute
   '/intelligence': typeof IntelligenceRoute
   '/saved': typeof SavedRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/intelligence': typeof SettingsIntelligenceRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -79,8 +114,12 @@ export interface FileRouteTypes {
     | '/following'
     | '/intelligence'
     | '/saved'
+    | '/settings'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/settings/appearance'
+    | '/settings/intelligence'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -89,14 +128,21 @@ export interface FileRouteTypes {
     | '/saved'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/settings/appearance'
+    | '/settings/intelligence'
+    | '/settings'
   id:
     | '__root__'
     | '/'
     | '/following'
     | '/intelligence'
     | '/saved'
+    | '/settings'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/settings/appearance'
+    | '/settings/intelligence'
+    | '/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -104,6 +150,7 @@ export interface RootRouteChildren {
   FollowingRoute: typeof FollowingRoute
   IntelligenceRoute: typeof IntelligenceRoute
   SavedRoute: typeof SavedRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiChatRoute: typeof ApiChatRoute
 }
@@ -138,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SavedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap.xml': {
       id: '/sitemap.xml'
       path: '/sitemap.xml'
@@ -152,14 +206,52 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/appearance': {
+      id: '/settings/appearance'
+      path: '/appearance'
+      fullPath: '/settings/appearance'
+      preLoaderRoute: typeof SettingsAppearanceRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/intelligence': {
+      id: '/settings/intelligence'
+      path: '/intelligence'
+      fullPath: '/settings/intelligence'
+      preLoaderRoute: typeof SettingsIntelligenceRouteImport
+      parentRoute: typeof SettingsRoute
+    }
   }
 }
+
+interface SettingsRouteChildren {
+  SettingsAppearanceRoute: typeof SettingsAppearanceRoute
+  SettingsIntelligenceRoute: typeof SettingsIntelligenceRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsAppearanceRoute: SettingsAppearanceRoute,
+  SettingsIntelligenceRoute: SettingsIntelligenceRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FollowingRoute: FollowingRoute,
   IntelligenceRoute: IntelligenceRoute,
   SavedRoute: SavedRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiChatRoute: ApiChatRoute,
 }
