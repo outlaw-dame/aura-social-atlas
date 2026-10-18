@@ -192,3 +192,35 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Phone app top bar: Framework7's React navbar renders the title before the side
+   slots, so space-between leaves the page name at the far left and drifts the menu
+   icon toward the middle. Restore menu icon left, page name centred, actions right. */
+.navbar .navbar-inner > .left { order: -1; }
+.navbar .navbar-inner > .right { order: 1; }
+.navbar .navbar-inner > .title.title {
+  order: 0;
+
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: auto;
+  margin: 0 !important;
+
+  padding: 0 96px;
+
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* Side panel: Framework7 tags the current section with .item-selected but ships no
+   styling for it, so the list looked identical whatever you were viewing. Give the
+   current section the app's own tinted surface and accent ink. */
+.panel .item-link.item-selected { background: color-mix(in oklab, var(--accent) 12%, transparent); }
+.panel .item-link.item-selected .item-title { color: var(--accent); font-weight: 600; }
+.panel .item-link.item-selected .item-media .icon { color: var(--accent); }
+
+
