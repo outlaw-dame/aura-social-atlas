@@ -13,7 +13,7 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
     <Sheet opened={opened} onSheetClosed={onClose} swipeToClose backdrop style={{ height: 'auto' }}>
       <Block>
         <div style={{ fontWeight: 600, fontSize: 17, marginBottom: 4 }}>New post</div>
-        <div style={{ fontSize: 13, opacity: 0.6 }}>Drafts stay on this device. Publishing arrives when you connect Bluesky or Mastodon.</div>
+        <div style={{ fontSize: 13, opacity: 0.6 }}>Nothing is posted yet — publishing arrives when you connect Bluesky or Mastodon.</div>
       </Block>
       <List strong inset>
         <ListInput type="textarea" placeholder="What's worth sharing?" value={text} maxlength={500}
@@ -22,7 +22,7 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
       <Block style={{ display: 'flex', gap: 8 }}>
         <Button tonal style={{ flex: 1 }} onClick={onClose}>Cancel</Button>
         <Button fill style={{ flex: 1 }} disabled={!text.trim()}
-          onClick={() => { f7.toast.show({ text: 'Draft saved', closeTimeout: 1600 }); setText(''); onClose(); }}>Save draft</Button>
+          onClick={() => { f7.toast.show({ text: 'Draft kept for now — not posted', closeTimeout: 1600 }); setText(''); onClose(); }}>Save draft</Button>
       </Block>
     </Sheet>
   );
