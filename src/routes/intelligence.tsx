@@ -1,5 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { Discovery } from '@/components/social/Discovery';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 export const Route = createFileRoute('/intelligence')({
  head: () => ({ meta: [
  { title: 'Intelligence — Atlas settings' },
@@ -9,6 +8,5 @@ export const Route = createFileRoute('/intelligence')({
  { property: 'og:type', content: 'website' },
  { name: 'twitter:card', content: 'summary' },
  ] }),
- component: Page,
+ beforeLoad: () => { throw redirect({ to: '/settings/intelligence' }); },
 });
-function Page() { return <Discovery view="intelligence" />; }
