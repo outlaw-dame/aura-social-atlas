@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { ArrowUpRight, Bookmark, Check, Compass, Menu, Plus, Rss, Search, Settings, Sparkles, Users, X } from 'lucide-react';
+import { ArrowUpRight, Bell, Bookmark, Check, Compass, Copy, Menu, PenLine, Plus, Rss, Search, Settings, Sparkles, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { creators, matchesCreator, networks, posts, topics, type Creator } from '@/lib/social-catalogue';
 import { useSocial } from './SocialState';
@@ -15,6 +15,9 @@ export function Discovery({ view = 'discover' }: { view?: 'discover' | 'followin
   const [topic, setTopic] = useState('All topics');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [creatorDialog, setCreatorDialog] = useState<Creator | null>(null);
+  const [headerCompose, setHeaderCompose] = useState(false);
+  const [headerDraft, setHeaderDraft] = useState('');
+  const [headerCopied, setHeaderCopied] = useState(false);
   const matching = creators.filter(c => matchesCreator(c, submitted, network, topic));
   const feed = posts.filter(p => matching.some(c => c.id === p.creatorId) && (view !== 'following' || state.followed.includes(p.creatorId)) && (view !== 'saved' || state.saved.includes(p.id)));
   const searchActive = !!submitted || network !== 'All networks' || topic !== 'All topics';
