@@ -216,3 +216,11 @@
   pointer-events: none;
 }
 
+/* Side panel: Framework7 tags the current section with .item-selected but ships no
+   styling for it, so the list looked identical whatever you were viewing. Give the
+   current section the app's own tinted surface and accent ink. */
+.panel .item-link.item-selected { background: color-mix(in oklab, var(--accent) 12%, transparent); }
+.panel .item-link.item-selected .item-title { color: var(--accent); font-weight: 600; }
+.panel .item-link.item-selected .item-media .icon { color: var(--accent); }
+
+
