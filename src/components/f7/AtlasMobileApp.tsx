@@ -8,7 +8,7 @@ import 'framework7/css/bundle';
 import 'framework7-icons/css/framework7-icons.css';
 import 'material-icons/iconfont/material-icons.css';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
-import { Fab, NavRight, f7 } from 'framework7-react';
+import { Fab, NavRight, NavLeft, Panel, f7 } from 'framework7-react';
 import { creators, posts, networks, matchesCreator } from '@/lib/social-catalogue';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
@@ -93,9 +93,32 @@ export default function AtlasMobileApp() {
 
   return (
     <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: '#2f6fd6' }}>
+      <Panel left cover swipe resizable={false}>
+        <Page>
+          <Block style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', fontSize: 32, marginTop: 24 }}>Atlas</Block>
+          <List strong inset dividers>
+            <ListItem link="#" panelClose title="Discover" selected={title === 'Discover'} onClick={() => f7.tab.show('#tab-discover')}>
+              <Icon slot="media" ios="f7:compass" md="material:explore" />
+            </ListItem>
+            <ListItem link="#" panelClose title="Following" selected={title === 'Following'} onClick={() => f7.tab.show('#tab-following')} after={String(followed.length)}>
+              <Icon slot="media" ios="f7:person_2" md="material:group" />
+            </ListItem>
+            <ListItem link="#" panelClose title="Saved" selected={title === 'Saved'} onClick={() => f7.tab.show('#tab-saved')} after={String(saved.length)}>
+              <Icon slot="media" ios="f7:bookmark" md="material:bookmark" />
+            </ListItem>
+            <ListItem link="#" panelClose title="Settings" selected={title === 'Settings'} onClick={() => f7.tab.show('#tab-settings')}>
+              <Icon slot="media" ios="f7:gear_alt" md="material:settings" />
+            </ListItem>
+          </List>
+          <Block style={{ fontSize: 12, opacity: 0.6 }}>Sample profiles, not live accounts.</Block>
+        </Page>
+      </Panel>
       <View main>
         <Page pageContent={false}>
           <Navbar title={title}>
+            <NavLeft>
+              <Link iconOnly panelOpen="left" aria-label="Open menu"><Icon ios="f7:sidebar_left" md="material:menu" /></Link>
+            </NavLeft>
             <NavRight>
               <Link iconOnly aria-label="Activity" onClick={() => f7.toast.show({ text: 'No new activity yet', closeTimeout: 1600 })}>
                 <Icon ios="f7:bell" md="material:notifications_none" />
