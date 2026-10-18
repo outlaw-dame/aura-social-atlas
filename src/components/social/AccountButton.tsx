@@ -55,7 +55,7 @@ export function AccountButton() {
           />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="social-glass w-56">
+      <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="normal-case">
           <div className="flex items-center gap-2">
             <img src={preset.src} alt="" className="size-9 rounded-full object-cover" />
