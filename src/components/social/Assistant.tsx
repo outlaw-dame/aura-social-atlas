@@ -2,16 +2,21 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { ArrowUp, Send, Sparkle, X } from "lucide-react";
+import { ArrowUp, PenLine, Send, Sparkle, X } from "lucide-react";
+import { Button } from '@/components/ui/button';
 const SUGGESTED_PROMPTS = ["What is the open social web?", "How do Mastodon and Bluesky differ?", "Explain RSS feeds"];
 export function AssistantOverlay({
   open,
   onOpenChange,
   onNavigate,
+  showLauncher = true,
+  onCompose,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onNavigate: (url: string, title?: string) => void;
+  showLauncher?: boolean;
+  onCompose?: () => void;
 }) {
   const transport = useMemo(() => new DefaultChatTransport({ api: "/api/chat" }), []);
   const { messages, sendMessage, status, error } = useChat({
@@ -72,7 +77,7 @@ export function AssistantOverlay({
 
   return (
     <>
-      <button
+      {showLauncher && <button
         onClick={() => onOpenChange(!open)}
         className={`fixed bottom-5 right-5 z-50 grid size-12 place-items-center rounded-full transition duration-300 active:scale-95 sm:bottom-8 sm:right-8 sm:size-14 ${hidden && !open ? "pointer-events-none translate-y-6 opacity-0" : "opacity-100"}`}
         aria-label={open ? "Close AI assistant" : "Open AI assistant"}
@@ -83,7 +88,7 @@ export function AssistantOverlay({
             <Sparkle className="size-4 fill-white" strokeWidth={2} aria-hidden="true" />
           </span>
         </span>
-      </button>
+      </button>}
 
       {open && (
         <div
@@ -92,7 +97,7 @@ export function AssistantOverlay({
           className="fixed bottom-24 right-4 z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-border bg-card text-card-foreground shadow-2xl animate-float-up sm:bottom-28 sm:right-8"
           style={{ height: "min(30rem, calc(100dvh - 8rem))" }}
         >
-          <div className="flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/10">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="orb-glow grid size-8 place-items-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-white">
                 <Sparkle className="size-3.5 fill-white" strokeWidth={2} />
@@ -102,13 +107,13 @@ export function AssistantOverlay({
                 <p className="text-[11px] text-zinc-500">Your discovery companion</p>
               </div>
             </div>
-            <button
+            <div className="flex items-center gap-1">{onCompose && <Button variant="ghost" size="icon" aria-label="Return to composer" title="Compose" onClick={onCompose}><PenLine /></Button>}<button
               onClick={() => onOpenChange(false)}
               className="grid size-8 place-items-center rounded-full text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10"
               aria-label="Close"
             >
               <X className="size-4" />
-            </button>
+            </button></div>
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
