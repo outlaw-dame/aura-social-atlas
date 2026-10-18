@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AVATAR_PRESETS } from '@/lib/atlas-avatars';
 import { cn } from '@/lib/utils';
-import { Logo } from '@/components/social/Logo';
+import { Compass } from 'lucide-react';
 
 export const Route = createFileRoute('/auth')({
   head: () => ({
@@ -70,10 +70,10 @@ function AuthPage() {
   };
 
   return (
-    <main className="social-page relative min-h-dvh grid place-items-center px-4 py-10">
-      <div className="social-panel w-full max-w-sm rounded-3xl p-6">
+    <main className="relative grid min-h-dvh place-items-center bg-background px-4 py-10 text-foreground">
+      <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 text-card-foreground shadow-lg">
         <div className="flex items-center justify-center gap-2 pb-2">
-          <Logo className="size-7" />
+          <Compass className="size-7 text-accent" strokeWidth={1.5} />
           <span className="font-semibold">Atlas</span>
         </div>
         {needsConfirmation ? (
@@ -115,7 +115,7 @@ function AuthPage() {
                         onClick={() => setAvatarKey(preset.key)}
                         className={cn(
                           'size-11 rounded-full overflow-hidden transition-transform hover:scale-105',
-                          avatarKey === preset.key && 'ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-surface-card)]'
+                          avatarKey === preset.key && 'ring-2 ring-accent ring-offset-2 ring-offset-background'
                         )}
                       >
                         <img src={preset.src} alt={preset.label} className="size-full object-cover" />

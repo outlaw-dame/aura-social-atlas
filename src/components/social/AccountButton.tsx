@@ -16,7 +16,7 @@ export function AccountButton() {
   const { user, profile, loading, signOut } = useAtlasAuth();
 
   if (loading) {
-    return <div className="size-8 shrink-0 rounded-full bg-[var(--color-surface-glass)]" aria-hidden />;
+    return <div className="size-8 shrink-0 rounded-full bg-muted" aria-hidden />;
   }
 
   if (!user) {

@@ -43,8 +43,8 @@ function ResetPasswordPage() {
   };
 
   return (
-    <main className="social-page relative min-h-dvh grid place-items-center px-4 py-10">
-      <div className="social-panel w-full max-w-sm rounded-3xl p-6">
+    <main className="relative grid min-h-dvh place-items-center bg-background px-4 py-10 text-foreground">
+      <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 text-card-foreground shadow-lg">
         {!isRecovery ? (
           <div className="space-y-2 text-center">
             <h1 className="text-xl font-semibold">Reset password</h1>

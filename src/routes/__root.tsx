@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SocialProvider } from "@/components/social/SocialState";
+import { AtlasAuthProvider } from "@/components/social/AuthState";
 
 function NotFoundComponent() {
   return (
@@ -143,7 +144,9 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <SocialProvider><Outlet /></SocialProvider>
+      <AtlasAuthProvider>
+        <SocialProvider><Outlet /></SocialProvider>
+      </AtlasAuthProvider>
     </QueryClientProvider>
   );
 }
