@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import Framework7 from 'framework7/lite-bundle';
 import Framework7React, {
-  App, View, Page, Navbar, NavTitle, NavTitleLarge, NavRight, Link, Toolbar, Tabs, Tab, PageContent,
+  App, View, Page, Navbar, Link, Toolbar, Tabs, Tab, PageContent,
   Searchbar, List, ListItem, Block, BlockTitle, Card, CardContent, CardFooter, Button, Chip, Toggle, Segmented,
 } from 'framework7-react';
 import 'framework7/css/bundle';
+import { Compass, Users, Bookmark, Settings as Gear } from 'lucide-react';
 import { creators, posts, networks, matchesCreator } from '@/lib/social-catalogue';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
@@ -32,6 +33,7 @@ export default function AtlasMobileApp() {
   const { followed, saved, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled, setAssistantEnabled } = useSocial();
   const auth = useAtlasAuth() as { user?: { email?: string } | null; profile?: { display_name: string | null; avatar_key: string | null } | null; signOut?: () => Promise<void> };
   const [query, setQuery] = useState('');
+  const [title, setTitle] = useState('Discover');
   const [network, setNetwork] = useState<string>('All networks');
 
   useEffect(() => { if (isDesktop()) window.location.replace('/'); }, []);
@@ -68,18 +70,15 @@ export default function AtlasMobileApp() {
     <App theme={theme} darkMode={dark} name="Atlas" colors={{ primary: '#2f6fd6' }}>
       <View main>
         <Page pageContent={false}>
+          <Navbar title={title} />
           <Toolbar tabbar icons bottom>
-            <Link tabLink="#tab-discover" tabLinkActive text="Discover" iconIos="f7:compass" iconMd="material:explore" />
-            <Link tabLink="#tab-following" text="Following" iconIos="f7:person_2" iconMd="material:group" />
-            <Link tabLink="#tab-saved" text="Saved" iconIos="f7:bookmark" iconMd="material:bookmark" />
-            <Link tabLink="#tab-settings" text="Settings" iconIos="f7:gear" iconMd="material:settings" />
+            <Link tabLink="#tab-discover" tabLinkActive><Compass className="icon" size={24} aria-hidden /><span className="tabbar-label">Discover</span></Link>
+            <Link tabLink="#tab-following"><Users className="icon" size={24} aria-hidden /><span className="tabbar-label">Following</span></Link>
+            <Link tabLink="#tab-saved"><Bookmark className="icon" size={24} aria-hidden /><span className="tabbar-label">Saved</span></Link>
+            <Link tabLink="#tab-settings"><Gear className="icon" size={24} aria-hidden /><span className="tabbar-label">Settings</span></Link>
           </Toolbar>
           <Tabs>
-            <Tab id="tab-discover" className="page-content" tabActive>
-              <Navbar large transparent>
-                <NavTitle>Atlas</NavTitle>
-                <NavTitleLarge>Discover</NavTitleLarge>
-              </Navbar>
+            <Tab id="tab-discover" className="page-content" onTabShow={() => setTitle('Discover')} tabActive>
               <Searchbar placeholder="Search creators" disableButton={false} onInput={(e: any) => setQuery(e.target.value)} onClickClear={() => setQuery('')} />
               <Block>
                 <Segmented strong round>
@@ -102,23 +101,17 @@ export default function AtlasMobileApp() {
               {posts.map(postCard)}
             </Tab>
 
-            <Tab id="tab-following" className="page-content">
-              <Navbar large transparent><NavTitle>Following</NavTitle><NavTitleLarge>Following</NavTitleLarge></Navbar>
+            <Tab id="tab-following" className="page-content" onTabShow={() => setTitle('Following')}>
               {followingPosts.length ? followingPosts.map(postCard) : (
                 <Block strong inset>Follow creators in Discover and their stories will show up here.</Block>
               )}
             </Tab>
 
-            <Tab id="tab-saved" className="page-content">
-              <Navbar large transparent><NavTitle>Saved</NavTitle><NavTitleLarge>Saved</NavTitleLarge></Navbar>
+            <Tab id="tab-saved" className="page-content" onTabShow={() => setTitle('Saved')}>
               {savedPosts.length ? savedPosts.map(postCard) : <Block strong inset>Stories you save appear here.</Block>}
             </Tab>
 
-            <Tab id="tab-settings" className="page-content">
-              <Navbar large transparent>
-                <NavTitle>Settings</NavTitle><NavTitleLarge>Settings</NavTitleLarge>
-                <NavRight />
-              </Navbar>
+            <Tab id="tab-settings" className="page-content" onTabShow={() => setTitle('Settings')}>
               <BlockTitle>Account</BlockTitle>
               <List strong inset dividers>
                 {auth.user ? (
