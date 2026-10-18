@@ -164,6 +164,21 @@ function AuthPage() {
             <Button type="submit" className="w-full rounded-full" disabled={busy}>
               {busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}
             </Button>
+            <div className="flex items-center gap-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />or<span className="h-px flex-1 bg-border" />
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Button type="button" variant="outline" className="rounded-full" onClick={() => void socialSignIn('google')}>
+                Continue with Google
+              </Button>
+              <button
+                type="button"
+                className="lovable-auth-button rounded-full"
+                onClick={() => void socialSignIn('lovable')}
+              >
+                Continue with Lovable
+              </button>
+            </div>
             <p className="text-center text-sm opacity-75">
               {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
               <button
