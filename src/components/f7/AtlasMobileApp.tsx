@@ -5,7 +5,10 @@ import Framework7React, {
   Searchbar, List, ListItem, Block, BlockTitle, Card, CardContent, CardFooter, Button, Chip, Toggle, Segmented,
 } from 'framework7-react';
 import 'framework7/css/bundle';
-import { Compass, Users, Bookmark, Settings as Gear } from 'lucide-react';
+import 'framework7-icons/css/framework7-icons.css';
+import 'material-icons/iconfont/material-icons.css';
+import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
+import { Fab } from 'framework7-react';
 import { creators, posts, networks, matchesCreator } from '@/lib/social-catalogue';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
@@ -33,13 +36,35 @@ export default function AtlasMobileApp() {
   const { followed, saved, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled, setAssistantEnabled } = useSocial();
   const auth = useAtlasAuth() as { user?: { email?: string } | null; profile?: { display_name: string | null; avatar_key: string | null } | null; signOut?: () => Promise<void> };
   const [query, setQuery] = useState('');
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [fabHidden, setFabHidden] = useState(false);
+  const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
   const [title, setTitle] = useState('Discover');
   const [network, setNetwork] = useState<string>('All networks');
 
   useEffect(() => { if (isDesktop()) window.location.replace('/'); }, []);
+  useEffect(() => { setMode(dark ? 'dark' : 'light'); }, []);
+  const [systemDark, setSystemDark] = useState(false);
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-  }, [dark]);
+    const q = window.matchMedia('(prefers-color-scheme: dark)');
+    setSystemDark(q.matches);
+    const on = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    q.addEventListener('change', on);
+    return () => q.removeEventListener('change', on);
+  }, []);
+  const isDark = mode === 'system' ? systemDark : mode === 'dark';
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    if (isDark !== dark) toggleDark();
+  }, [isDark]);
+  // Hide the floating buttons while the feed scrolls, bring them back when it settles.
+  useEffect(() => {
+    let t: number | undefined;
+    const on = () => { setFabHidden(true); clearTimeout(t); t = window.setTimeout(() => setFabHidden(false), 700); };
+    document.addEventListener('scroll', on, true);
+    return () => { document.removeEventListener('scroll', on, true); clearTimeout(t); };
+  }, []);
 
   const results = creators.filter(c => matchesCreator(c, query, network, 'All topics'));
   const creatorOf = (id: string) => creators.find(c => c.id === id)!;
@@ -67,15 +92,25 @@ export default function AtlasMobileApp() {
   const name = auth.profile?.display_name || auth.user?.email;
 
   return (
-    <App theme={theme} darkMode={dark} name="Atlas" colors={{ primary: '#2f6fd6' }}>
+    <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: '#2f6fd6' }}>
       <View main>
         <Page pageContent={false}>
           <Navbar title={title} />
+          <Fab position="right-bottom" slot="fixed" aria-label="Compose" onClick={() => setComposeOpen(true)}
+            style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
+            <Icon ios="f7:square_pencil" md="material:edit" />
+          </Fab>
+          {assistantEnabled && (
+            <Fab position="left-bottom" slot="fixed" color="white" aria-label="Open assistant" onClick={() => setChatOpen(true)}
+              style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
+              <Icon ios="f7:sparkles" md="material:auto_awesome" />
+            </Fab>
+          )}
           <Toolbar tabbar icons bottom>
-            <Link tabLink="#tab-discover" tabLinkActive><Compass className="icon" size={24} aria-hidden /><span className="tabbar-label">Discover</span></Link>
-            <Link tabLink="#tab-following"><Users className="icon" size={24} aria-hidden /><span className="tabbar-label">Following</span></Link>
-            <Link tabLink="#tab-saved"><Bookmark className="icon" size={24} aria-hidden /><span className="tabbar-label">Saved</span></Link>
-            <Link tabLink="#tab-settings"><Gear className="icon" size={24} aria-hidden /><span className="tabbar-label">Settings</span></Link>
+            <Link tabLink="#tab-discover" tabLinkActive><Icon ios="f7:compass" md="material:explore" /><span className="tabbar-label">Discover</span></Link>
+            <Link tabLink="#tab-following"><Icon ios="f7:person_2" md="material:group" /><span className="tabbar-label">Following</span></Link>
+            <Link tabLink="#tab-saved"><Icon ios="f7:bookmark" md="material:bookmark" /><span className="tabbar-label">Saved</span></Link>
+            <Link tabLink="#tab-settings"><Icon ios="f7:gear_alt" md="material:settings" /><span className="tabbar-label">Settings</span></Link>
           </Toolbar>
           <Tabs>
             <Tab id="tab-discover" className="page-content" onTabShow={() => setTitle('Discover')} tabActive>
@@ -127,11 +162,13 @@ export default function AtlasMobileApp() {
               </List>
               <BlockTitle>Appearance</BlockTitle>
               <List strong inset dividers>
-                <ListItem title="Dark mode"><Toggle slot="after" checked={dark} onToggleChange={toggleDark} /></ListItem>
+                <ListItem title="Light" radio radioIcon="end" name="mode" checked={mode === 'light'} onChange={() => setMode('light')} />
+                <ListItem title="Dark" radio radioIcon="end" name="mode" checked={mode === 'dark'} onChange={() => setMode('dark')} />
+                <ListItem title="Match device" radio radioIcon="end" name="mode" checked={mode === 'system'} onChange={() => setMode('system')} />
               </List>
               <BlockTitle>Intelligence</BlockTitle>
               <List strong inset dividers>
-                <ListItem title="AI assistant" footer="Off by default. Stored on this device.">
+                <ListItem title="AI assistant" footer="Off by default. When on, a sparkle button opens chat.">
                   <Toggle slot="after" checked={assistantEnabled} onToggleChange={() => setAssistantEnabled(!assistantEnabled)} />
                 </ListItem>
               </List>
@@ -144,6 +181,8 @@ export default function AtlasMobileApp() {
           </Tabs>
         </Page>
       </View>
+      <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
+      {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
   );
 }
