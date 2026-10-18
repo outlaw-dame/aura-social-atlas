@@ -204,7 +204,9 @@
   left: 0;
   right: 0;
   width: auto;
+  margin: 0;
   padding: 0 96px;
+
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
