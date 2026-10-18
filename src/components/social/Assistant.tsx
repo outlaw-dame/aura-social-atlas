@@ -60,13 +60,21 @@ export function AssistantOverlay({
     setInput("");
   };
 
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>;
+    const onScroll = () => { setHidden(true); clearTimeout(t); t = setTimeout(() => setHidden(false), 700); };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { window.removeEventListener("scroll", onScroll); clearTimeout(t); };
+  }, []);
+
   const busy = status === "streaming" || status === "submitted";
 
   return (
     <>
       <button
         onClick={() => onOpenChange(!open)}
-        className="fixed bottom-5 right-5 z-50 grid size-12 place-items-center rounded-full transition active:scale-95 sm:bottom-8 sm:right-8 sm:size-14"
+        className={`fixed bottom-5 right-5 z-50 grid size-12 place-items-center rounded-full transition duration-300 active:scale-95 sm:bottom-8 sm:right-8 sm:size-14 ${hidden && !open ? "pointer-events-none translate-y-6 opacity-0" : "opacity-100"}`}
         aria-label={open ? "Close AI assistant" : "Open AI assistant"}
       >
         <span className="absolute inset-0 animate-orb-pulse rounded-full bg-sky-400/35 blur-xl" aria-hidden="true" />
