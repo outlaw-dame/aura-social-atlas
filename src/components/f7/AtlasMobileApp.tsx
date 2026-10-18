@@ -8,7 +8,7 @@ import 'framework7/css/bundle';
 import 'framework7-icons/css/framework7-icons.css';
 import 'material-icons/iconfont/material-icons.css';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
-import { Fab } from 'framework7-react';
+import { Fab, NavRight, f7 } from 'framework7-react';
 import { creators, posts, networks, matchesCreator } from '@/lib/social-catalogue';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
@@ -95,7 +95,22 @@ export default function AtlasMobileApp() {
     <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: '#2f6fd6' }}>
       <View main>
         <Page pageContent={false}>
-          <Navbar title={title} />
+          <Navbar title={title}>
+            <NavRight>
+              <Link iconOnly aria-label="Activity" onClick={() => f7.toast.show({ text: 'No new activity yet', closeTimeout: 1600 })}>
+                <Icon ios="f7:bell" md="material:notifications_none" />
+              </Link>
+              {auth.user ? (
+                <Link iconOnly aria-label="Account" onClick={() => f7.tab.show('#tab-settings')}>
+                  <img src={avatarPreset(auth.profile?.avatar_key).src} alt="" width={30} height={30} style={{ borderRadius: 15 }} />
+                </Link>
+              ) : (
+                <Link iconOnly external href="/auth" aria-label="Sign in">
+                  <Icon ios="f7:person_crop_circle" md="material:account_circle" />
+                </Link>
+              )}
+            </NavRight>
+          </Navbar>
           <Fab position="right-bottom" slot="fixed" aria-label="Compose" onClick={() => setComposeOpen(true)}
             style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
             <Icon ios="f7:square_pencil" md="material:edit" />
