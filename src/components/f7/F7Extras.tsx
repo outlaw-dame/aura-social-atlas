@@ -22,7 +22,7 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
       <Block style={{ display: 'flex', gap: 8 }}>
         <Button tonal style={{ flex: 1 }} onClick={onClose}>Cancel</Button>
         <Button fill style={{ flex: 1 }} disabled={!text.trim()}
-          onClick={() => { f7.toast.show({ text: 'Draft kept for now — not posted', closeTimeout: 1600 }); setText(''); onClose(); }}>Save draft</Button>
+          onClick={() => { f7.toast.show({ text: 'Not posted — connect an account to publish', closeTimeout: 1600 }); setText(''); onClose(); }}>Done</Button>
       </Block>
     </Sheet>
   );
