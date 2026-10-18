@@ -66,12 +66,12 @@ export function AssistantOverlay({
     <>
       <button
         onClick={() => onOpenChange(!open)}
-        className="fixed bottom-5 right-5 z-50 grid size-14 place-items-center rounded-full transition active:scale-95 sm:bottom-8 sm:right-8 sm:size-16"
+        className="fixed bottom-5 right-5 z-50 grid size-12 place-items-center rounded-full transition active:scale-95 sm:bottom-8 sm:right-8 sm:size-14"
         aria-label={open ? "Close AI assistant" : "Open AI assistant"}
       >
         <span className="absolute inset-0 animate-orb-pulse rounded-full bg-sky-400/35 blur-xl" aria-hidden="true" />
         <span className="liquid-glass specular relative grid size-full place-items-center rounded-full ring-1 ring-white/60 dark:ring-white/10">
-          <span className="orb-glow grid size-9 place-items-center rounded-full bg-gradient-to-br from-sky-400 via-sky-500 to-indigo-500 text-white">
+          <span className="orb-glow grid size-8 place-items-center rounded-full bg-gradient-to-br from-sky-400 via-sky-500 to-indigo-500 text-white">
             <Sparkle className="size-4 fill-white" strokeWidth={2} aria-hidden="true" />
           </span>
         </span>
@@ -81,10 +81,10 @@ export function AssistantOverlay({
         <div
           role="dialog"
           aria-label="Atlas AI assistant"
-          className="liquid-glass specular fixed inset-x-3 bottom-24 z-50 flex max-h-[calc(100dvh-7rem)] flex-col overflow-hidden rounded-[28px] shadow-2xl ring-1 ring-black/5 animate-float-up sm:inset-x-auto sm:bottom-28 sm:right-8 sm:w-[26rem] dark:ring-white/10"
-          style={{ height: "min(38rem, calc(100dvh - 7rem))" }}
+          className="fixed bottom-24 right-4 z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-border bg-card text-card-foreground shadow-2xl animate-float-up sm:bottom-28 sm:right-8"
+          style={{ height: "min(30rem, calc(100dvh - 8rem))" }}
         >
-          <div className="flex items-center justify-between border-b border-black/5 px-5 py-4 dark:border-white/10">
+          <div className="flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/10">
             <div className="flex items-center gap-3">
               <div className="orb-glow grid size-8 place-items-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-white">
                 <Sparkle className="size-3.5 fill-white" strokeWidth={2} />
@@ -103,19 +103,18 @@ export function AssistantOverlay({
             </button>
           </div>
 
-          <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {messages.length === 0 && (
               <div className="space-y-4">
                 <p className="text-pretty text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
-                  Hi — I'm Atlas. I can answer questions, summarize what you're reading, or open
-                  sites and run searches for you. Try one:
+                  Hi — I'm Atlas. I can answer questions or run searches across the open social web. Try one:
                 </p>
                 <div className="flex flex-col gap-2">
                   {SUGGESTED_PROMPTS.map((p) => (
                     <button
                       key={p}
                       onClick={() => sendMessage({ text: p })}
-                      className="rounded-2xl bg-white/50 px-4 py-2.5 text-left text-sm text-zinc-800 ring-1 ring-black/5 transition hover:bg-white/80 dark:bg-white/5 dark:text-zinc-200 dark:ring-white/10 dark:hover:bg-white/10"
+                      className="rounded-2xl bg-muted px-3 py-2 text-left text-sm text-foreground ring-1 ring-border transition hover:bg-accent/10 dark:bg-muted dark:text-zinc-200 dark:ring-white/10 dark:hover:bg-white/10"
                     >
                       {p}
                     </button>
@@ -144,8 +143,8 @@ export function AssistantOverlay({
             )}
           </div>
 
-          <div className="border-t border-black/5 p-4 dark:border-white/10">
-            <div className="relative flex items-end gap-2 rounded-3xl bg-white/60 px-4 py-2.5 ring-1 ring-black/5 focus-within:ring-sky-400/40 dark:bg-white/5 dark:ring-white/10">
+          <div className="border-t border-black/5 p-3 dark:border-white/10">
+            <div className="relative flex items-end gap-2 rounded-3xl bg-muted px-4 py-2 ring-1 ring-border focus-within:ring-sky-400/40 dark:bg-white/5 dark:ring-white/10">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -188,7 +187,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
         className={`prose-chat max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
           isUser
             ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-            : "bg-white/60 text-zinc-800 ring-1 ring-black/5 dark:bg-white/5 dark:text-zinc-100 dark:ring-white/10"
+            : "bg-muted text-foreground ring-1 ring-border dark:bg-muted dark:text-zinc-100 dark:ring-white/10"
         }`}
       >
         <ReactMarkdown>{text}</ReactMarkdown>
