@@ -1,32 +1,33 @@
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { ArrowUpRight, Bookmark, Check, Compass, Menu, Moon, Plus, Rss, Search, Sparkle, Sparkles, Sun, Users, X } from 'lucide-react';
+import { ArrowUpRight, Bookmark, Check, Compass, Menu, Plus, Rss, Search, Settings, Sparkles, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { creators, matchesCreator, networks, posts, topics, type Creator } from '@/lib/social-catalogue';
 import { useSocial } from './SocialState';
-import { AssistantOverlay } from './Assistant';
+import { Composer } from './Composer';
+import { Preferences } from './Preferences';
 
-export function Discovery({ view = 'discover' }: { view?: 'discover' | 'following' | 'saved' | 'intelligence' }) {
+export function Discovery({ view = 'discover' }: { view?: 'discover' | 'following' | 'saved' | 'settings' | 'intelligence' | 'appearance' }) {
   const state = useSocial();
   const [query, setQuery] = useState('');
   const [submitted, setSubmitted] = useState('');
   const [network, setNetwork] = useState('All networks');
   const [topic, setTopic] = useState('All topics');
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [assistantOpen, setAssistantOpen] = useState(false);
   const [creatorDialog, setCreatorDialog] = useState<Creator | null>(null);
   const matching = creators.filter(c => matchesCreator(c, submitted, network, topic));
   const feed = posts.filter(p => matching.some(c => c.id === p.creatorId) && (view !== 'following' || state.followed.includes(p.creatorId)) && (view !== 'saved' || state.saved.includes(p.id)));
   const searchActive = !!submitted || network !== 'All networks' || topic !== 'All topics';
   const title = view === 'following' ? 'Your corner of the web.' : view === 'saved' ? 'Worth coming back to.' : 'A world of independent voices.';
-  const nav = [{ to: '/' as const, label: 'Discover', icon: Compass, key: 'discover' }, { to: '/following' as const, label: 'Following', icon: Users, key: 'following' }, { to: '/saved' as const, label: 'Saved', icon: Bookmark, key: 'saved' }, { to: '/intelligence' as const, label: 'Intelligence', icon: Sparkle, key: 'intelligence' }];
+  const nav = [{ to: '/' as const, label: 'Discover', icon: Compass, key: 'discover' }, { to: '/following' as const, label: 'Following', icon: Users, key: 'following' }, { to: '/saved' as const, label: 'Saved', icon: Bookmark, key: 'saved' }, { to: '/settings' as const, label: 'Settings', icon: Settings, key: 'settings' }];
+  const settingsView = view === 'settings' || view === 'intelligence' || view === 'appearance';
   const toggleTopic = (value: string) => { setTopic(value); setMobileOpen(false); };
   return <div className={state.dark ? 'dark' : ''}><div className="social-app min-h-screen bg-background text-foreground">
     {mobileOpen && <Button variant="ghost" aria-label="Close navigation" onClick={() => setMobileOpen(false)} className="social-backdrop fixed inset-0 z-30 h-auto rounded-none lg:hidden" />}
     <aside className={`social-sidebar liquid-glass specular fixed inset-y-3 left-3 z-40 flex w-60 flex-col rounded-3xl border border-border p-5 transition-transform lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}>
       <div className="mb-9 flex items-center justify-between"><Link to="/" className="flex items-center gap-2 font-serif text-3xl italic"><Compass className="size-6 text-accent" strokeWidth={1.5} />Atlas</Link><Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X /></Button></div>
       <p className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Your open web</p>
-      <nav aria-label="Main navigation" className="space-y-1">{nav.map(item => <Button asChild variant="ghost" key={item.key} className={`h-11 w-full justify-start rounded-xl ${view === item.key ? 'social-selected' : 'text-muted-foreground'}`}><Link to={item.to} onClick={() => setMobileOpen(false)} aria-current={view === item.key ? 'page' : undefined}><item.icon />{item.label}{item.key === 'following' && <span className="ml-auto text-xs">{state.followed.length}</span>}{item.key === 'saved' && <span className="ml-auto text-xs">{state.saved.length}</span>}</Link></Button>)}</nav>
+      <nav aria-label="Main navigation" className="space-y-1">{nav.map(item => <Button asChild variant="ghost" key={item.key} className={`h-11 w-full justify-start rounded-xl ${(view === item.key || (item.key === 'settings' && settingsView)) ? 'social-selected' : 'text-muted-foreground'}`}><Link to={item.to} onClick={() => setMobileOpen(false)} aria-current={(view === item.key || (item.key === 'settings' && settingsView)) ? 'page' : undefined}><item.icon />{item.label}{item.key === 'following' && <span className="ml-auto text-xs">{state.followed.length}</span>}{item.key === 'saved' && <span className="ml-auto text-xs">{state.saved.length}</span>}</Link></Button>)}</nav>
       <div className="mt-8 border-t border-border pt-5"><p className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Explore topics</p>{topics.slice(1).map(t => <Button key={t} variant="ghost" onClick={() => toggleTopic(t)} className={`mb-1 h-9 w-full justify-start text-sm ${topic === t ? 'text-accent' : 'text-muted-foreground'}`}><span className="social-topic-dot" />{t}</Button>)}</div>
       <div className="mt-7"><p className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Your voices</p>{state.followed.length === 0 ? <p className="text-xs leading-relaxed text-muted-foreground">No voices followed yet.</p> : creators.filter(c => state.followed.includes(c.id)).map(c => <Button variant="ghost" key={c.id} onClick={() => setCreatorDialog(c)} className="mb-2 h-auto w-full justify-start whitespace-normal px-0 text-left text-xs"><span className="social-avatar size-7 shrink-0 text-[9px]">{c.initials}</span><span>{c.name}</span></Button>)}</div>
       <div className="mt-auto border-t border-border pt-4"><span className="flex items-center gap-2 text-xs text-muted-foreground"><Rss className="size-3" />Open web. Human voices.</span><span className="mt-2 block text-[10px] text-muted-foreground">Sample edition · session-only selections</span></div>
@@ -39,10 +40,9 @@ export function Discovery({ view = 'discover' }: { view?: 'discover' | 'followin
           {(query || submitted) && <Button type="button" variant="ghost" size="icon" className="size-7" aria-label="Clear search" onClick={() => { setQuery(''); setSubmitted(''); }}><X /></Button>}
           <Button variant="ghost" type="submit" size="icon" className="size-7" aria-label="Search"><ArrowUpRight /></Button>
         </form>
-        <Button variant="ghost" size="icon" onClick={state.toggleDark} className="liquid-glass specular shrink-0 rounded-full border border-border" aria-label={state.dark ? 'Switch to light theme' : 'Switch to dark theme'}>{state.dark ? <Sun /> : <Moon />}</Button>
       </header>
       <main className="mx-auto max-w-[1400px] px-5 pb-28 pt-7 sm:px-9">
-        {view === 'intelligence' ? <Intelligence /> : <>
+        {settingsView ? <Preferences page={view === 'intelligence' ? 'intelligence' : view === 'appearance' ? 'appearance' : 'settings'} /> : <>
         <div className="mb-8 animate-float-up"><p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><span className="social-status-dot" />{view === 'discover' ? 'Discover the open social web' : view === 'following' ? 'A feed of your own' : 'Your reading list'}</p><h1 className="font-serif text-4xl leading-tight sm:text-5xl">{title}</h1><p className="mt-3 text-sm text-muted-foreground">{view === 'discover' ? 'Find creators, fresh perspectives, and conversations beyond your usual circle.' : view === 'following' ? 'The latest from the voices you choose.' : 'Stories and ideas you’ve set aside.'}</p></div>
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
           <div className="flex flex-wrap gap-1" aria-label="Filter by network">{networks.map(n => <Button key={n} variant="ghost" size="sm" onClick={() => setNetwork(n)} aria-pressed={network === n} className={`rounded-full ${network === n ? 'social-selected' : 'text-muted-foreground'}`}>{n === 'RSS' && <Rss className="size-3" />}{n}</Button>)}</div>
@@ -67,21 +67,8 @@ export function Discovery({ view = 'discover' }: { view?: 'discover' | 'followin
         </>}
       </main>
     </div>
-    {state.assistantEnabled && view !== 'intelligence' && <AssistantOverlay open={assistantOpen} onOpenChange={setAssistantOpen} onNavigate={url => { if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); else { setQuery(url); setSubmitted(url); } }} />}
+    {!settingsView && <Composer assistantEnabled={state.assistantEnabled} onNavigate={url => { if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); else { setQuery(url); setSubmitted(url); } }} />}
     {creatorDialog && <div className="social-backdrop fixed inset-0 z-[60] grid place-items-center px-5" onClick={() => setCreatorDialog(null)}><section role="dialog" aria-modal="true" aria-labelledby="creator-name" className="liquid-glass specular w-full max-w-sm rounded-3xl border border-border bg-card p-6" onClick={e => e.stopPropagation()}><div className="flex justify-between"><span className="social-avatar size-14 text-lg">{creatorDialog.initials}</span><Button variant="ghost" size="icon" aria-label="Close creator profile" onClick={() => setCreatorDialog(null)}><X /></Button></div><h2 id="creator-name" className="mt-5 font-serif text-3xl">{creatorDialog.name}</h2><p className="mt-2 text-xs text-muted-foreground">{creatorDialog.handle} · {creatorDialog.network}</p><p className="mt-5 text-sm leading-relaxed">{creatorDialog.bio}</p><p className="mt-3 text-xs text-muted-foreground">Sample profile · no live account connected</p><Button className="mt-6 w-full" onClick={() => state.toggleFollow(creatorDialog.id)}>{state.followed.includes(creatorDialog.id) ? <Check /> : <Plus />}{state.followed.includes(creatorDialog.id) ? 'Following · unfollow' : 'Follow voice'}</Button></section></div>}
   </div></div>;
 }
 
-function Intelligence() {
-  const state = useSocial();
-  const on = state.assistantEnabled;
-  return <div className="max-w-2xl animate-float-up">
-    <p className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Settings</p>
-    <h1 className="font-serif text-4xl leading-tight sm:text-5xl">Intelligence</h1>
-    <p className="mt-3 text-sm text-muted-foreground">Atlas works fully without AI. Turn on the assistant only if you want it.</p>
-    <div className="mt-8 flex items-start justify-between gap-6 rounded-3xl border border-border bg-card p-6">
-      <div><h2 className="text-base font-semibold">Atlas assistant</h2><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Adds a small assistant button to the corner of your screen. It can answer questions and run searches for you. Your messages are sent to an AI service to generate replies.</p></div>
-      <button role="switch" aria-checked={on} aria-label="Atlas assistant" onClick={() => state.setAssistantEnabled(!on)} className={`relative h-7 w-12 shrink-0 rounded-full transition ${on ? 'bg-accent' : 'bg-muted'}`}><span className={`absolute top-1 size-5 rounded-full bg-background shadow transition-all ${on ? 'left-6' : 'left-1'}`} /></button>
-    </div>
-  </div>;
-}
