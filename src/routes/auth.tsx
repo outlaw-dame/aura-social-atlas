@@ -35,6 +35,14 @@ function AuthPage() {
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const socialSignIn = async (provider: 'google' | 'lovable') => {
+    setError(null);
+    const result = await lovable.auth.signInWithOAuth(provider, {
+      redirect_uri: window.location.origin,
+    });
+    if (result.error) setError(result.error.message);
+  };
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
