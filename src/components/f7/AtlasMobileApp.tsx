@@ -8,7 +8,7 @@ import 'framework7/css/bundle';
 import 'framework7-icons/css/framework7-icons.css';
 import 'material-icons/iconfont/material-icons.css';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
-import { Fab, NavRight, NavLeft, Panel, f7 } from 'framework7-react';
+import { Fab, NavRight, NavLeft, Panel, Popup, f7 } from 'framework7-react';
 import { creators, posts, networks, matchesCreator } from '@/lib/social-catalogue';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
@@ -37,6 +37,7 @@ export default function AtlasMobileApp() {
   const auth = useAtlasAuth() as { user?: { email?: string } | null; profile?: { display_name: string | null; avatar_key: string | null } | null; signOut?: () => Promise<void> };
   const [query, setQuery] = useState('');
   const [composeOpen, setComposeOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [fabHidden, setFabHidden] = useState(false);
   const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
@@ -124,7 +125,7 @@ export default function AtlasMobileApp() {
                 <Icon ios="f7:bell" md="material:notifications_none" />
               </Link>
               {auth.user ? (
-                <Link iconOnly aria-label="Account" onClick={() => f7.tab.show('#tab-settings')}>
+                <Link iconOnly aria-label="Your profile" onClick={() => setProfileOpen(true)}>
                   <img src={avatarPreset(auth.profile?.avatar_key).src} alt="" width={30} height={30} style={{ borderRadius: 15 }} />
                 </Link>
               ) : (
@@ -185,19 +186,6 @@ export default function AtlasMobileApp() {
             </Tab>
 
             <Tab id="tab-settings" className="page-content" onTabShow={() => setTitle('Settings')}>
-              <BlockTitle>Account</BlockTitle>
-              <List strong inset dividers>
-                {auth.user ? (
-                  <>
-                    <ListItem title={name ?? 'Signed in'} footer={auth.user.email}>
-                      <img slot="media" src={avatarPreset(auth.profile?.avatar_key).src} alt="" width={40} height={40} style={{ borderRadius: 20 }} />
-                    </ListItem>
-                    <ListItem link="#" title="Sign out" onClick={() => auth.signOut?.()} />
-                  </>
-                ) : (
-                  <ListItem link="/auth" external title="Sign in or create account" />
-                )}
-              </List>
               <BlockTitle>Appearance</BlockTitle>
               <List strong inset dividers>
                 <ListItem title="Light" radio radioIcon="end" name="mode" checked={mode === 'light'} onChange={() => setMode('light')} />
@@ -219,6 +207,29 @@ export default function AtlasMobileApp() {
           </Tabs>
         </Page>
       </View>
+      <Popup opened={profileOpen} onPopupClosed={() => setProfileOpen(false)} swipeToClose>
+        <Page>
+          <Navbar title="Profile">
+            <NavRight><Link popupClose>Done</Link></NavRight>
+          </Navbar>
+          {auth.user && (
+            <>
+              <Block style={{ textAlign: 'center', marginTop: 32 }}>
+                <img src={avatarPreset(auth.profile?.avatar_key).src} alt="" width={96} height={96} style={{ borderRadius: 48 }} />
+                <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 28, marginTop: 12 }}>{name ?? 'Signed in'}</div>
+                <div style={{ opacity: 0.6, fontSize: 14 }}>{auth.user.email}</div>
+              </Block>
+              <List strong inset dividers>
+                <ListItem title="Following" after={String(followed.length)} />
+                <ListItem title="Saved" after={String(saved.length)} />
+              </List>
+              <List strong inset dividers>
+                <ListItem link="#" title="Sign out" onClick={async () => { await auth.signOut?.(); setProfileOpen(false); }} />
+              </List>
+            </>
+          )}
+        </Page>
+      </Popup>
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
