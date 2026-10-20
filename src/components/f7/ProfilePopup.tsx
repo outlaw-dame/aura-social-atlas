@@ -140,8 +140,8 @@ export function ProfilePopup({ opened, onClose }: { opened: boolean; onClose: ()
             <Button small onClick={async () => { await signOut(); onClose(); }}>Sign out</Button>
           </footer>
         </>}
+        <EditProfileSheet opened={editOpen} onClose={() => setEditOpen(false)} />
       </Page>
-      <EditProfileSheet opened={editOpen} onClose={() => setEditOpen(false)} />
     </Popup>
   );
 }
