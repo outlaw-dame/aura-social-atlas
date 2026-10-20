@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import { strictEqual } from 'node:assert';
-import { networkBrands, networkBrand } from './network-brands';
+import { networkBrands, networkBrand } from './network-brands.ts';
 
 describe('network brands', () => {
   test('uses the official Bluesky Blue #0085FF', () => {
