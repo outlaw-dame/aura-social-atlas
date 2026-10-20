@@ -13,6 +13,7 @@ import { creators, posts, networks, matchesCreator } from '@/lib/social-catalogu
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
+import { ProfilePopup } from './ProfilePopup';
 
 Framework7.use(Framework7React);
 
@@ -89,8 +90,6 @@ export default function AtlasMobileApp() {
       </Card>
     );
   };
-
-  const name = auth.profile?.display_name || auth.user?.email;
 
   return (
     <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: '#2f6fd6' }}>
@@ -207,29 +206,7 @@ export default function AtlasMobileApp() {
           </Tabs>
         </Page>
       </View>
-      <Popup opened={profileOpen} onPopupClosed={() => setProfileOpen(false)} swipeToClose>
-        <Page>
-          <Navbar title="Profile">
-            <NavRight><Link popupClose>Done</Link></NavRight>
-          </Navbar>
-          {auth.user && (
-            <>
-              <Block style={{ textAlign: 'center', marginTop: 32 }}>
-                <img src={avatarPreset(auth.profile?.avatar_key).src} alt="" width={96} height={96} style={{ borderRadius: 48 }} />
-                <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 28, marginTop: 12 }}>{name ?? 'Signed in'}</div>
-                <div style={{ opacity: 0.6, fontSize: 14 }}>{auth.user.email}</div>
-              </Block>
-              <List strong inset dividers>
-                <ListItem title="Following" after={String(followed.length)} />
-                <ListItem title="Saved" after={String(saved.length)} />
-              </List>
-              <List strong inset dividers>
-                <ListItem link="#" title="Sign out" onClick={async () => { await auth.signOut?.(); setProfileOpen(false); }} />
-              </List>
-            </>
-          )}
-        </Page>
-      </Popup>
+      <ProfilePopup opened={profileOpen} onClose={() => setProfileOpen(false)} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
