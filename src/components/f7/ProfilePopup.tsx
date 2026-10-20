@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Popup, Page, Navbar, NavRight, Link, Button, Segmented, Icon, Sheet, Block, List, ListInput, f7 } from 'framework7-react';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useSocial } from '@/components/social/SocialState';
@@ -24,6 +24,14 @@ export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [tags, setTags] = useState((profile?.featured_hashtags ?? []).map(t => `#${t}`).join(' '));
   const [saving, setSaving] = useState(false);
+
+  // The sheet stays mounted at app level, so refresh the fields each time it opens.
+  useEffect(() => {
+    if (opened) {
+      setBio(profile?.bio ?? '');
+      setTags((profile?.featured_hashtags ?? []).map(t => `#${t}`).join(' '));
+    }
+  }, [opened]);
 
   const save = async () => {
     setSaving(true);
