@@ -49,7 +49,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
     }
     supabase
       .from('profiles')
-      .select('display_name, avatar_key')
+      .select('display_name, avatar_key, bio, featured_hashtags')
       .eq('id', userId)
       .maybeSingle()
       .then(({ data }) => {
@@ -66,8 +66,20 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   };
 
+  const updateProfile: AuthState['updateProfile'] = async (patch) => {
+    if (!userId) return;
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(patch)
+      .eq('id', userId)
+      .select('display_name, avatar_key, bio, featured_hashtags')
+      .single();
+    if (error) throw error;
+    setProfile(data as AtlasProfile);
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, loading, signOut, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
