@@ -270,3 +270,7 @@
 .atlas-profile-edit .icon { font-size: 14px; }
 
 
+
+.atlas-profile-feed-avatar { width: 44px; height: 44px; border-radius: 50%; flex: 0 0 44px; }
+.atlas-profile-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+.atlas-profile-sample { text-align: center; font-size: 12px; opacity: 0.55; margin: 4px 16px 12px; }

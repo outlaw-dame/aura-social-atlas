@@ -3,7 +3,7 @@ import { Popup, Page, Navbar, NavRight, Link, Button, Segmented, Icon, Sheet, Bl
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useSocial } from '@/components/social/SocialState';
 import { avatarPreset } from '@/lib/atlas-avatars';
-import { creators, posts } from '@/lib/social-catalogue';
+import { creators, posts, type Creator } from '@/lib/social-catalogue';
 import { linkifyHashtags, extractHashtags, hashtagUrl } from '@/lib/hashtags';
 
 const sections = ['Posts', 'Media', 'Saved', 'Feeds', 'Collections', 'Lists'] as const;
@@ -65,7 +65,7 @@ export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose
   );
 }
 
-export function ProfilePopup({ opened, onClose, onEditProfile }: { opened: boolean; onClose: () => void; onEditProfile: () => void }) {
+export function ProfilePopup({ opened, onClose, onEditProfile, onOpenCreator }: { opened: boolean; onClose: () => void; onEditProfile: () => void; onOpenCreator: (creator: Creator) => void }) {
   const { user, profile, signOut } = useAtlasAuth();
   const { followed, saved, toggleSave } = useSocial();
   const [section, setSection] = useState<Section>('Posts');
@@ -88,7 +88,6 @@ export function ProfilePopup({ opened, onClose, onEditProfile }: { opened: boole
             <Link iconOnly aria-label="Profile settings" onClick={openSettings}>
               <Icon ios="f7:gear_alt" md="material:settings" />
             </Link>
-            <Link popupClose aria-label="Close profile">Done</Link>
           </NavRight>
         </Navbar>
         {user && <>
@@ -138,10 +137,10 @@ export function ProfilePopup({ opened, onClose, onEditProfile }: { opened: boole
                 <Button small tonal onClick={() => toggleSave(post.id)}><Icon ios="f7:bookmark_fill" md="material:bookmark" /> Remove from saved</Button>
               </div>
             </article>)}
-            {section === 'Feeds' && followedCreators.map(creator => <Link key={creator.id} external target="_blank" {...{ rel: 'noopener noreferrer' }} href={creator.url} className="atlas-profile-feed">
-              <span className="social-avatar">{creator.initials}</span>
+            {section === 'Feeds' && followedCreators.map(creator => <Link key={creator.id} className="atlas-profile-feed" onClick={() => onOpenCreator(creator)}>
+              <img className="atlas-profile-feed-avatar" src={avatarPreset(creator.avatar_key).src} alt="" width={44} height={44} />
               <span><strong>{creator.name}</strong><small>{creator.network} · {creator.handle}</small></span>
-              <Icon ios="f7:arrow_up_right" md="material:open_in_new" />
+              <Icon ios="f7:chevron_right" md="material:chevron_right" />
             </Link>)}
           </section>
           <footer className="atlas-profile-footer">
