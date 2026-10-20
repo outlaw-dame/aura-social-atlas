@@ -5,12 +5,15 @@ import travel from '@/assets/news-travel.jpg';
 
 export const networks = ['All networks', 'Bluesky', 'Mastodon', 'RSS'] as const;
 export const topics = ['All topics', 'Design', 'Science', 'Culture', 'Travel'] as const;
-export type Creator = { id: string; name: string; handle: string; network: string; topic: string; bio: string; initials: string; url: string };
+export type Creator = {
+  id: string; name: string; handle: string; network: string; topic: string; bio: string;
+  initials: string; url: string; avatar_key: string; followers: string; featured_hashtags: string[];
+};
 export const creators: Creator[] = [
-  { id: 'studio', name: 'The Material Studio', handle: '@materialstudio', network: 'Bluesky', topic: 'Design', bio: 'Objects, spaces, and the people who make them.', initials: 'MS', url: 'https://bsky.app/' },
-  { id: 'orbit', name: 'Notes from Orbit', handle: '@notesfromorbit', network: 'Mastodon', topic: 'Science', bio: 'A little perspective from beyond our planet.', initials: 'NO', url: 'https://mastodon.social/' },
-  { id: 'form', name: 'A Softer Form', handle: 'asofterform.example', network: 'RSS', topic: 'Culture', bio: 'Architecture and everyday life, observed slowly.', initials: 'SF', url: 'https://www.architecturaldigest.com/' },
-  { id: 'elsewhere', name: 'Elsewhere Journal', handle: '@elsewherejournal', network: 'Bluesky', topic: 'Travel', bio: 'Small discoveries from the road less traveled.', initials: 'EJ', url: 'https://bsky.app/' },
+  { id: 'studio', name: 'The Material Studio', handle: '@materialstudio', network: 'Bluesky', topic: 'Design', bio: 'Objects, spaces, and the people who make them. Weekly notes on #design and #interiors from the workshop.', initials: 'MS', url: 'https://bsky.app/', avatar_key: 'memoji-1', followers: '12.4K', featured_hashtags: ['design', 'interiors'] },
+  { id: 'orbit', name: 'Notes from Orbit', handle: '@notesfromorbit', network: 'Mastodon', topic: 'Science', bio: 'A little perspective from beyond our planet. Dispatches on #space and #science, written slowly.', initials: 'NO', url: 'https://mastodon.social/', avatar_key: 'memoji-2', followers: '48.1K', featured_hashtags: ['space', 'science'] },
+  { id: 'form', name: 'A Softer Form', handle: 'asofterform.example', network: 'RSS', topic: 'Culture', bio: 'Architecture and everyday life, observed slowly. Essays on #architecture and #slowliving.', initials: 'SF', url: 'https://www.architecturaldigest.com/', avatar_key: 'memoji-3', followers: '9.2K', featured_hashtags: ['architecture', 'slowliving'] },
+  { id: 'elsewhere', name: 'Elsewhere Journal', handle: '@elsewherejournal', network: 'Bluesky', topic: 'Travel', bio: 'Small discoveries from the road less traveled. Postcards about #travel and quiet #coastlines.', initials: 'EJ', url: 'https://bsky.app/', avatar_key: 'memoji-4', followers: '21.7K', featured_hashtags: ['travel', 'coastlines'] },
 ];
 export const posts = [
   { id: 'glass', creatorId: 'form', title: 'A softer way to see the city', excerpt: 'Looking at the buildings that make light feel like a material of its own.', image: architecture, url: 'https://www.architecturaldigest.com/', kind: 'Essay', alt: 'Modern glass architecture' },
