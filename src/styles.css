@@ -57,7 +57,7 @@
   --muted: oklch(0.96 0.005 260);
   --muted-foreground: oklch(0.5 0.01 260);
 
-  --accent: oklch(0.7 0.15 230);
+  --accent: #FA243C;
   --accent-foreground: oklch(0.99 0 0);
 
   --destructive: oklch(0.58 0.22 27);
@@ -81,8 +81,8 @@
   --secondary-foreground: oklch(0.97 0 0);
   --muted: oklch(0.27 0.01 260);
   --muted-foreground: oklch(0.7 0.01 260);
-  --accent: oklch(0.7 0.15 230);
-  --accent-foreground: oklch(0.15 0.01 260);
+  --accent: #FA243C;
+  --accent-foreground: oklch(0.99 0 0);
   --destructive: oklch(0.7 0.19 22);
   --destructive-foreground: oklch(0.97 0 0);
   --border: oklch(1 0 0 / 10%);
@@ -263,10 +263,14 @@
 .atlas-profile-footer .button { color: var(--muted-foreground); width: max-content; margin: 0 auto; }
 .atlas-profile-bio { margin: 14px auto 0; max-width: 320px; font-size: 14px; line-height: 1.6; color: var(--foreground); overflow-wrap: anywhere; white-space: pre-line; }
 .atlas-profile-bio-empty { color: var(--muted-foreground); }
-.atlas-hashtag { color: var(--primary); text-decoration: none; font-weight: 500; }
+.atlas-hashtag { color: var(--accent); text-decoration: none; font-weight: 500; }
 .atlas-profile-tags { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
-.atlas-profile-tag { padding: 6px 12px; border-radius: 999px; background: var(--secondary); color: var(--primary); font-size: 13px; font-weight: 500; text-decoration: none; }
+.atlas-profile-tag { padding: 6px 12px; border-radius: 999px; background: color-mix(in oklab, var(--accent) 10%, var(--secondary)); color: var(--accent); font-size: 13px; font-weight: 500; text-decoration: none; }
 .atlas-profile-edit { margin-top: 16px; gap: 6px; }
 .atlas-profile-edit .icon { font-size: 14px; }
 
 
+
+.atlas-profile-feed-avatar { width: 44px; height: 44px; border-radius: 50%; flex: 0 0 44px; }
+.atlas-profile-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+.atlas-profile-sample { text-align: center; font-size: 12px; opacity: 0.55; margin: 4px 16px 12px; }

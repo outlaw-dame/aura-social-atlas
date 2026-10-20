@@ -13,3 +13,4 @@
 - [x] Phone app side panel marks the section you're viewing.
 - [x] Phone Profile: Followers stat, settings gear, editable bio with linkified hashtags, Mastodon-style featured hashtags.
 
+- [x] Memoji avatars and filled-out profiles for creators; Apple Music red (#FA243C) accent incl. hashtags; profile gear top-right without Done.
