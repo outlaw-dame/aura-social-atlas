@@ -170,10 +170,10 @@ export default function AtlasMobileApp() {
               <List strong inset dividers mediaList>
                 {results.map(c => (
                   <ListItem key={c.id} title={c.name} text={c.bio}
-                    subtitle="" after=""
-                    footer=""
-                  >
                     onClick={() => setCreatorOpen(c)} style={{ cursor: 'pointer' }}>
+                    <span slot="subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      {c.handle} · <NetworkBadge network={c.network} />
+                    </span>
                     <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={44} height={44} style={{ borderRadius: 22 }} />
                     <Button slot="after" small round fill={!followed.includes(c.id)} tonal={followed.includes(c.id)}
                       onClick={(e: any) => { e.stopPropagation(); toggleFollow(c.id); }}>
