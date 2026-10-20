@@ -49,7 +49,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
     }
     supabase
       .from('profiles')
-      .select('display_name, avatar_key, bio, featured_hashtags')
+      .select('display_name, avatar_key, bio, featured_hashtags, created_at')
       .eq('id', userId)
       .maybeSingle()
       .then(({ data }) => {
@@ -72,7 +72,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
       .from('profiles')
       .update(patch)
       .eq('id', userId)
-      .select('display_name, avatar_key, bio, featured_hashtags')
+      .select('display_name, avatar_key, bio, featured_hashtags, created_at')
       .single();
     if (error) throw error;
     setProfile(data as AtlasProfile);
