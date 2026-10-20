@@ -274,3 +274,19 @@
 .atlas-profile-feed-avatar { width: 44px; height: 44px; border-radius: 50%; flex: 0 0 44px; }
 .atlas-profile-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
 .atlas-profile-sample { text-align: center; font-size: 12px; opacity: 0.55; margin: 4px 16px 12px; }
+
+/* Mastodon-style author tag: handle meta, verified fields, flags, pinned label */
+.atlas-profile-meta { display: flex; gap: 10px; justify-content: center; align-items: center; font-size: 12px; opacity: 0.6; margin-top: 6px; flex-wrap: wrap; }
+.atlas-profile-meta .icon { font-size: 14px; vertical-align: -2px; margin-right: 2px; }
+.atlas-follows-you { font-size: 11px; padding: 2px 8px; border-radius: 6px; background: var(--secondary); opacity: 1; }
+.atlas-profile-flag { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 6px; background: var(--secondary); vertical-align: middle; }
+.atlas-profile-flag .icon { font-size: 13px; }
+.atlas-profile-fields { margin: 14px auto 0; max-width: 320px; text-align: left; display: grid; gap: 6px; }
+.atlas-profile-field { display: flex; gap: 10px; font-size: 13px; align-items: baseline; }
+.atlas-profile-field-name { flex: 0 0 96px; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; opacity: 0.55; margin: 0; }
+.atlas-profile-field-value { flex: 1; margin: 0; display: flex; align-items: center; gap: 5px; }
+.atlas-profile-field-value a { color: var(--accent); text-decoration: none; }
+.atlas-profile-verified, .atlas-profile-verified a { color: #34c759 !important; font-weight: 600; }
+.atlas-profile-verified .icon { font-size: 15px; }
+.atlas-profile-tag small { opacity: 0.6; font-weight: 400; margin-left: 2px; }
+.atlas-pinned { display: flex; align-items: center; gap: 6px; font-size: 12px; opacity: 0.6; margin: 8px 16px 0; }

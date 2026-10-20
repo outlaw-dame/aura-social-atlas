@@ -95,6 +95,11 @@ export function ProfilePopup({ opened, onClose, onEditProfile, onOpenCreator }: 
             <img className="atlas-profile-avatar" src={avatarPreset(profile?.avatar_key).src} alt="Your avatar" width={96} height={96} />
             <h1>{profile?.display_name || 'Your profile'}</h1>
             <p className="atlas-profile-email">{user.email}</p>
+            {profile?.created_at && (
+              <div className="atlas-profile-meta">
+                <span><Icon ios="f7:calendar" md="material:calendar_month" /> Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+              </div>
+            )}
             <div className="atlas-profile-stats">
               <span><strong>0</strong> Followers</span>
               <span><strong>{followed.length}</strong> Following</span>
