@@ -1,13 +1,15 @@
 import { Popup, Page, Navbar, NavRight, Link, Icon, Button, Card, CardContent, CardFooter } from 'framework7-react';
-import { posts, type Creator } from '@/lib/social-catalogue';
+import { posts, fullHandle, type Creator } from '@/lib/social-catalogue';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { linkifyHashtags, hashtagUrl } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
 
-/** Sample creator profile: memoji avatar, bio with linkified hashtags, featured tags, their stories. */
+/** Mastodon-style creator profile: full fediverse handle, verified fields, featured tags, pinned story. */
 export function CreatorPopup({ creator, onClose }: { creator: Creator | null; onClose: () => void }) {
   const { followed, toggleFollow, saved, toggleSave } = useSocial();
   const theirPosts = creator ? posts.filter(p => p.creatorId === creator.id) : [];
+  const pinned = theirPosts.filter(p => p.pinned);
+  const rest = theirPosts.filter(p => !p.pinned);
 
   return (
     <Popup opened={!!creator} onPopupClosed={onClose} className="atlas-creator-popup">
@@ -22,17 +24,41 @@ export function CreatorPopup({ creator, onClose }: { creator: Creator | null; on
           </Navbar>
           <header className="atlas-profile-header">
             <img className="atlas-profile-avatar" src={avatarPreset(creator.avatar_key).src} alt={`${creator.name} avatar`} width={96} height={96} />
-            <h1>{creator.name}</h1>
-            <p className="atlas-profile-email">{creator.handle} · {creator.network}</p>
+            <h1>
+              {creator.name}
+              {creator.bot && <span className="atlas-profile-flag" title="Automated account"><Icon ios="f7:gear_alt_fill" md="material:smart_toy" /> Bot</span>}
+            </h1>
+            <p className="atlas-profile-email">{fullHandle(creator)}</p>
+            <div className="atlas-profile-meta">
+              <span><Icon ios="f7:calendar" md="material:calendar_month" /> Joined {creator.joined}</span>
+              {creator.follows_you && <span className="atlas-follows-you">Follows you</span>}
+            </div>
             <div className="atlas-profile-stats">
               <span><strong>{creator.followers}</strong> Followers</span>
               <span><strong>{theirPosts.length}</strong> Stories</span>
             </div>
             <p className="atlas-profile-bio">{linkifyHashtags(creator.bio)}</p>
+            {creator.fields.length > 0 && (
+              <dl className="atlas-profile-fields">
+                {creator.fields.map(field => (
+                  <div key={field.name} className="atlas-profile-field">
+                    <dt className="atlas-profile-field-name">{field.name}</dt>
+                    <dd className={`atlas-profile-field-value${field.verified ? ' atlas-profile-verified' : ''}`}>
+                      {field.verified && <Icon ios="f7:checkmark_seal_fill" md="material:verified" />}
+                      {field.url
+                        ? <a href={field.url} target="_blank" rel="me noopener noreferrer">{field.value}</a>
+                        : field.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
             {creator.featured_hashtags.length > 0 && (
               <div className="atlas-profile-tags" aria-label="Featured hashtags">
                 {creator.featured_hashtags.map(tag => (
-                  <a key={tag} className="atlas-profile-tag" href={hashtagUrl(tag)} target="_blank" rel="noopener noreferrer">#{tag}</a>
+                  <a key={tag.name} className="atlas-profile-tag" href={hashtagUrl(tag.name)} target="_blank" rel="noopener noreferrer">
+                    #{tag.name} <small>{tag.count} posts</small>
+                  </a>
                 ))}
               </div>
             )}
@@ -45,7 +71,10 @@ export function CreatorPopup({ creator, onClose }: { creator: Creator | null; on
             </div>
           </header>
           <p className="atlas-profile-sample">Sample profile, not a live account.</p>
-          {theirPosts.map(p => (
+          {pinned.length > 0 && (
+            <p className="atlas-pinned"><Icon ios="f7:pin_fill" md="material:push_pin" /> Pinned story</p>
+          )}
+          {[...pinned, ...rest].map(p => (
             <Card key={p.id} outline className="atlas-f7-card">
               <img src={p.image} alt={p.alt} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', display: 'block' }} />
               <CardContent>
