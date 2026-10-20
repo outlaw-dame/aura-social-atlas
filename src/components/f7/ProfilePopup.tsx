@@ -81,7 +81,7 @@ export function ProfilePopup({ opened, onClose, onEditProfile }: { opened: boole
   };
 
   return (
-    <Popup opened={opened} onPopupClosed={onClose} swipeToClose className="atlas-profile-popup">
+    <Popup opened={opened} onPopupClosed={onClose} className="atlas-profile-popup">
       <Page>
         <Navbar title="Profile">
           <NavRight>
