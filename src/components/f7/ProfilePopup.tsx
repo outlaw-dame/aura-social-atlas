@@ -37,7 +37,7 @@ function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose: () =>
   };
 
   return (
-    <Sheet opened={opened} onSheetClosed={onClose} swipeToClose backdrop style={{ height: 'auto' }}>
+    <Sheet opened={opened} onSheetClosed={onClose} backdrop style={{ height: 'auto' }}>
       <Block>
         <div style={{ fontWeight: 600, fontSize: 17, marginBottom: 4 }}>Edit profile</div>
         <div style={{ fontSize: 13, opacity: 0.6 }}>Hashtags in your bio become links. Featured hashtags show on your profile like they do on Mastodon.</div>
