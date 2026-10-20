@@ -14,3 +14,4 @@
 - [x] Phone Profile: Followers stat, settings gear, editable bio with linkified hashtags, Mastodon-style featured hashtags.
 
 - [x] Memoji avatars and filled-out profiles for creators; Apple Music red (#FA243C) accent incl. hashtags; profile gear top-right without Done.
+- [x] Emulate Mastodon author tag: full @user@domain handle, verified rel="me" fields, featured tag counts, joined date, Follows you badge, bot flag, pinned stories.
