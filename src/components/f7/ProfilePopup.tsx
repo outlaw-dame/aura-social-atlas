@@ -17,8 +17,9 @@ const emptySections: Record<Section, { ios: string; md: string; title: string; d
   Lists: { ios: 'f7:list_bullet', md: 'material:format_list_bulleted', title: 'No lists yet', detail: 'Your creator lists will appear here when lists are available.' },
 };
 
-/** Edit sheet for the bio and Mastodon-style featured hashtags. */
-function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose: () => void }) {
+/** Edit sheet for the bio and Mastodon-style featured hashtags. Rendered at app level:
+    Framework7 sheets nested inside a popup break the popup's swipe handler. */
+export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { profile, updateProfile } = useAtlasAuth();
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [tags, setTags] = useState((profile?.featured_hashtags ?? []).map(t => `#${t}`).join(' '));
@@ -56,11 +57,10 @@ function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose: () =>
   );
 }
 
-export function ProfilePopup({ opened, onClose }: { opened: boolean; onClose: () => void }) {
+export function ProfilePopup({ opened, onClose, onEditProfile }: { opened: boolean; onClose: () => void; onEditProfile: () => void }) {
   const { user, profile, signOut } = useAtlasAuth();
   const { followed, saved, toggleSave } = useSocial();
   const [section, setSection] = useState<Section>('Posts');
-  const [editOpen, setEditOpen] = useState(false);
   const savedPosts = posts.filter(post => saved.includes(post.id));
   const followedCreators = creators.filter(creator => followed.includes(creator.id));
   const empty = emptySections[section];
