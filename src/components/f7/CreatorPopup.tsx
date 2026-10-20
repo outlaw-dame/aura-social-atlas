@@ -3,6 +3,7 @@ import { posts, fullHandle, type Creator } from '@/lib/social-catalogue';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { linkifyHashtags, hashtagUrl } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
+import { NetworkBadge } from '@/lib/networks';
 
 /** Mastodon-style creator profile: full fediverse handle, verified fields, featured tags, pinned story. */
 export function CreatorPopup({ creator, onClose }: { creator: Creator | null; onClose: () => void }) {
@@ -31,6 +32,7 @@ export function CreatorPopup({ creator, onClose }: { creator: Creator | null; on
             <p className="atlas-profile-email">{fullHandle(creator)}</p>
             <div className="atlas-profile-meta">
               <span><Icon ios="f7:calendar" md="material:calendar_month" /> Joined {creator.joined}</span>
+              <NetworkBadge network={creator.network} />
               {creator.follows_you && <span className="atlas-follows-you">Follows you</span>}
             </div>
             <div className="atlas-profile-stats">
@@ -78,7 +80,9 @@ export function CreatorPopup({ creator, onClose }: { creator: Creator | null; on
             <Card key={p.id} outline className="atlas-f7-card">
               <img src={p.image} alt={p.alt} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', display: 'block' }} />
               <CardContent>
-                <div style={{ fontSize: 12, opacity: 0.6 }}>{p.kind}</div>
+                <div style={{ fontSize: 12, opacity: 0.6, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <NetworkBadge network={creator.network} /> · {p.kind} · <span style={{ opacity: 0.8 }}>{fullHandle(creator)}</span>
+                </div>
                 <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22, lineHeight: 1.15, margin: '6px 0' }}>{p.title}</div>
                 <div style={{ opacity: 0.75 }}>{p.excerpt}</div>
               </CardContent>
