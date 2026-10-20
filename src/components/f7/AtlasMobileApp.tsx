@@ -13,7 +13,7 @@ import { creators, posts, networks, matchesCreator } from '@/lib/social-catalogu
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
-import { ProfilePopup } from './ProfilePopup';
+import { ProfilePopup, EditProfileSheet } from './ProfilePopup';
 
 Framework7.use(Framework7React);
 
@@ -39,6 +39,7 @@ export default function AtlasMobileApp() {
   const [query, setQuery] = useState('');
   const [composeOpen, setComposeOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [fabHidden, setFabHidden] = useState(false);
   const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
@@ -206,7 +207,8 @@ export default function AtlasMobileApp() {
           </Tabs>
         </Page>
       </View>
-      <ProfilePopup opened={profileOpen} onClose={() => setProfileOpen(false)} />
+      <ProfilePopup opened={profileOpen} onClose={() => setProfileOpen(false)} onEditProfile={() => setEditProfileOpen(true)} />
+      <EditProfileSheet opened={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
