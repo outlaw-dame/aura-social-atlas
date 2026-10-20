@@ -234,6 +234,7 @@
 .atlas-profile-navigation { padding: 0 16px 20px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
 .atlas-profile-navigation::-webkit-scrollbar { display: none; }
 .atlas-profile-segments { width: max-content; min-width: 100%; background: var(--secondary); }
+.atlas-profile-segments .segmented-highlight { display: none; }
 .atlas-profile-segments .button { flex: 1 0 auto; min-height: 40px; padding-inline: 17px; font-size: 13px; color: var(--muted-foreground); letter-spacing: 0; }
 .atlas-profile-segments .button-active { background: var(--card); color: var(--foreground); }
 .atlas-profile-content { padding: 24px 20px; min-height: 290px; }
