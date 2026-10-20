@@ -1,4 +1,5 @@
 # Atlas social discovery
+- [ ] Match phone Profile to the centered reference with Posts, Media, Saved, Feeds, Collections, and Lists; verify signed-in tabs and Settings separation.
 - [x] Replace browser chrome with social search, creator discovery, Following, and Saved views.
 - [x] Preserve Liquid Glass styling and the existing assistant.
 - [x] Update public page descriptions and verify discovery interactions.

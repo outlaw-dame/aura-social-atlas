@@ -223,4 +223,41 @@
 .panel .item-link.item-selected .item-title { color: var(--accent); font-weight: 600; }
 .panel .item-link.item-selected .item-media .icon { color: var(--accent); }
 
+/* Centered social profile; the six section names scroll rather than compress. */
+.atlas-profile-popup .page { background: var(--background); color: var(--foreground); }
+.atlas-profile-header { text-align: center; padding: 32px 24px 24px; }
+.atlas-profile-avatar { display: block; margin: 0 auto 16px; border-radius: 50%; background: var(--secondary); object-fit: cover; }
+.atlas-profile-header h1 { margin: 0; font-family: var(--font-sans); font-size: 27px; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
+.atlas-profile-email { margin: 8px 0 18px; font-size: 14px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.atlas-profile-stats { display: flex; gap: 24px; justify-content: center; font-size: 13px; color: var(--muted-foreground); }
+.atlas-profile-stats strong { color: var(--foreground); font-weight: 600; margin-right: 3px; }
+.atlas-profile-navigation { padding: 0 16px 20px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.atlas-profile-navigation::-webkit-scrollbar { display: none; }
+.atlas-profile-segments { width: max-content; min-width: 100%; background: var(--secondary); }
+.atlas-profile-segments .button { flex: 1 0 auto; min-height: 40px; padding-inline: 17px; font-size: 13px; color: var(--muted-foreground); letter-spacing: 0; }
+.atlas-profile-segments .button-active { background: var(--card); color: var(--foreground); }
+.atlas-profile-content { padding: 24px 20px; min-height: 290px; }
+.atlas-profile-empty { text-align: center; padding: 36px 12px; }
+.atlas-profile-empty-icon { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 18px; border-radius: 50%; background: var(--secondary); color: var(--muted-foreground); }
+.atlas-profile-empty h2 { font-size: 19px; font-weight: 600; margin: 0 0 8px; }
+.atlas-profile-empty p { max-width: 280px; margin: 0 auto; color: var(--muted-foreground); font-size: 14px; line-height: 1.6; }
+.atlas-profile-story { overflow: hidden; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; background: var(--card); }
+.atlas-profile-story-image, .atlas-profile-story-image img { display: block; width: 100%; }
+.atlas-profile-story-image img { aspect-ratio: 16 / 10; object-fit: cover; }
+.atlas-profile-story-body { padding: 16px; }
+.atlas-profile-story-meta { font-size: 12px; color: var(--muted-foreground); }
+.atlas-profile-story h2 { font-family: var(--font-serif); font-weight: 400; font-size: 25px; line-height: 1.2; margin: 8px 0; }
+.atlas-profile-story h2 a { color: var(--foreground); }
+.atlas-profile-story p { font-size: 14px; color: var(--muted-foreground); line-height: 1.6; }
+.atlas-profile-story .button { width: max-content; max-width: 100%; gap: 6px; }
+.atlas-profile-story .button .icon { font-size: 16px; }
+.atlas-profile-feed { display: flex; gap: 14px; padding: 18px 0; border-bottom: 1px solid var(--border); color: var(--foreground); }
+.atlas-profile-feed .social-avatar { width: 44px; height: 44px; flex: 0 0 44px; }
+.atlas-profile-feed > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.atlas-profile-feed strong, .atlas-profile-feed small { display: block; }
+.atlas-profile-feed small { margin-top: 4px; color: var(--muted-foreground); font-size: 12px; }
+.atlas-profile-feed > .icon { font-size: 18px; align-self: center; color: var(--muted-foreground); }
+.atlas-profile-footer { padding: 0 24px 32px; }
+.atlas-profile-footer .button { color: var(--muted-foreground); width: max-content; margin: 0 auto; }
+
 
