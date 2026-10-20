@@ -9,7 +9,8 @@ import 'framework7-icons/css/framework7-icons.css';
 import 'material-icons/iconfont/material-icons.css';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
 import { Fab, NavRight, NavLeft, Panel, Popup, f7 } from 'framework7-react';
-import { creators, posts, networks, matchesCreator, type Creator } from '@/lib/social-catalogue';
+import { creators, posts, networks, matchesCreator, fullHandle, type Creator } from '@/lib/social-catalogue';
+import { NetworkBadge } from '@/lib/networks';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
@@ -85,7 +86,7 @@ export default function AtlasMobileApp() {
           <button type="button" onClick={() => setCreatorOpen(c)} aria-label={`View ${c.name}'s profile`}
             style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.75, background: 'none', border: 0, padding: 0, color: 'inherit', cursor: 'pointer' }}>
             <img src={avatarPreset(c.avatar_key).src} alt="" width={22} height={22} style={{ borderRadius: 11 }} />
-            {c.name} · {c.network} · {p.kind}
+            <span>{c.name} <span style={{ opacity: 0.65 }}>{fullHandle(c)}</span></span> · <NetworkBadge network={c.network} /> · {p.kind}
           </button>
           <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 24, lineHeight: 1.15, margin: '6px 0' }}>{p.title}</div>
           <div style={{ opacity: 0.75 }}>{p.excerpt}</div>
@@ -168,7 +169,10 @@ export default function AtlasMobileApp() {
               <BlockTitle>Creators</BlockTitle>
               <List strong inset dividers mediaList>
                 {results.map(c => (
-                  <ListItem key={c.id} title={c.name} subtitle={`${c.handle} · ${c.network}`} text={c.bio}
+                  <ListItem key={c.id} title={c.name} text={c.bio}
+                    subtitle="" after=""
+                    footer=""
+                  >
                     onClick={() => setCreatorOpen(c)} style={{ cursor: 'pointer' }}>
                     <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={44} height={44} style={{ borderRadius: 22 }} />
                     <Button slot="after" small round fill={!followed.includes(c.id)} tonal={followed.includes(c.id)}
