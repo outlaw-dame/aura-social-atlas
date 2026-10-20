@@ -41,10 +41,10 @@ export function ProfilePopup({ opened, onClose }: { opened: boolean; onClose: ()
               <span><strong>{saved.length}</strong> Saved</span>
             </div>
           </header>
-          <div className="atlas-profile-navigation">
-            <Segmented strong round className="atlas-profile-segments" role="tablist" aria-label="Profile sections">
+          <div className="atlas-profile-navigation" role="tablist" aria-label="Profile sections">
+            <Segmented strong round className="atlas-profile-segments">
               {sections.map(item => <Button key={item} round active={section === item}
-                role="tab" aria-selected={section === item} aria-controls="atlas-profile-content"
+                {...{ role: 'tab' }} aria-selected={section === item} aria-controls="atlas-profile-content"
                 id={`atlas-profile-tab-${item.toLowerCase()}`} onClick={() => setSection(item)}>{item}</Button>)}
             </Segmented>
           </div>
@@ -55,15 +55,15 @@ export function ProfilePopup({ opened, onClose }: { opened: boolean; onClose: ()
               <p>{empty.detail}</p>
             </div>}
             {section === 'Saved' && savedPosts.map(post => <article key={post.id} className="atlas-profile-story">
-              <Link external target="_blank" rel="noopener noreferrer" href={post.url} className="atlas-profile-story-image"><img src={post.image} alt={post.alt} loading="lazy" /></Link>
+              <Link external target="_blank" {...{ rel: 'noopener noreferrer' }} href={post.url} className="atlas-profile-story-image"><img src={post.image} alt={post.alt} loading="lazy" /></Link>
               <div className="atlas-profile-story-body">
                 <span className="atlas-profile-story-meta">{creators.find(creator => creator.id === post.creatorId)?.name} · {post.kind}</span>
-                <h2><Link external target="_blank" rel="noopener noreferrer" href={post.url}>{post.title}</Link></h2>
+                <h2><Link external target="_blank" {...{ rel: 'noopener noreferrer' }} href={post.url}>{post.title}</Link></h2>
                 <p>{post.excerpt}</p>
                 <Button small tonal onClick={() => toggleSave(post.id)}><Icon ios="f7:bookmark_fill" md="material:bookmark" /> Remove from saved</Button>
               </div>
             </article>)}
-            {section === 'Feeds' && followedCreators.map(creator => <Link key={creator.id} external target="_blank" rel="noopener noreferrer" href={creator.url} className="atlas-profile-feed">
+            {section === 'Feeds' && followedCreators.map(creator => <Link key={creator.id} external target="_blank" {...{ rel: 'noopener noreferrer' }} href={creator.url} className="atlas-profile-feed">
               <span className="social-avatar">{creator.initials}</span>
               <span><strong>{creator.name}</strong><small>{creator.network} · {creator.handle}</small></span>
               <Icon ios="f7:arrow_up_right" md="material:open_in_new" />
