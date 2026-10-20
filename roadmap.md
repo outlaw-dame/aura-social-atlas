@@ -11,4 +11,5 @@
 - [x] Framework7 phone app at /app + home-screen install
 - [x] Phone app top bar: menu icon far left, section name centred, actions far right on iOS and Android.
 - [x] Phone app side panel marks the section you're viewing.
+- [x] Phone Profile: Followers stat, settings gear, editable bio with linkified hashtags, Mastodon-style featured hashtags.
 

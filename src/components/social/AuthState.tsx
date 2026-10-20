@@ -3,7 +3,12 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { supabase } from '@/integrations/supabase/client';
 import type { Session, User } from '@supabase/supabase-js';
 
-export type AtlasProfile = { display_name: string | null; avatar_key: string | null };
+export type AtlasProfile = {
+  display_name: string | null;
+  avatar_key: string | null;
+  bio: string | null;
+  featured_hashtags: string[];
+};
 
 type AuthState = {
   session: Session | null;
@@ -11,6 +16,7 @@ type AuthState = {
   profile: AtlasProfile | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  updateProfile: (patch: Partial<Pick<AtlasProfile, 'display_name' | 'avatar_key' | 'bio' | 'featured_hashtags'>>) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -43,7 +49,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
     }
     supabase
       .from('profiles')
-      .select('display_name, avatar_key')
+      .select('display_name, avatar_key, bio, featured_hashtags')
       .eq('id', userId)
       .maybeSingle()
       .then(({ data }) => {
@@ -60,8 +66,20 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   };
 
+  const updateProfile: AuthState['updateProfile'] = async (patch) => {
+    if (!userId) return;
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(patch)
+      .eq('id', userId)
+      .select('display_name, avatar_key, bio, featured_hashtags')
+      .single();
+    if (error) throw error;
+    setProfile(data as AtlasProfile);
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, loading, signOut, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

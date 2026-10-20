@@ -261,5 +261,12 @@
 .atlas-profile-feed > .icon { font-size: 18px; align-self: center; color: var(--muted-foreground); }
 .atlas-profile-footer { padding: 0 24px 32px; }
 .atlas-profile-footer .button { color: var(--muted-foreground); width: max-content; margin: 0 auto; }
+.atlas-profile-bio { margin: 14px auto 0; max-width: 320px; font-size: 14px; line-height: 1.6; color: var(--foreground); overflow-wrap: anywhere; white-space: pre-line; }
+.atlas-profile-bio-empty { color: var(--muted-foreground); }
+.atlas-hashtag { color: var(--primary); text-decoration: none; font-weight: 500; }
+.atlas-profile-tags { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+.atlas-profile-tag { padding: 6px 12px; border-radius: 999px; background: var(--secondary); color: var(--primary); font-size: 13px; font-weight: 500; text-decoration: none; }
+.atlas-profile-edit { margin-top: 16px; gap: 6px; }
+.atlas-profile-edit .icon { font-size: 14px; }
 
 
