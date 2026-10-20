@@ -3,7 +3,12 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { supabase } from '@/integrations/supabase/client';
 import type { Session, User } from '@supabase/supabase-js';
 
-export type AtlasProfile = { display_name: string | null; avatar_key: string | null };
+export type AtlasProfile = {
+  display_name: string | null;
+  avatar_key: string | null;
+  bio: string | null;
+  featured_hashtags: string[];
+};
 
 type AuthState = {
   session: Session | null;
@@ -11,6 +16,7 @@ type AuthState = {
   profile: AtlasProfile | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  updateProfile: (patch: Partial<Pick<AtlasProfile, 'display_name' | 'avatar_key' | 'bio' | 'featured_hashtags'>>) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
