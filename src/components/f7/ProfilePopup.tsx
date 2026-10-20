@@ -104,7 +104,7 @@ export function ProfilePopup({ opened, onClose, onEditProfile }: { opened: boole
                 ))}
               </div>
             )}
-            <Button small tonal className="atlas-profile-edit" onClick={() => setEditOpen(true)}>
+            <Button small tonal className="atlas-profile-edit" onClick={onEditProfile}>
               <Icon ios="f7:pencil" md="material:edit" /> Edit profile
             </Button>
           </header>
@@ -140,7 +140,6 @@ export function ProfilePopup({ opened, onClose, onEditProfile }: { opened: boole
             <Button small onClick={async () => { await signOut(); onClose(); }}>Sign out</Button>
           </footer>
         </>}
-        <EditProfileSheet opened={editOpen} onClose={() => setEditOpen(false)} />
       </Page>
     </Popup>
   );
