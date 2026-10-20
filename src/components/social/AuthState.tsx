@@ -8,6 +8,7 @@ export type AtlasProfile = {
   avatar_key: string | null;
   bio: string | null;
   featured_hashtags: string[];
+  created_at: string;
 };
 
 type AuthState = {
