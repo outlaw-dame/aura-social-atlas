@@ -1,26 +1,27 @@
-import { describe, it, expect } from 'vitest';
+import { describe, test } from 'node:test';
+import { deepStrictEqual, strictEqual } from 'node:assert';
 import { extractHashtags, hashtagUrl } from './hashtags';
 
 describe('extractHashtags', () => {
-  it('extracts lowercase tag names without the #', () => {
-    expect(extractHashtags('#Design #OpenWeb')).toEqual(['design', 'openweb']);
+  test('extracts lowercase tag names without the #', () => {
+    deepStrictEqual(extractHashtags('#Design #OpenWeb'), ['design', 'openweb']);
   });
 
-  it('dedupes repeated tags', () => {
-    expect(extractHashtags('#art #art #ART')).toEqual(['art']);
+  test('dedupes repeated tags', () => {
+    deepStrictEqual(extractHashtags('#art #art #ART'), ['art']);
   });
 
-  it('rejects all-digit tags like Mastodon', () => {
-    expect(extractHashtags('#123 #a1')).toEqual(['a1']);
+  test('rejects all-digit tags like Mastodon', () => {
+    deepStrictEqual(extractHashtags('#123 #a1'), ['a1']);
   });
 
-  it('ignores # mid-word and after URL chars', () => {
-    expect(extractHashtags('a#b /#c &#d')).toEqual([]);
+  test('ignores # mid-word and after URL chars', () => {
+    deepStrictEqual(extractHashtags('a#b /#c &#d'), []);
   });
 });
 
 describe('hashtagUrl', () => {
-  it('links to the Mastodon tag page', () => {
-    expect(hashtagUrl('openweb')).toBe('https://mastodon.social/tags/openweb');
+  test('links to the Mastodon tag page', () => {
+    strictEqual(hashtagUrl('openweb'), 'https://mastodon.social/tags/openweb');
   });
 });
