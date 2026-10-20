@@ -1,16 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, test } from 'node:test';
+import { strictEqual } from 'node:assert';
 import { networkBrands, networkBrand } from './networks';
 
 describe('network brands', () => {
-  it('uses the official Bluesky Blue #0085FF', () => {
-    expect(networkBrands.Bluesky.color).toBe('#0085FF');
+  test('uses the official Bluesky Blue #0085FF', () => {
+    strictEqual(networkBrands.Bluesky.color, '#0085FF');
   });
-  it('uses the official Mastodon Purple #6364FF', () => {
-    expect(networkBrands.Mastodon.color).toBe('#6364FF');
+  test('uses the official Mastodon Purple #6364FF', () => {
+    strictEqual(networkBrands.Mastodon.color, '#6364FF');
   });
-  it('returns a brand for Bluesky and Mastodon but not RSS', () => {
-    expect(networkBrand('Bluesky')?.label).toBe('Bluesky');
-    expect(networkBrand('Mastodon')?.label).toBe('Mastodon');
-    expect(networkBrand('RSS')).toBeNull();
+  test('returns a brand for Bluesky and Mastodon but not RSS', () => {
+    strictEqual(networkBrand('Bluesky')?.label, 'Bluesky');
+    strictEqual(networkBrand('Mastodon')?.label, 'Mastodon');
+    strictEqual(networkBrand('RSS'), null);
   });
 });
