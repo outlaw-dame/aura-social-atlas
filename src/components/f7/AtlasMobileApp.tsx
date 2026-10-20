@@ -9,11 +9,12 @@ import 'framework7-icons/css/framework7-icons.css';
 import 'material-icons/iconfont/material-icons.css';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
 import { Fab, NavRight, NavLeft, Panel, Popup, f7 } from 'framework7-react';
-import { creators, posts, networks, matchesCreator } from '@/lib/social-catalogue';
+import { creators, posts, networks, matchesCreator, type Creator } from '@/lib/social-catalogue';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { ProfilePopup, EditProfileSheet } from './ProfilePopup';
+import { CreatorPopup } from './CreatorPopup';
 
 Framework7.use(Framework7React);
 
@@ -41,6 +42,7 @@ export default function AtlasMobileApp() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [creatorOpen, setCreatorOpen] = useState<Creator | null>(null);
   const [fabHidden, setFabHidden] = useState(false);
   const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
   const [title, setTitle] = useState('Discover');
@@ -80,7 +82,11 @@ export default function AtlasMobileApp() {
       <Card key={p.id} outline={theme === 'ios'} raised={theme === 'md'} className="atlas-f7-card">
         <img src={p.image} alt={p.alt} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', display: 'block' }} />
         <CardContent>
-          <div style={{ fontSize: 12, opacity: 0.6 }}>{c.name} · {c.network} · {p.kind}</div>
+          <button type="button" onClick={() => setCreatorOpen(c)} aria-label={`View ${c.name}'s profile`}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.75, background: 'none', border: 0, padding: 0, color: 'inherit', cursor: 'pointer' }}>
+            <img src={avatarPreset(c.avatar_key).src} alt="" width={22} height={22} style={{ borderRadius: 11 }} />
+            {c.name} · {c.network} · {p.kind}
+          </button>
           <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 24, lineHeight: 1.15, margin: '6px 0' }}>{p.title}</div>
           <div style={{ opacity: 0.75 }}>{p.excerpt}</div>
         </CardContent>
@@ -93,7 +99,7 @@ export default function AtlasMobileApp() {
   };
 
   return (
-    <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: '#2f6fd6' }}>
+    <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: '#FA243C' }}>
       <Panel left cover swipe resizable={false}>
         <Page>
           <Block style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', fontSize: 32, marginTop: 24 }}>Atlas</Block>
@@ -162,9 +168,11 @@ export default function AtlasMobileApp() {
               <BlockTitle>Creators</BlockTitle>
               <List strong inset dividers mediaList>
                 {results.map(c => (
-                  <ListItem key={c.id} title={c.name} subtitle={`${c.handle} · ${c.network}`} text={c.bio}>
-                    <div slot="media" style={{ width: 44, height: 44, borderRadius: 22, display: 'grid', placeItems: 'center', background: 'rgba(47,111,214,.12)', fontWeight: 600 }}>{c.initials}</div>
-                    <Button slot="after" small round fill={!followed.includes(c.id)} tonal={followed.includes(c.id)} onClick={() => toggleFollow(c.id)}>
+                  <ListItem key={c.id} title={c.name} subtitle={`${c.handle} · ${c.network}`} text={c.bio}
+                    onClick={() => setCreatorOpen(c)} style={{ cursor: 'pointer' }}>
+                    <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={44} height={44} style={{ borderRadius: 22 }} />
+                    <Button slot="after" small round fill={!followed.includes(c.id)} tonal={followed.includes(c.id)}
+                      onClick={(e: any) => { e.stopPropagation(); toggleFollow(c.id); }}>
                       {followed.includes(c.id) ? 'Following' : 'Follow'}
                     </Button>
                   </ListItem>
@@ -207,7 +215,8 @@ export default function AtlasMobileApp() {
           </Tabs>
         </Page>
       </View>
-      <ProfilePopup opened={profileOpen} onClose={() => setProfileOpen(false)} onEditProfile={() => setEditProfileOpen(true)} />
+      <ProfilePopup opened={profileOpen} onClose={() => setProfileOpen(false)} onEditProfile={() => setEditProfileOpen(true)} onOpenCreator={setCreatorOpen} />
+      <CreatorPopup creator={creatorOpen} onClose={() => setCreatorOpen(null)} />
       <EditProfileSheet opened={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
