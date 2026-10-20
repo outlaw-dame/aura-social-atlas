@@ -279,6 +279,8 @@
 .atlas-profile-meta { display: flex; gap: 10px; justify-content: center; align-items: center; font-size: 12px; opacity: 0.6; margin-top: 6px; flex-wrap: wrap; }
 .atlas-profile-meta .icon { font-size: 14px; vertical-align: -2px; margin-right: 2px; }
 .atlas-follows-you { font-size: 11px; padding: 2px 8px; border-radius: 6px; background: var(--secondary); opacity: 1; }
+.atlas-network-badge { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; opacity: 1; }
+.atlas-network-badge svg { flex-shrink: 0; }
 .atlas-profile-flag { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 6px; background: var(--secondary); vertical-align: middle; }
 .atlas-profile-flag .icon { font-size: 13px; }
 .atlas-profile-fields { margin: 14px auto 0; max-width: 320px; text-align: left; display: grid; gap: 6px; }
