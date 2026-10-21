@@ -19,10 +19,10 @@ describe('social discovery filters', () => {
 
 describe('postsByTag', () => {
   test('returns only that creator\'s posts carrying the tag', () => {
-    deepStrictEqual(postsByTag('orbit', 'space').map(p => p.id), ['stars']);
+    deepStrictEqual(postsByTag('orbit', 'space').map(p => p.id), ['stars', 'moonlight', 'stargazing']);
     deepStrictEqual(postsByTag('orbit', 'travel'), []);
   });
   test('matches tags case-insensitively', () => {
-    deepStrictEqual(postsByTag('airwaves', 'Podcasting20').map(p => p.id), ['waves']);
+    deepStrictEqual(postsByTag('airwaves', 'Podcasting20').map(p => p.id), ['waves', 'chapters', 'transcripts']);
   });
 });

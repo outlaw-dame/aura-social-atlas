@@ -4,6 +4,7 @@ import { useAtlasAuth } from '@/components/social/AuthState';
 import { useSocial } from '@/components/social/SocialState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { creators, posts, type Creator } from '@/lib/social-catalogue';
+import { CreatorTag } from '@/components/social/CreatorTag';
 import { linkifyHashtags, extractHashtags, hashtagUrl } from '@/lib/hashtags';
 
 const sections = ['Posts', 'Media', 'Saved', 'Feeds', 'Collections', 'Lists'] as const;
@@ -139,6 +140,7 @@ export function ProfilePopup({ opened, onClose, onEditProfile, onOpenCreator }: 
                 <span className="atlas-profile-story-meta">{creators.find(creator => creator.id === post.creatorId)?.name} · {post.kind}</span>
                 <h2><Link external target="_blank" {...{ rel: 'noopener noreferrer' }} href={post.url}>{post.title}</Link></h2>
                 <p>{post.excerpt}</p>
+                {(() => { const creator = creators.find(c => c.id === post.creatorId); return creator ? <CreatorTag creator={creator} onOpen={() => onOpenCreator(creator)} /> : null; })()}
                 <Button small tonal onClick={() => toggleSave(post.id)}><Icon ios="f7:bookmark_fill" md="material:bookmark" /> Remove from saved</Button>
               </div>
             </article>)}

@@ -17,6 +17,7 @@ import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { ProfilePopup, EditProfileSheet } from './ProfilePopup';
 import { CreatorPopup } from './CreatorPopup';
+import { CreatorTag } from '@/components/social/CreatorTag';
 
 Framework7.use(Framework7React);
 
@@ -75,7 +76,7 @@ export default function AtlasMobileApp() {
   }, []);
 
   const results = creators.filter(c => matchesCreator(c, query, network, 'All topics'));
-  const creatorOf = (id: string) => creators.find(c => c.id === id)!;
+  const creatorOf = (id: string) => creators.find(c => c.id === id);
   const tagFeedCreator = tagFeed ? creatorOf(tagFeed.creatorId) : null;
   const tagFeedPosts = tagFeed ? postsByTag(tagFeed.creatorId, tagFeed.tag) : [];
   const followingPosts = posts.filter(p => followed.includes(p.creatorId));
@@ -83,17 +84,15 @@ export default function AtlasMobileApp() {
 
   const postCard = (p: (typeof posts)[number]) => {
     const c = creatorOf(p.creatorId);
+    if (!c) return null;
     return (
       <Card key={p.id} outline={theme === 'ios'} raised={theme === 'md'} className="atlas-f7-card">
         <img src={p.image} alt={p.alt} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', display: 'block' }} />
         <CardContent>
-          <button type="button" onClick={() => setCreatorOpen(c)} aria-label={`View ${c.name}'s profile`}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.75, background: 'none', border: 0, padding: 0, color: 'inherit', cursor: 'pointer' }}>
-            <img src={avatarPreset(c.avatar_key).src} alt="" width={22} height={22} style={{ borderRadius: 11 }} />
-            <span>{c.name} <span style={{ opacity: 0.65 }}>{fullHandle(c)}</span></span> · <NetworkBadge network={c.network} /> · {p.kind}
-          </button>
           <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 24, lineHeight: 1.15, margin: '6px 0' }}>{p.title}</div>
           <div style={{ opacity: 0.75 }}>{p.excerpt}</div>
+          <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => setTagFeed({ creatorId: c.id, tag })}>#{tag}</Link>)}</div>
+          <CreatorTag creator={c} onOpen={() => setCreatorOpen(c)} />
         </CardContent>
         <CardFooter>
           <Link external target="_blank" href={p.url}>Open</Link>
