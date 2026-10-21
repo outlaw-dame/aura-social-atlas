@@ -1,4 +1,5 @@
 # Atlas social discovery
+- [x] Add more sample posts and reusable Mastodon-style creator attribution with profile, follow, and creator-tag feeds; verify phone and desktop flows.
 - [x] Match phone Profile to the centered reference with Posts, Media, Saved, Feeds, Collections, and Lists; verify signed-in tabs and Settings separation.
 - [x] Replace browser chrome with social search, creator discovery, Following, and Saved views.
 - [x] Preserve Liquid Glass styling and the existing assistant.

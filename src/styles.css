@@ -299,3 +299,16 @@
 .atlas-profile-verified .icon { font-size: 15px; }
 .atlas-profile-tag small { opacity: 0.6; font-weight: 400; margin-left: 2px; }
 .atlas-pinned { display: flex; align-items: center; gap: 6px; font-size: 12px; opacity: 0.6; margin: 8px 16px 0; }
+
+/* Compact article attribution, inspired by Mastodon's linked author strip. */
+.atlas-author-tag { display: flex; align-items: center; gap: 6px; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; color: var(--foreground); }
+.atlas-author-tag .atlas-author-profile { display: flex; flex: 1; min-width: 0; height: auto; gap: 10px; padding: 4px 0; justify-content: flex-start; text-align: left; white-space: normal; color: var(--foreground); border-radius: 6px; }
+.atlas-author-profile img { width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; background: var(--social-avatar); }
+.atlas-author-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; overflow-wrap: anywhere; line-height: 1.35; }
+.atlas-author-name { font-size: 13px; font-weight: 600; }
+.atlas-author-name > small:first-child { font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
+.atlas-author-handle { font-size: 11px; font-weight: 400; color: var(--muted-foreground); }
+.atlas-author-network { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 10px; color: var(--muted-foreground); }
+.atlas-author-tag .atlas-author-follow { flex: 0 0 36px; width: 36px; height: 36px; color: var(--accent); }
+.atlas-author-chevron { flex: 0 0 14px; color: var(--muted-foreground); }
+.atlas-story-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; font-size: 12px; }

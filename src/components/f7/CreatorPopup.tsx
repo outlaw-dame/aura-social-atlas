@@ -4,6 +4,7 @@ import { avatarPreset } from '@/lib/atlas-avatars';
 import { linkifyHashtags, linkifyHashtagsWith, hashtagUrl } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
 import { NetworkBadge, networkBrands } from '@/lib/networks';
+import { CreatorTag } from '@/components/social/CreatorTag';
 
 /** Mastodon-style creator profile: full fediverse handle, verified fields, featured tags, pinned story. */
 export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator | null; onClose: () => void; onOpenTag?: (creator: Creator, tag: string) => void }) {
@@ -58,9 +59,9 @@ export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator
             {creator.featured_hashtags.length > 0 && (
               <div className="atlas-profile-tags" aria-label="Featured hashtags">
                 {creator.featured_hashtags.map(tag => (
-                  <a key={tag.name} className="atlas-profile-tag" href={hashtagUrl(tag.name)} target="_blank" rel="noopener noreferrer">
+                  <Link key={tag.name} className="atlas-profile-tag" href={onOpenTag ? undefined : hashtagUrl(tag.name)} external={!onOpenTag} onClick={() => onOpenTag?.(creator, tag.name)}>
                     #{tag.name} <small>{tag.count} posts</small>
-                  </a>
+                  </Link>
                 ))}
               </div>
             )}
@@ -98,6 +99,8 @@ export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator
                 </div>
                 <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22, lineHeight: 1.15, margin: '6px 0' }}>{p.title}</div>
                 <div style={{ opacity: 0.75 }}>{p.excerpt}</div>
+                <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => onOpenTag?.(creator, tag)}>#{tag}</Link>)}</div>
+                <CreatorTag creator={creator} onOpen={() => document.querySelector('.atlas-creator-popup .page-content')?.scrollTo({ top: 0, behavior: 'smooth' })} />
               </CardContent>
               <CardFooter>
                 <Link external target="_blank" href={p.url}>Open</Link>
