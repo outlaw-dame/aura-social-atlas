@@ -171,7 +171,7 @@ export default function AtlasMobileApp() {
                 </Segmented>
               </Block>
               <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:person_2_square_stack" md="material:groups" /> Creators</span></BlockTitle>
-              <List strong inset dividers mediaList>
+              <List strong inset dividers mediaList className="atlas-creator-list">
                 {results.map(c => (
                   <ListItem key={c.id} title={c.name} text={linkifyHashtagsWith(c.bio, tag => setTagFeed({ creatorId: c.id, tag }))}
                     onClick={() => setCreatorOpen(c)} style={{ cursor: 'pointer' }}>
