@@ -266,8 +266,7 @@
 .atlas-hashtag { color: var(--accent); text-decoration: none; font-weight: 500; }
 .atlas-hashtag-btn { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
 .atlas-blocktitle-icon { display: inline-flex; align-items: center; gap: 6px; }
-.atlas-creator-list { --f7-list-item-text-max-lines: unset; }
-.atlas-creator-list .item-text { -webkit-line-clamp: unset; max-height: none; }
+.atlas-creator-list { --f7-list-item-text-max-lines: 10; }
 .atlas-podcast { margin-top: 14px; }
 .atlas-podcast-title { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; opacity: 0.7; margin: 0 0 8px; }
 .atlas-podcast-feed { margin-top: 8px; font-size: 11px; opacity: 0.55; word-break: break-all; }
