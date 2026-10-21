@@ -9,8 +9,9 @@ import 'framework7-icons/css/framework7-icons.css';
 import 'material-icons/iconfont/material-icons.css';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
 import { Fab, NavRight, NavLeft, Panel, Popup, f7 } from 'framework7-react';
-import { creators, posts, networks, matchesCreator, fullHandle, type Creator } from '@/lib/social-catalogue';
+import { creators, posts, networks, matchesCreator, fullHandle, postsByTag, type Creator } from '@/lib/social-catalogue';
 import { NetworkBadge } from '@/lib/networks';
+import { linkifyHashtagsWith } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
@@ -44,6 +45,7 @@ export default function AtlasMobileApp() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [creatorOpen, setCreatorOpen] = useState<Creator | null>(null);
+  const [tagFeed, setTagFeed] = useState<{ creatorId: string; tag: string } | null>(null);
   const [fabHidden, setFabHidden] = useState(false);
   const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
   const [title, setTitle] = useState('Discover');
@@ -74,6 +76,8 @@ export default function AtlasMobileApp() {
 
   const results = creators.filter(c => matchesCreator(c, query, network, 'All topics'));
   const creatorOf = (id: string) => creators.find(c => c.id === id)!;
+  const tagFeedCreator = tagFeed ? creatorOf(tagFeed.creatorId) : null;
+  const tagFeedPosts = tagFeed ? postsByTag(tagFeed.creatorId, tagFeed.tag) : [];
   const followingPosts = posts.filter(p => followed.includes(p.creatorId));
   const savedPosts = posts.filter(p => saved.includes(p.id));
 
