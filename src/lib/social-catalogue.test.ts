@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import { deepStrictEqual } from 'node:assert';
-import { creators, matchesCreator } from './social-catalogue';
+import { creators, matchesCreator, postsByTag } from './social-catalogue';
 
 describe('social discovery filters', () => {
   test('network selection limits matches to that network', () => {
@@ -11,5 +11,18 @@ describe('social discovery filters', () => {
   });
   test('topic and network filters both apply', () => {
     deepStrictEqual(creators.filter(c => matchesCreator(c, '', 'Bluesky', 'Travel')).map(c => c.id), ['elsewhere']);
+  });
+  test('podcast creators match the Podcasts network filter', () => {
+    deepStrictEqual(creators.filter(c => matchesCreator(c, '', 'Podcasts', 'All topics')).map(c => c.id), ['airwaves']);
+  });
+});
+
+describe('postsByTag', () => {
+  test('returns only that creator\'s posts carrying the tag', () => {
+    deepStrictEqual(postsByTag('orbit', 'space').map(p => p.id), ['stars']);
+    deepStrictEqual(postsByTag('orbit', 'travel'), []);
+  });
+  test('matches tags case-insensitively', () => {
+    deepStrictEqual(postsByTag('airwaves', 'Podcasting20').map(p => p.id), ['waves']);
   });
 });

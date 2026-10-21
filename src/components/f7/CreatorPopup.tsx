@@ -1,12 +1,12 @@
 import { Popup, Page, Navbar, NavRight, Link, Icon, Button, Card, CardContent, CardFooter } from 'framework7-react';
-import { posts, fullHandle, type Creator } from '@/lib/social-catalogue';
+import { posts, fullHandle, podcastFeatureLabels, type Creator } from '@/lib/social-catalogue';
 import { avatarPreset } from '@/lib/atlas-avatars';
-import { linkifyHashtags, hashtagUrl } from '@/lib/hashtags';
+import { linkifyHashtags, linkifyHashtagsWith, hashtagUrl } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
-import { NetworkBadge } from '@/lib/networks';
+import { NetworkBadge, networkBrands } from '@/lib/networks';
 
 /** Mastodon-style creator profile: full fediverse handle, verified fields, featured tags, pinned story. */
-export function CreatorPopup({ creator, onClose }: { creator: Creator | null; onClose: () => void }) {
+export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator | null; onClose: () => void; onOpenTag?: (creator: Creator, tag: string) => void }) {
   const { followed, toggleFollow, saved, toggleSave } = useSocial();
   const theirPosts = creator ? posts.filter(p => p.creatorId === creator.id) : [];
   const pinned = theirPosts.filter(p => p.pinned);
@@ -39,7 +39,7 @@ export function CreatorPopup({ creator, onClose }: { creator: Creator | null; on
               <span><strong>{creator.followers}</strong> Followers</span>
               <span><strong>{theirPosts.length}</strong> Stories</span>
             </div>
-            <p className="atlas-profile-bio">{linkifyHashtags(creator.bio)}</p>
+            <p className="atlas-profile-bio">{onOpenTag ? linkifyHashtagsWith(creator.bio, tag => onOpenTag(creator, tag)) : linkifyHashtags(creator.bio)}</p>
             {creator.fields.length > 0 && (
               <dl className="atlas-profile-fields">
                 {creator.fields.map(field => (
@@ -62,6 +62,19 @@ export function CreatorPopup({ creator, onClose }: { creator: Creator | null; on
                     #{tag.name} <small>{tag.count} posts</small>
                   </a>
                 ))}
+              </div>
+            )}
+            {creator.podcast && (
+              <div className="atlas-podcast">
+                <p className="atlas-podcast-title"><NetworkBadge network="Podcasts" /> feed</p>
+                <div className="atlas-profile-tags" aria-label="Podcasting 2.0 features">
+                  {creator.podcast.features.map(feature => (
+                    <span key={feature} className="atlas-feature-chip" style={{ color: networkBrands.Podcasts.color, background: `color-mix(in oklab, ${networkBrands.Podcasts.color} 10%, transparent)` }}>
+                      {podcastFeatureLabels[feature]}
+                    </span>
+                  ))}
+                </div>
+                <p className="atlas-podcast-feed">{creator.podcast.feed_url}</p>
               </div>
             )}
             <div className="atlas-profile-actions">

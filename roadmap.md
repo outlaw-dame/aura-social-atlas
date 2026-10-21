@@ -16,3 +16,4 @@
 - [x] Memoji avatars and filled-out profiles for creators; Apple Music red (#FA243C) accent incl. hashtags; profile gear top-right without Done.
 - [x] Emulate Mastodon author tag: full @user@domain handle, verified rel="me" fields, featured tag counts, joined date, Follows you badge, bot flag, pinned stories.
 - [x] Branded network badges: Bluesky logo + Bluesky Blue #0085FF, Mastodon logo + Mastodon Purple #6364FF, on profiles and lists; posts tagged with full @user@domain creator handles.
+- [x] Linkified bio hashtags open an in-app feed of that creator's posts with the tag; icon next to the Creators header; Podcasting 2.0 network with Podcast Index red #F90000 badge, feature chips (chapters, transcripts, value4value, persons), and feed metadata.
