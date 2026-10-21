@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import { deepStrictEqual } from 'node:assert';
-import { creators, matchesCreator } from './social-catalogue';
+import { creators, matchesCreator, postsByTag } from './social-catalogue';
 
 describe('social discovery filters', () => {
   test('network selection limits matches to that network', () => {
