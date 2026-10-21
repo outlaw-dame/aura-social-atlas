@@ -64,6 +64,19 @@ export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator
                 ))}
               </div>
             )}
+            {creator.podcast && (
+              <div className="atlas-podcast">
+                <p className="atlas-podcast-title"><NetworkBadge network="Podcasts" /> feed</p>
+                <div className="atlas-profile-tags" aria-label="Podcasting 2.0 features">
+                  {creator.podcast.features.map(feature => (
+                    <span key={feature} className="atlas-feature-chip" style={{ color: networkBrands.Podcasts.color, background: `color-mix(in oklab, ${networkBrands.Podcasts.color} 10%, transparent)` }}>
+                      {podcastFeatureLabels[feature]}
+                    </span>
+                  ))}
+                </div>
+                <p className="atlas-podcast-feed">{creator.podcast.feed_url}</p>
+              </div>
+            )}
             <div className="atlas-profile-actions">
               <Button small round fill={!followed.includes(creator.id)} tonal={followed.includes(creator.id)}
                 onClick={() => toggleFollow(creator.id)}>
