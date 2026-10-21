@@ -3,7 +3,7 @@ import space from '@/assets/news-space.jpg';
 import design from '@/assets/news-design.jpg';
 import travel from '@/assets/news-travel.jpg';
 
-export const networks = ['All networks', 'Bluesky', 'Mastodon', 'RSS'] as const;
+export const networks = ['All networks', 'Bluesky', 'Mastodon', 'RSS', 'Podcasts'] as const;
 export const topics = ['All topics', 'Design', 'Science', 'Culture', 'Travel'] as const;
 
 /** Mastodon-style profile field: key/value metadata, optionally a verified link (rel="me"). */
@@ -11,11 +11,25 @@ export type ProfileField = { name: string; value: string; url?: string; verified
 /** Mastodon-style featured hashtag with usage count. */
 export type FeaturedTag = { name: string; count: number };
 
+/** Podcasting 2.0 namespace features a show supports. */
+export type PodcastFeature = 'chapters' | 'transcripts' | 'value4value' | 'persons';
+
+export const podcastFeatureLabels: Record<PodcastFeature, string> = {
+  chapters: 'Chapters',
+  transcripts: 'Transcripts',
+  value4value: 'Value 4 Value',
+  persons: 'Persons',
+};
+
+/** Podcasting 2.0 feed metadata: stable podcast:guid, feed URL, supported namespace features. */
+export type PodcastInfo = { guid: string; feed_url: string; features: PodcastFeature[] };
+
 export type Creator = {
   id: string; name: string; handle: string; domain: string; network: string; topic: string; bio: string;
   initials: string; url: string; avatar_key: string; followers: string; joined: string;
   follows_you?: boolean; bot?: boolean;
   fields: ProfileField[]; featured_hashtags: FeaturedTag[];
+  podcast?: PodcastInfo;
 };
 
 export const creators: Creator[] = [
@@ -58,19 +72,41 @@ export const creators: Creator[] = [
     ],
     featured_hashtags: [{ name: 'travel', count: 178 }, { name: 'coastlines', count: 63 }],
   },
+  {
+    id: 'airwaves', name: 'Airwaves Weekly', handle: 'airwaves.example/feed.xml', domain: 'rss', network: 'Podcasts', topic: 'Culture',
+    bio: 'Weekly conversations on the open web and the future of #podcasting. Chapters, transcripts, and boosts — the full #podcasting20 stack.',
+    initials: 'AW', url: 'https://podcastindex.org/', avatar_key: 'memoji-1', followers: '6.8K', joined: 'September 2022',
+    fields: [
+      { name: 'Feed', value: 'airwaves.example/feed.xml', url: 'https://podcastindex.org/', verified: true },
+      { name: 'Hosted by', value: 'M. Reyes & J. Okafor' },
+    ],
+    featured_hashtags: [{ name: 'podcasting', count: 88 }, { name: 'podcasting20', count: 54 }],
+    podcast: {
+      guid: '9b024349-ccf0-5f69-a609-6b82873eab3c',
+      feed_url: 'https://airwaves.example/feed.xml',
+      features: ['chapters', 'transcripts', 'value4value', 'persons'],
+    },
+  },
 ];
 
 export const posts = [
-  { id: 'glass', creatorId: 'form', title: 'A softer way to see the city', excerpt: 'Looking at the buildings that make light feel like a material of its own.', image: architecture, url: 'https://www.architecturaldigest.com/', kind: 'Essay', alt: 'Modern glass architecture', pinned: true },
-  { id: 'objects', creatorId: 'studio', title: 'Objects that invite you to slow down', excerpt: 'A study in texture, thoughtful details, and the beauty of everyday things.', image: design, url: 'https://www.dezeen.com/', kind: 'Photo story', alt: 'Thoughtfully designed interior objects', pinned: true },
-  { id: 'stars', creatorId: 'orbit', title: 'There is always more beyond the horizon', excerpt: 'A new perspective on the stars, and our small place among them.', image: space, url: 'https://www.nasa.gov/', kind: 'Dispatch', alt: 'Stars and a celestial landscape', pinned: true },
-  { id: 'coast', creatorId: 'elsewhere', title: 'Postcards from a quieter coastline', excerpt: 'Empty harbors, soft mornings, and a different rhythm of travel.', image: travel, url: 'https://www.cntraveler.com/', kind: 'Journal', alt: 'Mediterranean coastal scenery', pinned: true },
+  { id: 'glass', creatorId: 'form', title: 'A softer way to see the city', excerpt: 'Looking at the buildings that make light feel like a material of its own.', image: architecture, url: 'https://www.architecturaldigest.com/', kind: 'Essay', alt: 'Modern glass architecture', pinned: true, tags: ['architecture', 'slowliving'] },
+  { id: 'objects', creatorId: 'studio', title: 'Objects that invite you to slow down', excerpt: 'A study in texture, thoughtful details, and the beauty of everyday things.', image: design, url: 'https://www.dezeen.com/', kind: 'Photo story', alt: 'Thoughtfully designed interior objects', pinned: true, tags: ['design', 'interiors'] },
+  { id: 'stars', creatorId: 'orbit', title: 'There is always more beyond the horizon', excerpt: 'A new perspective on the stars, and our small place among them.', image: space, url: 'https://www.nasa.gov/', kind: 'Dispatch', alt: 'Stars and a celestial landscape', pinned: true, tags: ['space', 'science'] },
+  { id: 'coast', creatorId: 'elsewhere', title: 'Postcards from a quieter coastline', excerpt: 'Empty harbors, soft mornings, and a different rhythm of travel.', image: travel, url: 'https://www.cntraveler.com/', kind: 'Journal', alt: 'Mediterranean coastal scenery', pinned: true, tags: ['travel', 'coastlines'] },
+  { id: 'waves', creatorId: 'airwaves', title: 'Who owns the podcast feed?', excerpt: 'A conversation with the people keeping podcasting open, one namespace tag at a time.', image: space, url: 'https://podcastindex.org/', kind: 'Episode', alt: 'Studio microphones under a starry sky', pinned: true, tags: ['podcasting', 'podcasting20'] },
 ];
 
 /** Full fediverse address, e.g. @notesfromorbit@mastodon.social. */
 export function fullHandle(creator: Creator): string {
   const name = creator.handle.startsWith('@') ? creator.handle : `@${creator.handle}`;
   return creator.domain === 'rss' ? creator.handle : `${name}@${creator.domain}`;
+}
+
+/** Posts by one creator tagged with a given hashtag (normalized, no #). */
+export function postsByTag(creatorId: string, tag: string) {
+  const normalized = tag.toLowerCase();
+  return posts.filter(p => p.creatorId === creatorId && p.tags.includes(normalized));
 }
 
 export function matchesCreator(creator: Creator, query: string, network: string, topic: string) {

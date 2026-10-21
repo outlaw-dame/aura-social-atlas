@@ -9,26 +9,52 @@ export function hashtagUrl(tag: string) {
   return `https://mastodon.social/tags/${encodeURIComponent(tag)}`;
 }
 
-/** Splits text into plain runs and hashtag links, Mastodon-style. */
-export function linkifyHashtags(text: string): ReactNode[] {
-  const out: ReactNode[] = [];
+/** Splits text into plain runs and hashtag tokens. */
+function splitHashtags(text: string): (string | { tag: string })[] {
+  const out: (string | { tag: string })[] = [];
   let last = 0;
-  let key = 0;
   for (const match of text.matchAll(HASHTAG_RE)) {
     const start = match.index ?? 0;
     const boundary = match[1];
     const tag = match[2];
     const tagStart = start + boundary.length;
     if (tagStart > last) out.push(text.slice(last, tagStart));
-    out.push(
-      <a key={key++} href={hashtagUrl(tag)} target="_blank" rel="noopener noreferrer" className="atlas-hashtag">
-        #{tag}
-      </a>,
-    );
+    out.push({ tag });
     last = tagStart + tag.length + 1;
   }
   if (last < text.length) out.push(text.slice(last));
   return out;
+}
+
+/** Splits text into plain runs and hashtag links, Mastodon-style. */
+export function linkifyHashtags(text: string): ReactNode[] {
+  return splitHashtags(text).map((part, i) =>
+    typeof part === 'string' ? part : (
+      <a key={i} href={hashtagUrl(part.tag)} target="_blank" rel="noopener noreferrer" className="atlas-hashtag">
+        #{part.tag}
+      </a>
+    ),
+  );
+}
+
+/**
+ * Like linkifyHashtags, but tags are in-app buttons calling onTag with the
+ * normalized tag name. Clicks stop propagation so they work inside rows and
+ * cards that have their own onClick.
+ */
+export function linkifyHashtagsWith(text: string, onTag: (tag: string) => void): ReactNode[] {
+  return splitHashtags(text).map((part, i) =>
+    typeof part === 'string' ? part : (
+      <button
+        key={i}
+        type="button"
+        className="atlas-hashtag atlas-hashtag-btn"
+        onClick={e => { e.stopPropagation(); onTag(part.tag.toLowerCase()); }}
+      >
+        #{part.tag}
+      </button>
+    ),
+  );
 }
 
 /** Extracts normalized hashtag names (lowercased, no #) from free text. */

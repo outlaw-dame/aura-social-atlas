@@ -1,6 +1,7 @@
 /**
  * Open social web network branding: official brand colors and logos.
  * Bluesky Blue #0085FF and Mastodon Purple #6364FF; logo paths from Simple Icons (CC0).
+ * Podcasting 2.0 uses the Podcast Index red #F90000 with a microphone mark.
  */
 
 export const networkBrands = {
