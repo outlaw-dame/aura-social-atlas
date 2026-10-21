@@ -170,10 +170,10 @@ export default function AtlasMobileApp() {
                   {networks.map(n => <Button key={n} small active={network === n} onClick={() => setNetwork(n)}>{n.replace(' networks', '')}</Button>)}
                 </Segmented>
               </Block>
-              <BlockTitle>Creators</BlockTitle>
+              <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:person_2_square_stack" md="material:groups" /> Creators</span></BlockTitle>
               <List strong inset dividers mediaList>
                 {results.map(c => (
-                  <ListItem key={c.id} title={c.name} text={c.bio}
+                  <ListItem key={c.id} title={c.name} text={linkifyHashtagsWith(c.bio, tag => setTagFeed({ creatorId: c.id, tag }))}
                     onClick={() => setCreatorOpen(c)} style={{ cursor: 'pointer' }}>
                     <span slot="subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                       {c.handle} · <NetworkBadge network={c.network} />
@@ -224,7 +224,26 @@ export default function AtlasMobileApp() {
         </Page>
       </View>
       <ProfilePopup opened={profileOpen} onClose={() => setProfileOpen(false)} onEditProfile={() => setEditProfileOpen(true)} onOpenCreator={setCreatorOpen} />
-      <CreatorPopup creator={creatorOpen} onClose={() => setCreatorOpen(null)} />
+      <CreatorPopup creator={creatorOpen} onClose={() => setCreatorOpen(null)} onOpenTag={(c, tag) => { setCreatorOpen(null); setTagFeed({ creatorId: c.id, tag }); }} />
+      <Popup opened={!!tagFeed} onPopupClosed={() => setTagFeed(null)}>
+        {tagFeed && tagFeedCreator && (
+          <Page>
+            <Navbar title={`#${tagFeed.tag}`} subtitle={tagFeedCreator.name}>
+              <NavRight>
+                <Link iconOnly popupClose aria-label="Close tag feed">
+                  <Icon ios="f7:xmark" md="material:close" />
+                </Link>
+              </NavRight>
+            </Navbar>
+            <Block strong inset style={{ fontSize: 13 }}>
+              Stories by {tagFeedCreator.name} tagged <span className="atlas-hashtag">#{tagFeed.tag}</span>
+            </Block>
+            {tagFeedPosts.length ? tagFeedPosts.map(postCard) : (
+              <Block strong inset>No stories with this tag yet.</Block>
+            )}
+          </Page>
+        )}
+      </Popup>
       <EditProfileSheet opened={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
