@@ -264,7 +264,7 @@
 .atlas-profile-bio { margin: 14px auto 0; max-width: 320px; font-size: 14px; line-height: 1.6; color: var(--foreground); overflow-wrap: anywhere; white-space: pre-line; }
 .atlas-profile-bio-empty { color: var(--muted-foreground); }
 .atlas-hashtag { color: var(--accent); text-decoration: none; font-weight: 500; }
-.atlas-hashtag-btn { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.atlas-hashtag-btn { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; width: auto; text-align: start; }
 .atlas-blocktitle-icon { display: inline-flex; align-items: center; gap: 6px; }
 .atlas-creator-list { --f7-list-item-text-max-lines: 10; }
 .atlas-podcast { margin-top: 14px; }
