@@ -43,6 +43,15 @@ function AuthPage() {
     if (result.error) setError(result.error.message);
   };
 
+  const bonfireSignIn = async () => {
+    setError(null);
+    const { error: oidcError } = await supabase.auth.signInWithOAuth({
+      provider: 'custom:app-oidc',
+      options: { redirectTo: window.location.origin },
+    });
+    if (oidcError) setError(oidcError.message);
+  };
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
