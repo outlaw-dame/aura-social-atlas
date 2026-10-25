@@ -187,6 +187,14 @@ function AuthPage() {
             >
               Continue with Lovable
             </button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full rounded-full"
+              onClick={() => void bonfireSignIn()}
+            >
+              Continue with Bonfire (Fedizen.net)
+            </Button>
             <p className="text-center text-sm opacity-75">
               {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
               <button
