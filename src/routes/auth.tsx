@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { BONFIRE_PROVIDER, BONFIRE_SCOPES, friendlyBonfireError, readOAuthError } from '@/lib/bonfire-auth';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable/index';
@@ -43,13 +44,40 @@ function AuthPage() {
     if (result.error) setError(result.error.message);
   };
 
+  // Show an error the auth server sent back after a failed Bonfire round trip.
+  useEffect(() => {
+    const returned = readOAuthError(window.location.href);
+    if (returned) {
+      setError(friendlyBonfireError(`${returned.code} ${returned.description}`));
+      window.history.replaceState(null, '', '/auth');
+    }
+  }, []);
+
   const bonfireSignIn = async () => {
     setError(null);
-    const { error: oidcError } = await supabase.auth.signInWithOAuth({
-      provider: 'custom:app-oidc',
-      options: { redirectTo: window.location.origin },
+    setBusy(true);
+    const { data, error: oidcError } = await supabase.auth.signInWithOAuth({
+      provider: BONFIRE_PROVIDER,
+      options: { redirectTo: window.location.origin, scopes: BONFIRE_SCOPES, skipBrowserRedirect: true },
     });
-    if (oidcError) setError(oidcError.message);
+    if (oidcError || !data?.url) {
+      setBusy(false);
+      setError(friendlyBonfireError(oidcError?.message ?? ''));
+      return;
+    }
+    // Pre-check so an unconfigured provider shows a message instead of a raw JSON page.
+    try {
+      const probe = await fetch(data.url, { redirect: 'manual' });
+      if (probe.type !== 'opaqueredirect' && !probe.ok && probe.status >= 400) {
+        const body = await probe.json().catch(() => ({}));
+        setBusy(false);
+        setError(friendlyBonfireError(String(body?.msg ?? body?.error ?? '')));
+        return;
+      }
+    } catch {
+      // Network/CORS hiccup: fall through to the normal redirect.
+    }
+    window.location.assign(data.url);
   };
 
   const onSubmit = async (event: FormEvent) => {
