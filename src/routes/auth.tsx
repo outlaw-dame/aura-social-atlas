@@ -43,6 +43,15 @@ function AuthPage() {
     if (result.error) setError(result.error.message);
   };
 
+  const bonfireSignIn = async () => {
+    setError(null);
+    const { error: oidcError } = await supabase.auth.signInWithOAuth({
+      provider: 'custom:app-oidc',
+      options: { redirectTo: window.location.origin },
+    });
+    if (oidcError) setError(oidcError.message);
+  };
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -178,6 +187,14 @@ function AuthPage() {
             >
               Continue with Lovable
             </button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full rounded-full"
+              onClick={() => void bonfireSignIn()}
+            >
+              Continue with Bonfire (Fedizen.net)
+            </Button>
             <p className="text-center text-sm opacity-75">
               {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
               <button
