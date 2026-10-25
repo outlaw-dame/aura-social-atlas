@@ -1,6 +1,7 @@
 // Session state for Atlas accounts. One subscription, shared through context.
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { readOAuthError } from '@/lib/bonfire-auth';
 import type { Session, User } from '@supabase/supabase-js';
 
 export type AtlasProfile = {
@@ -28,6 +29,11 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // A failed OAuth round trip returns to the app origin with error params; show it on /auth.
+    if (window.location.pathname !== '/auth' && readOAuthError(window.location.href)) {
+      window.location.replace(`/auth${window.location.search}${window.location.hash}`);
+      return;
+    }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
