@@ -62,7 +62,10 @@ function AuthPage() {
     // preview we must send a top-level tab to it. Open the tab synchronously
     // in the click handler (before any await) so popup blockers allow it.
     const embedded = isEmbeddedPreview();
-    const popup = embedded ? window.open('about:blank', '_blank', 'noopener') : null;
+    // No 'noopener' here: it would make window.open return null, and we need
+    // the handle to steer the tab once the sign-in URL is ready. We sever
+    // window.opener manually right after navigating it.
+    const popup = embedded ? window.open('about:blank', '_blank') : null;
     const { data, error: oidcError } = await supabase.auth.signInWithOAuth({
       provider: BONFIRE_PROVIDER,
       options: { redirectTo: window.location.origin, scopes: BONFIRE_SCOPES, skipBrowserRedirect: true },
@@ -76,6 +79,7 @@ function AuthPage() {
     setBusy(false);
     if (embedded) {
       if (popup) {
+        popup.opener = null;
         popup.location.href = data.url;
         // The session lands in the new tab; this tab keeps working.
         setNeedsExternalTab(true);
