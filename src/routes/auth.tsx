@@ -56,26 +56,32 @@ function AuthPage() {
   const bonfireSignIn = async () => {
     setError(null);
     setBusy(true);
+    // Fedizen's authorization page forbids framing, so inside the embedded
+    // preview we must send a top-level tab to it. Open the tab synchronously
+    // in the click handler (before any await) so popup blockers allow it.
+    const embedded = isEmbeddedPreview();
+    const popup = embedded ? window.open('about:blank', '_blank', 'noopener') : null;
     const { data, error: oidcError } = await supabase.auth.signInWithOAuth({
       provider: BONFIRE_PROVIDER,
       options: { redirectTo: window.location.origin, scopes: BONFIRE_SCOPES, skipBrowserRedirect: true },
     });
     if (oidcError || !data?.url) {
+      popup?.close();
       setBusy(false);
       setError(friendlyBonfireError(oidcError?.message ?? ''));
       return;
     }
-    // Pre-check so an unconfigured provider shows a message instead of a raw JSON page.
-    try {
-      const probe = await fetch(data.url, { redirect: 'manual' });
-      if (probe.type !== 'opaqueredirect' && !probe.ok && probe.status >= 400) {
-        const body = await probe.json().catch(() => ({}));
-        setBusy(false);
-        setError(friendlyBonfireError(String(body?.msg ?? body?.error ?? '')));
-        return;
+    setBusy(false);
+    if (embedded) {
+      if (popup) {
+        popup.location.href = data.url;
+        // The session lands in the new tab; this tab keeps working.
+        setNeedsExternalTab(true);
+      } else {
+        // Popup blocked: offer a manual link the user can open themselves.
+        setExternalUrl(data.url);
       }
-    } catch {
-      // Network/CORS hiccup: fall through to the normal redirect.
+      return;
     }
     window.location.assign(data.url);
   };
