@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import { deepStrictEqual, match, strictEqual } from 'node:assert';
-import { BONFIRE_PROVIDER, BONFIRE_SCOPES, friendlyBonfireError, readOAuthError, safeNextPath } from './bonfire-auth';
+import { BONFIRE_PROVIDER, BONFIRE_SCOPES, friendlyBonfireError, isEmbeddedPreview, readOAuthError, safeNextPath } from './bonfire-auth';
 
 describe('bonfire auth', () => {
   test('uses the prefixed custom provider id', () => {
@@ -21,5 +21,8 @@ describe('bonfire auth', () => {
     strictEqual(safeNextPath('//evil.com'), '/');
     strictEqual(safeNextPath('https://evil.com'), '/');
     strictEqual(safeNextPath('/saved'), '/saved');
+  });
+  test('treats a window-less environment as not embedded', () => {
+    strictEqual(isEmbeddedPreview(), false);
   });
 });

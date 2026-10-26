@@ -41,3 +41,17 @@ export function safeNextPath(next: string | null | undefined): string {
   if (!next || !next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return '/';
   return next;
 }
+
+/**
+ * True when the app runs inside an iframe (e.g. the Lovable editor preview).
+ * Comparing window references is cross-origin safe; Fedizen's authorization
+ * page forbids framing, so an in-frame redirect shows "refused to connect".
+ */
+export function isEmbeddedPreview(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
