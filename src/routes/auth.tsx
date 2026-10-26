@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { BONFIRE_PROVIDER, BONFIRE_SCOPES, friendlyBonfireError, readOAuthError } from '@/lib/bonfire-auth';
+import { BONFIRE_PROVIDER, BONFIRE_SCOPES, friendlyBonfireError, isEmbeddedPreview, readOAuthError } from '@/lib/bonfire-auth';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable/index';
