@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import { deepStrictEqual, match, strictEqual } from 'node:assert';
-import { BONFIRE_PROVIDER, BONFIRE_SCOPES, friendlyBonfireError, isEmbeddedPreview, readOAuthError, safeNextPath } from './bonfire-auth';
+import { BONFIRE_PROVIDER, BONFIRE_SCOPES, friendlyBonfireError, isEmbeddedPreview, readOAuthError, safeNextPath, standaloneAuthUrl } from './bonfire-auth';
 
 describe('bonfire auth', () => {
   test('uses the prefixed custom provider id', () => {
@@ -24,5 +24,9 @@ describe('bonfire auth', () => {
   });
   test('treats a window-less environment as not embedded', () => {
     strictEqual(isEmbeddedPreview(), false);
+  });
+  test('standalone link is the absolute same-origin /auth page', () => {
+    strictEqual(standaloneAuthUrl('https://x.lovable.app'), 'https://x.lovable.app/auth');
+    strictEqual(standaloneAuthUrl('https://x.lovable.app/'), 'https://x.lovable.app/auth');
   });
 });
