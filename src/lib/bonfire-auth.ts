@@ -31,6 +31,14 @@ export function friendlyBonfireError(message: string): string {
     return 'Bonfire sign-in isn’t switched on yet. The site owner needs to finish setting it up.';
   if (m.includes('access_denied') || m.includes('denied'))
     return 'Sign-in was cancelled on Fedizen.';
+  if (m.includes('invalid_client') || m.includes('exchange external code') || m.includes('unable to exchange'))
+    return 'Fedizen didn’t accept Atlas’s app details when finishing sign-in. The site owner needs to check the Fedizen client ID, secret and return address.';
+  if (m.includes('email'))
+    return 'Fedizen didn’t share an email address, which Atlas needs to create your account.';
+  if (m.includes('nonce') || m.includes('id token') || m.includes('id_token') || m.includes('issuer') || m.includes('audience'))
+    return 'Fedizen’s sign-in reply couldn’t be verified. Please try again; if it keeps happening the site owner needs to check the setup.';
+  if (m.includes('state') || m.includes('flow') || m.includes('code verifier') || m.includes('pkce'))
+    return 'Your sign-in session expired. Start again from this page in the same tab.';
   if (m.includes('redirect'))
     return 'This address isn’t allowed to finish sign-in. The site owner needs to allow it.';
   return 'Couldn’t sign in with Bonfire. Please try again.';

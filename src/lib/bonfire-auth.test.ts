@@ -30,3 +30,11 @@ describe('bonfire auth', () => {
     strictEqual(standaloneAuthUrl('https://x.lovable.app/'), 'https://x.lovable.app/auth');
   });
 });
+
+describe('friendlyBonfireError token exchange', () => {
+  it('maps a rejected Fedizen client to an owner-actionable message', () => {
+    const msg = friendlyBonfireError('server_error Unable to exchange external code: 3CrZ');
+    expect(msg).toContain('client ID');
+    expect(msg).not.toContain('3CrZ');
+  });
+});
