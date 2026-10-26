@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { BONFIRE_PROVIDER, BONFIRE_SCOPES, friendlyBonfireError, isEmbeddedPreview, readOAuthError } from '@/lib/bonfire-auth';
+import { BONFIRE_PROVIDER, BONFIRE_SCOPES, friendlyBonfireError, isEmbeddedPreview, readOAuthError, standaloneAuthUrl } from '@/lib/bonfire-auth';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable/index';
@@ -34,8 +34,7 @@ function AuthPage() {
   const [avatarKey, setAvatarKey] = useState(AVATAR_PRESETS[0].key);
   const [error, setError] = useState<string | null>(null);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
-  const [needsExternalTab, setNeedsExternalTab] = useState(false);
-  const [externalUrl, setExternalUrl] = useState<string | null>(null);
+  const [embeddedHref, setEmbeddedHref] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const socialSignIn = async (provider: 'google' | 'lovable') => {
@@ -55,41 +54,25 @@ function AuthPage() {
     }
   }, []);
 
+  // Fedizen forbids framing, so inside the embedded preview we never start
+  // OAuth; we offer a plain link that opens this page as its own tab instead.
+  // Detected after mount so server and first client render match.
+  useEffect(() => {
+    if (isEmbeddedPreview()) setEmbeddedHref(standaloneAuthUrl(window.location.origin));
+  }, []);
+
+  // Top-level only: a normal full-page redirect to Fedizen, no popups.
   const bonfireSignIn = async () => {
     setError(null);
     setBusy(true);
-    // Fedizen's authorization page forbids framing, so inside the embedded
-    // preview we must send a top-level tab to it. Open the tab synchronously
-    // in the click handler (before any await) so popup blockers allow it.
-    const embedded = isEmbeddedPreview();
-    // No 'noopener' here: it would make window.open return null, and we need
-    // the handle to steer the tab once the sign-in URL is ready. We sever
-    // window.opener manually right after navigating it.
-    const popup = embedded ? window.open('about:blank', '_blank') : null;
-    const { data, error: oidcError } = await supabase.auth.signInWithOAuth({
+    const { error: oidcError } = await supabase.auth.signInWithOAuth({
       provider: BONFIRE_PROVIDER,
-      options: { redirectTo: window.location.origin, scopes: BONFIRE_SCOPES, skipBrowserRedirect: true },
+      options: { redirectTo: window.location.origin, scopes: BONFIRE_SCOPES },
     });
-    if (oidcError || !data?.url) {
-      popup?.close();
+    if (oidcError) {
       setBusy(false);
-      setError(friendlyBonfireError(oidcError?.message ?? ''));
-      return;
+      setError(friendlyBonfireError(oidcError.message));
     }
-    setBusy(false);
-    if (embedded) {
-      if (popup) {
-        popup.opener = null;
-        popup.location.href = data.url;
-        // The session lands in the new tab; this tab keeps working.
-        setNeedsExternalTab(true);
-      } else {
-        // Popup blocked: offer a manual link the user can open themselves.
-        setExternalUrl(data.url);
-      }
-      return;
-    }
-    window.location.assign(data.url);
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -227,26 +210,27 @@ function AuthPage() {
             >
               Continue with Lovable
             </button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full rounded-full"
-              onClick={() => void bonfireSignIn()}
-            >
-              Continue with Bonfire (Fedizen.net)
-            </Button>
-            {needsExternalTab && (
-              <p className="text-center text-xs text-muted-foreground">
-                Fedizen opened in a new tab — finish signing in there, then come back here.
-              </p>
-            )}
-            {externalUrl && (
-              <p className="text-center text-xs text-muted-foreground">
-                Your browser blocked the new tab.{' '}
-                <a href={externalUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-                  Open Fedizen sign-in in a new tab
-                </a>
-              </p>
+            {embeddedHref ? (
+              <div className="space-y-2">
+                <Button asChild variant="outline" className="w-full rounded-full">
+                  <a href={embeddedHref} target="_blank" rel="noopener noreferrer">
+                    Open Atlas in new tab to sign in with Fedizen
+                  </a>
+                </Button>
+                <p className="text-center text-xs text-muted-foreground">
+                  Fedizen can’t open inside this preview window. Use the link above, then choose Continue with Bonfire there.
+                </p>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full rounded-full"
+                disabled={busy}
+                onClick={() => void bonfireSignIn()}
+              >
+                Continue with Bonfire (Fedizen.net)
+              </Button>
             )}
             <p className="text-center text-sm opacity-75">
               {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}

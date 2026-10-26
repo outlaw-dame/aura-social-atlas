@@ -55,3 +55,8 @@ export function isEmbeddedPreview(): boolean {
     return true;
   }
 }
+
+/** Absolute same-origin /auth URL used to reopen Atlas as a top-level tab. */
+export function standaloneAuthUrl(origin: string): string {
+  return new URL('/auth', origin).href;
+}
