@@ -231,6 +231,19 @@ function AuthPage() {
             >
               Continue with Bonfire (Fedizen.net)
             </Button>
+            {needsExternalTab && (
+              <p className="text-center text-xs text-muted-foreground">
+                Fedizen opened in a new tab — finish signing in there, then come back here.
+              </p>
+            )}
+            {externalUrl && (
+              <p className="text-center text-xs text-muted-foreground">
+                Your browser blocked the new tab.{' '}
+                <a href={externalUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                  Open Fedizen sign-in in a new tab
+                </a>
+              </p>
+            )}
             <p className="text-center text-sm opacity-75">
               {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
               <button
