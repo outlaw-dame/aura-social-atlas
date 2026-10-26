@@ -34,6 +34,8 @@ function AuthPage() {
   const [avatarKey, setAvatarKey] = useState(AVATAR_PRESETS[0].key);
   const [error, setError] = useState<string | null>(null);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [needsExternalTab, setNeedsExternalTab] = useState(false);
+  const [externalUrl, setExternalUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const socialSignIn = async (provider: 'google' | 'lovable') => {
