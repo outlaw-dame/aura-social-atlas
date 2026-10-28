@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { readOAuthError } from '@/lib/bonfire-auth';
+import { observeSession } from '@/lib/auth-session';
 import type { Session, User } from '@supabase/supabase-js';
 
 export type AtlasProfile = {
@@ -25,7 +26,8 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AtlasAuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<AtlasProfile | null>(null);
+  const [profileRecord, setProfileRecord] = useState<{ userId: string; profile: AtlasProfile } | null>(null);
+  const profile = profileRecord?.userId === session?.user.id ? profileRecord?.profile ?? null : null;
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,16 +36,19 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
       window.location.replace(`/auth${window.location.search}${window.location.hash}`);
       return;
     }
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-    });
-
-    return () => sub.subscription.unsubscribe();
+    return observeSession<Session>(
+      notify => {
+        const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => notify(nextSession));
+        return () => sub.subscription.unsubscribe();
+      },
+      async () => {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        return data.session;
+      },
+      setSession,
+      () => setLoading(false),
+    );
   }, []);
 
   const userId = session?.user?.id;
@@ -51,7 +56,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     if (!userId) {
-      setProfile(null);
+      setProfileRecord(null);
       return;
     }
     supabase
@@ -60,7 +65,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
       .eq('id', userId)
       .maybeSingle()
       .then(({ data }) => {
-        if (!cancelled) setProfile((data as AtlasProfile | null) ?? null);
+        if (!cancelled) setProfileRecord(data ? { userId, profile: data as AtlasProfile } : null);
       });
     return () => {
       cancelled = true;
@@ -70,7 +75,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut();
     setSession(null);
-    setProfile(null);
+    setProfileRecord(null);
   };
 
   const updateProfile: AuthState['updateProfile'] = async (patch) => {
@@ -82,7 +87,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
       .select('display_name, avatar_key, bio, featured_hashtags, created_at')
       .single();
     if (error) throw error;
-    setProfile(data as AtlasProfile);
+    setProfileRecord({ userId, profile: data as AtlasProfile });
   };
 
   return (
