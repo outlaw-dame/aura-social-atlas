@@ -67,6 +67,7 @@ export type BonfireActivityNode = {
   objectPostContent?: { name?: string | null; summary?: string | null; htmlBody?: string | null } | null;
   subject?: { character?: { username?: string; canonicalUri?: string } | null; profile?: { name?: string; icon?: string } | null } | null;
   media?: { url?: string; mediaType?: string }[] | null;
+  object?: { creator?: BonfireActivityNode['subject'] } | null;
 };
 
 const decode = (s: string) => s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&[a-z#0-9]+;/gi, ' ');
@@ -81,7 +82,7 @@ export function htmlToParagraphs(html = ''): string[] {
 const isHttp = (u?: string) => !!u && /^https?:\/\//i.test(u);
 
 export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticle[] {
-  return nodes.flatMap(n => {
+  return nodes.map(withAuthor).flatMap(n => {
     const pc = n.objectPostContent; const title = pc?.name?.trim();
     if (!title) return [];
     const paragraphs = htmlToParagraphs(pc?.htmlBody ?? '');
@@ -101,7 +102,7 @@ export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticl
 
 /** Any Bonfire activity (short posts included) as a plain-text feed post; remote HTML never rendered. */
 export function fromBonfirePosts(nodes: BonfireActivityNode[]) {
-  return nodes.flatMap(n => {
+  return nodes.map(withAuthor).flatMap(n => {
     const pc = n.objectPostContent;
     const paragraphs = [pc?.name?.trim(), ...htmlToParagraphs(pc?.htmlBody ?? '')].filter((t): t is string => !!t);
     if (!paragraphs.length) return [];
@@ -116,4 +117,9 @@ export function fromBonfirePosts(nodes: BonfireActivityNode[]) {
       image: n.media?.find(m => m.mediaType?.startsWith('image/') && isHttp(m.url))?.url,
     }];
   });
+}
+
+/** Bonfire may hide the activity subject; the post's creator is the same author. */
+function withAuthor(n: BonfireActivityNode): BonfireActivityNode {
+  return n.subject?.character || n.subject?.profile ? n : { ...n, subject: n.object?.creator ?? n.subject };
 }
