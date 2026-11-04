@@ -23,6 +23,7 @@ import { Route as FedizenCallbackRouteImport } from './routes/fedizen.callback'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
 import { Route as SettingsIntelligenceRouteImport } from './routes/settings.intelligence'
+import { Route as TagsTagRouteImport } from './routes/tags.$tag'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -94,6 +95,11 @@ const SettingsIntelligenceRoute = SettingsIntelligenceRouteImport.update({
   path: '/intelligence',
   getParentRoute: () => SettingsRoute,
 } as any)
+const TagsTagRoute = TagsTagRouteImport.update({
+  id: '/tags/$tag',
+  path: '/tags/$tag',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
+  '/tags/$tag': typeof TagsTagRoute
   '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
+  '/tags/$tag': typeof TagsTagRoute
   '/settings': typeof SettingsIndexRoute
 }
 export interface FileRoutesById {
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
+  '/tags/$tag': typeof TagsTagRoute
   '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/fedizen/callback'
     | '/settings/appearance'
     | '/settings/intelligence'
+    | '/tags/$tag'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
     | '/fedizen/callback'
     | '/settings/appearance'
     | '/settings/intelligence'
+    | '/tags/$tag'
     | '/settings'
   id:
     | '__root__'
@@ -190,6 +201,7 @@ export interface FileRouteTypes {
     | '/fedizen/callback'
     | '/settings/appearance'
     | '/settings/intelligence'
+    | '/tags/$tag'
     | '/settings/'
   fileRoutesById: FileRoutesById
 }
@@ -205,6 +217,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiChatRoute: typeof ApiChatRoute
   FedizenCallbackRoute: typeof FedizenCallbackRoute
+  TagsTagRoute: typeof TagsTagRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -307,6 +320,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsIntelligenceRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/tags/$tag': {
+      id: '/tags/$tag'
+      path: '/tags/$tag'
+      fullPath: '/tags/$tag'
+      preLoaderRoute: typeof TagsTagRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -338,6 +358,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiChatRoute: ApiChatRoute,
   FedizenCallbackRoute: FedizenCallbackRoute,
+  TagsTagRoute: TagsTagRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
