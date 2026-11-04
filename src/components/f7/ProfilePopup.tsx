@@ -113,7 +113,7 @@ export function ProfilePopup({ opened, onClose, onEditProfile, onOpenCreator }: 
             {featured.length > 0 && (
               <div className="atlas-profile-tags" aria-label="Featured hashtags">
                 {featured.map(tag => (
-                  <a key={tag} className="atlas-profile-tag" href={hashtagUrl(tag)} target="_blank" rel="noopener noreferrer">#{tag}</a>
+                  <a key={tag} className="atlas-profile-tag" href={hashtagUrl(tag)}>#{tag}</a>
                 ))}
               </div>
             )}
