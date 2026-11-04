@@ -17,6 +17,7 @@ import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { ProfilePopup, EditProfileSheet } from './ProfilePopup';
 import { CreatorPopup } from './CreatorPopup';
+import { MobileRecentArticles, MobileFedizenFeed, useActivitySummary } from './FedizenMobile';
 import { CreatorTag } from '@/components/social/CreatorTag';
 
 Framework7.use(Framework7React);
@@ -80,6 +81,7 @@ export default function AtlasMobileApp() {
   const tagFeedCreator = tagFeed ? creatorOf(tagFeed.creatorId) : null;
   const tagFeedPosts = tagFeed ? postsByTag(tagFeed.creatorId, tagFeed.tag) : [];
   const followingPosts = posts.filter(p => followed.includes(p.creatorId));
+  const activityText = useActivitySummary();
   const savedPosts = posts.filter(p => saved.includes(p.id));
 
   const postCard = (p: (typeof posts)[number]) => {
@@ -131,7 +133,7 @@ export default function AtlasMobileApp() {
               <Link iconOnly panelOpen="left" aria-label="Open menu"><Icon ios="f7:sidebar_left" md="material:menu" /></Link>
             </NavLeft>
             <NavRight>
-              <Link iconOnly aria-label="Activity" onClick={() => f7.toast.show({ text: 'No new activity yet', closeTimeout: 1600 })}>
+              <Link iconOnly aria-label="Activity" onClick={() => f7.toast.show({ text: activityText, closeTimeout: 3000 })}>
                 <Icon ios="f7:bell" md="material:notifications_none" />
               </Link>
               {auth.user ? (
@@ -187,11 +189,14 @@ export default function AtlasMobileApp() {
                 ))}
                 {results.length === 0 && <ListItem title="No creators match your search" />}
               </List>
+              <MobileRecentArticles />
               <BlockTitle>Stories</BlockTitle>
               {posts.map(postCard)}
             </Tab>
 
             <Tab id="tab-following" className="page-content" onTabShow={() => setTitle('Following')}>
+              <MobileFedizenFeed />
+              <BlockTitle>Atlas creators you follow</BlockTitle>
               {followingPosts.length ? followingPosts.map(postCard) : (
                 <Block strong inset>Follow creators in Discover and their stories will show up here.</Block>
               )}
