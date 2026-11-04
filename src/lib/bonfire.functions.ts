@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import type { BonfireArticle } from './spotlight';
+import type { FedizenPost } from './fedizen-feed';
 
 export type RecentArticlesResult = { articles: BonfireArticle[]; error?: 'unavailable' };
 
@@ -7,4 +8,12 @@ export type RecentArticlesResult = { articles: BonfireArticle[]; error?: 'unavai
 export const getRecentArticles = createServerFn({ method: 'GET' }).handler(async (): Promise<RecentArticlesResult> => {
   const { fetchRecentArticles } = await import('./bonfire.server');
   return fetchRecentArticles();
+});
+
+export type PublicFeedResult = { posts: FedizenPost[]; error?: 'unavailable' };
+
+/** Public Fedizen local feed via Bonfire GraphQL (Mastodon REST public timelines require login there). */
+export const getFedizenPublic = createServerFn({ method: 'GET' }).handler(async (): Promise<PublicFeedResult> => {
+  const { fetchPublicFeed } = await import('./bonfire.server');
+  return fetchPublicFeed();
 });
