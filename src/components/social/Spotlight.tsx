@@ -54,8 +54,8 @@ function Row({ it }: { it: SpotlightItem }) {
 function Carousel({ items }: { items: SpotlightItem[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const page = (dir: number) => { const el = ref.current; if (el) el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: 'smooth' }); };
-  return <div className="relative" aria-roledescription="carousel" aria-label="Featured stories">
-    <div ref={ref} className="-mx-1 flex snap-x snap-mandatory gap-5 overflow-x-auto px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+  return <div className="relative min-w-0 w-full overflow-hidden" aria-roledescription="carousel" aria-label="Featured stories">
+    <div ref={ref} className="flex w-full snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {items.map((it, i) => <article key={it.id} aria-roledescription="slide" aria-label={`${i + 1} of ${items.length}`} className="w-[85%] shrink-0 snap-start sm:w-[70%] lg:w-[60%]">
         <a href={it.url} target="_blank" rel="noopener noreferrer" className="group relative block overflow-hidden rounded-2xl bg-muted">
           <img src={it.image} alt="" loading={i === 0 ? 'eager' : 'lazy'} className="aspect-[16/10] w-full object-cover transition-transform duration-700 group-hover:scale-[1.025]" />
@@ -77,7 +77,7 @@ function Carousel({ items }: { items: SpotlightItem[] }) {
 export function Spotlight() {
   const { data, isLoading } = useQuery({ queryKey: ['spotlight'], queryFn: () => getSpotlight(), staleTime: 10 * 60_000 });
   const items = data?.items ?? [];
-  return <section aria-labelledby="spotlight-heading" className="mb-12">
+  return <section aria-labelledby="spotlight-heading" className="mb-12 min-w-0 max-w-full">
     <div className="mb-5 flex items-baseline justify-between"><h2 id="spotlight-heading" className="flex items-center gap-2 font-serif text-2xl italic"><Flame className="size-5 text-accent" />Spotlight</h2></div>
     {isLoading ? <p className="text-sm text-muted-foreground">Gathering what people are sharing…</p> : !items.length ? <p className="text-sm text-muted-foreground">Nothing trending right now.</p> : <>
       {(() => {
