@@ -12,4 +12,16 @@ describe('public Fedizen feed mapping', () => {
     const r = fromBonfirePosts([{ id: 'b', objectPostContent: { htmlBody: '<p>x</p>' }, subject: { profile: { icon: 'javascript:alert(1)' } } }, { id: 'c', objectPostContent: { htmlBody: '' } }]);
     strictEqual(r.length, 1); strictEqual(r[0].avatar, undefined);
   });
+  test('credits boosts to the original author and shows each post once', () => {
+    const body = { htmlBody: '<p>Original</p>' };
+    const r = fromBonfirePosts([
+      { id: 'create', verb: { verb: 'Create' }, objectPostContent: body, subject: { character: { username: 'ann@mastodon.social' } }, object: { id: 'obj1' } },
+      { id: 'boost', verb: { verb: 'Boost' }, objectPostContent: body, subject: { profile: { name: 'Bob' } }, object: { id: 'obj1', creator: { character: { username: 'ann@mastodon.social' } } } },
+      { id: 'boost2', verb: { verb: 'Boost' }, objectPostContent: { htmlBody: '<p>Other</p>' }, subject: { profile: { name: 'Bob' } }, object: { id: 'obj2', creator: { character: { username: 'cy' } } } },
+    ]);
+    strictEqual(r.length, 2);
+    strictEqual(r[1].handle, '@cy@fedizen.net');
+    strictEqual(r[1].boostedBy, 'Bob');
+    strictEqual(r[0].boostedBy, undefined);
+  });
 });
