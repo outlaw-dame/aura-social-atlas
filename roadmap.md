@@ -21,5 +21,5 @@
 - [x] Linkified bio hashtags open an in-app feed of that creator's posts with the tag; icon next to the Creators header; Podcasting 2.0 network with Podcast Index red #F90000 badge, feature chips (chapters, transcripts, value4value, persons), and feed metadata.
 - [x] Bonfire/Fedizen sign-in: verified Fedizen OIDC discovery, registered Atlas client on fedizen.net, sign-in code already in place; user completes setup in Auth settings.
 - [x] Fedizen Recent Articles on Discover (public Bonfire GraphQL "articles" feed) with in-app reader
-- [ ] Phone app (/app): show Recent Articles
-- [ ] Personal Fedizen feed (Following/notifications) — needs a separate Fedizen API permission step
+- [x] Phone app (/app): show Recent Articles
+- [x] Personal Fedizen feed + activity via read-only "Connect Fedizen" (needs a real user connect to verify)
