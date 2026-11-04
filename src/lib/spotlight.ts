@@ -67,7 +67,8 @@ export type BonfireActivityNode = {
   objectPostContent?: { name?: string | null; summary?: string | null; htmlBody?: string | null } | null;
   subject?: { character?: { username?: string; canonicalUri?: string } | null; profile?: { name?: string; icon?: string } | null } | null;
   media?: { url?: string; mediaType?: string }[] | null;
-  object?: { creator?: BonfireActivityNode['subject'] } | null;
+  verb?: { verb?: string | null } | null;
+  object?: { id?: string; creator?: BonfireActivityNode['subject'] } | null;
 };
 
 const decode = (s: string) => s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&[a-z#0-9]+;/gi, ' ');
@@ -102,7 +103,15 @@ export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticl
 
 /** Any Bonfire activity (short posts included) as a plain-text feed post; remote HTML never rendered. */
 export function fromBonfirePosts(nodes: BonfireActivityNode[]) {
-  return nodes.map(withAuthor).flatMap(n => {
+  const seen = new Set<string>();
+  return nodes.flatMap(raw => {
+    // Boosts: credit the original author, show the booster, and show each object only once.
+    const boost = raw.verb?.verb === 'Boost' || raw.verb?.verb === 'Announce';
+    const key = raw.object?.id ?? raw.id;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const booster = boost ? (raw.subject?.profile?.name || raw.subject?.character?.username) : undefined;
+    const n = boost && raw.object?.creator ? { ...raw, subject: raw.object.creator } : withAuthor(raw);
     const pc = n.objectPostContent;
     const paragraphs = [pc?.name?.trim(), ...htmlToParagraphs(pc?.htmlBody ?? '')].filter((t): t is string => !!t);
     if (!paragraphs.length) return [];
@@ -115,6 +124,7 @@ export function fromBonfirePosts(nodes: BonfireActivityNode[]) {
       handle: user ? `@${user.includes('@') ? user : `${user}@fedizen.net`}` : '',
       avatar: isHttp(avatar) ? avatar : undefined,
       image: n.media?.find(m => m.mediaType?.startsWith('image/') && isHttp(m.url))?.url,
+      boostedBy: booster || undefined,
     }];
   });
 }
