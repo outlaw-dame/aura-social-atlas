@@ -2,9 +2,27 @@
 export type SpotlightItem = {
   id: string; source: 'Mastodon' | 'Bonfire'; title: string; description: string; url: string;
   image?: string; provider: string; author?: string; shares?: number; published?: string;
+  /** Mastodon 4.3+ author attribution (fediverse:creator) — a verified fediverse account for the writer. */
+  authorAccount?: { name: string; acct: string; url: string; avatar?: string };
+  authorUrl?: string;
 };
 
-type MastodonLink = { url: string; title: string; description?: string; image?: string | null; provider_name?: string; author_name?: string; history?: { uses: string }[] };
+type MastodonAuthor = { name?: string; url?: string; account?: { display_name?: string; username?: string; acct?: string; url?: string; avatar?: string } | null };
+type MastodonLink = { url: string; title: string; description?: string; image?: string | null; provider_name?: string; author_name?: string; author_url?: string; authors?: MastodonAuthor[]; history?: { uses: string }[] };
+
+const httpOnly = (u?: string) => (u && /^https?:\/\//i.test(u) ? u : undefined);
+
+/** Picks the first author with a linked fediverse account, as Mastodon's "More from" byline does. */
+export function linkAuthor(l: Pick<MastodonLink, 'authors' | 'author_name' | 'author_url'>) {
+  const a = l.authors?.find(x => x.account?.acct && httpOnly(x.account.url));
+  const acc = a?.account;
+  const acct = acc?.acct ? (acc.acct.includes('@') ? acc.acct : `${acc.acct}@mastodon.social`) : '';
+  return {
+    author: acc?.display_name || a?.name || l.author_name || undefined,
+    authorUrl: httpOnly(a?.url || l.author_url),
+    authorAccount: acc && acct ? { name: acc.display_name || acc.username || acct, acct: `@${acct.replace(/^@/, '')}`, url: acc.url!, avatar: httpOnly(acc.avatar) } : undefined,
+  };
+}
 type MastodonStatus = { id: string; url?: string | null; uri: string; content?: string; created_at?: string; account?: { display_name?: string; acct?: string }; card?: { title?: string; description?: string; image?: string | null; url?: string } | null; reblogs_count?: number };
 
 const strip = (html = '') => html.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim();
@@ -12,7 +30,7 @@ const strip = (html = '') => html.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;
 export function fromMastodonLinks(links: MastodonLink[]): SpotlightItem[] {
   return links.filter(l => l.url && l.title).map(l => ({
     id: `m:${l.url}`, source: 'Mastodon', title: l.title, description: l.description ?? '', url: l.url,
-    image: l.image ?? undefined, provider: l.provider_name || new URL(l.url).hostname, author: l.author_name || undefined,
+    image: l.image ?? undefined, provider: l.provider_name || new URL(l.url).hostname, ...linkAuthor(l),
     shares: (l.history ?? []).reduce((n, h) => n + Number(h.uses || 0), 0),
   }));
 }
