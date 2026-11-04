@@ -8,7 +8,7 @@ async function appFor(redirectUri: string) {
   const db = await admin();
   const { data } = await db.from('fedizen_oauth_apps').select('client_id, client_secret').eq('redirect_uri', redirectUri).maybeSingle();
   if (data) return data;
-  const res = await fetch(`${FEDIZEN}/api/v1/apps`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_name: 'Atlas', redirect_uris: redirectUri, scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin }) });
+  const res = await fetch(`${FEDIZEN}/api/v1/apps`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_name: 'Atlas', redirect_uris: redirectUri, scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin }), signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`Fedizen app registration failed [${res.status}]`);
   const j = await res.json() as { client_id: string; client_secret: string };
   await db.from('fedizen_oauth_apps').insert({ redirect_uri: redirectUri, client_id: j.client_id, client_secret: j.client_secret });
@@ -32,11 +32,11 @@ export async function finishConnect(userId: string, code: string, state: string)
   await db.from('fedizen_oauth_states').delete().eq('state', state);
   if (!st || st.user_id !== userId || Date.now() - new Date(st.created_at).getTime() > 15 * 60_000) return { ok: false as const, error: 'This connection link expired. Please try again.' };
   const app = await appFor(st.redirect_uri);
-  const res = await fetch(`${FEDIZEN}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: st.redirect_uri, client_id: app.client_id, client_secret: app.client_secret, code_verifier: st.code_verifier }) });
-  if (!res.ok) { console.error(`Fedizen token exchange failed [${res.status}]: ${(await res.text()).slice(0, 300)}`); return { ok: false as const, error: 'Fedizen didn’t accept the connection. Please try again.' }; }
+  const res = await fetch(`${FEDIZEN}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: st.redirect_uri, client_id: app.client_id, client_secret: app.client_secret, code_verifier: st.code_verifier }), signal: AbortSignal.timeout(10000) });
+  if (!res.ok) { console.error(`Fedizen token exchange failed [${res.status}]`); return { ok: false as const, error: 'Fedizen didn’t accept the connection. Please try again.' }; }
   const tok = await res.json() as { access_token: string; scope?: string };
   let handle: string | null = null;
-  const me = await fetch(`${FEDIZEN}/api/v1/accounts/verify_credentials`, { headers: { authorization: `Bearer ${tok.access_token}` } });
+  const me = await fetch(`${FEDIZEN}/api/v1/accounts/verify_credentials`, { headers: { authorization: `Bearer ${tok.access_token}` }, signal: AbortSignal.timeout(10000) });
   if (me.ok) handle = ((await me.json()) as { acct?: string }).acct ?? null;
   await db.from('fedizen_connections').upsert({ user_id: userId, access_token: tok.access_token, scope: tok.scope ?? FEDIZEN_API_SCOPE, account_handle: handle });
   return { ok: true as const };

@@ -62,7 +62,7 @@ export type BonfireArticle = {
   author: string; handle?: string; avatar?: string; image?: string; likes: number; boosts: number; replies: number;
 };
 
-type BonfireActivityNode = {
+export type BonfireActivityNode = {
   id: string; date?: string; canonicalUri?: string; boostCount?: number; likeCount?: number; repliesCount?: number;
   objectPostContent?: { name?: string | null; summary?: string | null; htmlBody?: string | null } | null;
   subject?: { character?: { username?: string; canonicalUri?: string } | null; profile?: { name?: string; icon?: string } | null } | null;
@@ -95,6 +95,25 @@ export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticl
       handle: n.subject?.character?.username ? `@${n.subject.character.username.replace(/^@/, '')}` : undefined,
       avatar: isHttp(avatar) ? avatar : undefined, image,
       likes: n.likeCount ?? 0, boosts: n.boostCount ?? 0, replies: n.repliesCount ?? 0,
+    }];
+  });
+}
+
+/** Any Bonfire activity (short posts included) as a plain-text feed post; remote HTML never rendered. */
+export function fromBonfirePosts(nodes: BonfireActivityNode[]) {
+  return nodes.flatMap(n => {
+    const pc = n.objectPostContent;
+    const paragraphs = [pc?.name?.trim(), ...htmlToParagraphs(pc?.htmlBody ?? '')].filter((t): t is string => !!t);
+    if (!paragraphs.length) return [];
+    const user = n.subject?.character?.username?.replace(/^@/, '');
+    const avatar = n.subject?.profile?.icon;
+    return [{
+      id: n.id, paragraphs, date: n.date,
+      url: isHttp(n.canonicalUri) ? n.canonicalUri! : `https://fedizen.net/post/${encodeURIComponent(n.id)}`,
+      author: n.subject?.profile?.name || user || 'Fedizen member',
+      handle: user ? `@${user.includes('@') ? user : `${user}@fedizen.net`}` : '',
+      avatar: isHttp(avatar) ? avatar : undefined,
+      image: n.media?.find(m => m.mediaType?.startsWith('image/') && isHttp(m.url))?.url,
     }];
   });
 }
