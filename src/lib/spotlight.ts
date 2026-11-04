@@ -55,7 +55,7 @@ const decode = (s: string) => s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').r
 
 /** Converts remote HTML to plain paragraphs so nothing from the remote server is rendered as markup. */
 export function htmlToParagraphs(html = ''): string[] {
-  return html.split(/<\/(?:p|h[1-6]|li|blockquote)>|<br\s*\/?>/i)
+  return html.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '').split(/<\/(?:p|h[1-6]|li|blockquote)>|<br\s*\/?>/i)
     .map(chunk => decode(chunk.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 }

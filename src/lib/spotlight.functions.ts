@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
-import { fromBonfireStatuses, fromMastodonLinks, mixSpotlight, type SpotlightItem } from './spotlight';
+import { fromMastodonLinks, mixSpotlight, type SpotlightItem } from './spotlight';
+import { getRecentArticles } from './bonfire.functions';
 
 async function getJson(url: string): Promise<unknown[]> {
   try {
@@ -12,10 +13,10 @@ async function getJson(url: string): Promise<unknown[]> {
 
 /** Public reads only: Mastodon's trending news and Fedizen (Bonfire) trending/recent articles. */
 export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): Promise<{ items: SpotlightItem[]; bonfireCount: number }> => {
-  const [links, statuses] = await Promise.all([
+  const [links, recent] = await Promise.all([
     getJson('https://mastodon.social/api/v1/trends/links?limit=8'),
-    getJson('https://fedizen.net/api/v1/trends/statuses?limit=20'),
+    getRecentArticles(),
   ]);
-  const bonfire = fromBonfireStatuses(statuses as never).slice(0, 6);
+  const bonfire: SpotlightItem[] = recent.articles.slice(0, 4).map(a => ({ id: `b:${a.id}`, source: 'Bonfire', title: a.title, description: a.summary, url: a.url, image: a.image, provider: 'fedizen.net', author: a.author, published: a.date }));
   return { items: mixSpotlight(fromMastodonLinks(links as never), bonfire), bonfireCount: bonfire.length };
 });
