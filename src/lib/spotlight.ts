@@ -89,7 +89,7 @@ export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticl
     const image = n.media?.find(m => m.mediaType?.startsWith('image/') && isHttp(m.url))?.url;
     const avatar = n.subject?.profile?.icon;
     return [{
-      id: n.id, title, summary: pc?.summary?.trim() || paragraphs[0]?.slice(0, 220) || '', paragraphs,
+      id: n.id, title, summary: decode(pc?.summary ?? '').trim() || paragraphs[0]?.slice(0, 220) || '', paragraphs,
       url: isHttp(n.canonicalUri) ? n.canonicalUri! : `https://fedizen.net/post/${n.id}`, date: n.date,
       author: n.subject?.profile?.name || n.subject?.character?.username || 'Fedizen author',
       handle: n.subject?.character?.username ? `@${n.subject.character.username.replace(/^@/, '')}` : undefined,
