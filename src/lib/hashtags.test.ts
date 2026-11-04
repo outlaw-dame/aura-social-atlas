@@ -22,6 +22,6 @@ describe('extractHashtags', () => {
 
 describe('hashtagUrl', () => {
   test('links to the Mastodon tag page', () => {
-    strictEqual(hashtagUrl('openweb'), 'https://mastodon.social/tags/openweb');
+    strictEqual(hashtagUrl('openweb'), '/tags/openweb');
   });
 });

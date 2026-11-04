@@ -3,6 +3,7 @@ import { ArrowUpRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NetworkBadge } from '@/lib/networks';
 import { useQuery } from '@tanstack/react-query';
+import { linkifyHashtags } from '@/lib/hashtags';
 import { getVoiceAvatars } from '@/lib/voices.functions';
 import { voices, voicesPage, VOICES_PER_PAGE } from '@/lib/voices';
 
@@ -27,9 +28,9 @@ export function VoicesToKnow() {
           <span className="flex items-center gap-1 text-xs font-semibold group-hover:underline">{v.name}<ArrowUpRight className="size-3 text-muted-foreground" /></span>
           <span className="block truncate text-[10px] text-muted-foreground">{v.handle}</span>
           <span className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground"><NetworkBadge network={v.network} /> · {v.topic}</span>
-          <span className="mt-2 block text-xs leading-relaxed text-muted-foreground">{v.bio}</span>
         </span>
       </a>
+      <p className="mt-2 pl-[52px] text-xs leading-relaxed text-muted-foreground">{linkifyHashtags(v.bio)}</p>
     </li>)}</ul>
   </div>;
 }

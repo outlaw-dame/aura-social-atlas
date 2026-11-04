@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 const HASHTAG_RE = /(^|[^\w/+&-])#([\p{L}\p{N}_]*[\p{L}_][\p{L}\p{N}_]*)/gu;
 
 export function hashtagUrl(tag: string) {
-  return `https://mastodon.social/tags/${encodeURIComponent(tag)}`;
+  return `/tags/${encodeURIComponent(tag)}`;
 }
 
 /** Splits text into plain runs and hashtag tokens. */
@@ -30,7 +30,7 @@ function splitHashtags(text: string): (string | { tag: string })[] {
 export function linkifyHashtags(text: string): ReactNode[] {
   return splitHashtags(text).map((part, i) =>
     typeof part === 'string' ? part : (
-      <a key={i} href={hashtagUrl(part.tag)} target="_blank" rel="noopener noreferrer" className="atlas-hashtag">
+      <a key={i} href={hashtagUrl(part.tag)} className="atlas-hashtag" onClick={e => e.stopPropagation()}>
         #{part.tag}
       </a>
     ),
