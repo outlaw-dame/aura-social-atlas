@@ -37,3 +37,46 @@ export function mixSpotlight(a: SpotlightItem[], b: SpotlightItem[]): SpotlightI
   for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i]) out.push(a[i]); if (b[i]) out.push(b[i]); }
   return out;
 }
+
+/** A real Bonfire Article from Fedizen's GraphQL "articles" feed (never a guessed long post). */
+export type BonfireArticle = {
+  id: string; title: string; summary: string; paragraphs: string[]; url: string; date?: string;
+  author: string; handle?: string; avatar?: string; image?: string; likes: number; boosts: number; replies: number;
+};
+
+type BonfireActivityNode = {
+  id: string; date?: string; canonicalUri?: string; boostCount?: number; likeCount?: number; repliesCount?: number;
+  objectPostContent?: { name?: string | null; summary?: string | null; htmlBody?: string | null } | null;
+  subject?: { character?: { username?: string; canonicalUri?: string } | null; profile?: { name?: string; icon?: string } | null } | null;
+  media?: { url?: string; mediaType?: string }[] | null;
+};
+
+const decode = (s: string) => s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&[a-z#0-9]+;/gi, ' ');
+
+/** Converts remote HTML to plain paragraphs so nothing from the remote server is rendered as markup. */
+export function htmlToParagraphs(html = ''): string[] {
+  return html.split(/<\/(?:p|h[1-6]|li|blockquote)>|<br\s*\/?>/i)
+    .map(chunk => decode(chunk.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+const isHttp = (u?: string) => !!u && /^https?:\/\//i.test(u);
+
+export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticle[] {
+  return nodes.flatMap(n => {
+    const pc = n.objectPostContent; const title = pc?.name?.trim();
+    if (!title) return [];
+    const paragraphs = htmlToParagraphs(pc?.htmlBody ?? '');
+    if (paragraphs[0]?.toLowerCase() === title.toLowerCase()) paragraphs.shift();
+    const image = n.media?.find(m => m.mediaType?.startsWith('image/') && isHttp(m.url))?.url;
+    const avatar = n.subject?.profile?.icon;
+    return [{
+      id: n.id, title, summary: pc?.summary?.trim() || paragraphs[0]?.slice(0, 220) || '', paragraphs,
+      url: isHttp(n.canonicalUri) ? n.canonicalUri! : `https://fedizen.net/post/${n.id}`, date: n.date,
+      author: n.subject?.profile?.name || n.subject?.character?.username || 'Fedizen author',
+      handle: n.subject?.character?.username ? `@${n.subject.character.username.replace(/^@/, '')}` : undefined,
+      avatar: isHttp(avatar) ? avatar : undefined, image,
+      likes: n.likeCount ?? 0, boosts: n.boostCount ?? 0, replies: n.repliesCount ?? 0,
+    }];
+  });
+}
