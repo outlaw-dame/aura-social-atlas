@@ -9,10 +9,14 @@ import type { SpotlightItem } from '@/lib/spotlight';
 /** Mastodon-style "More from" author attribution, improved with handle, publisher and a byline fallback. */
 function Byline({ it }: { it: SpotlightItem }) {
   const acc = it.authorAccount;
-  if (acc) return <a href={acc.url} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center gap-2 rounded-xl border border-border p-2 text-xs hover:bg-muted" aria-label={`More from ${acc.name} on the fediverse`}>
-    {acc.avatar ? <img src={acc.avatar} alt="" width={28} height={28} className="size-7 rounded-full object-cover" loading="lazy" /> : <span className="size-7 rounded-full bg-muted" />}
-    <span className="min-w-0 flex-1"><span className="block text-muted-foreground">More from</span><span className="block truncate font-medium text-foreground">{acc.name} <span className="font-normal text-muted-foreground">{acc.acct}</span></span></span>
-    <ExternalLink className="size-3.5 text-muted-foreground" aria-hidden="true" />
+  if (acc) return <a href={acc.url} target="_blank" rel="noopener noreferrer" className="group/by mt-4 flex items-center gap-3 rounded-2xl border border-border/60 bg-muted/40 p-3 shadow-sm transition-colors hover:bg-muted" aria-label={`More from ${acc.name} on the fediverse`}>
+    {acc.avatar ? <img src={acc.avatar} alt="" width={44} height={44} className="size-11 shrink-0 rounded-xl object-cover ring-1 ring-border" loading="lazy" /> : <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-background font-serif text-lg ring-1 ring-border">{acc.name.charAt(0)}</span>}
+    <span className="min-w-0 flex-1">
+      <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"><NetworkBadge network="Mastodon" className="[&>svg]:size-3" />· More from</span>
+      <span className="mt-0.5 block truncate text-sm font-semibold text-foreground">{acc.name}</span>
+      <span className="block truncate text-xs text-muted-foreground">{acc.acct}</span>
+    </span>
+    <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover/by:translate-x-0.5" aria-hidden="true" />
   </a>;
   if (!it.author) return null;
   return <p className="mt-2 text-xs text-muted-foreground">By {it.authorUrl ? <a href={it.authorUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">{it.author}</a> : it.author}</p>;
