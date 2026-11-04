@@ -57,6 +57,6 @@ export async function disconnect(userId: string) {
 
 export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {
   const res = await fetch(`${FEDIZEN}${path}`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
-  if (!res.ok) { console.error(`Fedizen ${path} failed [${res.status}]: ${(await res.text()).slice(0, 300)}`); return { status: res.status, data: [] }; }
+  if (!res.ok) { console.error(`Fedizen ${path} failed [${res.status}]`); return { status: res.status, data: [] }; }
   const j = await res.json(); return { status: 200, data: Array.isArray(j) ? j : [] };
 }

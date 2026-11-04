@@ -8,14 +8,14 @@ import type { BonfireArticle } from '@/lib/spotlight';
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 
 export function RecentArticles() {
-  const { data, isLoading } = useQuery({ queryKey: ['bonfire-articles'], queryFn: () => getRecentArticles(), staleTime: 5 * 60_000 });
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ['bonfire-articles'], queryFn: () => getRecentArticles(), staleTime: 5 * 60_000 });
   const [open, setOpen] = useState<BonfireArticle | null>(null);
   const articles = data?.articles ?? [];
   return <section aria-labelledby="recent-articles-heading" className="mb-12">
     <div className="mb-5 flex items-baseline justify-between"><h2 id="recent-articles-heading" className="flex items-center gap-2 font-serif text-2xl italic"><BookOpen className="size-5 text-accent" />Recent articles</h2><span className="text-[10px] uppercase text-muted-foreground">Live from Fedizen</span></div>
     {isLoading ? <p className="text-sm text-muted-foreground">Loading articles from Fedizen…</p>
-      : data?.error ? <p className="text-sm text-muted-foreground">Fedizen couldn’t be reached right now. Try again in a moment.</p>
-      : !articles.length ? <p className="text-sm text-muted-foreground">No articles have been published on Fedizen yet.</p>
+      : isError || data?.error ? <p className="text-sm text-muted-foreground">Fedizen couldn’t be reached right now. <Button variant="link" size="sm" className="px-1" onClick={() => refetch()}>Try again</Button></p>
+      : !articles.length ? <p className="text-sm text-muted-foreground">Fedizen answered, but no articles have been published yet.</p>
       : <div className="grid gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">{articles.slice(0, 9).map(a => <article key={a.id}>
         <button type="button" onClick={() => setOpen(a)} className="group block w-full text-left">
           {a.image && <div className="mb-3 overflow-hidden rounded-2xl"><img src={a.image} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover transition-transform duration-700 group-hover:scale-[1.025]" /></div>}

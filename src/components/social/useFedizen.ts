@@ -14,7 +14,7 @@ export function useFedizen() {
   const q = useQuery({ queryKey: ['fedizen-home', user?.id], queryFn: () => home(), enabled: !!user, staleTime: 60_000 });
   const embedded = typeof window !== 'undefined' && isEmbeddedPreview();
   return {
-    signedIn: !!user, loading: !!user && q.isLoading, data: q.data, error, embedded,
+    signedIn: !!user, loading: !!user && q.isLoading, data: q.data, error, embedded, queryError: q.isError, retry: () => { void q.refetch(); },
     connect: async () => {
       setError(null);
       const r = await start({ data: { origin: window.location.origin } });
