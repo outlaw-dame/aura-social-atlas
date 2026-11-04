@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      fedizen_connections: {
+        Row: {
+          access_token: string
+          account_handle: string | null
+          created_at: string
+          scope: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          account_handle?: string | null
+          created_at?: string
+          scope: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          account_handle?: string | null
+          created_at?: string
+          scope?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      fedizen_oauth_apps: {
+        Row: {
+          client_id: string
+          client_secret: string
+          created_at: string
+          redirect_uri: string
+        }
+        Insert: {
+          client_id: string
+          client_secret: string
+          created_at?: string
+          redirect_uri: string
+        }
+        Update: {
+          client_id?: string
+          client_secret?: string
+          created_at?: string
+          redirect_uri?: string
+        }
+        Relationships: []
+      }
+      fedizen_oauth_states: {
+        Row: {
+          code_verifier: string
+          created_at: string
+          redirect_uri: string
+          state: string
+          user_id: string
+        }
+        Insert: {
+          code_verifier: string
+          created_at?: string
+          redirect_uri: string
+          state: string
+          user_id: string
+        }
+        Update: {
+          code_verifier?: string
+          created_at?: string
+          redirect_uri?: string
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_key: string | null
