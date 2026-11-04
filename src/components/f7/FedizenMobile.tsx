@@ -17,11 +17,11 @@ export function MobileRecentArticles() {
     {isLoading ? <Block strong inset>Loading articles from Fedizen…</Block>
       : data?.error ? <Block strong inset>Fedizen couldn’t be reached right now.</Block>
       : !list.length ? <Block strong inset>No articles on Fedizen yet.</Block>
-      : list.slice(0, 6).map(a => <Card key={a.id} outline onClick={() => setOpen(a)} style={{ cursor: 'pointer' }}>
+      : list.slice(0, 6).map(a => <div key={a.id} role="button" tabIndex={0} onClick={() => setOpen(a)} onKeyDown={e => e.key === 'Enter' && setOpen(a)} style={{ cursor: 'pointer' }}><Card outline>
         {a.image && <img src={a.image} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }} />}
         <CardContent><div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22, lineHeight: 1.2 }}>{a.title}</div>{a.summary && <p style={{ opacity: .7, fontSize: 14, marginBottom: 0 }}>{a.summary.slice(0, 140)}</p>}</CardContent>
         <CardFooter><span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>{a.avatar && <img src={a.avatar} alt="" width={20} height={20} style={{ borderRadius: 10 }} />}{a.author} · {when(a.date)}</span></CardFooter>
-      </Card>)}
+      </Card></div>)}
     <Popup opened={!!open} onPopupClosed={() => setOpen(null)} swipeToClose>
       <Page>
         <Navbar title={open?.author ?? ''}><NavRight><Link popupClose iconOnly aria-label="Close article"><Icon ios="f7:xmark" md="material:close" /></Link></NavRight></Navbar>
