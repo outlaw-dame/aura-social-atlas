@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { ArrowUpRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NetworkBadge } from '@/lib/networks';
-import { avatarPreset, defaultAvatarKey } from '@/lib/atlas-avatars';
+import { useQuery } from '@tanstack/react-query';
+import { getVoiceAvatars } from '@/lib/voices.functions';
 import { voices, voicesPage, VOICES_PER_PAGE } from '@/lib/voices';
 
 /** Rotating list of real open-web writers; six at a time, advancing on its own or on request. */
 export function VoicesToKnow() {
   const [page, setPage] = useState(0);
+  const { data: avatars } = useQuery({ queryKey: ['voice-avatars'], queryFn: () => getVoiceAvatars(), staleTime: 3600_000 });
   const pages = Math.ceil(voices.length / VOICES_PER_PAGE);
   useEffect(() => {
     const t = setInterval(() => setPage(p => p + 1), 20000);
@@ -20,7 +22,7 @@ export function VoicesToKnow() {
     </div>
     <ul className="space-y-5">{voicesPage(page).map(v => <li key={v.id} className="border-b border-border pb-5 animate-in fade-in duration-500">
       <a href={v.url} target="_blank" rel="noopener noreferrer" className="group flex items-start gap-3" aria-label={`${v.name} on ${v.network}`}>
-        <img className="social-avatar size-10 shrink-0" src={avatarPreset(defaultAvatarKey(v.id)).src} alt="" />
+        {avatars?.[v.id] ? <img className="size-10 shrink-0 rounded-full object-cover ring-1 ring-border" src={avatars[v.id]!} alt="" width={40} height={40} loading="lazy" referrerPolicy="no-referrer" /> : <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted font-serif text-sm ring-1 ring-border" aria-hidden="true">{v.name.split(/\s+/).filter(w => /^[A-Z]/.test(w)).slice(0, 2).map(w => w[0]).join('')}</span>}
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1 text-xs font-semibold group-hover:underline">{v.name}<ArrowUpRight className="size-3 text-muted-foreground" /></span>
           <span className="block truncate text-[10px] text-muted-foreground">{v.handle}</span>
