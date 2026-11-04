@@ -1,6 +1,6 @@
 import { fromBonfireArticles, fromBonfirePosts, type BonfireActivityNode } from './spotlight';
 
-const query = (feed: string) => `{feedActivities(first:20,filter:{feedName:"${feed}"}){edges{node{id date canonicalUri boostCount likeCount repliesCount objectPostContent{name summary htmlBody} subject{... on User{character{username canonicalUri} profile{name icon}}} media{url mediaType} object{... on Post{creator{... on User{character{username canonicalUri} profile{name icon}}}}}}}}}`;
+const query = (feed: string) => `{feedActivities(first:20,filter:{feedName:"${feed}"}){edges{node{id date canonicalUri verb{verb} boostCount likeCount repliesCount objectPostContent{name summary htmlBody} subject{... on User{character{username canonicalUri} profile{name icon}}} media{url mediaType} object{... on Post{id creator{... on User{character{username canonicalUri} profile{name icon}}}}}}}}}`;
 
 import type { RecentArticlesResult, PublicFeedResult } from './bonfire.functions';
 
