@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { Flame, TrendingUp, ExternalLink } from 'lucide-react';
+import { useRef } from 'react';
+import { Flame, TrendingUp, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { getSpotlight } from '@/lib/spotlight.functions';
 import { NetworkBadge } from '@/lib/networks';
 import type { SpotlightItem } from '@/lib/spotlight';
@@ -48,16 +50,45 @@ function Row({ it }: { it: SpotlightItem }) {
   </article>;
 }
 
+/** Primary feature carousel, styled like the creator story cards: large image with a label pill. */
+function Carousel({ items }: { items: SpotlightItem[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const page = (dir: number) => { const el = ref.current; if (el) el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: 'smooth' }); };
+  return <div className="relative min-w-0 w-full overflow-hidden" aria-roledescription="carousel" aria-label="Featured stories">
+    <div ref={ref} className="flex w-full snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {items.map((it, i) => <article key={it.id} aria-roledescription="slide" aria-label={`${i + 1} of ${items.length}`} className="w-[85%] shrink-0 snap-start sm:w-[70%] lg:w-[60%]">
+        <a href={it.url} target="_blank" rel="noopener noreferrer" className="group relative block overflow-hidden rounded-2xl bg-muted">
+          <img src={it.image} alt="" loading={i === 0 ? 'eager' : 'lazy'} className="aspect-[16/10] w-full object-cover transition-transform duration-700 group-hover:scale-[1.025]" />
+          <span className="social-image-label absolute bottom-4 left-4 rounded-full px-3 py-1 text-[10px] font-medium">{it.source === 'Mastodon' ? 'Trending' : 'Article'} · {it.provider}</span>
+        </a>
+        <div className="mt-3"><Meta it={it} /></div>
+        <h3 className="mt-1.5 line-clamp-3 font-serif text-2xl leading-tight"><a href={it.url} target="_blank" rel="noopener noreferrer" className="hover:underline">{it.title}</a></h3>
+        {it.description && <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{it.description}</p>}
+        <Byline it={it} />
+      </article>)}
+    </div>
+    {items.length > 1 && <div className="mt-3 hidden justify-end gap-2 sm:flex">
+      <Button variant="outline" size="icon" className="size-8 rounded-full" aria-label="Previous story" onClick={() => page(-1)}><ChevronLeft /></Button>
+      <Button variant="outline" size="icon" className="size-8 rounded-full" aria-label="Next story" onClick={() => page(1)}><ChevronRight /></Button>
+    </div>}
+  </div>;
+}
+
 export function Spotlight() {
   const { data, isLoading } = useQuery({ queryKey: ['spotlight'], queryFn: () => getSpotlight(), staleTime: 10 * 60_000 });
   const items = data?.items ?? [];
-  return <section aria-labelledby="spotlight-heading" className="mb-12">
+  return <section aria-labelledby="spotlight-heading" className="mb-12 min-w-0 max-w-full">
     <div className="mb-5 flex items-baseline justify-between"><h2 id="spotlight-heading" className="flex items-center gap-2 font-serif text-2xl italic"><Flame className="size-5 text-accent" />Spotlight</h2></div>
     {isLoading ? <p className="text-sm text-muted-foreground">Gathering what people are sharing…</p> : !items.length ? <p className="text-sm text-muted-foreground">Nothing trending right now.</p> : <>
-      <div className="grid gap-x-8 lg:grid-cols-[1.4fr_1fr]">
-        {items[0] && <Lead it={items[0]} />}
-        <ul className="divide-y divide-border border-t border-border lg:border-t-0">{items.slice(1, 9).map(it => <li key={it.id}><Row it={it} /></li>)}</ul>
-      </div>
+      {(() => {
+        const featured = items.filter(it => it.image).slice(0, 5);
+        const ids = new Set(featured.map(f => f.id));
+        const rest = items.filter(it => !ids.has(it.id)).slice(0, 8);
+        return <>
+          {featured.length > 0 && <Carousel items={featured} />}
+          {rest.length > 0 && <ul className="mt-6 divide-y divide-border border-t border-border">{rest.map(it => <li key={it.id}><Row it={it} /></li>)}</ul>}
+        </>;
+      })()}
       {data && data.bonfireCount === 0 && <p className="mt-6 text-xs text-muted-foreground">No public Fedizen articles are trending yet — new Bonfire articles will appear here as they’re shared.</p>}
     </>}
   </section>;
