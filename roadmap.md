@@ -20,3 +20,6 @@
 - [x] Branded network badges: Bluesky logo + Bluesky Blue #0085FF, Mastodon logo + Mastodon Purple #6364FF, on profiles and lists; posts tagged with full @user@domain creator handles.
 - [x] Linkified bio hashtags open an in-app feed of that creator's posts with the tag; icon next to the Creators header; Podcasting 2.0 network with Podcast Index red #F90000 badge, feature chips (chapters, transcripts, value4value, persons), and feed metadata.
 - [x] Bonfire/Fedizen sign-in: verified Fedizen OIDC discovery, registered Atlas client on fedizen.net, sign-in code already in place; user completes setup in Auth settings.
+- [x] Fedizen Recent Articles on Discover (public Bonfire GraphQL "articles" feed) with in-app reader
+- [ ] Phone app (/app): show Recent Articles
+- [ ] Personal Fedizen feed (Following/notifications) — needs a separate Fedizen API permission step
