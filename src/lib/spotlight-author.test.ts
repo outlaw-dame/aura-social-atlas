@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { linkAuthor } from './spotlight';
 describe('linkAuthor', () => {
   it('uses the linked fediverse account like Mastodon "More from"', () => {
