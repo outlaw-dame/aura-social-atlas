@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { fromMastodonLinks, mixSpotlight, type SpotlightItem } from './spotlight';
-import { getRecentArticles } from './bonfire.functions';
+
 
 async function getJson(url: string): Promise<unknown[]> {
   try {
@@ -15,7 +15,7 @@ async function getJson(url: string): Promise<unknown[]> {
 export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): Promise<{ items: SpotlightItem[]; bonfireCount: number }> => {
   const [links, recent] = await Promise.all([
     getJson('https://mastodon.social/api/v1/trends/links?limit=8'),
-    getRecentArticles(),
+    import('./bonfire.server').then(m => m.fetchRecentArticles()),
   ]);
   const bonfire: SpotlightItem[] = recent.articles.slice(0, 4).map(a => ({ id: `b:${a.id}`, source: 'Bonfire', title: a.title, description: a.summary, url: a.url, image: a.image, provider: 'fedizen.net', author: a.author, published: a.date }));
   return { items: mixSpotlight(fromMastodonLinks(links as never), bonfire), bonfireCount: bonfire.length };
