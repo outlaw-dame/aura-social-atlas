@@ -8,7 +8,7 @@ defmodule Bonfire.RelayClient.Store.Memory do
   use Agent
 
   def start_link(opts \\ []) do
-    Agent.start_link(fn -> %{subs: %{}, seen: MapSet.new()} end, Keyword.take(opts, [:name]))
+    Agent.start_link(fn -> %{subs: %{}, seen: %{}} end, Keyword.take(opts, [:name]))
   end
 
   @impl true
@@ -44,11 +44,28 @@ defmodule Bonfire.RelayClient.Store.Memory do
   def list(s), do: Agent.get(s, &Map.values(&1.subs))
 
   @impl true
-  def mark_seen(s, id) do
+  def claim(s, id, lease_ms) do
+    now = System.monotonic_time(:millisecond)
+
     Agent.get_and_update(s, fn st ->
-      if MapSet.member?(st.seen, id),
-        do: {:duplicate, st},
-        else: {:new, %{st | seen: MapSet.put(st.seen, id)}}
+      case st.seen[id] do
+        :done -> {:done, st}
+        {:claimed, until} when until > now -> {:in_flight, st}
+        _ -> {:claimed, put_in(st, [:seen, id], {:claimed, now + lease_ms})}
+      end
+    end)
+  end
+
+  @impl true
+  def complete(s, id), do: Agent.update(s, &put_in(&1, [:seen, id], :done))
+
+  @impl true
+  def release(s, id) do
+    Agent.update(s, fn st ->
+      case st.seen[id] do
+        {:claimed, _} -> %{st | seen: Map.delete(st.seen, id)}
+        _ -> st
+      end
     end)
   end
 end

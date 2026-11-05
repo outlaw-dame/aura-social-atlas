@@ -33,6 +33,8 @@ if Code.ensure_loaded?(Ecto.Schema) and Code.ensure_loaded?(Ecto.Query) do
     def insert_subscription(repo, %Subscription{} = sub) do
       # Live rows are protected by a partial unique index; a terminal row for
       # the same relay is replaced so the admin can re-subscribe.
+      # Two concurrent first-time inserts race on the primary key; the loser
+      # gets {:error, :already_subscribed} instead of a second Follow.
       repo.transaction(fn ->
         case repo.get(Row, sub.relay_actor_id, lock: "FOR UPDATE") do
           %Row{state: s} when s in @live -> repo.rollback(:already_subscribed)
@@ -40,8 +42,10 @@ if Code.ensure_loaded?(Ecto.Schema) and Code.ensure_loaded?(Ecto.Query) do
           nil -> :ok
         end
 
-        repo.insert!(to_row(sub))
-        sub
+        case repo.insert(to_row(sub), on_conflict: :nothing, conflict_target: :relay_actor_id) do
+          {:ok, %Row{inserted_at: %DateTime{}}} -> sub
+          _ -> repo.rollback(:already_subscribed)
+        end
       end)
     end
 
@@ -65,17 +69,50 @@ if Code.ensure_loaded?(Ecto.Schema) and Code.ensure_loaded?(Ecto.Query) do
     @impl true
     def list(repo), do: repo.all(Row) |> Enum.map(&from_row/1)
 
-    @impl true
-    def mark_seen(repo, activity_id) do
-      {n, _} =
-        repo.insert_all(
-          "bonfire_relay_client_seen",
-          [%{activity_id: activity_id, seen_at: DateTime.utc_now()}],
-          on_conflict: :nothing,
-          conflict_target: :activity_id
-        )
+    # One statement, atomic under concurrency: insert a fresh claim, or take
+    # over an expired claim; a live claim or a completed row is left alone.
+    @claim_sql """
+    INSERT INTO bonfire_relay_client_seen (activity_id, status, claimed_until, seen_at)
+    VALUES ($1, 'claimed', now() + ($2 * interval '1 millisecond'), now())
+    ON CONFLICT (activity_id) DO UPDATE
+      SET status = 'claimed', claimed_until = EXCLUDED.claimed_until
+      WHERE bonfire_relay_client_seen.status = 'claimed'
+        AND bonfire_relay_client_seen.claimed_until < now()
+    RETURNING activity_id
+    """
 
-      if n == 1, do: :new, else: :duplicate
+    @impl true
+    def claim(repo, id, lease_ms) do
+      case repo.query!(@claim_sql, [id, lease_ms]) do
+        %{num_rows: 1} ->
+          :claimed
+
+        _ ->
+          case repo.query!("SELECT status FROM bonfire_relay_client_seen WHERE activity_id = $1", [id]) do
+            %{rows: [["done"]]} -> :done
+            _ -> :in_flight
+          end
+      end
+    end
+
+    @impl true
+    def complete(repo, id) do
+      repo.query!(
+        "UPDATE bonfire_relay_client_seen SET status = 'done', claimed_until = NULL WHERE activity_id = $1",
+        [id]
+      )
+
+      :ok
+    end
+
+    @impl true
+    def release(repo, id) do
+      repo.query!(
+        "DELETE FROM bonfire_relay_client_seen WHERE activity_id = $1 AND status = 'claimed'",
+        [id]
+      )
+
+      :ok
     end
 
     defp to_row(%Subscription{} = s) do
