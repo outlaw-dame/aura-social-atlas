@@ -26,3 +26,4 @@
 - [x] Optional allowlist-only Fedify relay (relay/): Mastodon + LitePub modes, SSRF/redirect/size limits, durable Postgres stores, README and .env.example. Inactive until separately deployed and subscribed by the Fedizen admin.
 - [x] Relay security: forward only public posts from currently subscribed servers, verified after signature checks; control-plane handshakes kept separate; signed end-to-end tests.
 - [x] Relay: atomic cross-process duplicate check, exact @fedify 2.4.5 pin with startup guard, offline-only tests.
+- [x] Optional Bonfire relay client extension (bonfire_relay_client/): Mastodon + LitePub subscriptions, public-only, origin re-fetch, atomic dedup; off by default, needs 3 upstream Bonfire patches before install.
