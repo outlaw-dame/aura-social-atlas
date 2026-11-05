@@ -5,7 +5,7 @@
  */
 import { delivered } from './fetch-stub.testutil.ts';
 import { beforeAll, describe, expect, test } from 'bun:test';
-import { generateCryptoKeyPair, signRequest } from '@fedify/fedify';
+import { generateCryptoKeyPair, signJsonLd, signRequest } from '@fedify/fedify';
 import { exportSpki, getDocumentLoader } from '@fedify/vocab-runtime';
 import { buildRelay, storesFor } from './app.ts';
 import { parseConfig } from './policy.ts';
@@ -31,8 +31,10 @@ const loader = async (url: string) => {
   return { contextUrl: null, document: doc, documentUrl: url };
 };
 
-async function post(relayInbox: URL, signer: Remote, body: Record<string, unknown>) {
-  const req = new Request(relayInbox, { method: 'POST', headers: { 'content-type': 'application/activity+json', accept: 'application/activity+json' }, body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', ...body }) });
+async function post(relayInbox: URL, signer: Remote, body: Record<string, unknown>, ldSign = false) {
+  let doc: unknown = { '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'], ...body };
+  if (ldSign) doc = await signJsonLd(doc, signer.keys.privateKey, new URL(signer.keyId), { contextLoader: loader });
+  const req = new Request(relayInbox, { method: 'POST', headers: { 'content-type': 'application/activity+json', accept: 'application/activity+json' }, body: JSON.stringify(doc) });
   return signRequest(req, signer.keys.privateKey, new URL(signer.keyId));
 }
 
@@ -84,16 +86,13 @@ for (const protocol of ['litepub', 'mastodon'] as const) {
     test('a valid public post from a subscriber is relayed to other subscribers', async () => {
       const body = { id: `https://fedizen.net/activities/${n()}`, type: protocol === 'litepub' ? 'Announce' : 'Create', actor: alice.id, to: [AS_PUBLIC], cc: [`${alice.id}/followers`],
         object: protocol === 'litepub' ? 'https://fedizen.net/notes/public' : { id: 'https://fedizen.net/notes/public', type: 'Note', attributedTo: alice.id, to: [AS_PUBLIC], content: 'hello' } };
-      const res = await handle(await post(inbox, alice, body));
+      // Mastodon-style relays forward the original activity verbatim, which requires its own LD signature.
+      const res = await handle(await post(inbox, alice, body, protocol === 'mastodon'));
       expect(res.status).toBeLessThan(300);
-      if (protocol === 'litepub') {
-        expect(await until(() => delivered.some(d => d.url === socialRelay.inbox))).toBe(true);
-      } else {
-        // Mastodon-style forwarding only forwards activities carrying their own LD signature/proof;
-        // HTTP-signed-only posts are dropped by Fedify (skipIfUnsigned), so nothing leaks either way.
-        await settle();
-        expect(delivered.filter(d => d.url === fedizenRelay.inbox)).toHaveLength(0);
-      }
+      expect(await until(() => delivered.some(d => d.url === socialRelay.inbox))).toBe(true);
+      // Never echoed back to the sender's own server.
+      expect(delivered.some(d => d.url === fedizenRelay.inbox)).toBe(false);
+      if (protocol === 'mastodon') expect(delivered.find(d => d.url === socialRelay.inbox)!.body.id).toBe(body.id);
     });
 
     test('duplicate activity ids are delivered at most once', async () => {
@@ -102,7 +101,7 @@ for (const protocol of ['litepub', 'mastodon'] as const) {
       await handle(await post(inbox, alice, body));
       await handle(await post(inbox, alice, body));
       await settle();
-      expect(delivered.filter(d => d.url === socialRelay.inbox).length).toBeLessThanOrEqual(1);
+      expect(delivered.filter(d => d.url === socialRelay.inbox).length).toBe(protocol === 'litepub' ? 1 : 0);
     });
 
     test('followers-only and direct posts are refused before reaching Fedify', async () => {
