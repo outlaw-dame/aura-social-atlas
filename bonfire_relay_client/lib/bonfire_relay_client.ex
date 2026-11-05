@@ -11,6 +11,8 @@ defmodule Bonfire.RelayClient do
   require Logger
   alias Bonfire.RelayClient.{Activity, Config, Policy, Protocol, Subscription, URL}
 
+  @claim_lease_ms 300_000
+
   @doc "Admin action: subscribe to `relay_actor_id` using a fixed protocol."
   def subscribe(relay_actor_id, protocol, ctx) do
     %{config: cfg, store: {store, srv}, federation: fed} = ctx
@@ -24,17 +26,31 @@ defmodule Bonfire.RelayClient do
          {:ok, %{id: ^relay_id, inbox: inbox}} <- fed.resolve_actor(relay_id),
          true <- URL.host(inbox) == host || {:error, :inbox_origin_mismatch},
          {:ok, local} <- fed.local_relay_actor(),
-         {:ok, %{"id" => follow_id}} when is_binary(follow_id) <-
-           fed.follow(local, relay_id, Protocol.follow_object(protocol, relay_id)) do
-      store.insert_subscription(srv, %Subscription{
-        relay_actor_id: relay_id,
-        relay_inbox: inbox,
-        relay_host: host,
-        protocol: protocol,
-        follow_id: follow_id,
-        local_actor_id: local,
-        updated_at: DateTime.utc_now()
-      })
+         # Persist-before-send: the Follow id is minted locally and the
+         # :pending row is committed (atomically unique per relay) BEFORE the
+         # Follow is queued, so an early Accept always finds its state and a
+         # concurrent duplicate request loses at the insert and sends nothing.
+         {:ok, follow_id} <- fed.mint_activity_id(local),
+         true <- URL.host(follow_id) == URL.host(local) || {:error, :follow_id_origin_mismatch},
+         {:ok, sub} <-
+           store.insert_subscription(srv, %Subscription{
+             relay_actor_id: relay_id,
+             relay_inbox: inbox,
+             relay_host: host,
+             protocol: protocol,
+             follow_id: follow_id,
+             local_actor_id: local,
+             updated_at: DateTime.utc_now()
+           }) do
+      case fed.follow(local, relay_id, Protocol.follow_object(protocol, relay_id), follow_id) do
+        {:ok, _} ->
+          # Re-read: an Accept may already have advanced the state.
+          {:ok, store.get_by_relay_actor(srv, relay_id) || sub}
+
+        {:error, reason} ->
+          mark_failed(store, srv, relay_id)
+          {:error, {:follow_failed, reason}}
+      end
     else
       {:ok, %{id: _}} -> {:error, :actor_id_mismatch}
       {:error, _} = e -> e
@@ -52,6 +68,13 @@ defmodule Bonfire.RelayClient do
          {:ok, _} <- fed.unfollow(sub.local_actor_id, sub.relay_actor_id, sub.follow_id),
          {:ok, sub} <- finish_removal(sub) do
       store.update_subscription(srv, sub)
+    end
+  end
+
+  defp mark_failed(store, srv, relay_id) do
+    with %Subscription{} = s <- store.get_by_relay_actor(srv, relay_id),
+         {:ok, s} <- Subscription.transition(s, :failed) do
+      store.update_subscription(srv, s)
     end
   end
 
@@ -165,10 +188,31 @@ defmodule Bonfire.RelayClient do
         {:drop, reason}
 
       _ ->
-        if store.mark_seen(srv, a["id"]) == :duplicate do
-          {:drop, :duplicate}
-        else
-          apply_decision(decision, sub, fed)
+        # Durable claim with status: :claimed (we own it, lease-bound),
+        # :in_flight (another worker holds an unexpired lease), :done
+        # (completed earlier). Only success or a PERMANENT rejection
+        # completes the claim; transient failures release it for retry.
+        case store.claim(srv, a["id"], @claim_lease_ms) do
+          :done ->
+            {:drop, :duplicate}
+
+          :in_flight ->
+            {:drop, :in_flight}
+
+          :claimed ->
+            case apply_decision(decision, sub, fed) do
+              {:ok, _} = ok ->
+                store.complete(srv, a["id"])
+                ok
+
+              {:drop, _} = permanent ->
+                store.complete(srv, a["id"])
+                permanent
+
+              {:error, _} = transient ->
+                store.release(srv, a["id"])
+                transient
+            end
         end
     end
   end
@@ -183,23 +227,65 @@ defmodule Bonfire.RelayClient do
     end
   end
 
-  @doc "Outbound fan-out to ACCEPTED Mastodon-protocol relays (opt-in via `outbound_enabled`)."
+  @doc """
+  Outbound fan-out (opt-in via `outbound_enabled`).
+
+  * Mastodon relays (state :accepted): the original signed public activity
+    is delivered to the relay inbox.
+  * LitePub relays (state :accepted AND reciprocal Follow accepted): the
+    Bonfire service actor sends a public `Announce` of the object id to the
+    relay inbox. Only `Create` is announced; other types are reported in
+    `:skipped`, never silently dropped.
+
+  Returns `{:ok, %{delivered: [...], skipped: [...], errors: [...]}}`.
+  """
   def outbound(activity, local_host, ctx) do
     %{config: cfg, store: {store, srv}, federation: fed} = ctx
 
-    inboxes =
-      for s <- store.list(srv),
-          Subscription.active?(s),
-          s.protocol == :mastodon,
-          do: s.relay_inbox
-
     cond do
-      not (cfg.enabled and cfg.outbound_enabled) -> {:error, :disabled}
-      not Policy.outbound?(activity, local_host) -> {:drop, :not_public_or_not_local}
-      inboxes == [] -> {:ok, []}
-      true -> with :ok <- fed.deliver(activity, inboxes), do: {:ok, inboxes}
+      not (cfg.enabled and cfg.outbound_enabled) ->
+        {:error, :disabled}
+
+      not Policy.outbound?(activity, local_host) ->
+        {:drop, :not_public_or_not_local}
+
+      true ->
+        active = Enum.filter(store.list(srv), &Subscription.active?/1)
+        {masto, lite} = Enum.split_with(active, &(&1.protocol == :mastodon))
+        acc = %{delivered: [], skipped: [], errors: []}
+
+        acc =
+          case Enum.map(masto, & &1.relay_inbox) do
+            [] -> acc
+            inboxes -> record(acc, inboxes, fed.deliver(activity, inboxes))
+          end
+
+        acc = Enum.reduce(lite, acc, &litepub_out(&1, &2, activity, fed))
+        {:ok, acc}
     end
   end
+
+  defp litepub_out(%{reciprocal_follow_id: nil} = s, acc, _a, _fed),
+    do: %{acc | skipped: [{s.relay_inbox, :reciprocal_follow_not_accepted} | acc.skipped]}
+
+  defp litepub_out(s, acc, %{"type" => "Create"} = a, fed) do
+    case Activity.id_of(Activity.object(a)) do
+      id when is_binary(id) ->
+        record(acc, [s.relay_inbox], fed.announce(s.local_actor_id, id, s.relay_inbox))
+
+      _ ->
+        %{acc | skipped: [{s.relay_inbox, :missing_object_id} | acc.skipped]}
+    end
+  end
+
+  defp litepub_out(s, acc, _a, _fed),
+    do: %{acc | skipped: [{s.relay_inbox, :litepub_announces_creates_only} | acc.skipped]}
+
+  defp record(acc, inboxes, :ok), do: %{acc | delivered: acc.delivered ++ inboxes}
+  defp record(acc, inboxes, {:ok, _}), do: %{acc | delivered: acc.delivered ++ inboxes}
+
+  defp record(acc, inboxes, {:error, r}),
+    do: %{acc | errors: acc.errors ++ Enum.map(inboxes, &{&1, r})}
 
   defp enabled(%Config{enabled: true}), do: :ok
   defp enabled(_), do: {:error, :disabled}

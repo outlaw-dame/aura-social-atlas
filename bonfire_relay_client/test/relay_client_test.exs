@@ -13,6 +13,8 @@ defmodule Bonfire.RelayClientTest do
   setup do
     Application.put_env(:bonfire_relay_client, :test_pid, self())
     Application.put_env(:bonfire_relay_client, :test_objects, %{})
+    Application.put_env(:bonfire_relay_client, :test_fail, [])
+    Application.delete_env(:bonfire_relay_client, :test_on_follow)
     {:ok, srv} = start_supervised(Memory)
 
     {:ok, cfg} =
@@ -399,7 +401,8 @@ defmodule Bonfire.RelayClientTest do
         "object" => note("https://fedizen.example/n/1", "https://fedizen.example/u/x")
       }
 
-      assert {:ok, ["https://relay.masto.example/inbox"]} = RelayClient.outbound(pub, local, ctx)
+      assert {:ok, %{delivered: delivered}} = RelayClient.outbound(pub, local, ctx)
+      assert delivered == ["https://relay.masto.example/inbox"]
 
       fo = %{pub | "to" => ["https://fedizen.example/u/x/followers"]}
       assert {:drop, _} = RelayClient.outbound(fo, local, ctx)
@@ -424,6 +427,205 @@ defmodule Bonfire.RelayClientTest do
     test "outbound off unless explicitly enabled", %{ctx: ctx} do
       ctx = %{ctx | config: %{ctx.config | outbound_enabled: false}}
       assert {:error, :disabled} = RelayClient.outbound(%{}, "fedizen.example", ctx)
+    end
+  end
+
+  describe "persist-before-send subscribe" do
+    test "early Accept arriving during follow/4 is applied", %{ctx: ctx} do
+      Application.put_env(:bonfire_relay_client, :test_on_follow, fn follow_id ->
+        a = %{"type" => "Accept", "actor" => @masto, "object" => follow_id}
+
+        {:ok, %{state: :accepted}} =
+          RelayClient.handle_incoming(%{signer: @masto, activity: a}, ctx)
+      end)
+
+      assert {:ok, %{state: :accepted}} = RelayClient.subscribe(@masto, :mastodon, ctx)
+    end
+
+    test "follow queue failure marks failed and allows a clean retry", %{ctx: ctx, srv: srv} do
+      Application.put_env(:bonfire_relay_client, :test_fail, [:follow])
+
+      assert {:error, {:follow_failed, :queue_down}} =
+               RelayClient.subscribe(@masto, :mastodon, ctx)
+
+      assert Memory.get_by_relay_actor(srv, @masto).state == :failed
+      assert {:ok, %{state: :pending}} = RelayClient.subscribe(@masto, :mastodon, ctx)
+    end
+
+    test "concurrent subscribe sends exactly one Follow", %{ctx: ctx} do
+      results =
+        1..20
+        |> Task.async_stream(fn _ -> RelayClient.subscribe(@masto, :mastodon, ctx) end)
+        |> Enum.map(fn {:ok, r} -> r end)
+
+      assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+      assert Enum.count(results, &(&1 == {:error, :already_subscribed})) == 19
+      assert_received {:follow, _, @masto, _}
+      refute_received {:follow, _, @masto, _}
+    end
+  end
+
+  describe "claims and retries" do
+    setup %{ctx: ctx} do
+      accept!(ctx, sub!(ctx, @lite, :litepub))
+      oid = "https://author.example/notes/r1"
+
+      Application.put_env(:bonfire_relay_client, :test_objects, %{
+        oid => note(oid, "https://author.example/u/a")
+      })
+
+      ann = %{
+        "id" => "#{@lite}/ann/r1",
+        "type" => "Announce",
+        "actor" => @lite,
+        "to" => [@public],
+        "object" => oid
+      }
+
+      %{env: %{signer: @lite, activity: ann}}
+    end
+
+    test "transient fetch failure is released and retried", %{ctx: ctx, env: env} do
+      Application.put_env(:bonfire_relay_client, :test_fail, [:fetch])
+      assert {:error, :timeout} = RelayClient.handle_incoming(env, ctx)
+      assert {:ok, _} = RelayClient.handle_incoming(env, ctx)
+      assert {:drop, :duplicate} = RelayClient.handle_incoming(env, ctx)
+    end
+
+    test "transient ingest failure is released and retried", %{ctx: ctx, env: env} do
+      Application.put_env(:bonfire_relay_client, :test_fail, [:ingest])
+      assert {:error, :db_busy} = RelayClient.handle_incoming(env, ctx)
+      assert {:ok, _} = RelayClient.handle_incoming(env, ctx)
+    end
+
+    test "live claim reports in_flight, completed reports duplicate", %{srv: srv} do
+      assert :claimed = Memory.claim(srv, "x", 60_000)
+      assert :in_flight = Memory.claim(srv, "x", 60_000)
+      Memory.complete(srv, "x")
+      assert :done = Memory.claim(srv, "x", 60_000)
+    end
+
+    test "expired lease can be taken over", %{srv: srv} do
+      assert :claimed = Memory.claim(srv, "y", 1)
+      Process.sleep(5)
+      assert :claimed = Memory.claim(srv, "y", 60_000)
+    end
+
+    test "release after completion does not reopen", %{srv: srv} do
+      :claimed = Memory.claim(srv, "z", 60_000)
+      Memory.complete(srv, "z")
+      Memory.release(srv, "z")
+      assert :done = Memory.claim(srv, "z", 60_000)
+    end
+  end
+
+  describe "LitePub outbound Announce" do
+    @pub_create %{
+      "id" => "https://fedizen.example/a/1",
+      "type" => "Create",
+      "actor" => "https://fedizen.example/u/x",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "object" => %{
+        "id" => "https://fedizen.example/n/1",
+        "type" => "Note",
+        "attributedTo" => "https://fedizen.example/u/x",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"]
+      }
+    }
+
+    defp reciprocal!(ctx) do
+      f = %{
+        "id" => "#{@lite}/follows/o",
+        "type" => "Follow",
+        "actor" => @lite,
+        "object" => Fed.local()
+      }
+
+      {:ok, _} = RelayClient.handle_incoming(%{signer: @lite, activity: f}, ctx)
+    end
+
+    test "skipped (not silent) until relay's reciprocal Follow is accepted", %{ctx: ctx} do
+      accept!(ctx, sub!(ctx, @lite, :litepub))
+
+      assert {:ok, %{delivered: [], skipped: [{_, :reciprocal_follow_not_accepted}]}} =
+               RelayClient.outbound(@pub_create, "fedizen.example", ctx)
+
+      refute_received {:announce, _, _, _}
+    end
+
+    test "public Create is announced by the service actor to the relay inbox", %{ctx: ctx} do
+      accept!(ctx, sub!(ctx, @lite, :litepub))
+      reciprocal!(ctx)
+
+      assert {:ok, %{delivered: ["https://relay.lite.example/inbox"]}} =
+               RelayClient.outbound(@pub_create, "fedizen.example", ctx)
+
+      local = Fed.local()
+
+      assert_received {:announce, ^local, "https://fedizen.example/n/1",
+                       "https://relay.lite.example/inbox"}
+    end
+
+    test "non-Create types are reported as skipped; failures reported as errors", %{ctx: ctx} do
+      accept!(ctx, sub!(ctx, @lite, :litepub))
+      reciprocal!(ctx)
+      upd = %{@pub_create | "type" => "Update"}
+
+      assert {:ok, %{skipped: [{_, :litepub_announces_creates_only}]}} =
+               RelayClient.outbound(upd, "fedizen.example", ctx)
+
+      Application.put_env(:bonfire_relay_client, :test_fail, [:announce])
+
+      assert {:ok, %{errors: [{_, :queue_down}]}} =
+               RelayClient.outbound(@pub_create, "fedizen.example", ctx)
+    end
+
+    test "followers-only Create never announced", %{ctx: ctx} do
+      accept!(ctx, sub!(ctx, @lite, :litepub))
+      reciprocal!(ctx)
+      fo = %{@pub_create | "to" => ["https://fedizen.example/u/x/followers"]}
+      assert {:drop, _} = RelayClient.outbound(fo, "fedizen.example", ctx)
+      refute_received {:announce, _, _, _}
+    end
+  end
+
+  describe "LD signature semantics" do
+    setup %{ctx: ctx} do
+      accept!(ctx, sub!(ctx, @masto, :mastodon))
+      :ok
+    end
+
+    test "no LD signature: original fetched from origin and re-verified there", %{ctx: ctx} do
+      actor = "https://author.example/u/a"
+      oid = "https://author.example/n/ld1"
+      Application.put_env(:bonfire_relay_client, :test_objects, %{oid => note(oid, actor)})
+
+      c = %{
+        "id" => "https://author.example/act/ld1",
+        "type" => "Create",
+        "actor" => actor,
+        "to" => [@public],
+        "object" => note(oid, actor)
+      }
+
+      assert {:ok, _} = RelayClient.handle_incoming(%{signer: @masto, activity: c}, ctx)
+      assert_received {:fetch, ^oid}
+      assert_received {:ingest, ^oid, _}
+    end
+
+    test "LD signer equal to the relay (not the author) is not accepted", %{ctx: ctx} do
+      actor = "https://author.example/u/a"
+
+      c = %{
+        "id" => "https://author.example/act/ld2",
+        "type" => "Create",
+        "actor" => actor,
+        "to" => [@public],
+        "object" => note("https://author.example/n/ld2", actor)
+      }
+
+      RelayClient.handle_incoming(%{signer: @masto, activity: c, ld_verified_actor: @masto}, ctx)
+      assert_received {:fetch, "https://author.example/n/ld2"}
     end
   end
 end

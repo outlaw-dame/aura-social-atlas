@@ -16,8 +16,19 @@ defmodule Bonfire.RelayClient.Federation do
   @callback resolve_actor(actor_id) ::
               {:ok, %{id: actor_id, inbox: String.t()}} | {:error, term()}
 
-  @doc "Build, sign and queue a Follow. `object` is as:Public (Mastodon) or the relay actor (LitePub)."
-  @callback follow(local :: actor_id, relay :: actor_id, object :: String.t()) ::
+  @doc "Mint the id the Follow WILL carry, so state is persisted before it is sent."
+  @callback mint_activity_id(local :: actor_id) :: {:ok, String.t()} | {:error, term()}
+
+  @doc """
+  Build, sign and queue a Follow with the pre-minted `follow_id`. `object`
+  is as:Public (Mastodon) or the relay actor (LitePub).
+  """
+  @callback follow(
+              local :: actor_id,
+              relay :: actor_id,
+              object :: String.t(),
+              follow_id :: String.t()
+            ) ::
               {:ok, %{required(String.t()) => term()}} | {:error, term()}
 
   @callback unfollow(local :: actor_id, relay :: actor_id, follow_id :: String.t()) ::
@@ -31,6 +42,10 @@ defmodule Bonfire.RelayClient.Federation do
 
   @doc "Hand a verified public object/activity to Bonfire's normal incoming pipeline."
   @callback ingest(map(), opts :: keyword()) :: {:ok, term()} | {:error, term()}
+
+  @doc "Queue a public Announce of `object_id` from the service actor to a LitePub relay inbox."
+  @callback announce(local :: actor_id, object_id :: String.t(), inbox :: String.t()) ::
+              :ok | {:error, term()}
 
   @doc "Queue a local activity for signed delivery to the given inboxes."
   @callback deliver(activity :: map(), inboxes :: [String.t()]) :: :ok | {:error, term()}

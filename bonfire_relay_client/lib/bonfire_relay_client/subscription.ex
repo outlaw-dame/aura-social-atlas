@@ -7,13 +7,14 @@ defmodule Bonfire.RelayClient.Subscription do
      |                   |
      +--Reject--> rejected          (rejected/removed are terminal; a fresh
      +--unsubscribe--> removed       subscribe creates a new Follow id)
+     +--Follow queue failed--> failed
   ```
 
   `protocol` is fixed at creation and never changes: an Accept/Follow that
   looks like the other protocol is refused rather than "downgraded".
   """
 
-  @states [:pending, :accepted, :rejected, :unsubscribing, :removed]
+  @states [:pending, :accepted, :rejected, :unsubscribing, :removed, :failed]
   @protocols [:mastodon, :litepub]
 
   @enforce_keys [:relay_actor_id, :relay_inbox, :relay_host, :protocol, :follow_id]
@@ -29,18 +30,19 @@ defmodule Bonfire.RelayClient.Subscription do
     updated_at: nil
   ]
 
-  @type state :: :pending | :accepted | :rejected | :unsubscribing | :removed
+  @type state :: :pending | :accepted | :rejected | :unsubscribing | :removed | :failed
   @type t :: %__MODULE__{}
 
   def states, do: @states
   def protocols, do: @protocols
 
   @transitions %{
-    pending: [:accepted, :rejected, :removed],
+    pending: [:accepted, :rejected, :removed, :failed],
     accepted: [:unsubscribing, :rejected],
     unsubscribing: [:removed],
     rejected: [],
-    removed: []
+    removed: [],
+    failed: []
   }
 
   @spec transition(t(), state()) :: {:ok, t()} | {:error, {:invalid_transition, state(), state()}}

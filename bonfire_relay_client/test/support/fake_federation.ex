@@ -20,12 +20,41 @@ defmodule Bonfire.RelayClient.Test.FakeFederation do
     {:ok, %{id: id, inbox: "https://#{host}/inbox"}}
   end
 
+  # Failure injection: each op listed in :test_fail fails once (consumed).
+  defp fail?(op) do
+    fails = Application.get_env(:bonfire_relay_client, :test_fail, [])
+
+    if op in fails do
+      Application.put_env(:bonfire_relay_client, :test_fail, List.delete(fails, op))
+      true
+    else
+      false
+    end
+  end
+
   @impl true
-  def follow(local, relay, object) do
+  def mint_activity_id(local),
+    do: {:ok, "#{local}/follow/#{:erlang.unique_integer([:positive])}"}
+
+  @impl true
+  def follow(local, relay, object, follow_id) do
     notify({:follow, local, relay, object})
 
-    {:ok,
-     %{"id" => "#{@local}/follow/#{:erlang.unique_integer([:positive])}", "type" => "Follow"}}
+    # Simulates the relay answering before follow/4 returns (early Accept).
+    case Application.get_env(:bonfire_relay_client, :test_on_follow) do
+      f when is_function(f, 1) -> f.(follow_id)
+      _ -> :ok
+    end
+
+    if fail?(:follow),
+      do: {:error, :queue_down},
+      else: {:ok, %{"id" => follow_id, "type" => "Follow"}}
+  end
+
+  @impl true
+  def announce(local, object_id, inbox) do
+    notify({:announce, local, object_id, inbox})
+    if fail?(:announce), do: {:error, :queue_down}, else: :ok
   end
 
   @impl true
@@ -44,16 +73,17 @@ defmodule Bonfire.RelayClient.Test.FakeFederation do
   def fetch_object(id) do
     notify({:fetch, id})
 
-    case Map.fetch(objects(), id) do
-      {:ok, o} -> {:ok, o}
-      :error -> {:error, :not_found}
+    cond do
+      fail?(:fetch) -> {:error, :timeout}
+      Map.has_key?(objects(), id) -> {:ok, Map.fetch!(objects(), id)}
+      true -> {:error, :not_found}
     end
   end
 
   @impl true
   def ingest(data, opts) do
     notify({:ingest, data["id"], opts})
-    {:ok, data}
+    if fail?(:ingest), do: {:error, :db_busy}, else: {:ok, data}
   end
 
   @impl true
