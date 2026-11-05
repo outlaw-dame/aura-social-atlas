@@ -3,28 +3,42 @@ if Code.ensure_loaded?(ActivityPub) and Code.ensure_loaded?(ActivityPub.Actor) d
     @moduledoc """
     Production adapter onto `activity_pub` / `bonfire_federate_activitypub`.
 
-    FAIL-CLOSED: anything that needs an upstream hook which does not exist yet
-    returns `{:error, {:upstream_hook_required, name}}` instead of guessing.
-    No subscription can be created through this adapter until
-    `mint_activity_id/1` and `follow/4` are implemented on top of upstream
-    hooks, so a half-working relay can never be switched on by accident.
-    Only compiles inside a Bonfire host; NOT compiled against upstream here.
-    See README "Upstream touchpoints".
+    It is capability-gated and FAIL-CLOSED. Every call first checks that the
+    upstream hooks from `upstream_patches/` are present (`ActivityPub.RelayHooks.version/0
+    == 1` and `Bonfire.Federate.ActivityPub.Incoming.receive_relayed/2`).
+    When they are missing, the call returns
+    `{:error, {:upstream_hook_required, name}}` and nothing is sent, fetched
+    or ingested.
+
+    Calls go through `apply/3` so this module compiles against unpatched
+    upstream too. It only compiles inside a Bonfire host and has NOT been
+    compiled or run against a patched Bonfire in this repository.
     """
     @behaviour Bonfire.RelayClient.Federation
 
-    defp hook(name), do: {:error, {:upstream_hook_required, name}}
+    @hooks ActivityPub.RelayHooks
+    @incoming Bonfire.Federate.ActivityPub.Incoming
 
-    @impl true
-    def local_relay_actor do
-      case Application.get_env(:bonfire_relay_client, :local_actor_username) do
-        u when is_binary(u) ->
-          with {:ok, actor} <- ActivityPub.Actor.get_cached(username: u), do: {:ok, actor.ap_id}
+    defp hooks_ok?(name) do
+      cond do
+        not (Code.ensure_loaded?(@hooks) and function_exported?(@hooks, :version, 0) and
+                 apply(@hooks, :version, []) == 1) ->
+          {:error, {:upstream_hook_required, name}}
 
-        _ ->
-          {:error, :local_actor_not_configured}
+        not (Code.ensure_loaded?(@incoming) and function_exported?(@incoming, :receive_relayed, 2)) ->
+          {:error, {:upstream_hook_required, :incoming_relayed_object}}
+
+        true ->
+          :ok
       end
     end
+
+    defp call(name, fun, args) do
+      with :ok <- hooks_ok?(name), do: apply(@hooks, fun, args)
+    end
+
+    @impl true
+    def local_relay_actor, do: call(:service_actor, :service_actor_id, [])
 
     @impl true
     def resolve_actor(id) do
@@ -33,48 +47,47 @@ if Code.ensure_loaded?(ActivityPub) and Code.ensure_loaded?(ActivityPub.Actor) d
       end
     end
 
-    # TODO(upstream #2): ActivityPub.follow/2 mints its own id and sets
-    # `object` to the followed actor. Needs `id:` and `object_override:`.
     @impl true
-    def mint_activity_id(_local), do: hook(:follow_with_preminted_id)
+    def mint_activity_id(_local), do: call(:follow_with_preminted_id, :mint_activity_id, [])
 
     @impl true
-    def follow(_local, _relay, _object, _follow_id), do: hook(:follow_with_preminted_id)
-
-    @impl true
-    def unfollow(local, relay, _follow_id) do
-      with {:ok, l} <- ActivityPub.Actor.get_cached(ap_id: local),
-           {:ok, r} <- ActivityPub.Actor.get_cached(ap_id: relay) do
-        ActivityPub.unfollow(%{actor: l, object: r})
+    def follow(local, relay, object, follow_id) do
+      with {:ok, ^local} <- local_relay_actor() || {:error, :not_service_actor},
+           {:ok, data} <- call(:follow_with_preminted_id, :follow, [relay, object, follow_id]) do
+        {:ok, data}
+      else
+        {:ok, _other} -> {:error, :not_service_actor}
+        e -> e
       end
     end
 
     @impl true
-    def accept(local, follow) do
-      with {:ok, l} <- ActivityPub.Actor.get_cached(ap_id: local) do
-        ActivityPub.accept(%{actor: l, to: [follow["actor"]], object: follow, local: true})
-      end
+    def unfollow(_local, relay, follow_id),
+      do: call(:follow_with_preminted_id, :undo_follow, [relay, follow_id])
+
+    @impl true
+    def accept(_local, follow), do: call(:service_actor_accept, :accept, [follow])
+
+    @impl true
+    def fetch_object(id), do: call(:fetch_without_ingest, :fetch_without_ingest, [id])
+
+    @impl true
+    def ingest(data, opts) do
+      with :ok <- hooks_ok?(:incoming_relayed_object),
+           do: apply(@incoming, :receive_relayed, [data, opts])
     end
 
-    # TODO(upstream #4): needs a fetch that returns the origin-verified data
-    # without side-effect ingestion. Upstream Fetcher.fetch_object_from_id/2
-    # also inserts the object, which would bypass Policy.verify_fetched/2.
     @impl true
-    def fetch_object(_id), do: hook(:fetch_without_ingest)
+    def deliver(%{"id" => id}, inboxes),
+      do: call(:publisher_extra_inboxes, :deliver_local, [id, inboxes]) |> ok()
 
-    # TODO(upstream #1/#4): Incoming.receive_activity/1 expects an
-    # ActivityPub.Object produced by the verified inbox pipeline, not a
-    # plain map; a `relayed_by` + "no trust elevation" entry point is needed.
-    @impl true
-    def ingest(_data, _opts), do: hook(:incoming_relayed_object)
+    def deliver(_, _), do: {:error, :missing_id}
 
-    # TODO(upstream #3): publisher must accept extra recipient inboxes.
     @impl true
-    def deliver(_activity, _inboxes), do: hook(:publisher_extra_inboxes)
+    def announce(_local, object_id, inbox),
+      do: call(:service_actor_announce, :announce, [object_id, inbox]) |> ok()
 
-    # TODO(upstream #5): ActivityPub.announce/2 from the service actor
-    # addressed to the relay inbox (extra inbox + as:Public).
-    @impl true
-    def announce(_local, _object_id, _inbox), do: hook(:service_actor_announce)
+    defp ok({:ok, _}), do: :ok
+    defp ok(e), do: e
   end
 end
