@@ -35,8 +35,7 @@ defmodule Bonfire.RelayClient.Repo.Migrations.RelayClientAdminRules do
 
     create(
       constraint(:bonfire_relay_client_subscriptions, :kind_valid,
-        check:
-          "kind IS NULL OR kind IN ('mastodon','litepub','fedibuzz_tag','fedibuzz_instance')"
+        check: "kind IS NULL OR kind IN ('mastodon','litepub','fedibuzz_tag','fedibuzz_instance')"
       )
     )
 

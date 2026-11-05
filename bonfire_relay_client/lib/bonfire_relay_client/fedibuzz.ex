@@ -53,11 +53,17 @@ defmodule Bonfire.RelayClient.FediBuzz do
     i = URI.parse(id)
 
     cond do
-      not URL.same_origin?(candidate, id) -> {:error, :actor_host_mismatch}
-      not URL.same_origin?(candidate, inbox) -> {:error, :inbox_host_mismatch}
+      not URL.same_origin?(candidate, id) ->
+        {:error, :actor_host_mismatch}
+
+      not URL.same_origin?(candidate, inbox) ->
+        {:error, :inbox_host_mismatch}
+
       String.trim_trailing(i.path || "", "/") != String.trim_trailing(c.path || "", "/") ->
         {:error, :actor_path_mismatch}
-      true -> :ok
+
+      true ->
+        :ok
     end
   end
 

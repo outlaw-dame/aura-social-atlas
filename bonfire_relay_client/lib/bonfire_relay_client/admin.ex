@@ -140,11 +140,20 @@ defmodule Bonfire.RelayClient.Admin do
     rate = Map.get(i, :max_per_minute, 600)
 
     cond do
-      policy not in Subscription.inbound_policies() -> {:error, {:invalid, :inbound_policy}}
-      not is_boolean(out) -> {:error, {:invalid, :outbound_enabled}}
-      out and kind in [:fedibuzz_tag, :fedibuzz_instance] -> {:error, :fedibuzz_is_inbound_only}
-      not (is_integer(rate) and rate >= 1 and rate <= @max_rate) -> {:error, {:invalid, :max_per_minute}}
-      true -> {:ok, %{inbound_policy: policy, outbound_enabled: out, max_per_minute: rate}}
+      policy not in Subscription.inbound_policies() ->
+        {:error, {:invalid, :inbound_policy}}
+
+      not is_boolean(out) ->
+        {:error, {:invalid, :outbound_enabled}}
+
+      out and kind in [:fedibuzz_tag, :fedibuzz_instance] ->
+        {:error, :fedibuzz_is_inbound_only}
+
+      not (is_integer(rate) and rate >= 1 and rate <= @max_rate) ->
+        {:error, {:invalid, :max_per_minute}}
+
+      true ->
+        {:ok, %{inbound_policy: policy, outbound_enabled: out, max_per_minute: rate}}
     end
   end
 
@@ -289,7 +298,12 @@ defmodule Bonfire.RelayClient.Admin do
 
     with :ok <- authorize(ctx),
          {:ok, rule} <-
-           builder.(attrs |> Map.new() |> Map.drop([:id]) |> Map.put(:created_by, actor_label(ctx))),
+           builder.(
+             attrs
+             |> Map.new()
+             |> Map.drop([:id])
+             |> Map.put(:created_by, actor_label(ctx))
+           ),
          {:ok, rule} <- store.put_rule(srv, rule) do
       audit(ctx, :add_rule, rule.id)
       {:ok, rule}

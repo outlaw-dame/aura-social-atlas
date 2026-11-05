@@ -121,7 +121,8 @@ defmodule Bonfire.RelayClient do
         to = if type == "Accept", do: :accepted, else: :rejected
 
         case Subscription.transition(sub, to) do
-          {:ok, sub} -> store.update_subscription(srv, sub)
+          # CAS on the state we read: a concurrent admin disable wins cleanly.
+          {:ok, new} -> store.cas_subscription(srv, [sub.state], new)
           # Duplicate Accept for an already-accepted subscription is idempotent.
           {:error, {:invalid_transition, s, s}} -> {:ok, sub}
           err -> err
@@ -147,7 +148,7 @@ defmodule Bonfire.RelayClient do
 
       true ->
         with {:ok, _} <- fed.accept(sub.local_actor_id, a) do
-          store.update_subscription(srv, %{sub | reciprocal_follow_id: a["id"]})
+          store.cas_subscription(srv, [sub.state], %{sub | reciprocal_follow_id: a["id"]})
         end
     end
   end
@@ -163,7 +164,7 @@ defmodule Bonfire.RelayClient do
       Activity.id_of(inner) == sub.reciprocal_follow_id and is_binary(sub.reciprocal_follow_id) ->
         # Relay stopped following us: treat as relay ending the subscription.
         with {:ok, s} <- Subscription.transition(sub, :rejected),
-             do: store.update_subscription(srv, s)
+             do: store.cas_subscription(srv, [sub.state], s)
 
       true ->
         {:error, :unknown_undo}
@@ -181,8 +182,8 @@ defmodule Bonfire.RelayClient do
     decision =
       with :ok <- throttle(sub, store, srv) do
         Policy.inbound(a, env,
-        relay_host: sub.relay_host,
-        max_age: cfg.max_activity_age_seconds,
+          relay_host: sub.relay_host,
+          max_age: cfg.max_activity_age_seconds,
           max_skew: cfg.max_clock_skew_seconds
         )
       end

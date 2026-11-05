@@ -18,12 +18,12 @@ defmodule Bonfire.RelayClient.Authorizer.Bonfire do
   def admin?(ctx) do
     cond do
       Code.ensure_loaded?(Bonfire.Me.Accounts) and
-          function_exported?(Bonfire.Me.Accounts, :is_admin?, 1) and
+        function_exported?(Bonfire.Me.Accounts, :is_admin?, 1) and
           apply(Bonfire.Me.Accounts, :is_admin?, [ctx]) == true ->
         true
 
       Code.ensure_loaded?(Bonfire.Boundaries) and
-        function_exported?(Bonfire.Boundaries, :can?, 3) ->
+          function_exported?(Bonfire.Boundaries, :can?, 3) ->
         apply(Bonfire.Boundaries, :can?, [ctx, :configure, :instance]) == true
 
       true ->

@@ -147,7 +147,9 @@ defmodule Bonfire.RelayClient.Rules do
     domain_hits =
       compiled.by_domain
       |> Map.get(author_host, [])
-      |> Enum.filter(&(in_scope?(&1, relay_id) and (&1.tags == [] or tags_ok?(&1.tags, &1.tag_mode, tags))))
+      |> Enum.filter(
+        &(in_scope?(&1, relay_id) and (&1.tags == [] or tags_ok?(&1.tags, &1.tag_mode, tags)))
+      )
 
     tag_hits ++ domain_hits
   end
