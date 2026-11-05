@@ -1,7 +1,14 @@
 import { createRelay, type Relay } from '@fedify/relay';
 import { InProcessMessageQueue, MemoryKvStore, getAuthenticatedDocumentLoader, type KvStore, type MessageQueue } from '@fedify/fedify';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
+import type { Activity } from '@fedify/vocab';
+import type { InboxContext } from '@fedify/fedify';
+import { Temporal } from 'temporal-polyfill';
 import { claimedActor, isAllowedActor, type RelayConfig } from './policy.ts';
+import { authorizeForward, prefilterRaw } from './visibility.ts';
+
+type InboxCtx = InboxContext<unknown>;
+export type LoaderOverrides = { documentLoaderFactory?: RelayOptions['documentLoaderFactory']; authenticatedDocumentLoaderFactory?: RelayOptions['authenticatedDocumentLoaderFactory'] };
 
 export type Stores = { kv: KvStore; queue: MessageQueue; ping: () => Promise<boolean>; close: () => Promise<void> };
 
@@ -46,7 +53,7 @@ export async function readLimited(req: Request, limit: number): Promise<Uint8Arr
 }
 
 /** Builds one relay instance (one protocol, one origin) behind an allowlist gate and a minimal health endpoint. */
-export function buildRelay(cfg: RelayConfig, stores: Stores) {
+export function buildRelay(cfg: RelayConfig, stores: Stores, testLoaders: LoaderOverrides = {}) {
   // SSRF guard: Fedify validates every URL and redirect hop against public DNS results; we never allow private addresses.
   const loaderOpts = { allowPrivateAddress: false, maxRedirection: cfg.maxRedirects, timeout: cfg.fetchTimeoutMs, userAgent: { software: 'AtlasRelay/1.0', url: cfg.origin } };
   const relay: Relay = createRelay(cfg.protocol, {
@@ -54,8 +61,9 @@ export function buildRelay(cfg: RelayConfig, stores: Stores) {
     queue: stores.queue,
     origin: cfg.origin,
     name: 'Atlas Relay',
-    documentLoaderFactory: (o) => getDocumentLoader({ ...o, ...loaderOpts }),
-    authenticatedDocumentLoaderFactory: (identity, o) => getAuthenticatedDocumentLoader(identity, { ...o, ...loaderOpts }),
+    // testLoaders exist only so tests can serve fake remote actors; main.ts never passes them.
+    documentLoaderFactory: testLoaders.documentLoaderFactory ?? ((o) => getDocumentLoader({ ...o, ...loaderOpts })),
+    authenticatedDocumentLoaderFactory: testLoaders.authenticatedDocumentLoaderFactory ?? ((identity, o) => getAuthenticatedDocumentLoader(identity, { ...o, ...loaderOpts })),
     // Subscriptions: only explicitly allowlisted instances; everyone else gets a Reject.
     subscriptionHandler: async (_ctx, actor) => {
       const ok = isAllowedActor(actor.id, cfg.allowedDomains);
@@ -63,6 +71,35 @@ export function buildRelay(cfg: RelayConfig, stores: Stores) {
       return ok;
     },
   });
+
+  // Hosts of servers whose relay subscription is currently accepted.
+  async function subscriberHosts(): Promise<Set<string>> {
+    const hosts = new Set<string>();
+    for await (const f of relay.listFollowers()) if (f.state === 'accepted') { try { hosts.add(new URL(f.actorId).hostname.toLowerCase()); } catch { /* skip */ } }
+    return hosts;
+  }
+
+  // Authoritative gate inside Fedify's verified inbox pipeline. deliverActivity is the internal hook both
+  // relay types call for Create/Update/Delete/Move/Announce; fail closed if a library update removes it.
+  const internal = relay as unknown as { deliverActivity?: (ctx: InboxCtx, activity: Activity, exclude: URL[]) => Promise<void> };
+  if (typeof internal.deliverActivity !== 'function') throw new Error('@fedify/relay internals changed: refusing to start without the forwarding policy hook.');
+  const deliver = internal.deliverActivity.bind(relay);
+  internal.deliverActivity = async (ctx, activity, exclude) => {
+    const decision = await authorizeForward(activity, {
+      allowedDomains: cfg.allowedDomains,
+      subscriberHosts,
+      loadObject: async (a) => { try { return await a.getObject({ documentLoader: ctx.documentLoader, contextLoader: ctx.contextLoader, crossOrigin: 'ignore' }); } catch { return null; } },
+      markSeen: async (id) => {
+        const key = ['atlas-relay', 'seen', id];
+        if (await stores.kv.get(key) != null) return false;
+        await stores.kv.set(key, 1, { ttl: Temporal.Duration.from({ hours: 48 }) });
+        return true;
+      },
+    });
+    if (!decision.ok) { log('forward.dropped', { host: hostOf(activity.actorId), reason: decision.reason }); return; }
+    log('forward.accepted', { host: hostOf(activity.actorId) });
+    await deliver(ctx, activity, exclude);
+  };
 
   async function handle(req: Request): Promise<Response> {
     const url = new URL(req.url);
@@ -76,9 +113,13 @@ export function buildRelay(cfg: RelayConfig, stores: Stores) {
       if (!bytes) return new Response('Payload too large', { status: 413 });
       let body: unknown;
       try { body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { return new Response('Invalid JSON', { status: 400 }); }
-      // Pre-filter only; Fedify still verifies the HTTP signature and that the key owner matches the actor.
+      // Pre-filter on claimed fields only; Fedify then verifies the signature and signer/actor match,
+      // and authorizeForward re-checks everything on the verified activity before relaying.
       const actor = claimedActor(body);
-      if (!isAllowedActor(actor, cfg.allowedDomains)) { log('inbound.blocked', { host: hostOf(actor) }); return new Response('Forbidden', { status: 403 }); }
+      const pre = isAllowedActor(actor, cfg.allowedDomains)
+        ? prefilterRaw({ body, allowedDomains: cfg.allowedDomains, subscriberHosts: await subscriberHosts() })
+        : { ok: false as const, status: 403, reason: 'actor not allowlisted' };
+      if (!pre.ok) { log('inbound.blocked', { host: hostOf(actor), reason: pre.reason }); return new Response(pre.status === 403 ? 'Forbidden' : 'Rejected', { status: pre.status }); }
       // Forward the exact original bytes and headers so Digest / HTTP signatures stay valid.
       return relay.fetch(new Request(req.url, { method: 'POST', headers: req.headers, body: bytes }));
     }

@@ -5,13 +5,16 @@
   "description": "Optional, separately deployed allowlist-only ActivityPub relay (Mastodon or LitePub style). Not part of the Atlas web app build.",
   "scripts": {
     "start": "bun src/main.ts",
-    "test": "bun test src"
+    "test": "bun test src",
+    "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
     "@fedify/fedify": "^2.4.5",
     "@fedify/postgres": "^2.4.5",
     "@fedify/relay": "^2.4.5",
     "@fedify/vocab-runtime": "^2.4.5",
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "@fedify/vocab": "^2.4.5",
+    "temporal-polyfill": "^1.0.8"
   }
 }
