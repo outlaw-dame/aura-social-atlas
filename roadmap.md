@@ -23,3 +23,4 @@
 - [x] Fedizen Recent Articles on Discover (public Bonfire GraphQL "articles" feed) with in-app reader
 - [x] Phone app (/app): show Recent Articles
 - [x] Personal Fedizen feed + activity via read-only "Connect Fedizen" (needs a real user connect to verify)
+- [x] Optional allowlist-only Fedify relay (relay/): Mastodon + LitePub modes, SSRF/redirect/size limits, durable Postgres stores, README and .env.example. Inactive until separately deployed and subscribed by the Fedizen admin.
