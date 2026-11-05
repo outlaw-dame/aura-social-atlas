@@ -43,6 +43,7 @@ defmodule Bonfire.RelayClient.Test.FakeFederation do
   @impl true
   def fetch_object(id) do
     notify({:fetch, id})
+    if fail?(:fetch), do: throw(:never)
 
     case Map.fetch(objects(), id) do
       {:ok, o} -> {:ok, o}
@@ -53,7 +54,7 @@ defmodule Bonfire.RelayClient.Test.FakeFederation do
   @impl true
   def ingest(data, opts) do
     notify({:ingest, data["id"], opts})
-    {:ok, data}
+    if fail?(:ingest), do: {:error, :db_busy}, else: {:ok, data}
   end
 
   @impl true
