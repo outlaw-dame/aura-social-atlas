@@ -49,7 +49,8 @@ Requirements: Bun ≥ 1.1, PostgreSQL ≥ 13, TLS-terminating reverse proxy (Cad
 cd relay
 bun install
 cp .env.example .env    # edit per instance
-bun run test            # 74 tests: config, policy, and signed end-to-end through Fedify (in-memory, no network)
+bun install --frozen-lockfile   # exact pinned versions from bun.lock
+bun run test            # 83 tests; all network access is disabled by test-preload.ts
 bun run typecheck (from the repo root, run app tests with `bun test ./src` so relay tests are not picked up without their deps)
 bun run start           # reads env; refuses to start if unsafe
 ```
@@ -79,7 +80,9 @@ Follow with `crossOrigin: "trust"`.
    - `Announce`: announced object fetched (SSRF-safe loader, cross-origin embeds refetched) and must be public — an
      unreachable or private object is dropped;
    - `Delete`: object must be on the actor's origin;
-   - duplicate activity ids within 48 h are dropped (on top of Fedify's own inbox idempotency).
+   - duplicate activity ids within 48 h are dropped (on top of Fedify's own inbox idempotency). The claim is atomic
+     across processes: `KvStore.cas(key, undefined, …)`, which `PostgresKvStore` implements as one
+     `INSERT … ON CONFLICT (key)` on the table's primary key. A store without `cas()` makes the relay refuse to relay.
 
 `Move` and other types are never relayed. If a library upgrade removes the `deliverActivity` hook, the relay refuses to
 start rather than run without the policy.
@@ -116,8 +119,14 @@ Atlas's app code is unchanged by any of this: Atlas reads Fedizen through its Gr
   generated keys, fake actor documents and a stubbed network; no live Mastodon/Bonfire/Pleroma instance, live PostgreSQL
   or real Fedizen subscription has been exercised.
 - Whether Fedizen (Bonfire) sends LD-signed activities to Mastodon-style relays is unverified; if not, use LitePub mode.
-- The policy hook relies on an undocumented internal method of `@fedify/relay` 2.4 (`deliverActivity`). Pin the version
-  and re-run the tests before upgrading; startup fails closed if it disappears.
+- **Not ready for unattended production.** The policy hooks an undocumented internal method of `@fedify/relay`
+  (`deliverActivity`). All `@fedify/*` packages are pinned to exactly 2.4.5 in `package.json` and `bun.lock`, startup
+  refuses any other installed version, and a test fails if the hook disappears. Before running unattended, get a
+  supported pre-forward/authorization hook upstream in `@fedify/relay` (or maintain a fork) instead of relying on this.
+- Duplicate-claim race tests run against PGlite (real PostgreSQL SQL, executed one statement at a time) over the wire
+  protocol with several independent pools. True parallel execution on a production PostgreSQL server is not tested here.
+- Tests never touch the internet: `test-preload.ts` replaces `fetch` for every test file (POSTs captured locally,
+  everything else throws). DNS lookups made by Fedify's address validation are not blocked.
 - Subscriber membership is per **server host**: any authenticated account on a subscribed, allowlisted server may
   publish its own public posts. Narrower per-account rules would need an extra allowlist.
 - Visibility is decided from AS2 addressing. A server that marks unlisted/quiet-public posts with Public in `cc` will
