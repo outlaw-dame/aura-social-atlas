@@ -27,3 +27,4 @@
 - [x] Relay security: forward only public posts from currently subscribed servers, verified after signature checks; control-plane handshakes kept separate; signed end-to-end tests.
 - [x] Relay: atomic cross-process duplicate check, exact @fedify 2.4.5 pin with startup guard, offline-only tests.
 - [x] Optional Bonfire relay client extension (bonfire_relay_client/): Mastodon + LitePub subscriptions, public-only, origin re-fetch, atomic dedup; off by default, needs 5 upstream Bonfire hooks before install (adapter fails closed until then); persist-before-send subscribe, retryable claims, LitePub Announce out.
+- [x] Relay admin (Bonfire instance settings → Relays): Mastodon/LitePub/FediBuzz tag + instance connections, hashtag and instance rules with honest coverage, server-side admin checks, 5 upstream hook patches (apply cleanly, not built in Bonfire).

@@ -187,6 +187,10 @@ mix compile --warnings-as-errors && mix test && mix format --check-formatted
 RELAY_CLIENT_PG_URL=ecto://postgres@127.0.0.1:5432/relay_client_test mix test --only pg
 ```
 
-Tests are offline and use `test/support/fake_federation.ex`. Not yet tested:
-real Bonfire compile, Ecto store against Postgres, live interop with
-`../relay/` or any public relay, LD-signature verification (delegated to Bonfire).
+The tests are offline and use `test/support/fake_federation.ex`. The `:pg`
+suite uses loopback PostgreSQL only.
+
+Not yet tested:
+- Compiling or running inside Bonfire with the patches applied.
+- Live interop with `../relay/`, FediBuzz or any public relay.
+- LD-signature verification, which is delegated to Bonfire's `ActivityPub.Safety`.
