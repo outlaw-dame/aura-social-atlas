@@ -1,8 +1,8 @@
 diff --git a/lib/adapter/incoming.ex b/lib/adapter/incoming.ex
-index e24a288..3cf2bfe 100644
+index e24a288..ac7d2a8 100644
 --- a/lib/adapter/incoming.ex
 +++ b/lib/adapter/incoming.ex
-@@ -25,6 +25,29 @@ defmodule Bonfire.Federate.ActivityPub.Incoming do
+@@ -25,6 +25,31 @@ defmodule Bonfire.Federate.ActivityPub.Incoming do
                           ["View", "Listen", "WatchAction"]
                         )
  
@@ -17,15 +17,17 @@ index e24a288..3cf2bfe 100644
 +  def receive_relayed(%{"id" => id} = data, opts) when is_binary(id) do
 +    relayed_by = Keyword.fetch!(opts, :relayed_by)
 +
-+    with {:ok, %ActivityPub.Object{} = object} <-
-+           ActivityPub.Object.get_cached(ap_id: id)
-+           |> case do
-+             {:ok, existing} -> {:ok, existing}
-+             _ -> ActivityPub.Object.insert(data, false, nil, [])
-+           end do
++    with {:ok, %ActivityPub.Object{} = object} <- cached_or_insert_relayed(id, data) do
 +      object
 +      |> Map.put(:relayed_by, relayed_by)
 +      |> receive_activity()
++    end
++  end
++
++  defp cached_or_insert_relayed(id, data) do
++    case ActivityPub.Object.get_cached(ap_id: id) do
++      {:ok, existing} -> {:ok, existing}
++      _ -> ActivityPub.Object.insert(data, false, nil, [])
 +    end
 +  end
 +

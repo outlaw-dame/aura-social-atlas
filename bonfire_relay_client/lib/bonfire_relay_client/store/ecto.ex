@@ -68,8 +68,23 @@ if Code.ensure_loaded?(Ecto.Schema) and Code.ensure_loaded?(Ecto.Query) do
         end
 
         # Two first-time inserts race on the primary key; the loser rolls back.
-        case repo.insert(to_row(sub), on_conflict: :nothing, conflict_target: :relay_actor_id) do
-          {:ok, %Row{inserted_at: %DateTime{}}} -> sub
+        # insert_all reports the real affected-row count; `insert/2` with
+        # `on_conflict: :nothing` returns {:ok, struct} even when nothing was
+        # written (caught by the PostgreSQL race test).
+        now = DateTime.utc_now()
+
+        fields =
+          sub
+          |> to_row()
+          |> Map.from_struct()
+          |> Map.drop([:__meta__])
+          |> Map.merge(%{inserted_at: now, updated_at: now})
+
+        case repo.insert_all(Row, [fields],
+               on_conflict: :nothing,
+               conflict_target: :relay_actor_id
+             ) do
+          {1, _} -> sub
           _ -> repo.rollback(:already_subscribed)
         end
       end)

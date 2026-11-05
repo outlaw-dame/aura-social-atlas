@@ -1,27 +1,92 @@
 # bonfire_relay_client (optional, not installed)
 
-An opt-in Elixir extension that lets a **Bonfire** instance subscribe to
-ActivityPub relays using either the **Mastodon** or **LitePub** protocol
-(FEP-ae0c). It lives in the Atlas repo only because we have no writable
-`bonfire-networks` checkout.
+An opt-in Elixir extension that gives a **Bonfire** instance admin-managed
+relay subscriptions, like Mastodon's *Admin → Relays*. It adds
+FediBuzz/buzzrelay-style **hashtag** and **instance** relays, plus local
+hashtag/instance rules. It lives in the Atlas repo because no writable
+`bonfire-networks` checkout is connected.
 
 **Status — read this first**
 
-- Not installed on Fedizen. Fedizen does **not** support relays today.
-- Off by default (`enabled: false`, `outbound_enabled: false`). Nothing
-  subscribes, follows or deploys automatically; only an admin calling
-  `Bonfire.RelayClient.subscribe/3` starts a subscription.
-- The pure core (config, URLs, protocol, policy, state machine, in-memory
-  store) compiles and passes 43 offline ExUnit tests with Elixir 1.18.5 / OTP 27.
-- `Federation.Bonfire` is **fail-closed**: follow, fetch, ingest, deliver and
-  announce return `{:error, {:upstream_hook_required, name}}` until the
-  upstream hooks below exist, so subscribing through it fails before
-  anything is sent. It and `Store.Ecto` only compile inside a Bonfire host
-  and have **not** been compiled against upstream.
+- Not installed on Fedizen. Fedizen has not been modified, and nothing was
+  deployed or subscribed.
+- Off by default (`enabled: false`, `outbound_enabled: false`). Connections
+  are created **idle**, and only an admin pressing *Enable* sends a Follow.
+- 86 ExUnit tests pass with Elixir 1.18.5 / OTP 27.
+  - 77 are pure or offline.
+  - 9 run the real Ecto store and both migrations against a local
+    PostgreSQL 16, when `RELAY_CLIENT_PG_URL` is set.
+  - `mix compile --warnings-as-errors` and `mix format --check-formatted`
+    pass. The admin LiveComponent is compiled and render-tested with
+    Phoenix LiveView 1.x.
+- `Federation.Bonfire` is **fail-closed and capability-gated**. Until
+  `ActivityPub.RelayHooks.version() == 1` and `Incoming.receive_relayed/2`
+  exist (see `upstream_patches/`), every call returns
+  `{:error, {:upstream_hook_required, _}}`.
+- The upstream patches apply cleanly to current upstream HEADs and parse,
+  but have **not** been compiled or run inside a Bonfire app.
 
-Separate from `../relay/` (a Fedify relay *server*) and from the Atlas web app.
+## Three entities
 
-## How it works
+| Entity | What it is | Where |
+|---|---|---|
+| A. Relay connection | URL/actor, kind (`mastodon`, `litepub`, `fedibuzz_tag`, `fedibuzz_instance`), state (`idle → pending → accepted / rejected / failed`), last error and error count, per-minute volume limit, inbound policy (`all_public` or `rules_only`), per-connection outbound, created-by | `Subscription`, table `bonfire_relay_client_subscriptions` |
+| B. Hashtag rule | normalised tags, `any`/`all`, scope (all relays or listed connections) | `Rules.TagRule`, table `bonfire_relay_client_rules` |
+| C. Instance rule | domain, `observed` (only posts relays happen to deliver) or `whole_instance` (needs an accepted FediBuzz instance relay for it), optional tags | `Rules.DomainRule`, same table |
+
+### Selective upstream source vs local filter (never conflated)
+
+- A **FediBuzz connection** is a *selective upstream source*: buzzrelay
+  only sends posts it saw with that tag or from that instance. It is a
+  server-level Follow by the instance **service actor** of the resolved
+  topic actor. It is not a user hashtag follow, and it is not a Mastodon
+  public-collection subscription.
+- **Rules** are *local filters* on what connected relays actually deliver.
+  `Rules.coverage/2` and the UI badge say *no source* until an accepted
+  connection in scope exists. Nothing claims every remote post will appear.
+- Topic integrity: content from a `fedibuzz_tag` connection must carry that
+  tag as a real AS2 `Hashtag`. Content from `fedibuzz_instance` must be
+  authored on that instance. Anything else is dropped as `off_topic`.
+
+### FediBuzz specifics (from astro/buzzrelay source)
+
+- Routes: `GET/POST /tag/{tag}` and `/instance/{host}`. The same URL is the
+  topic actor and its inbox.
+- Tag key: `deunicode → lowercase → drop whitespace and '-'`. We approximate
+  this exactly for Latin diacritics, build a candidate URL, then **resolve**
+  it. The resolved actor must be on the same host and topic path, or the
+  connection is refused.
+- Accept comes from the topic actor and embeds our Follow. Content arrives as
+  `Announce{object: uri, to: Public}`. We use only the object id, re-fetch it
+  from its origin and verify it there.
+- FediBuzz is inbound-only. Outbound to it is refused at configuration time
+  and reported as skipped at send time.
+
+### No user-visible side effects
+
+- Follows are sent by the instance service actor. `RelayHooks.follow/3`
+  never calls the adapter, so no follow edges are created.
+- Ingested content goes in with `relayed_by` (provenance only),
+  `trusted_relay: false` and `no_follow_graph: true`. The relay is never the
+  author or booster.
+
+## Admin UI
+
+`Bonfire.RelayClient.Web.RelaysLive` is a stateful LiveComponent, mounted as
+`/settings/instance/relays` by `upstream_patches/bonfire_ui_me-relays-tab.patch`.
+That route sits in Bonfire's instance settings LiveView (session-bound and
+CSRF-protected LiveView socket).
+
+- Every event re-checks admin rights on the server (`Admin.authorize/1` via
+  `Authorizer.Bonfire`, which mirrors `Bonfire.Me.Accounts.is_admin?/1` /
+  `Boundaries.can?(ctx, :configure, :instance)`). It fails closed.
+- *Delete connection* requires the connection to be disabled first, and the
+  relay URL typed as confirmation, checked on the server. *Delete rule* also
+  requires a confirmation that is checked on the server.
+- *Enable*, *Disable* and *Retry* run compare-and-set on the stored state,
+  so concurrent clicks send at most one Follow.
+
+## Inbound flow
 
 ```text
 Remote relay ──HTTP-signed POST──▶ Bonfire inbox (verifies signature)
@@ -81,66 +146,46 @@ protocol is refused, never silently switched.
 1. Add the dependency in Bonfire's `deps.flavour.path` / `mix.exs`:
    `{:bonfire_relay_client, path: "extensions/bonfire_relay_client"}`.
 2. Copy `priv/repo/migrations/*` into Bonfire's migrations and run them.
-3. Configure:
-   ```elixir
-   config :bonfire_relay_client,
-     enabled: false,                       # flip only when ready
-     outbound_enabled: false,
-     allowed_relay_hosts: ["relay.example.org"],
-     local_actor_username: "relay"         # Bonfire service actor
-   ```
-4. Build the context:
-   `%{config: cfg, store: {Bonfire.RelayClient.Store.Ecto, Bonfire.Common.Repo}, federation: Bonfire.RelayClient.Federation.Bonfire}`.
+3. Apply the three patches in `upstream_patches/` to activity_pub,
+   bonfire_federate_activitypub and bonfire_ui_me.
+4. Configure as in **Configuration** below. The context is built by
+   `Bonfire.RelayClient.Context.build/1`. Follows always use Bonfire's
+   service actor (`ActivityPub.Utils.service_actor/0`).
 
-### Upstream touchpoints (patches required in bonfire-networks)
+### Upstream touchpoints
 
-Each one maps to a `{:upstream_hook_required, name}` in `Federation.Bonfire`.
+See `upstream_patches/README.md`. The five hooks are implemented there as
+patches against the current upstream sources.
 
-1. **Inbox hook** (`bonfire_federate_activitypub/lib/adapter/adapter.ex`
-   `handle_activity/1`, or right after signature verification in the
-   ActivityPub inbox). Call `Bonfire.RelayClient.handle_incoming/2` with
-   `%{signer: verified_key_owner, activity: data, ld_verified_actor: ...}`
-   before `Incoming.receive_activity/1`. Stop unless it returns
-   `:not_handled`. Today the verified signer is not passed to the adapter, and
-   `ld_verified_actor` must be set only when the LD signature verifies for
-   the activity's `actor`.
-2. **`follow_with_preminted_id`** (`activity_pub/lib/activity_pub.ex`
-   `follow/2`). It needs an `id:` option, so the subscription is stored before
-   sending, and an `object_override: as:Public` option for Mastodon relays.
-3. **`publisher_extra_inboxes`**: the publisher must accept extra recipient
-   inboxes, so the original activity can be signed by Bonfire and sent to
-   Mastodon relays.
-4. **`fetch_without_ingest` / `incoming_relayed_object`**: we need two things.
-   - A fetch that returns the data from its origin without inserting it, so
-     `Policy.verify_fetched/2` runs first.
-   - An `Incoming` entry point that takes the verified data with
-     `relayed_by` set and never treats the relay as the author or booster.
-
-   `receive_activity/1` expects an `ActivityPub.Object` from the verified
-   pipeline, not a plain map.
-5. **`service_actor_announce`**: `ActivityPub.announce/2` from the service
-   actor, addressed to as:Public plus the relay inbox (for LitePub).
-
-No raw POSTs are made anywhere in this package.
-
-Upstream has relay-actor corruption tests and a Fedify interop tester
-(`lib/testing/tester/fedify_tester/`) but no relay *subscription* support. The
-Fedify tester is the right place for real interop tests against `../relay/`
-once patches 1–3 land.
-
-## Admin usage
+## Configuration
 
 ```elixir
-Bonfire.RelayClient.subscribe("https://relay.example.org/actor", :mastodon, ctx)
-Bonfire.RelayClient.unsubscribe("https://relay.example.org/actor", ctx)
+config :bonfire_relay_client,
+  enabled: false,                 # flip only when ready
+  outbound_enabled: false,
+  allowed_relay_hosts: ["relay.fedi.buzz"],
+  store: {Bonfire.RelayClient.Store.Ecto, Bonfire.Common.Repo},
+  federation: Bonfire.RelayClient.Federation.Bonfire,
+  authorizer: Bonfire.RelayClient.Authorizer.Bonfire
+
+config :activity_pub, relay_inbox_hook: Bonfire.RelayClient.InboxHook
 ```
+
+Copy both files from `priv/repo/migrations` into the host app. The second
+migration is additive.
 
 ## Development
 
 ```sh
+mix deps.get   # dev/test-only: ecto_sql, postgrex, phoenix_live_view, jason
 mix compile --warnings-as-errors && mix test && mix format --check-formatted
+RELAY_CLIENT_PG_URL=ecto://postgres@127.0.0.1:5432/relay_client_test mix test --only pg
 ```
 
-Tests are offline and use `test/support/fake_federation.ex`. Not yet tested:
-real Bonfire compile, Ecto store against Postgres, live interop with
-`../relay/` or any public relay, LD-signature verification (delegated to Bonfire).
+The tests are offline and use `test/support/fake_federation.ex`. The `:pg`
+suite uses loopback PostgreSQL only.
+
+Not yet tested:
+- Compiling or running inside Bonfire with the patches applied.
+- Live interop with `../relay/`, FediBuzz or any public relay.
+- LD-signature verification, which is delegated to Bonfire's `ActivityPub.Safety`.
