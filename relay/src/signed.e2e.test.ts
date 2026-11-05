@@ -3,7 +3,8 @@
  * remote actor documents are served by an in-test loader, and outbound deliveries are captured by
  * stubbing fetch. No network traffic leaves the test.
  */
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { delivered } from './fetch-stub.testutil.ts';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { generateCryptoKeyPair, signRequest } from '@fedify/fedify';
 import { exportSpki, getDocumentLoader } from '@fedify/vocab-runtime';
 import { buildRelay, storesFor } from './app.ts';
@@ -13,8 +14,6 @@ import { AS_PUBLIC } from './visibility.ts';
 const AS = ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'];
 type Remote = { id: string; inbox: string; keyId: string; keys: CryptoKeyPair };
 const docs = new Map<string, unknown>();
-const delivered: { url: string; body: Record<string, unknown> }[] = [];
-const realFetch = globalThis.fetch;
 
 async function remoteActor(id: string, type = 'Person'): Promise<Remote> {
   const keys = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
@@ -44,14 +43,6 @@ async function until(pred: () => boolean, ms = 4000) {
 }
 const settle = () => new Promise(r => setTimeout(r, 400));
 
-beforeAll(() => {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const req = new Request(input, init);
-    if (req.method === 'POST') { delivered.push({ url: req.url, body: await req.json() }); return new Response(null, { status: 202 }); }
-    return realFetch(input, init);
-  }) as typeof fetch;
-});
-afterAll(() => { globalThis.fetch = realFetch; });
 
 for (const protocol of ['litepub', 'mastodon'] as const) {
   describe(`${protocol}: signed inbox pipeline`, () => {
@@ -88,7 +79,7 @@ for (const protocol of ['litepub', 'mastodon'] as const) {
       }
       await settle();
       delivered.length = 0;
-    });
+    }, 20000);
 
     test('a valid public post from a subscriber is relayed to other subscribers', async () => {
       const body = { id: `https://fedizen.net/activities/${n()}`, type: protocol === 'litepub' ? 'Announce' : 'Create', actor: alice.id, to: [AS_PUBLIC], cc: [`${alice.id}/followers`],
