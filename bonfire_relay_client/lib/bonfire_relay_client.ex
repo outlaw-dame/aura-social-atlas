@@ -24,17 +24,31 @@ defmodule Bonfire.RelayClient do
          {:ok, %{id: ^relay_id, inbox: inbox}} <- fed.resolve_actor(relay_id),
          true <- URL.host(inbox) == host || {:error, :inbox_origin_mismatch},
          {:ok, local} <- fed.local_relay_actor(),
-         {:ok, %{"id" => follow_id}} when is_binary(follow_id) <-
-           fed.follow(local, relay_id, Protocol.follow_object(protocol, relay_id)) do
-      store.insert_subscription(srv, %Subscription{
-        relay_actor_id: relay_id,
-        relay_inbox: inbox,
-        relay_host: host,
-        protocol: protocol,
-        follow_id: follow_id,
-        local_actor_id: local,
-        updated_at: DateTime.utc_now()
-      })
+         # Persist-before-send: the Follow id is minted locally and the
+         # :pending row is committed (atomically unique per relay) BEFORE the
+         # Follow is queued, so an early Accept always finds its state and a
+         # concurrent duplicate request loses at the insert and sends nothing.
+         {:ok, follow_id} <- fed.mint_activity_id(local),
+         true <- URL.host(follow_id) == URL.host(local) || {:error, :follow_id_origin_mismatch},
+         {:ok, sub} <-
+           store.insert_subscription(srv, %Subscription{
+             relay_actor_id: relay_id,
+             relay_inbox: inbox,
+             relay_host: host,
+             protocol: protocol,
+             follow_id: follow_id,
+             local_actor_id: local,
+             updated_at: DateTime.utc_now()
+           }) do
+      case fed.follow(local, relay_id, Protocol.follow_object(protocol, relay_id), follow_id) do
+        {:ok, _} ->
+          # Re-read: an Accept may already have advanced the state.
+          {:ok, store.get_by_relay_actor(srv, relay_id) || sub}
+
+        {:error, reason} ->
+          mark_failed(store, srv, relay_id)
+          {:error, {:follow_failed, reason}}
+      end
     else
       {:ok, %{id: _}} -> {:error, :actor_id_mismatch}
       {:error, _} = e -> e
@@ -52,6 +66,13 @@ defmodule Bonfire.RelayClient do
          {:ok, _} <- fed.unfollow(sub.local_actor_id, sub.relay_actor_id, sub.follow_id),
          {:ok, sub} <- finish_removal(sub) do
       store.update_subscription(srv, sub)
+    end
+  end
+
+  defp mark_failed(store, srv, relay_id) do
+    with %Subscription{} = s <- store.get_by_relay_actor(srv, relay_id),
+         {:ok, s} <- Subscription.transition(s, :failed) do
+      store.update_subscription(srv, s)
     end
   end
 
