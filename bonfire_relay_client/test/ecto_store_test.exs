@@ -24,8 +24,19 @@ defmodule Bonfire.RelayClient.EctoStoreTest do
       "DROP TABLE IF EXISTS bonfire_relay_client_volume, bonfire_relay_client_rules, bonfire_relay_client_seen, bonfire_relay_client_subscriptions, schema_migrations CASCADE"
     )
 
-    path = Path.join(File.cwd!(), "priv/repo/migrations")
-    Ecto.Migrator.run(Repo, path, :up, all: true, log: false)
+    # Compile each migration file once and reuse the modules, so the
+    # round-trip test does not redefine them.
+    migrations =
+      Path.join(File.cwd!(), "priv/repo/migrations/*.exs")
+      |> Path.wildcard()
+      |> Enum.sort()
+      |> Enum.map(fn f ->
+        [{mod, _}] = Code.require_file(f)
+        {f |> Path.basename() |> String.split("_") |> hd() |> String.to_integer(), mod}
+      end)
+
+    Application.put_env(:bonfire_relay_client, :test_migrations, migrations)
+    Ecto.Migrator.run(Repo, migrations, :up, all: true, log: false)
     :ok
   end
 
@@ -55,9 +66,9 @@ defmodule Bonfire.RelayClient.EctoStoreTest do
   end
 
   test "migrations round-trip (down and up again)" do
-    path = Path.join(File.cwd!(), "priv/repo/migrations")
-    Ecto.Migrator.run(Repo, path, :down, all: true, log: false)
-    Ecto.Migrator.run(Repo, path, :up, all: true, log: false)
+    migrations = Application.fetch_env!(:bonfire_relay_client, :test_migrations)
+    Ecto.Migrator.run(Repo, migrations, :down, all: true, log: false)
+    Ecto.Migrator.run(Repo, migrations, :up, all: true, log: false)
     assert %{rows: [[2]]} = Repo.query!("SELECT count(*) FROM schema_migrations")
   end
 
