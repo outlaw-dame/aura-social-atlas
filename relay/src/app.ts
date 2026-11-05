@@ -31,6 +31,33 @@ export async function storesFor(cfg: RelayConfig): Promise<Stores> {
   };
 }
 
+export const SEEN_TTL = Temporal.Duration.from({ hours: 48 });
+
+/**
+ * Atomically claims an activity id: true for exactly one caller across all processes sharing the store.
+ * Uses KvStore.cas(key, undefined, value) — for PostgresKvStore this is a single
+ * INSERT ... ON CONFLICT (key) DO UPDATE ... WHERE expired, guarded by the table's primary key.
+ */
+export async function claimActivityId(kv: KvStore, id: string): Promise<boolean> {
+  if (typeof kv.cas !== 'function') throw new Error('KvStore without atomic cas(); refusing to relay.');
+  return kv.cas(['atlas-relay', 'seen', id], undefined, 1, { ttl: SEEN_TTL });
+}
+
+/** The policy hooks an undocumented method; only run on the exact version it was verified against. */
+export const VERIFIED_FEDIFY_VERSION = '2.4.5';
+export function assertSupportedRelayVersion(installed = installedVersions()) {
+  for (const [name, v] of Object.entries(installed)) {
+    if (v !== VERIFIED_FEDIFY_VERSION) throw new Error(`${name}@${v} is not the verified ${VERIFIED_FEDIFY_VERSION}; refusing to start (the forwarding policy hooks @fedify/relay internals).`);
+  }
+}
+function installedVersions(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of ['@fedify/relay', '@fedify/fedify', '@fedify/vocab', '@fedify/vocab-runtime', '@fedify/postgres']) {
+    out[name] = (require(`${name}/package.json`) as { version: string }).version;
+  }
+  return out;
+}
+
 /** Reads a request body as raw bytes, aborting as soon as the limit is exceeded (never buffers an oversized body). */
 export async function readLimited(req: Request, limit: number): Promise<Uint8Array<ArrayBuffer> | null> {
   const declared = req.headers.get('content-length');
@@ -81,6 +108,7 @@ export function buildRelay(cfg: RelayConfig, stores: Stores, testLoaders: Loader
 
   // Authoritative gate inside Fedify's verified inbox pipeline. deliverActivity is the internal hook both
   // relay types call for Create/Update/Delete/Move/Announce; fail closed if a library update removes it.
+  assertSupportedRelayVersion();
   const internal = relay as unknown as { deliverActivity?: (ctx: InboxCtx, activity: Activity, exclude: URL[]) => Promise<void> };
   if (typeof internal.deliverActivity !== 'function') throw new Error('@fedify/relay internals changed: refusing to start without the forwarding policy hook.');
   const deliver = internal.deliverActivity.bind(relay);
@@ -89,12 +117,7 @@ export function buildRelay(cfg: RelayConfig, stores: Stores, testLoaders: Loader
       allowedDomains: cfg.allowedDomains,
       subscriberHosts,
       loadObject: async (a) => { try { return await a.getObject({ documentLoader: ctx.documentLoader, contextLoader: ctx.contextLoader, crossOrigin: 'ignore' }); } catch { return null; } },
-      markSeen: async (id) => {
-        const key = ['atlas-relay', 'seen', id] as const;
-        if (await stores.kv.get(key) != null) return false;
-        await stores.kv.set(key, 1, { ttl: Temporal.Duration.from({ hours: 48 }) });
-        return true;
-      },
+      markSeen: (id) => claimActivityId(stores.kv, id),
     });
     if (!decision.ok) { log('forward.dropped', { host: hostOf(activity.actorId), reason: decision.reason }); return; }
     log('forward.accepted', { host: hostOf(activity.actorId) });
