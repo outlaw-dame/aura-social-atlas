@@ -11,6 +11,7 @@
     "@fedify/fedify": "^2.4.5",
     "@fedify/postgres": "^2.4.5",
     "@fedify/relay": "^2.4.5",
+    "@fedify/vocab-runtime": "^2.4.5",
     "postgres": "^3.4.5"
   }
 }
