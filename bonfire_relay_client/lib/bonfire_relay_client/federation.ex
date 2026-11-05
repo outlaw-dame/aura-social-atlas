@@ -13,7 +13,8 @@ defmodule Bonfire.RelayClient.Federation do
   @callback local_relay_actor() :: {:ok, actor_id} | {:error, term()}
 
   @doc "Resolve a remote actor via Bonfire (WebFinger/actor fetch). Returns its inbox."
-  @callback resolve_actor(actor_id) :: {:ok, %{id: actor_id, inbox: String.t()}} | {:error, term()}
+  @callback resolve_actor(actor_id) ::
+              {:ok, %{id: actor_id, inbox: String.t()}} | {:error, term()}
 
   @doc "Build, sign and queue a Follow. `object` is as:Public (Mastodon) or the relay actor (LitePub)."
   @callback follow(local :: actor_id, relay :: actor_id, object :: String.t()) ::

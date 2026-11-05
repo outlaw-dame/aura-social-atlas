@@ -63,15 +63,32 @@ defmodule Bonfire.RelayClient.Policy do
     obj_id = Activity.id_of(obj)
 
     cond do
-      not is_binary(actor) or not is_binary(obj_id) -> {:drop, :malformed}
-      URL.host(actor) in [nil, relay_host] -> {:drop, :relay_authored_object}
-      not URL.same_origin?(actor, obj_id) -> {:drop, :origin_mismatch}
-      not URL.same_origin?(actor, activity["id"]) -> {:drop, :origin_mismatch}
-      is_map(obj) and not Activity.public?(obj) -> {:drop, :not_public}
-      is_map(obj) and Activity.type(obj) not in @content_types -> {:drop, :unsupported_type}
-      is_map(obj) and attributed_mismatch?(obj, actor) -> {:drop, :spoofed_attribution}
-      Map.get(envelope, :ld_verified_actor) == actor and is_map(obj) -> {:ingest_verified, activity}
-      true -> {:fetch, obj_id}
+      not is_binary(actor) or not is_binary(obj_id) ->
+        {:drop, :malformed}
+
+      URL.host(actor) in [nil, relay_host] ->
+        {:drop, :relay_authored_object}
+
+      not URL.same_origin?(actor, obj_id) ->
+        {:drop, :origin_mismatch}
+
+      not URL.same_origin?(actor, activity["id"]) ->
+        {:drop, :origin_mismatch}
+
+      is_map(obj) and not Activity.public?(obj) ->
+        {:drop, :not_public}
+
+      is_map(obj) and Activity.type(obj) not in @content_types ->
+        {:drop, :unsupported_type}
+
+      is_map(obj) and attributed_mismatch?(obj, actor) ->
+        {:drop, :spoofed_attribution}
+
+      Map.get(envelope, :ld_verified_actor) == actor and is_map(obj) ->
+        {:ingest_verified, activity}
+
+      true ->
+        {:fetch, obj_id}
     end
   end
 
@@ -83,11 +100,20 @@ defmodule Bonfire.RelayClient.Policy do
     author = Activity.id_of(obj["attributedTo"] |> List.wrap() |> List.first())
 
     cond do
-      obj["id"] != requested_id -> {:drop, :id_mismatch}
-      Activity.type(obj) not in @content_types -> {:drop, :unsupported_type}
-      not Activity.public?(obj) -> {:drop, :not_public}
-      not is_binary(author) or not URL.same_origin?(author, requested_id) -> {:drop, :origin_mismatch}
-      true -> {:ok, obj}
+      obj["id"] != requested_id ->
+        {:drop, :id_mismatch}
+
+      Activity.type(obj) not in @content_types ->
+        {:drop, :unsupported_type}
+
+      not Activity.public?(obj) ->
+        {:drop, :not_public}
+
+      not is_binary(author) or not URL.same_origin?(author, requested_id) ->
+        {:drop, :origin_mismatch}
+
+      true ->
+        {:ok, obj}
     end
   end
 

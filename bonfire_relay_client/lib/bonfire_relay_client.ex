@@ -19,7 +19,8 @@ defmodule Bonfire.RelayClient do
          true <- protocol in Subscription.protocols() || {:error, :invalid_protocol},
          {:ok, relay_id, host} <- URL.parse_https(relay_actor_id),
          true <- host in cfg.allowed_relay_hosts || {:error, :relay_not_allowlisted},
-         true <- live_count(store, srv) < cfg.max_subscriptions || {:error, :too_many_subscriptions},
+         true <-
+           live_count(store, srv) < cfg.max_subscriptions || {:error, :too_many_subscriptions},
          {:ok, %{id: ^relay_id, inbox: inbox}} <- fed.resolve_actor(relay_id),
          true <- URL.host(inbox) == host || {:error, :inbox_origin_mismatch},
          {:ok, local} <- fed.local_relay_actor(),
@@ -45,7 +46,8 @@ defmodule Bonfire.RelayClient do
   def unsubscribe(relay_actor_id, ctx) do
     %{store: {store, srv}, federation: fed} = ctx
 
-    with %Subscription{} = sub <- store.get_by_relay_actor(srv, relay_actor_id) || {:error, :not_found},
+    with %Subscription{} = sub <-
+           store.get_by_relay_actor(srv, relay_actor_id) || {:error, :not_found},
          {:ok, sub} <- step_down(sub),
          {:ok, _} <- fed.unfollow(sub.local_actor_id, sub.relay_actor_id, sub.follow_id),
          {:ok, sub} <- finish_removal(sub) do
@@ -186,7 +188,10 @@ defmodule Bonfire.RelayClient do
     %{config: cfg, store: {store, srv}, federation: fed} = ctx
 
     inboxes =
-      for s <- store.list(srv), Subscription.active?(s), s.protocol == :mastodon, do: s.relay_inbox
+      for s <- store.list(srv),
+          Subscription.active?(s),
+          s.protocol == :mastodon,
+          do: s.relay_inbox
 
     cond do
       not (cfg.enabled and cfg.outbound_enabled) -> {:error, :disabled}

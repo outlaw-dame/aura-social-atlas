@@ -14,14 +14,26 @@ defmodule Bonfire.RelayClient.URL do
     h = host |> String.trim() |> String.downcase() |> String.trim_trailing(".")
 
     cond do
-      h == "" or byte_size(h) > 253 -> {:error, :invalid_host}
-      h == "localhost" -> {:error, :invalid_host}
-      Enum.any?(@blocked_suffixes, &String.ends_with?(h, &1)) -> {:error, :invalid_host}
-      ip_literal?(h) -> {:error, :invalid_host}
-      not String.contains?(h, ".") -> {:error, :invalid_host}
+      h == "" or byte_size(h) > 253 ->
+        {:error, :invalid_host}
+
+      h == "localhost" ->
+        {:error, :invalid_host}
+
+      Enum.any?(@blocked_suffixes, &String.ends_with?(h, &1)) ->
+        {:error, :invalid_host}
+
+      ip_literal?(h) ->
+        {:error, :invalid_host}
+
+      not String.contains?(h, ".") ->
+        {:error, :invalid_host}
+
       not Regex.match?(~r/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/, h) ->
         {:error, :invalid_host}
-      true -> {:ok, h}
+
+      true ->
+        {:ok, h}
     end
   end
 

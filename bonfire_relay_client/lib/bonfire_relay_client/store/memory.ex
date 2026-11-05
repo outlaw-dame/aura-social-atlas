@@ -37,7 +37,8 @@ defmodule Bonfire.RelayClient.Store.Memory do
 
   @impl true
   def get_by_follow_id(s, id),
-    do: Agent.get(s, fn st -> Enum.find_value(st.subs, fn {_, v} -> v.follow_id == id && v end) end)
+    do:
+      Agent.get(s, fn st -> Enum.find_value(st.subs, fn {_, v} -> v.follow_id == id && v end) end)
 
   @impl true
   def list(s), do: Agent.get(s, &Map.values(&1.subs))

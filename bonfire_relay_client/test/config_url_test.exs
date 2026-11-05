@@ -10,9 +10,15 @@ defmodule Bonfire.RelayClient.ConfigUrlTest do
   test "rejects bad values" do
     assert {:error, {:invalid_config, :enabled}} = Config.validate(enabled: "yes")
     assert {:error, {:invalid_config, :max_subscriptions}} = Config.validate(max_subscriptions: 0)
-    assert {:error, {:invalid_config, :max_subscriptions}} = Config.validate(max_subscriptions: 1000)
-    assert {:error, {:invalid_config, :allowed_relay_hosts}} = Config.validate(allowed_relay_hosts: "x.org")
-    assert {:error, {:invalid_config, :allowed_relay_hosts}} = Config.validate(allowed_relay_hosts: ["127.0.0.1"])
+
+    assert {:error, {:invalid_config, :max_subscriptions}} =
+             Config.validate(max_subscriptions: 1000)
+
+    assert {:error, {:invalid_config, :allowed_relay_hosts}} =
+             Config.validate(allowed_relay_hosts: "x.org")
+
+    assert {:error, {:invalid_config, :allowed_relay_hosts}} =
+             Config.validate(allowed_relay_hosts: ["127.0.0.1"])
   end
 
   test "normalises hosts" do
@@ -22,9 +28,19 @@ defmodule Bonfire.RelayClient.ConfigUrlTest do
 
   test "URL safety" do
     assert {:ok, _, "relay.example.org"} = URL.parse_https("https://relay.example.org/actor")
-    for bad <- ["http://relay.example.org/actor", "https://127.0.0.1/actor", "https://[::1]/a",
-                "https://localhost/a", "https://u:p@relay.example.org/a", "https://relay.example.org:8443/a",
-                "https://relay.local/a", "https://relay.example.org/a#frag", "ftp://x.org", 42] do
+
+    for bad <- [
+          "http://relay.example.org/actor",
+          "https://127.0.0.1/actor",
+          "https://[::1]/a",
+          "https://localhost/a",
+          "https://u:p@relay.example.org/a",
+          "https://relay.example.org:8443/a",
+          "https://relay.local/a",
+          "https://relay.example.org/a#frag",
+          "ftp://x.org",
+          42
+        ] do
       assert {:error, _} = URL.parse_https(bad), "expected reject: #{inspect(bad)}"
     end
   end

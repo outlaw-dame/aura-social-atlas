@@ -23,7 +23,9 @@ defmodule Bonfire.RelayClient.Test.FakeFederation do
   @impl true
   def follow(local, relay, object) do
     notify({:follow, local, relay, object})
-    {:ok, %{"id" => "#{@local}/follow/#{:erlang.unique_integer([:positive])}", "type" => "Follow"}}
+
+    {:ok,
+     %{"id" => "#{@local}/follow/#{:erlang.unique_integer([:positive])}", "type" => "Follow"}}
   end
 
   @impl true
