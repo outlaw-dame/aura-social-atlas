@@ -10,7 +10,18 @@ export type RelayConfig = {
   devMemoryStore: boolean;
   port: number;
   maxBodyBytes: number;
+  fetchTimeoutMs: number;
+  maxRedirects: number;
 };
+
+/** Parses an integer env value within [min, max]; rejects NaN, fractions, negatives and out-of-range values. */
+export function intInRange(name: string, raw: string | undefined, def: number, min: number, max: number): number {
+  if (raw === undefined || raw.trim() === '') return def;
+  if (!/^\d+$/.test(raw.trim())) throw new Error(`${name} must be a whole number between ${min} and ${max}.`);
+  const n = Number(raw.trim());
+  if (!Number.isSafeInteger(n) || n < min || n > max) throw new Error(`${name} must be a whole number between ${min} and ${max}.`);
+  return n;
+}
 
 const PRIVATE_HOST = /^(localhost|.*\.local|.*\.internal|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.|\[?::1\]?$|\[?f[cd][0-9a-f]{2}:|\[?fe80:)/i;
 
@@ -35,8 +46,14 @@ export function parseConfig(env: Record<string, string | undefined>): RelayConfi
   for (const d of allowedDomains) if (!DOMAIN.test(d) || isPrivateHost(d)) throw new Error(`RELAY_ALLOWED_DOMAINS contains an invalid or private domain: ${d}`);
   const databaseUrl = env.DATABASE_URL || undefined;
   if (!databaseUrl && !devMemoryStore) throw new Error('DATABASE_URL (PostgreSQL) is required for durable keys, followers and delivery queue. Set RELAY_DEV_MEMORY=1 only for local testing.');
-  const port = Number(env.PORT ?? 8787);
-  return { protocol, origin: origin.origin, allowedDomains, databaseUrl, devMemoryStore, port, maxBodyBytes: Number(env.RELAY_MAX_BODY_BYTES ?? 1_000_000) };
+  if (databaseUrl && !/^postgres(ql)?:\/\//.test(databaseUrl)) throw new Error('DATABASE_URL must be a postgres:// or postgresql:// URL.');
+  return {
+    protocol, origin: origin.origin, allowedDomains, databaseUrl, devMemoryStore,
+    port: intInRange('PORT', env.PORT, 8787, 1, 65535),
+    maxBodyBytes: intInRange('RELAY_MAX_BODY_BYTES', env.RELAY_MAX_BODY_BYTES, 1_000_000, 1024, 10_000_000),
+    fetchTimeoutMs: intInRange('RELAY_FETCH_TIMEOUT_MS', env.RELAY_FETCH_TIMEOUT_MS, 10_000, 1000, 60_000),
+    maxRedirects: intInRange('RELAY_MAX_REDIRECTS', env.RELAY_MAX_REDIRECTS, 3, 0, 5),
+  };
 }
 
 /** Exact-host allowlist (no implicit subdomains). Only https actors are accepted. */
