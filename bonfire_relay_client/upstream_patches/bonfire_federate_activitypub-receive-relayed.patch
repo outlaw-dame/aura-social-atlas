@@ -1,0 +1,34 @@
+diff --git a/lib/adapter/incoming.ex b/lib/adapter/incoming.ex
+index e24a288..3cf2bfe 100644
+--- a/lib/adapter/incoming.ex
++++ b/lib/adapter/incoming.ex
+@@ -25,6 +25,29 @@ defmodule Bonfire.Federate.ActivityPub.Incoming do
+                          ["View", "Listen", "WatchAction"]
+                        )
+ 
++  @doc """
++  Entry point for `bonfire_relay_client`: an object (or LD-verified original
++  activity) that a subscribed relay delivered, ALREADY checked by the relay
++  client (public, origin-verified, filtered). It is stored as a remote object
++  of its own author and handed to the normal pipeline with `relayed_by` set
++  for provenance only. The relay is never recorded as booster or author, and
++  no follow edge is created.
++  """
++  def receive_relayed(%{"id" => id} = data, opts) when is_binary(id) do
++    relayed_by = Keyword.fetch!(opts, :relayed_by)
++
++    with {:ok, %ActivityPub.Object{} = object} <-
++           ActivityPub.Object.get_cached(ap_id: id)
++           |> case do
++             {:ok, existing} -> {:ok, existing}
++             _ -> ActivityPub.Object.insert(data, false, nil, [])
++           end do
++      object
++      |> Map.put(:relayed_by, relayed_by)
++      |> receive_activity()
++    end
++  end
++
+   def receive_activity(activity_id) when is_binary(activity_id) do
+     info("AP - load the activity data from ID")
+ 

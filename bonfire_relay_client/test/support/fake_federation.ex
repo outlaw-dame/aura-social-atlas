@@ -16,8 +16,16 @@ defmodule Bonfire.RelayClient.Test.FakeFederation do
 
   @impl true
   def resolve_actor(id) do
-    host = URI.parse(id).host
-    {:ok, %{id: id, inbox: "https://#{host}/inbox"}}
+    notify({:resolve, id})
+
+    case Application.get_env(:bonfire_relay_client, :test_resolve) do
+      f when is_function(f, 1) ->
+        f.(id)
+
+      _ ->
+        host = URI.parse(id).host
+        {:ok, %{id: id, inbox: "https://#{host}/inbox"}}
+    end
   end
 
   # Failure injection: each op listed in :test_fail fails once (consumed).

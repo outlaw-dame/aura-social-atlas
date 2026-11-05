@@ -12,6 +12,9 @@ defmodule Bonfire.RelayClient.Protocol do
 
   def follow_object(:mastodon, _relay_actor_id), do: Activity.public_uri()
   def follow_object(:litepub, relay_actor_id), do: relay_actor_id
+  # buzzrelay takes the Follow target from the inbox path, or from `object`
+  # when it names one of its own actors; we name the resolved topic actor.
+  def follow_object(:fedibuzz, relay_actor_id), do: relay_actor_id
 
   @doc """
   Checks that an Accept/Reject refers to OUR follow for this subscription

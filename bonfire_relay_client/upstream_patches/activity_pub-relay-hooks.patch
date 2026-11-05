@@ -1,0 +1,190 @@
+diff --git a/lib/federator/workers/helpers/receiver_helpers.ex b/lib/federator/workers/helpers/receiver_helpers.ex
+index 657d805..696943c 100644
+--- a/lib/federator/workers/helpers/receiver_helpers.ex
++++ b/lib/federator/workers/helpers/receiver_helpers.ex
+@@ -80,12 +80,35 @@ defmodule ActivityPub.Federator.Worker.ReceiverHelpers do
+   # A reply in one of our users' threads is then forwarded to their followers (`Forwarder`). Whom it goes to is asked before handling it, since a `Delete` takes away the reply it is found through.
+   defp handle_received(params, opts) do
+     case signature_in_body(params, opts) do
+-      {:ok, opts} -> do_handle_received(params, opts)
++      {:ok, opts} ->
++        case maybe_relay_hook(params, opts) do
++          :not_handled -> do_handle_received(params, opts)
++          handled -> {:ok, {:relay_client, handled}}
++        end
++
+       :refetch -> refetch_or_cancel(params, "its proof or LD signature does not hold")
+       {:cancel, _reason} = cancel -> cancel
+     end
+   end
+ 
++  # Opt-in relay subscriptions (bonfire_relay_client): only deliveries whose
++  # HTTP signature verified (`signed_by`) are offered, together with the actor
++  # whose proof / LD signature verified on THIS body, if any. The hook returns
++  # `:not_handled` for anything not from a subscribed relay.
++  defp maybe_relay_hook(params, opts) do
++    with hook when is_atom(hook) and not is_nil(hook) <-
++           Application.get_env(:activity_pub, :relay_inbox_hook),
++         signer when is_binary(signer) <- opts[:signed_by] do
++      ld_actor =
++        if opts[:authenticated] in [:ld_signature, :integrity_proof],
++          do: ActivityPub.Object.get_ap_id(params["actor"])
++
++      hook.handle_incoming(%{signer: signer, activity: params, ld_verified_actor: ld_actor})
++    else
++      _ -> :not_handled
++    end
++  end
++
+   # Accepted over an HTTP signature: a proof or LD signature in the body is checked too, so what is stored says it vouched for the document. Accepted another way, it was what vouched for it, or was checked already.
+   defp signature_in_body(params, opts) do
+     if opts[:authenticated] == :http_signature do
+diff --git a/lib/relay_hooks.ex b/lib/relay_hooks.ex
+new file mode 100644
+--- /dev/null
++++ b/lib/relay_hooks.ex
+@@ -0,0 +1,144 @@
++defmodule ActivityPub.RelayHooks do
++  @moduledoc """
++  Narrow, opt-in hooks for instance-level relay subscriptions
++  (`bonfire_relay_client`). Everything here acts as the instance SERVICE
++  actor and is signed by the normal publisher. Nothing touches the adapter's
++  follow graph: relay Follows are stored as ActivityPub objects only and
++  never handed to `Adapter.maybe_handle_activity/2`, so no user follows or
++  boosts are created.
++  """
++  alias ActivityPub.{Actor, Object, Utils}
++  alias ActivityPub.Federator.{APPublisher, Fetcher, Publisher}
++
++  @public "https://www.w3.org/ns/activitystreams#Public"
++
++  @doc "Bumped whenever a hook's contract changes; the client checks it."
++  def version, do: 1
++
++  @doc "Pre-mint an activity id on this instance (persist-before-send)."
++  def mint_activity_id, do: {:ok, Utils.generate_object_id()}
++
++  def service_actor_id do
++    with {:ok, %Actor{ap_id: id}} <- Utils.service_actor(), do: {:ok, id}
++  end
++
++  @doc """
++  Store and queue a signed Follow from the service actor with a pre-minted
++  `id`. `object` is `as:Public` (Mastodon relays) or the relay actor id.
++  Delivered ONLY to the relay's inbox. The adapter is deliberately not called.
++  """
++  def follow(relay_ap_id, object, id) when is_binary(id) do
++    with {:ok, service} <- Utils.service_actor(),
++         {:ok, relay} <- Actor.get_cached_or_fetch(ap_id: relay_ap_id),
++         data = %{
++           "@context" => "https://www.w3.org/ns/activitystreams",
++           "id" => id,
++           "type" => "Follow",
++           "actor" => service.ap_id,
++           "object" => object,
++           "to" => [relay.ap_id],
++           "state" => "pending"
++         },
++         {:ok, activity} <- Object.insert(data, true, nil, []),
++         {:ok, _job} <- deliver(service, activity.data, [relay.data["inbox"]]) do
++      {:ok, activity.data}
++    end
++  end
++
++  @doc "Undo a relay Follow by id (service actor, relay inbox only)."
++  def undo_follow(relay_ap_id, follow_id) do
++    with {:ok, service} <- Utils.service_actor(),
++         {:ok, relay} <- Actor.get_cached_or_fetch(ap_id: relay_ap_id),
++         {:ok, undo_id} <- mint_activity_id(),
++         data = %{
++           "@context" => "https://www.w3.org/ns/activitystreams",
++           "id" => undo_id,
++           "type" => "Undo",
++           "actor" => service.ap_id,
++           "object" => %{"id" => follow_id, "type" => "Follow", "actor" => service.ap_id},
++           "to" => [relay.ap_id]
++         },
++         {:ok, _} <- deliver(service, data, [relay.data["inbox"]]) do
++      {:ok, data}
++    end
++  end
++
++  @doc "Accept a verified incoming Follow (LitePub reciprocal) as the service actor."
++  def accept(follow) when is_map(follow) do
++    with {:ok, service} <- Utils.service_actor(),
++         {:ok, relay} <- Actor.get_cached_or_fetch(ap_id: follow["actor"]),
++         {:ok, id} <- mint_activity_id(),
++         data = %{
++           "@context" => "https://www.w3.org/ns/activitystreams",
++           "id" => id,
++           "type" => "Accept",
++           "actor" => service.ap_id,
++           "object" => follow,
++           "to" => [relay.ap_id]
++         },
++         {:ok, _} <- deliver(service, data, [relay.data["inbox"]]) do
++      {:ok, data}
++    end
++  end
++
++  @doc "Public Announce of a local object id from the service actor to a relay inbox."
++  def announce(object_id, inbox) do
++    with {:ok, service} <- Utils.service_actor(),
++         {:ok, %Object{local: true} = obj} <- Object.get_cached(ap_id: object_id),
++         true <- Utils.public?(obj.data) || {:error, :not_public},
++         {:ok, id} <- mint_activity_id(),
++         data = %{
++           "@context" => "https://www.w3.org/ns/activitystreams",
++           "id" => id,
++           "type" => "Announce",
++           "actor" => service.ap_id,
++           "object" => object_id,
++           "to" => [@public],
++           "cc" => [service.data["followers"]] |> Enum.reject(&is_nil/1)
++         },
++         {:ok, _} <- deliver(service, data, [inbox]) do
++      {:ok, data}
++    end
++  end
++
++  @doc """
++  Queue SIGNED delivery of `data` to explicit extra inboxes, through the
++  normal publisher queue. Never unsigned: the actor is always passed.
++  """
++  def deliver(%Actor{} = actor, data, inboxes) when is_list(inboxes) do
++    {:ok, json} = Jason.encode(data)
++
++    jobs =
++      for inbox <- Enum.uniq(inboxes), is_binary(inbox) do
++        Publisher.enqueue_one(APPublisher, actor, %{
++          inbox: inbox,
++          json: json,
++          id: data["id"],
++          actor_id: actor.id
++        })
++      end
++
++    {:ok, jobs}
++  end
++
++  @doc "Deliver an existing local activity, signed by its own actor, to extra inboxes."
++  def deliver_local(activity_id, inboxes) do
++    with {:ok, %Object{local: true, data: data}} <- Object.get_cached(ap_id: activity_id),
++         {:ok, actor} <- Actor.get_cached(ap_id: data["actor"]) do
++      deliver(actor, data, inboxes)
++    end
++  end
++
++  @doc """
++  Fetch an object from ITS origin through the normal signed fetcher, WITHOUT
++  inserting it, so the caller can apply policy first.
++  """
++  def fetch_without_ingest(id) when is_binary(id) do
++    with {:ok, %{"id" => ^id} = data} <- Fetcher.fetch_remote_object_from_id(id, []) do
++      {:ok, data}
++    else
++      {:ok, _} -> {:error, :id_mismatch}
++      other -> other
++    end
++  end
++end

@@ -1,3 +1,5 @@
-# Tests are fully offline: no module in lib/ performs network I/O, and the
-# only federation implementation used is the in-process fake.
-ExUnit.start()
+# Tests are offline. The only federation implementation used is the
+# in-process fake; the optional :pg suite talks to a loopback PostgreSQL only
+# when RELAY_CLIENT_PG_URL is set.
+exclude = if System.get_env("RELAY_CLIENT_PG_URL"), do: [], else: [:pg]
+ExUnit.start(exclude: exclude)

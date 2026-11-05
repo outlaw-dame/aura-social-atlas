@@ -9,7 +9,7 @@ defmodule Bonfire.RelayClient do
   `ctx` = `%{config: %Config{}, store: {StoreModule, server}, federation: FederationModule}`.
   """
   require Logger
-  alias Bonfire.RelayClient.{Activity, Config, Policy, Protocol, Subscription, URL}
+  alias Bonfire.RelayClient.{Activity, Config, Filter, Policy, Protocol, Rules, Subscription, URL}
 
   @claim_lease_ms 300_000
 
@@ -40,6 +40,8 @@ defmodule Bonfire.RelayClient do
              protocol: protocol,
              follow_id: follow_id,
              local_actor_id: local,
+             kind: protocol,
+             outbound_enabled: true,
              updated_at: DateTime.utc_now()
            }) do
       case fed.follow(local, relay_id, Protocol.follow_object(protocol, relay_id), follow_id) do
@@ -119,7 +121,8 @@ defmodule Bonfire.RelayClient do
         to = if type == "Accept", do: :accepted, else: :rejected
 
         case Subscription.transition(sub, to) do
-          {:ok, sub} -> store.update_subscription(srv, sub)
+          # CAS on the state we read: a concurrent admin disable wins cleanly.
+          {:ok, new} -> store.cas_subscription(srv, [sub.state], new)
           # Duplicate Accept for an already-accepted subscription is idempotent.
           {:error, {:invalid_transition, s, s}} -> {:ok, sub}
           err -> err
@@ -127,7 +130,7 @@ defmodule Bonfire.RelayClient do
     end
   end
 
-  defp control_or_data("Follow", %{protocol: :mastodon}, _env, _ctx),
+  defp control_or_data("Follow", %{protocol: p}, _env, _ctx) when p != :litepub,
     do: {:error, :protocol_mismatch}
 
   defp control_or_data("Follow", sub, %{activity: a}, ctx) do
@@ -145,7 +148,7 @@ defmodule Bonfire.RelayClient do
 
       true ->
         with {:ok, _} <- fed.accept(sub.local_actor_id, a) do
-          store.update_subscription(srv, %{sub | reciprocal_follow_id: a["id"]})
+          store.cas_subscription(srv, [sub.state], %{sub | reciprocal_follow_id: a["id"]})
         end
     end
   end
@@ -161,7 +164,7 @@ defmodule Bonfire.RelayClient do
       Activity.id_of(inner) == sub.reciprocal_follow_id and is_binary(sub.reciprocal_follow_id) ->
         # Relay stopped following us: treat as relay ending the subscription.
         with {:ok, s} <- Subscription.transition(sub, :rejected),
-             do: store.update_subscription(srv, s)
+             do: store.cas_subscription(srv, [sub.state], s)
 
       true ->
         {:error, :unknown_undo}
@@ -177,11 +180,13 @@ defmodule Bonfire.RelayClient do
     %{config: cfg, store: {store, srv}, federation: fed} = ctx
 
     decision =
-      Policy.inbound(a, env,
-        relay_host: sub.relay_host,
-        max_age: cfg.max_activity_age_seconds,
-        max_skew: cfg.max_clock_skew_seconds
-      )
+      with :ok <- throttle(sub, store, srv) do
+        Policy.inbound(a, env,
+          relay_host: sub.relay_host,
+          max_age: cfg.max_activity_age_seconds,
+          max_skew: cfg.max_clock_skew_seconds
+        )
+      end
 
     case decision do
       {:drop, reason} ->
@@ -200,7 +205,7 @@ defmodule Bonfire.RelayClient do
             {:drop, :in_flight}
 
           :claimed ->
-            case apply_decision(decision, sub, fed) do
+            case apply_decision(decision, sub, fed, compiled_rules(store, srv)) do
               {:ok, _} = ok ->
                 store.complete(srv, a["id"])
                 ok
@@ -217,14 +222,40 @@ defmodule Bonfire.RelayClient do
     end
   end
 
-  defp apply_decision({:ingest_verified, activity}, sub, fed),
-    do: fed.ingest(activity, relayed_by: sub.relay_actor_id, trusted_relay: false)
-
-  defp apply_decision({:fetch, id}, sub, fed) do
-    with {:ok, obj} <- fed.fetch_object(id),
-         {:ok, obj} <- Policy.verify_fetched(obj, id) do
-      fed.ingest(obj, relayed_by: sub.relay_actor_id, trusted_relay: false)
+  defp apply_decision({:ingest_verified, activity}, sub, fed, rules) do
+    with {:keep, rule_ids} <- Filter.decide(Activity.object(activity), sub, rules) do
+      fed.ingest(activity, ingest_opts(sub, rule_ids))
     end
+  end
+
+  defp apply_decision({:fetch, id}, sub, fed, rules) do
+    with {:ok, obj} <- fed.fetch_object(id),
+         {:ok, obj} <- Policy.verify_fetched(obj, id),
+         {:keep, rule_ids} <- Filter.decide(obj, sub, rules) do
+      fed.ingest(obj, ingest_opts(sub, rule_ids))
+    end
+  end
+
+  # The relay is provenance only: never author, booster or followed account.
+  defp ingest_opts(sub, rule_ids),
+    do: [
+      relayed_by: sub.relay_actor_id,
+      trusted_relay: false,
+      matched_rules: rule_ids,
+      no_follow_graph: true
+    ]
+
+  defp compiled_rules(store, srv), do: Rules.compile(store.list_rules(srv))
+
+  # Per-connection load control: a fixed one-minute window counter. Over the
+  # limit the activity is dropped (relays do not redeliver, so this sheds
+  # load instead of building a queue).
+  defp throttle(sub, store, srv) do
+    window = div(System.system_time(:second), 60)
+
+    if store.bump_volume(srv, sub.relay_actor_id, window) > sub.max_per_minute,
+      do: {:drop, :rate_limited},
+      else: :ok
   end
 
   @doc """
@@ -251,8 +282,17 @@ defmodule Bonfire.RelayClient do
 
       true ->
         active = Enum.filter(store.list(srv), &Subscription.active?/1)
+        {buzz, active} = Enum.split_with(active, &(&1.protocol == :fedibuzz))
+        {off, active} = Enum.split_with(active, &(not &1.outbound_enabled))
         {masto, lite} = Enum.split_with(active, &(&1.protocol == :mastodon))
-        acc = %{delivered: [], skipped: [], errors: []}
+
+        acc = %{
+          delivered: [],
+          skipped:
+            Enum.map(buzz, &{&1.relay_inbox, :fedibuzz_is_inbound_only}) ++
+              Enum.map(off, &{&1.relay_inbox, :outbound_disabled_for_connection}),
+          errors: []
+        }
 
         acc =
           case Enum.map(masto, & &1.relay_inbox) do
