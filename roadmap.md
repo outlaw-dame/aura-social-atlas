@@ -24,3 +24,4 @@
 - [x] Phone app (/app): show Recent Articles
 - [x] Personal Fedizen feed + activity via read-only "Connect Fedizen" (needs a real user connect to verify)
 - [x] Optional allowlist-only Fedify relay (relay/): Mastodon + LitePub modes, SSRF/redirect/size limits, durable Postgres stores, README and .env.example. Inactive until separately deployed and subscribed by the Fedizen admin.
+- [x] Relay security: forward only public posts from currently subscribed servers, verified after signature checks; control-plane handshakes kept separate; signed end-to-end tests.
