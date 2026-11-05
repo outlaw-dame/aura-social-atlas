@@ -13,8 +13,13 @@ defmodule Bonfire.RelayClient.RelaysLiveTest do
     {:ok, srv} = start_supervised(Memory)
     {:ok, cfg} = Config.validate(enabled: false, allowed_relay_hosts: ["relay.fedi.buzz"])
 
-    ctx = %{config: cfg, store: {Memory, srv}, federation: FakeFederation,
-            authorizer: FakeAuthorizer, actor: %{admin: true, name: "alice"}}
+    ctx = %{
+      config: cfg,
+      store: {Memory, srv},
+      federation: FakeFederation,
+      authorizer: FakeAuthorizer,
+      actor: %{admin: true, name: "alice"}
+    }
 
     %{ctx: ctx}
   end

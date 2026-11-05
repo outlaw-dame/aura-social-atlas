@@ -19,22 +19,37 @@ defmodule Bonfire.RelayClient.EctoStoreTest do
     url = System.get_env("RELAY_CLIENT_PG_URL")
     Application.put_env(:bonfire_relay_client, Repo, url: url, pool_size: 20, log: false)
     {:ok, _} = Repo.start_link()
-    Repo.query!("DROP TABLE IF EXISTS bonfire_relay_client_volume, bonfire_relay_client_rules, bonfire_relay_client_seen, bonfire_relay_client_subscriptions, schema_migrations CASCADE")
+
+    Repo.query!(
+      "DROP TABLE IF EXISTS bonfire_relay_client_volume, bonfire_relay_client_rules, bonfire_relay_client_seen, bonfire_relay_client_subscriptions, schema_migrations CASCADE"
+    )
+
     path = Path.join(File.cwd!(), "priv/repo/migrations")
     Ecto.Migrator.run(Repo, path, :up, all: true, log: false)
     :ok
   end
 
   setup do
-    Repo.query!("TRUNCATE bonfire_relay_client_volume, bonfire_relay_client_rules, bonfire_relay_client_seen, bonfire_relay_client_subscriptions")
+    Repo.query!(
+      "TRUNCATE bonfire_relay_client_volume, bonfire_relay_client_rules, bonfire_relay_client_seen, bonfire_relay_client_subscriptions"
+    )
+
     :ok
   end
 
   defp sub(attrs \\ []) do
     struct(
-      %Subscription{relay_actor_id: "https://relay.fedi.buzz/tag/knitting", relay_inbox: "https://relay.fedi.buzz/tag/knitting",
-        relay_host: "relay.fedi.buzz", protocol: :fedibuzz, kind: :fedibuzz_tag, topic: "knitting",
-        follow_id: nil, state: :idle, local_actor_id: "https://fedizen.example/actor"},
+      %Subscription{
+        relay_actor_id: "https://relay.fedi.buzz/tag/knitting",
+        relay_inbox: "https://relay.fedi.buzz/tag/knitting",
+        relay_host: "relay.fedi.buzz",
+        protocol: :fedibuzz,
+        kind: :fedibuzz_tag,
+        topic: "knitting",
+        follow_id: nil,
+        state: :idle,
+        local_actor_id: "https://fedizen.example/actor"
+      },
       attrs
     )
   end
@@ -47,7 +62,9 @@ defmodule Bonfire.RelayClient.EctoStoreTest do
   end
 
   test "subscription round-trip incl. enums and nullable follow id" do
-    {:ok, _} = Store.insert_subscription(Repo, sub(max_per_minute: 42, inbound_policy: :rules_only))
+    {:ok, _} =
+      Store.insert_subscription(Repo, sub(max_per_minute: 42, inbound_policy: :rules_only))
+
     got = Store.get_by_relay_actor(Repo, "https://relay.fedi.buzz/tag/knitting")
     assert got.state == :idle and got.kind == :fedibuzz_tag and got.protocol == :fedibuzz
     assert got.inbound_policy == :rules_only and got.max_per_minute == 42 and got.follow_id == nil
@@ -55,18 +72,24 @@ defmodule Bonfire.RelayClient.EctoStoreTest do
 
   test "DB constraints reject invalid states and rates" do
     assert_raise Postgrex.Error, fn ->
-      Repo.query!("INSERT INTO bonfire_relay_client_subscriptions (relay_actor_id, relay_inbox, relay_host, protocol, state, inserted_at, updated_at) VALUES ('x','x','x','mastodon','hacked', now(), now())")
+      Repo.query!(
+        "INSERT INTO bonfire_relay_client_subscriptions (relay_actor_id, relay_inbox, relay_host, protocol, state, inserted_at, updated_at) VALUES ('x','x','x','mastodon','hacked', now(), now())"
+      )
     end
 
     assert_raise Postgrex.Error, fn ->
-      Repo.query!("INSERT INTO bonfire_relay_client_subscriptions (relay_actor_id, relay_inbox, relay_host, protocol, state, max_per_minute, inserted_at, updated_at) VALUES ('y','x','x','mastodon','idle', 0, now(), now())")
+      Repo.query!(
+        "INSERT INTO bonfire_relay_client_subscriptions (relay_actor_id, relay_inbox, relay_host, protocol, state, max_per_minute, inserted_at, updated_at) VALUES ('y','x','x','mastodon','idle', 0, now(), now())"
+      )
     end
   end
 
   test "concurrent first inserts: exactly one wins" do
     results =
       1..20
-      |> Task.async_stream(fn _ -> Store.insert_subscription(Repo, sub()) end, max_concurrency: 20)
+      |> Task.async_stream(fn _ -> Store.insert_subscription(Repo, sub()) end,
+        max_concurrency: 20
+      )
       |> Enum.map(fn {:ok, r} -> r end)
 
     assert Enum.count(results, &match?({:ok, _}, &1)) == 1
@@ -78,7 +101,13 @@ defmodule Bonfire.RelayClient.EctoStoreTest do
     results =
       1..20
       |> Task.async_stream(
-        fn n -> Store.cas_subscription(Repo, [:idle], %{s | state: :pending, follow_id: "https://fedizen.example/f/#{n}"}) end,
+        fn n ->
+          Store.cas_subscription(Repo, [:idle], %{
+            s
+            | state: :pending,
+              follow_id: "https://fedizen.example/f/#{n}"
+          })
+        end,
         max_concurrency: 20
       )
       |> Enum.map(fn {:ok, r} -> r end)
@@ -90,7 +119,9 @@ defmodule Bonfire.RelayClient.EctoStoreTest do
   test "claims: concurrent claim has one owner; release retries; done is final" do
     results =
       1..20
-      |> Task.async_stream(fn _ -> Store.claim(Repo, "https://a.example/act/1", 60_000) end, max_concurrency: 20)
+      |> Task.async_stream(fn _ -> Store.claim(Repo, "https://a.example/act/1", 60_000) end,
+        max_concurrency: 20
+      )
       |> Enum.map(fn {:ok, r} -> r end)
 
     assert Enum.count(results, &(&1 == :claimed)) == 1
@@ -119,7 +150,13 @@ defmodule Bonfire.RelayClient.EctoStoreTest do
   end
 
   test "rules round-trip" do
-    {:ok, t} = Rules.tag_rule(%{tags: ["knitting", "café"], mode: :all, scope: {:connections, ["https://relay.fedi.buzz/tag/knitting"]}})
+    {:ok, t} =
+      Rules.tag_rule(%{
+        tags: ["knitting", "café"],
+        mode: :all,
+        scope: {:connections, ["https://relay.fedi.buzz/tag/knitting"]}
+      })
+
     {:ok, d} = Rules.domain_rule(%{domain: "fluffy.family", mode: :whole_instance, tags: ["art"]})
     Store.put_rule(Repo, t)
     Store.put_rule(Repo, d)
