@@ -24,10 +24,11 @@ async function remoteActor(id: string, type = 'Person'): Promise<Remote> {
   return r;
 }
 
+const TEST_HOSTS = new Set(['fedizen.net', 'mastodon.social', 'bonfire.example']);
 const contexts = getDocumentLoader(); // preloaded JSON-LD contexts only
 const loader = async (url: string) => {
   const doc = docs.get(url.split('#')[0]);
-  if (!doc) { if (url.startsWith('https://www.w3.org/') || url.startsWith('https://w3id.org/')) return contexts(url); throw new Error(`not found: ${url}`); }
+  if (!doc) { if (!TEST_HOSTS.has(new URL(url).hostname)) return contexts(url); throw new Error(`not found: ${url}`); }
   return { contextUrl: null, document: doc, documentUrl: url };
 };
 
