@@ -1,4 +1,4 @@
-import { createRelay, type Relay } from '@fedify/relay';
+import { createRelay, type Relay, type RelayOptions } from '@fedify/relay';
 import { InProcessMessageQueue, MemoryKvStore, getAuthenticatedDocumentLoader, type KvStore, type MessageQueue } from '@fedify/fedify';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import type { Activity } from '@fedify/vocab';
@@ -32,7 +32,7 @@ export async function storesFor(cfg: RelayConfig): Promise<Stores> {
 }
 
 /** Reads a request body as raw bytes, aborting as soon as the limit is exceeded (never buffers an oversized body). */
-export async function readLimited(req: Request, limit: number): Promise<Uint8Array | null> {
+export async function readLimited(req: Request, limit: number): Promise<Uint8Array<ArrayBuffer> | null> {
   const declared = req.headers.get('content-length');
   if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > limit)) return null;
   if (!req.body) return new Uint8Array();
@@ -90,7 +90,7 @@ export function buildRelay(cfg: RelayConfig, stores: Stores, testLoaders: Loader
       subscriberHosts,
       loadObject: async (a) => { try { return await a.getObject({ documentLoader: ctx.documentLoader, contextLoader: ctx.contextLoader, crossOrigin: 'ignore' }); } catch { return null; } },
       markSeen: async (id) => {
-        const key = ['atlas-relay', 'seen', id];
+        const key = ['atlas-relay', 'seen', id] as const;
         if (await stores.kv.get(key) != null) return false;
         await stores.kv.set(key, 1, { ttl: Temporal.Duration.from({ hours: 48 }) });
         return true;
@@ -121,7 +121,7 @@ export function buildRelay(cfg: RelayConfig, stores: Stores, testLoaders: Loader
         : { ok: false as const, status: 403, reason: 'actor not allowlisted' };
       if (!pre.ok) { log('inbound.blocked', { host: hostOf(actor), reason: pre.reason }); return new Response(pre.status === 403 ? 'Forbidden' : 'Rejected', { status: pre.status }); }
       // Forward the exact original bytes and headers so Digest / HTTP signatures stay valid.
-      return relay.fetch(new Request(req.url, { method: 'POST', headers: req.headers, body: bytes }));
+      return relay.fetch(new Request(req.url, { method: 'POST', headers: req.headers, body: bytes as Uint8Array<ArrayBuffer> }));
     }
     return relay.fetch(req);
   }
