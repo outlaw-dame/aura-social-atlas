@@ -35,14 +35,27 @@ NOT applied anywhere: Fedizen is not modified. Check them with `patch -p1
    Announce of a LOCAL, public object from the service actor to one relay
    inbox.
 
-## Verification status
+## Verification status (re-checked 2026-11-05 03:2x UTC)
 
-- All three patches apply cleanly (`patch --dry-run`) to the HEADs above.
+- All three patches apply cleanly to fresh clones at the HEADs in the table.
 - Every patched `.ex` file parses (`Code.string_to_quoted/2`).
-- NOT verified:
-  - Compiling or testing inside a full Bonfire app. This needs the whole
-    Bonfire umbrella and its deps, which weren't built here.
-  - The `.sface` template change; it isn't parsed.
-  - That the patched `receive_activity/1` path keeps relay content out of
-    boost/feed attribution as intended. Check this with Bonfire's own test
-    suite (`lib/testing/`, Fedify tester) once applied.
+- Every upstream function the patches call exists at those HEADs:
+  - `Utils.service_actor/0`
+  - `Utils.generate_object_id/1`
+  - `Fetcher.fetch_remote_object_from_id/2`
+  - `Publisher.enqueue_one/3`
+  - `Actor.get_cached_or_fetch/2`
+  - `Object.get_ap_id/1`
+  - the virtual `Object.relayed_by` field
+- Fixed in this pass: `RelayHooks.deliver/3` now passes `actor_id`,
+  `actor_ap_id` and `actor_username`, the same as upstream's `Forwarder`.
+  The publisher worker can then always find the signer. Upstream
+  `APPublisher.publish_one/1` falls back to an unsigned POST when no signer is
+  found; relays reject unsigned POSTs, so this fails safe. Removing that
+  fallback for relay jobs would be a worthwhile upstream follow-up.
+
+**Not verified:**
+- Compiling or testing inside a full Bonfire app (needs the whole Bonfire
+  codebase and its dependencies).
+- The `.sface` template change (not parsed).
+- Bonfire's own federation and Fedify interop tests with the patches applied.

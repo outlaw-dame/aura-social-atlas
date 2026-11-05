@@ -23,8 +23,28 @@ hashtag/instance rules. It lives in the Atlas repo because no writable
   `ActivityPub.RelayHooks.version() == 1` and `Incoming.receive_relayed/2`
   exist (see `upstream_patches/`), every call returns
   `{:error, {:upstream_hook_required, _}}`.
-- The upstream patches apply cleanly to current upstream HEADs and parse,
-  but have **not** been compiled or run inside a Bonfire app.
+- The upstream patches apply cleanly to current upstream HEADs (re-checked
+  2026-11-05) and parse, but have **not** been compiled or run inside a
+  Bonfire app.
+- The migrations were run up, down and up again on PostgreSQL 16 with no
+  warnings. Database constraints, insert races, compare-and-set, claims,
+  leases, the volume counter and rule round-trips are covered by the
+  `:pg` suite.
+
+### Remaining integration steps (in order)
+
+1. Apply `upstream_patches/*.patch` to activity_pub, bonfire_federate_activitypub
+   and bonfire_ui_me. Then compile and run Bonfire's own suites, including
+   `bonfire_federate_activitypub/lib/testing/` and the Fedify tester.
+2. Add this package as a Bonfire extension, copy both migrations and run them.
+3. Configure as in **Configuration**, keeping `enabled: false`. Check that
+   `/settings/instance/relays` renders for an admin and is refused for
+   non-admins.
+4. Test against a staging relay, for example the Fedify server in `../relay/`
+   or a private buzzrelay. Check the Follow, Accept, Announce and ingest flow,
+   and that no user follows or boosts appear.
+5. Only then, an operator sets `enabled: true` and adds real relays from
+   the admin screen.
 
 ## Three entities
 
