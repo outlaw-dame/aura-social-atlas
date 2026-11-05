@@ -50,7 +50,7 @@ describe('authenticated policy', () => {
     markSeen: async (id) => (seen.has(id) ? false : (seen.add(id), true)),
     ...over,
   });
-  const parse = (j: unknown) => Activity.fromJsonLd(j) as Promise<Activity>;
+  const parse = (j: Record<string, unknown>) => Activity.fromJsonLd({ '@context': 'https://www.w3.org/ns/activitystreams', ...j }) as Promise<Activity>;
   const reason = (d: Awaited<ReturnType<typeof authorizeForward>>) => (d.ok ? 'ok' : d.reason);
 
   test('valid public Create is allowed once; duplicate id is dropped', async () => {
