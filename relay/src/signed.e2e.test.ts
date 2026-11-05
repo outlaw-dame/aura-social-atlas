@@ -3,7 +3,7 @@
  * remote actor documents are served by an in-test loader, and outbound deliveries are captured by
  * stubbing fetch. No network traffic leaves the test.
  */
-import { delivered } from './fetch-stub.testutil.ts';
+import { delivered } from '../test-preload.ts';
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { generateCryptoKeyPair, signJsonLd, signRequest } from '@fedify/fedify';
 import { exportSpki, getDocumentLoader } from '@fedify/vocab-runtime';
@@ -151,3 +151,10 @@ for (const protocol of ['litepub', 'mastodon'] as const) {
     });
   });
 }
+
+test('no test request ever left the process', async () => {
+  const { blocked } = await import('../test-preload.ts');
+  // Only fake hosts were contacted, and only through the in-process stub.
+  for (const u of [...delivered.map(d => d.url), ...blocked]) expect(['fedizen.net', 'mastodon.social', 'bonfire.example', 'relay.example.com', 'localhost:8787'].includes(new URL(u).host)).toBe(true);
+  await expect(fetch('https://fedizen.net/')).rejects.toThrow(/network disabled/);
+});
