@@ -43,7 +43,7 @@ diff --git a/lib/relay_hooks.ex b/lib/relay_hooks.ex
 new file mode 100644
 --- /dev/null
 +++ b/lib/relay_hooks.ex
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,150 @@
 +defmodule ActivityPub.RelayHooks do
 +  @moduledoc """
 +  Narrow, opt-in hooks for instance-level relay subscriptions
@@ -156,11 +156,17 @@ new file mode 100644
 +
 +    jobs =
 +      for inbox <- Enum.uniq(inboxes), is_binary(inbox) do
++        # Same identifying params as ActivityPub.Federator.Forwarder, so the
++        # worker's signer lookup succeeds by id, ap_id or username. If every
++        # lookup failed, APPublisher.publish_one/1 would fall back to an
++        # UNSIGNED post, which receiving relays reject (fails safe, not open).
 +        Publisher.enqueue_one(APPublisher, actor, %{
 +          inbox: inbox,
 +          json: json,
 +          id: data["id"],
-+          actor_id: actor.id
++          actor_id: actor.id,
++          actor_ap_id: actor.data["id"],
++          actor_username: Map.get(actor, :username)
 +        })
 +      end
 +
