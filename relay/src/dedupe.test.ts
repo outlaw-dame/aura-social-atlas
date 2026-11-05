@@ -3,6 +3,10 @@
  * (PGlite, Postgres compiled to WASM, behind a wire-protocol socket) through the same postgres.js +
  * PostgresKvStore stack production uses, with several independent connection pools standing in for
  * separate relay processes.
+ *
+ * Limitation: PGlite executes statements one at a time, so this proves the ON CONFLICT claim is
+ * correct across connections and interleavings, not behaviour under true parallel execution. On real
+ * PostgreSQL the guarantee comes from the primary-key unique index on fedify_kv_v2.key.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { PGlite } from '@electric-sql/pglite';
@@ -24,7 +28,7 @@ beforeAll(async () => {
 afterAll(async () => { for (const p of pools) await p.end({ timeout: 1 }); await server.stop(); await db.close(); });
 
 function store(): PostgresKvStore {
-  const sql = postgres(`postgres://postgres@127.0.0.1:${PORT}/postgres`, { max: 4, onnotice: () => {} });
+  const sql = postgres(`postgres://postgres@127.0.0.1:${PORT}/postgres`, { max: 1, onnotice: () => {} });
   pools.push(sql);
   return new PostgresKvStore(sql);
 }
