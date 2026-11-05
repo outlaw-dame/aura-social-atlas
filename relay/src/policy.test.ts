@@ -10,6 +10,11 @@ describe('relay config', () => {
   test('requires durable storage outside dev', () => throws(() => parseConfig({ ...base, DATABASE_URL: '' })));
   test('requires https origin', () => throws(() => parseConfig({ ...base, RELAY_ORIGIN: 'http://relay.example.com' })));
   test('rejects private allowlist entries', () => throws(() => parseConfig({ ...base, RELAY_ALLOWED_DOMAINS: 'localhost' })));
+  test('rejects non-numeric limits', () => throws(() => parseConfig({ ...base, RELAY_MAX_BODY_BYTES: '1e9' })));
+  test('rejects out-of-range limits', () => throws(() => parseConfig({ ...base, RELAY_MAX_REDIRECTS: '50' })));
+  test('rejects bad ports', () => throws(() => parseConfig({ ...base, PORT: '70000' })));
+  test('rejects non-postgres database urls', () => throws(() => parseConfig({ ...base, DATABASE_URL: 'mysql://x' })));
+  test('defaults limits', () => strictEqual(parseConfig(base).maxRedirects, 3));
   test('accepts a valid litepub config', () => strictEqual(parseConfig({ ...base, RELAY_PROTOCOL: 'litepub' }).protocol, 'litepub'));
 });
 
