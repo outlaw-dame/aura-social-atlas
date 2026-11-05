@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { generateCryptoKeyPair, signRequest } from '@fedify/fedify';
-import { exportSpki } from '@fedify/vocab-runtime';
+import { exportSpki, getDocumentLoader } from '@fedify/vocab-runtime';
 import { buildRelay, storesFor } from './app.ts';
 import { parseConfig } from './policy.ts';
 import { AS_PUBLIC } from './visibility.ts';
@@ -24,9 +24,10 @@ async function remoteActor(id: string, type = 'Person'): Promise<Remote> {
   return r;
 }
 
+const contexts = getDocumentLoader(); // preloaded JSON-LD contexts only
 const loader = async (url: string) => {
   const doc = docs.get(url.split('#')[0]);
-  if (!doc) throw new Error(`not found: ${url}`);
+  if (!doc) { if (url.startsWith('https://www.w3.org/') || url.startsWith('https://w3id.org/')) return contexts(url); throw new Error(`not found: ${url}`); }
   return { contextUrl: null, document: doc, documentUrl: url };
 };
 
