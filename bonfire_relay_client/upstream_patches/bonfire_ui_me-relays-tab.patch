@@ -1,0 +1,38 @@
+diff --git a/lib/views/settings/instance_settings_live.ex b/lib/views/settings/instance_settings_live.ex
+index e4c7a10..a5b57a5 100644
+--- a/lib/views/settings/instance_settings_live.ex
++++ b/lib/views/settings/instance_settings_live.ex
+@@ -123,6 +123,16 @@ defmodule Bonfire.UI.Me.InstanceSettingsLive do
+      )}
+   end
+ 
++  def handle_params(%{"tab" => "relays"}, _url, socket) do
++    {:noreply,
++     assign(
++       socket,
++       back: true,
++       page_title: l("Relays"),
++       selected_tab: "relays"
++     )}
++  end
++
+   def handle_params(%{"tab" => "federation_status"}, _url, socket) do
+     {:noreply,
+      assign(
+diff --git a/lib/views/settings/instance_settings_live.sface b/lib/views/settings/instance_settings_live.sface
+index 9463cc6..1ff5b17 100644
+--- a/lib/views/settings/instance_settings_live.sface
++++ b/lib/views/settings/instance_settings_live.sface
+@@ -284,6 +284,12 @@
+         scope={:instance}
+         description={l("You can define custom emoji for all users on this instance.")}
+       />
++    {#match "relays"}
++      <StatefulComponent
++        module={maybe_component(Bonfire.RelayClient.Web.RelaysLive, @__context__)}
++        id="relay_client_admin"
++        __context__={@__context__}
++      />
+     {#match "federation_status"}
+       <StatefulComponent
+         module={maybe_component(Bonfire.UI.Social.BackgroundProcessingStatusLive, @__context__)}
