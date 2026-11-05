@@ -203,7 +203,7 @@ defmodule Bonfire.RelayClientTest do
             "to" => [@public], "object" => note("https://other.example/n/7", "https://author.example/u/a")}
       assert {:drop, :origin_mismatch} = RelayClient.handle_incoming(%{signer: @masto, activity: c}, ctx)
       c2 = %{c | "object" => note("https://author.example/n/8", "https://author.example/u/b")}
-      assert {:drop, :spoofed_attribution} = RelayClient.handle_incoming(%{signer: @masto, activity: c2}, ctx,)
+      assert {:drop, :spoofed_attribution} = RelayClient.handle_incoming(%{signer: @masto, activity: c2}, ctx)
     end
 
     test "duplicates and replays are processed once", %{ctx: ctx} do
