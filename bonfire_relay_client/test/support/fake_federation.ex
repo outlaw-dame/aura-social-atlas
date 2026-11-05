@@ -43,11 +43,11 @@ defmodule Bonfire.RelayClient.Test.FakeFederation do
   @impl true
   def fetch_object(id) do
     notify({:fetch, id})
-    if fail?(:fetch), do: throw(:never)
 
-    case Map.fetch(objects(), id) do
-      {:ok, o} -> {:ok, o}
-      :error -> {:error, :not_found}
+    cond do
+      fail?(:fetch) -> {:error, :timeout}
+      Map.has_key?(objects(), id) -> {:ok, Map.fetch!(objects(), id)}
+      true -> {:error, :not_found}
     end
   end
 

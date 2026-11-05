@@ -23,7 +23,12 @@ defmodule Bonfire.RelayClient.Federation do
   Build, sign and queue a Follow with the pre-minted `follow_id`. `object`
   is as:Public (Mastodon) or the relay actor (LitePub).
   """
-  @callback follow(local :: actor_id, relay :: actor_id, object :: String.t(), follow_id :: String.t()) ::
+  @callback follow(
+              local :: actor_id,
+              relay :: actor_id,
+              object :: String.t(),
+              follow_id :: String.t()
+            ) ::
               {:ok, %{required(String.t()) => term()}} | {:error, term()}
 
   @callback unfollow(local :: actor_id, relay :: actor_id, follow_id :: String.t()) ::

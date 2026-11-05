@@ -88,7 +88,10 @@ if Code.ensure_loaded?(Ecto.Schema) and Code.ensure_loaded?(Ecto.Query) do
           :claimed
 
         _ ->
-          case repo.query!("SELECT status FROM bonfire_relay_client_seen WHERE activity_id = $1", [id]) do
+          case repo.query!(
+                 "SELECT status FROM bonfire_relay_client_seen WHERE activity_id = $1",
+                 [id]
+               ) do
             %{rows: [["done"]]} -> :done
             _ -> :in_flight
           end
