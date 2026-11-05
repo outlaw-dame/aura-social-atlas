@@ -67,14 +67,19 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
           tag: blank(p["tag"]),
           domain: blank(p["domain"]),
           host: blank(p["host"]) || "relay.fedi.buzz",
-          inbound_policy: if(p["inbound_policy"] == "rules_only", do: :rules_only, else: :all_public),
+          inbound_policy:
+            if(p["inbound_policy"] == "rules_only", do: :rules_only, else: :all_public),
           outbound_enabled: p["outbound_enabled"] == "true",
           max_per_minute: int(p["max_per_minute"], 600)
         }
         |> Enum.reject(fn {_, v} -> is_nil(v) end)
         |> Map.new()
 
-      run(socket, &Admin.add_connection(&1, input), "Connection added (disabled). Enable it to send the Follow.")
+      run(
+        socket,
+        &Admin.add_connection(&1, input),
+        "Connection added (disabled). Enable it to send the Follow."
+      )
     end
 
     def handle_event("enable", %{"id" => id}, socket),
@@ -107,7 +112,8 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
     def handle_event("delete_rule", %{"id" => id, "confirm" => confirm}, socket),
       do: run(socket, &Admin.delete_rule(&1, id, confirm: confirm), "Rule deleted.")
 
-    def handle_event(_, _, socket), do: {:noreply, assign(socket, flash_msg: "Error: invalid request")}
+    def handle_event(_, _, socket),
+      do: {:noreply, assign(socket, flash_msg: "Error: invalid request")}
 
     defp blank(nil), do: nil
     defp blank(s), do: if(String.trim(s) == "", do: nil, else: String.trim(s))

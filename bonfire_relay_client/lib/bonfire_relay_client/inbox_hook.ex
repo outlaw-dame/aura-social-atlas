@@ -20,7 +20,10 @@ defmodule Bonfire.RelayClient.InboxHook do
       when is_binary(signer) and is_map(activity) do
     case Context.build(nil) do
       {:ok, ctx} ->
-        RelayClient.handle_incoming(Map.take(envelope, [:signer, :activity, :ld_verified_actor]), ctx)
+        RelayClient.handle_incoming(
+          Map.take(envelope, [:signer, :activity, :ld_verified_actor]),
+          ctx
+        )
 
       {:error, reason} ->
         Logger.debug("relay_client inbox hook inactive: #{inspect(reason)}")

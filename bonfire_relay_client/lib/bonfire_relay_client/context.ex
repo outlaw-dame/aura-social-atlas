@@ -16,8 +16,12 @@ defmodule Bonfire.RelayClient.Context do
   def build(actor) do
     env = Application.get_all_env(:bonfire_relay_client)
 
-    with {:ok, cfg} <- Config.validate(Keyword.drop(env, [:store, :federation, :authorizer, :local_actor_username])),
-         {mod, _srv} = store when is_atom(mod) <- Keyword.get(env, :store) || {:error, :store_not_configured},
+    with {:ok, cfg} <-
+           Config.validate(
+             Keyword.drop(env, [:store, :federation, :authorizer, :local_actor_username])
+           ),
+         {mod, _srv} = store when is_atom(mod) <-
+           Keyword.get(env, :store) || {:error, :store_not_configured},
          fed when is_atom(fed) and not is_nil(fed) <-
            Keyword.get(env, :federation) || {:error, :federation_not_configured},
          auth when is_atom(auth) and not is_nil(auth) <-

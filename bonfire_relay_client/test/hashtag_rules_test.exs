@@ -15,7 +15,19 @@ defmodule Bonfire.RelayClient.HashtagRulesTest do
     end
 
     test "rejects non-tags" do
-      for bad <- ["", "#", "123", "__", "a b", "a-b", "a.b", "#a#b", String.duplicate("a", 101), nil, 5] do
+      for bad <- [
+            "",
+            "#",
+            "123",
+            "__",
+            "a b",
+            "a-b",
+            "a.b",
+            "#a#b",
+            String.duplicate("a", 101),
+            nil,
+            5
+          ] do
         assert {:error, _} = Hashtag.normalize(bad), inspect(bad)
       end
     end
@@ -43,7 +55,9 @@ defmodule Bonfire.RelayClient.HashtagRulesTest do
       }
 
       assert Hashtag.from_object(obj) == MapSet.new(["knitting"])
-      assert Hashtag.from_object(%{"tag" => %{"type" => "Hashtag", "name" => "#solo"}}) == MapSet.new(["solo"])
+
+      assert Hashtag.from_object(%{"tag" => %{"type" => "Hashtag", "name" => "#solo"}}) ==
+               MapSet.new(["solo"])
     end
   end
 
@@ -61,7 +75,10 @@ defmodule Bonfire.RelayClient.HashtagRulesTest do
       assert {:error, {:invalid, :mode}} = Rules.tag_rule(%{tags: ["a"], mode: :xor})
       assert {:error, :too_many_tags} = Rules.tag_rule(%{tags: Enum.map(1..21, &"t#{&1}x")})
       assert {:error, :invalid_host} = Rules.domain_rule(%{domain: "127.0.0.1"})
-      assert {:error, {:invalid, :scope}} = Rules.tag_rule(%{tags: ["a"], scope: {:connections, ["http://x.org"]}})
+
+      assert {:error, {:invalid, :scope}} =
+               Rules.tag_rule(%{tags: ["a"], scope: {:connections, ["http://x.org"]}})
+
       assert {:ok, %{domain: "fluffy.family"}} = Rules.domain_rule(%{domain: "Fluffy.Family."})
     end
 
@@ -71,19 +88,57 @@ defmodule Bonfire.RelayClient.HashtagRulesTest do
       c = Rules.compile([any, all])
       one = obj("https://a.example/u/x", ["knitting"])
       both = obj("https://a.example/u/x", ["Knitting", "CROCHET"])
-      ids = fn o -> Rules.matching(c, o, "a.example", "https://r.example/actor") |> Enum.map(& &1.id) end
+
+      ids = fn o ->
+        Rules.matching(c, o, "a.example", "https://r.example/actor") |> Enum.map(& &1.id)
+      end
+
       assert ids.(one) == [any.id]
       assert Enum.sort(ids.(both)) == Enum.sort([any.id, all.id])
       assert ids.(obj("https://a.example/u/x", ["knittingx"])) == []
     end
 
     test "domain rule with optional tag condition and per-relay scope" do
-      {:ok, d} = Rules.domain_rule(%{domain: "a.example", tags: ["art"], scope: {:connections, ["https://r.example/actor"]}})
+      {:ok, d} =
+        Rules.domain_rule(%{
+          domain: "a.example",
+          tags: ["art"],
+          scope: {:connections, ["https://r.example/actor"]}
+        })
+
       c = Rules.compile([d])
-      assert [_] = Rules.matching(c, obj("https://a.example/u", ["art"]), "a.example", "https://r.example/actor")
-      assert [] = Rules.matching(c, obj("https://a.example/u", ["art"]), "a.example", "https://other.example/actor")
-      assert [] = Rules.matching(c, obj("https://a.example/u", ["cats"]), "a.example", "https://r.example/actor")
-      assert [] = Rules.matching(c, obj("https://b.example/u", ["art"]), "b.example", "https://r.example/actor")
+
+      assert [_] =
+               Rules.matching(
+                 c,
+                 obj("https://a.example/u", ["art"]),
+                 "a.example",
+                 "https://r.example/actor"
+               )
+
+      assert [] =
+               Rules.matching(
+                 c,
+                 obj("https://a.example/u", ["art"]),
+                 "a.example",
+                 "https://other.example/actor"
+               )
+
+      assert [] =
+               Rules.matching(
+                 c,
+                 obj("https://a.example/u", ["cats"]),
+                 "a.example",
+                 "https://r.example/actor"
+               )
+
+      assert [] =
+               Rules.matching(
+                 c,
+                 obj("https://b.example/u", ["art"]),
+                 "b.example",
+                 "https://r.example/actor"
+               )
     end
 
     test "disabled rules never match" do
@@ -95,7 +150,16 @@ defmodule Bonfire.RelayClient.HashtagRulesTest do
     test "coverage is honest: no source until an accepted connection can deliver" do
       {:ok, t} = Rules.tag_rule(%{tags: ["art"]})
       {:ok, w} = Rules.domain_rule(%{domain: "fluffy.family", mode: :whole_instance})
-      base = %Subscription{relay_actor_id: "https://relay.fedi.buzz/instance/fluffy.family", relay_inbox: "i", relay_host: "relay.fedi.buzz", protocol: :fedibuzz, follow_id: "f", kind: :fedibuzz_instance, topic: "fluffy.family"}
+
+      base = %Subscription{
+        relay_actor_id: "https://relay.fedi.buzz/instance/fluffy.family",
+        relay_inbox: "i",
+        relay_host: "relay.fedi.buzz",
+        protocol: :fedibuzz,
+        follow_id: "f",
+        kind: :fedibuzz_instance,
+        topic: "fluffy.family"
+      }
 
       cov = Rules.coverage([t, w], [%{base | state: :pending}])
       assert {:no_source, _} = cov[t.id]
@@ -112,10 +176,15 @@ defmodule Bonfire.RelayClient.HashtagRulesTest do
 
   describe "FediBuzz URLs" do
     test "canonical candidate URLs from typed input" do
-      assert {:ok, "https://relay.fedi.buzz/tag/knitting", "knitting"} = FediBuzz.tag_url("#Knitting")
+      assert {:ok, "https://relay.fedi.buzz/tag/knitting", "knitting"} =
+               FediBuzz.tag_url("#Knitting")
+
       assert {:ok, "https://relay.fedi.buzz/tag/cafe", "café"} = FediBuzz.tag_url("Café")
       assert {:ok, "https://relay.fedi.buzz/tag/%E6%97%A5%E6%9C%AC", _} = FediBuzz.tag_url("日本")
-      assert {:ok, "https://relay.fedi.buzz/instance/fluffy.family", "fluffy.family"} = FediBuzz.instance_url("Fluffy.Family")
+
+      assert {:ok, "https://relay.fedi.buzz/instance/fluffy.family", "fluffy.family"} =
+               FediBuzz.instance_url("Fluffy.Family")
+
       assert {:error, _} = FediBuzz.tag_url("../admin")
       assert {:error, _} = FediBuzz.instance_url("10.0.0.1")
       assert {:error, :self_reference} = FediBuzz.instance_url("relay.fedi.buzz")
@@ -125,27 +194,61 @@ defmodule Bonfire.RelayClient.HashtagRulesTest do
     test "resolved actor must match host and topic path" do
       c = "https://relay.fedi.buzz/tag/knitting"
       assert :ok = FediBuzz.verify_resolved(c, %{id: c, inbox: c})
-      assert {:error, :actor_host_mismatch} = FediBuzz.verify_resolved(c, %{id: "https://evil.example/tag/knitting", inbox: c})
-      assert {:error, :inbox_host_mismatch} = FediBuzz.verify_resolved(c, %{id: c, inbox: "https://evil.example/i"})
-      assert {:error, :actor_path_mismatch} = FediBuzz.verify_resolved(c, %{id: "https://relay.fedi.buzz/tag/other", inbox: c})
+
+      assert {:error, :actor_host_mismatch} =
+               FediBuzz.verify_resolved(c, %{id: "https://evil.example/tag/knitting", inbox: c})
+
+      assert {:error, :inbox_host_mismatch} =
+               FediBuzz.verify_resolved(c, %{id: c, inbox: "https://evil.example/i"})
+
+      assert {:error, :actor_path_mismatch} =
+               FediBuzz.verify_resolved(c, %{id: "https://relay.fedi.buzz/tag/other", inbox: c})
+
       assert {:error, :unresolvable} = FediBuzz.verify_resolved(c, nil)
     end
   end
 
   describe "Filter" do
     defp sub(attrs),
-      do: struct(%Subscription{relay_actor_id: "https://r.example/actor", relay_inbox: "i", relay_host: "r.example", protocol: :mastodon, follow_id: "f"}, attrs)
+      do:
+        struct(
+          %Subscription{
+            relay_actor_id: "https://r.example/actor",
+            relay_inbox: "i",
+            relay_host: "r.example",
+            protocol: :mastodon,
+            follow_id: "f"
+          },
+          attrs
+        )
 
     test "rules_only with no rules fails closed" do
-      assert {:drop, :no_rules} = Filter.decide(obj("https://a.example/u", ["x1"]), sub(inbound_policy: :rules_only), Rules.compile([]))
+      assert {:drop, :no_rules} =
+               Filter.decide(
+                 obj("https://a.example/u", ["x1"]),
+                 sub(inbound_policy: :rules_only),
+                 Rules.compile([])
+               )
     end
 
     test "all_public keeps; rules_only keeps only matches" do
       {:ok, r} = Rules.tag_rule(%{tags: ["art"]})
       c = Rules.compile([r])
       assert {:keep, []} = Filter.decide(obj("https://a.example/u", ["x1"]), sub(%{}), c)
-      assert {:keep, [_]} = Filter.decide(obj("https://a.example/u", ["art"]), sub(inbound_policy: :rules_only), c)
-      assert {:drop, :no_rule_matched} = Filter.decide(obj("https://a.example/u", ["x1"]), sub(inbound_policy: :rules_only), c)
+
+      assert {:keep, [_]} =
+               Filter.decide(
+                 obj("https://a.example/u", ["art"]),
+                 sub(inbound_policy: :rules_only),
+                 c
+               )
+
+      assert {:drop, :no_rule_matched} =
+               Filter.decide(
+                 obj("https://a.example/u", ["x1"]),
+                 sub(inbound_policy: :rules_only),
+                 c
+               )
     end
 
     test "FediBuzz topic integrity" do
