@@ -146,16 +146,11 @@ protocol is refused, never silently switched.
 1. Add the dependency in Bonfire's `deps.flavour.path` / `mix.exs`:
    `{:bonfire_relay_client, path: "extensions/bonfire_relay_client"}`.
 2. Copy `priv/repo/migrations/*` into Bonfire's migrations and run them.
-3. Configure:
-   ```elixir
-   config :bonfire_relay_client,
-     enabled: false,                       # flip only when ready
-     outbound_enabled: false,
-     allowed_relay_hosts: ["relay.example.org"],
-     local_actor_username: "relay"         # Bonfire service actor
-   ```
-4. Build the context:
-   `%{config: cfg, store: {Bonfire.RelayClient.Store.Ecto, Bonfire.Common.Repo}, federation: Bonfire.RelayClient.Federation.Bonfire}`.
+3. Apply the three patches in `upstream_patches/` to activity_pub,
+   bonfire_federate_activitypub and bonfire_ui_me.
+4. Configure as in **Configuration** below. The context is built by
+   `Bonfire.RelayClient.Context.build/1`. Follows always use Bonfire's
+   service actor (`ActivityPub.Utils.service_actor/0`).
 
 ### Upstream touchpoints
 
