@@ -8,7 +8,6 @@ defmodule Bonfire.RelayClient.AdminTest do
 
   @public "https://www.w3.org/ns/activitystreams#Public"
   @tag_url "https://relay.fedi.buzz/tag/knitting"
-  @inst_url "https://relay.fedi.buzz/instance/fluffy.family"
   @masto "https://relay.masto.example/actor"
 
   setup do

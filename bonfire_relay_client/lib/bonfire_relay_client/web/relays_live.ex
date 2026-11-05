@@ -88,7 +88,7 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
     def handle_event("disable", %{"id" => id}, socket),
       do: run(socket, &Admin.disable(&1, id), "Disabled; Undo queued.")
 
-    def handle_event("remove", %{"id" => id, "confirm" => confirm}, socket),
+    def handle_event("remove", %{"relay_id" => id, "confirm" => confirm}, socket),
       do: run(socket, &Admin.remove(&1, id, confirm: confirm), "Connection removed.")
 
     def handle_event("add_tag_rule", %{"rule" => p}, socket) do
@@ -109,7 +109,7 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
     def handle_event("toggle_rule", %{"id" => id, "enabled" => e}, socket),
       do: run(socket, &Admin.set_rule_enabled(&1, id, e == "true"), "Rule updated.")
 
-    def handle_event("delete_rule", %{"id" => id, "confirm" => confirm}, socket),
+    def handle_event("delete_rule", %{"rule_id" => id, "confirm" => confirm}, socket),
       do: run(socket, &Admin.delete_rule(&1, id, confirm: confirm), "Rule deleted.")
 
     def handle_event(_, _, socket),
@@ -178,7 +178,7 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
                     Disable
                   </button>
                   <form :if={c.state in [:idle, :failed, :rejected]} phx-submit="remove" phx-target={@myself} class="flex gap-1">
-                    <input type="hidden" name="id" value={c.relay_actor_id} />
+                    <input type="hidden" name="relay_id" value={c.relay_actor_id} />
                     <input type="text" name="confirm" placeholder="Type the relay URL to delete" aria-label="Confirm relay URL" class="input input-sm" required />
                     <button type="submit" class="btn btn-sm btn-error">Delete</button>
                   </form>
@@ -216,7 +216,7 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
                 {if r.enabled, do: "Pause", else: "Resume"}
               </button>
               <form phx-submit="delete_rule" phx-target={@myself} class="flex gap-1">
-                <input type="hidden" name="id" value={r.id} />
+                <input type="hidden" name="rule_id" value={r.id} />
                 <input type="hidden" name="confirm" value={r.id} />
                 <button type="submit" data-confirm="Delete this rule?" class="btn btn-xs btn-error">Delete</button>
               </form>
