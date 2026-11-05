@@ -12,10 +12,12 @@ ActivityPub relays using either the **Mastodon** or **LitePub** protocol
   subscribes, follows or deploys automatically; only an admin calling
   `Bonfire.RelayClient.subscribe/3` starts a subscription.
 - The pure core (config, URLs, protocol, policy, state machine, in-memory
-  store) compiles and passes 29 offline ExUnit tests with Elixir 1.18.5 / OTP 27.
-- `Federation.Bonfire` and `Store.Ecto` only compile inside a Bonfire host
-  and have **not** been compiled against upstream. Three upstream patches
-  (below) are still required.
+  store) compiles and passes 43 offline ExUnit tests with Elixir 1.18.5 / OTP 27.
+- `Federation.Bonfire` is **fail-closed**: follow, fetch, ingest, deliver and
+  announce return `{:error, {:upstream_hook_required, name}}` until the
+  upstream hooks below exist, so subscribing through it fails before
+  anything is sent. It and `Store.Ecto` only compile inside a Bonfire host
+  and have **not** been compiled against upstream.
 
 Separate from `../relay/` (a Fedify relay *server*) and from the Atlas web app.
 
@@ -38,7 +40,7 @@ Remote relay ──HTTP-signed POST──▶ Bonfire inbox (verifies signature)
 | Our Follow `object` | `as:Public` | relay actor |
 | Relay reply | Accept/Reject | Accept + reciprocal Follow (we Accept only from the pinned relay actor) |
 | Content in | original `Create`/`Update` (LD-signed) | `Announce{object: id}` |
-| Content out | our public activities to relay inbox | relay pulls via its Follow of us |
+| Content out | original public activity to relay inbox | service actor `Announce`s public `Create`s, only after the relay's reciprocal Follow is accepted; other types are reported as `skipped` |
 
 The protocol is fixed per subscription. A reply shaped like the other
 protocol is refused, never silently switched.
@@ -59,8 +61,15 @@ protocol is refused, never silently switched.
   objects, stale/future `published` and unsupported types are dropped.
 - The relay is never treated as the author or booster: content is ingested
   with `relayed_by` set and `trusted_relay: false`.
-- Dedup runs atomically per activity id (`ON CONFLICT DO NOTHING` in Postgres),
-  so replays and concurrent duplicates are processed once.
+- Subscribe is persist-before-send: the Follow id is minted first, the
+  `:pending` row is committed (unique per relay), then the Follow is queued.
+  Early Accepts find their state, concurrent requests send one Follow, and a
+  queue failure marks the row `:failed` so a clean retry is possible.
+- Inbound dedup is a durable claim with status. `claim` returns `:claimed`,
+  `:in_flight` (another worker's lease is live) or `:done`. Success or a
+  permanent rejection completes the claim; transient fetch/ingest errors
+  release it so a redelivery retries. Expired leases can be taken over
+  (single atomic `INSERT … ON CONFLICT DO UPDATE … WHERE` in Postgres).
 - Outbound: only public `Create/Update/Delete/Announce` authored on the local
   host go out, and only to **accepted** Mastodon relays when `outbound_enabled: true`.
 - URLs: https only, port 443, no userinfo or fragments, no IP literals or
@@ -85,21 +94,34 @@ protocol is refused, never silently switched.
 
 ### Upstream touchpoints (patches required in bonfire-networks)
 
-1. **Inbox hook** — `bonfire_federate_activitypub/lib/adapter/adapter.ex`
-   `handle_activity/1` (or the `ActivityPub` inbox controller after
-   signature verification): call `Bonfire.RelayClient.handle_incoming/2`
-   with `%{signer: verified_key_owner, activity: data, ld_verified_actor: ...}`
-   **before** `Incoming.receive_activity/1`. If it returns anything other than
-   `:not_handled`, stop there. The verified signer has to be exposed; today it
-   isn't passed to the adapter.
-2. **Public-object Follow** — `activity_pub/lib/activity_pub.ex` `follow/2`
-   always sets `object` to the followed actor. Mastodon relays need
-   `object: as:Public`, sent to the relay actor (`object_override` option).
-3. **Extra inboxes** — `bonfire_federate_activitypub/lib/adapter/outgoing.ex`
-   / the ActivityPub publisher must accept additional recipient inboxes, so
-   `Federation.Bonfire.deliver/2` can queue signed delivery through Bonfire's
-   own signer. Until then it returns `{:error, :upstream_publisher_hook_required}`.
-   No raw POSTs are made anywhere in this package.
+Each one maps to a `{:upstream_hook_required, name}` in `Federation.Bonfire`.
+
+1. **Inbox hook** (`bonfire_federate_activitypub/lib/adapter/adapter.ex`
+   `handle_activity/1`, or right after signature verification in the
+   ActivityPub inbox). Call `Bonfire.RelayClient.handle_incoming/2` with
+   `%{signer: verified_key_owner, activity: data, ld_verified_actor: ...}`
+   before `Incoming.receive_activity/1`. Stop unless it returns
+   `:not_handled`. Today the verified signer is not passed to the adapter, and
+   `ld_verified_actor` must be set only when the LD signature verifies for
+   the activity's `actor`.
+2. **`follow_with_preminted_id`** (`activity_pub/lib/activity_pub.ex`
+   `follow/2`). It needs an `id:` option, so the subscription is stored before
+   sending, and an `object_override: as:Public` option for Mastodon relays.
+3. **`publisher_extra_inboxes`**: the publisher must accept extra recipient
+   inboxes, so the original activity can be signed by Bonfire and sent to
+   Mastodon relays.
+4. **`fetch_without_ingest` / `incoming_relayed_object`**: we need two things.
+   - A fetch that returns the data from its origin without inserting it, so
+     `Policy.verify_fetched/2` runs first.
+   - An `Incoming` entry point that takes the verified data with
+     `relayed_by` set and never treats the relay as the author or booster.
+
+   `receive_activity/1` expects an `ActivityPub.Object` from the verified
+   pipeline, not a plain map.
+5. **`service_actor_announce`**: `ActivityPub.announce/2` from the service
+   actor, addressed to as:Public plus the relay inbox (for LitePub).
+
+No raw POSTs are made anywhere in this package.
 
 Upstream has relay-actor corruption tests and a Fedify interop tester
 (`lib/testing/tester/fedify_tester/`) but no relay *subscription* support. The
