@@ -45,7 +45,7 @@ Requirements: Bun ≥ 1.1, PostgreSQL ≥ 13, TLS-terminating reverse proxy (Cad
 cd relay
 bun install
 cp .env.example .env    # edit per instance
-bun run test            # 28 tests, in-memory stores
+bun run test            # 28 tests, in-memory stores (from the repo root, run app tests with `bun test ./src` so relay tests are not picked up without their deps)
 bun run start           # reads env; refuses to start if unsafe
 ```
 
