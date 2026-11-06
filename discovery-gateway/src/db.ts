@@ -108,7 +108,7 @@ export async function loadKeyPair(sql: Sql, identifier: string): Promise<{ priva
 export async function saveKeyPair(sql: Sql, identifier: string, privateKey: unknown, publicKey: unknown): Promise<void> {
   await sql`
     INSERT INTO gateway_keys (actor_identifier, private_key, public_key)
-    VALUES (${identifier}, ${sql.json(privateKey)}, ${sql.json(publicKey)})
+    VALUES (${identifier}, ${sql.json(privateKey as Parameters<typeof sql.json>[0])}, ${sql.json(publicKey as Parameters<typeof sql.json>[0])})
     ON CONFLICT (actor_identifier) DO NOTHING`;
 }
 
