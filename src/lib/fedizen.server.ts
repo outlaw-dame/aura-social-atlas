@@ -20,17 +20,29 @@ export async function startConnect(userId: string, redirectUri: string) {
   const state = random(24); const verifier = random(48);
   const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
   const db = await admin();
-  await db.from('fedizen_oauth_states').delete().eq('user_id', userId);
-  await db.from('fedizen_oauth_states').insert({ state, user_id: userId, code_verifier: verifier, redirect_uri: redirectUri });
+  const { error: clearError } = await db.from('fedizen_oauth_states').delete().eq('user_id', userId);
+  if (clearError) throw new Error('Could not clear previous Fedizen authorization state.');
+  const { error: insertError } = await db.from('fedizen_oauth_states').insert({ state, user_id: userId, code_verifier: verifier, redirect_uri: redirectUri });
+  if (insertError) throw new Error('Could not persist Fedizen authorization state.');
   const q = new URLSearchParams({ client_id: app.client_id, redirect_uri: redirectUri, response_type: 'code', scope: FEDIZEN_API_SCOPE, state, code_challenge: challenge, code_challenge_method: 'S256' });
   return `${FEDIZEN}/oauth/authorize?${q}`;
 }
 
+/** Consume exactly one authorization state belonging to the authenticated user.
+ * The DELETE + RETURNING is a single database operation: no cross-user
+ * deletion (IDOR) and no replay race between two callbacks. */
+export async function consumeOAuthState(db: Awaited<ReturnType<typeof admin>>, userId: string, state: string) {
+  const { data, error } = await db.from('fedizen_oauth_states')
+    .delete().eq('state', state).eq('user_id', userId).select('*').maybeSingle();
+  if (error) throw new Error('Could not atomically consume Fedizen authorization state.');
+  return data;
+}
+
 export async function finishConnect(userId: string, code: string, state: string) {
   const db = await admin();
-  const { data: st } = await db.from('fedizen_oauth_states').select('*').eq('state', state).maybeSingle();
-  await db.from('fedizen_oauth_states').delete().eq('state', state);
-  if (!st || st.user_id !== userId || Date.now() - new Date(st.created_at).getTime() > 15 * 60_000) return { ok: false as const, error: 'This connection link expired. Please try again.' };
+  const st = await consumeOAuthState(db, userId, state);
+  const age = st ? Date.now() - new Date(st.created_at).getTime() : NaN;
+  if (!st || !Number.isFinite(age) || age < 0 || age > 15 * 60_000) return { ok: false as const, error: 'This connection link expired. Please try again.' };
   const app = await appFor(st.redirect_uri);
   const res = await fetch(`${FEDIZEN}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: st.redirect_uri, client_id: app.client_id, client_secret: app.client_secret, code_verifier: st.code_verifier }), signal: AbortSignal.timeout(10000) });
   if (!res.ok) { console.error(`Fedizen token exchange failed [${res.status}]`); return { ok: false as const, error: 'Fedizen didn’t accept the connection. Please try again.' }; }
@@ -38,7 +50,8 @@ export async function finishConnect(userId: string, code: string, state: string)
   let handle: string | null = null;
   const me = await fetch(`${FEDIZEN}/api/v1/accounts/verify_credentials`, { headers: { authorization: `Bearer ${tok.access_token}` }, signal: AbortSignal.timeout(10000) });
   if (me.ok) handle = ((await me.json()) as { acct?: string }).acct ?? null;
-  await db.from('fedizen_connections').upsert({ user_id: userId, access_token: tok.access_token, scope: tok.scope ?? FEDIZEN_API_SCOPE, account_handle: handle });
+  const { error: saveError } = await db.from('fedizen_connections').upsert({ user_id: userId, access_token: tok.access_token, scope: tok.scope ?? FEDIZEN_API_SCOPE, account_handle: handle });
+  if (saveError) throw new Error('Could not save Fedizen connection.');
   return { ok: true as const };
 }
 
@@ -48,11 +61,10 @@ export async function tokenFor(userId: string) {
   return data;
 }
 
-export async function disconnect(userId: string) {
+export async function disconnect(userId: string): Promise<void> {
   const db = await admin();
-  const t = await tokenFor(userId);
-  await db.from('fedizen_connections').delete().eq('user_id', userId);
-  return t;
+  const { error } = await db.from('fedizen_connections').delete().eq('user_id', userId);
+  if (error) throw new Error('Could not disconnect Fedizen account.');
 }
 
 export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {
