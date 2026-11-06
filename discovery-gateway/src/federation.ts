@@ -123,6 +123,13 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
     const activityId = activity.id?.href;
     if (!activityId) { log('ingest.dropped', { reason: 'activity has no id' }); return; }
     const subscribedActors = await acceptedSubscriptionActors(stores.sql);
+    // Authorization BEFORE remote network I/O: an unsolicited signer must
+    // never control the URLs fetched on behalf of a gateway instance.
+    const sender = activity.actorId?.href;
+    if (!sender || !subscribedActors.has(sender)) {
+      log('ingest.dropped', { reason: 'actor is not an accepted subscription' });
+      return;
+    }
     // For Announce, the relay can authenticate its own announcement, NOT the
     // embedded third-party object. Re-fetch the canonical object from its
     // origin through Fedify's guarded document loader and check its metadata.
