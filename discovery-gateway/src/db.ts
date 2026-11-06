@@ -143,10 +143,20 @@ export async function setSubscriptionState(sql: Sql, id: string, state: Subscrip
   await sql`UPDATE gateway_subscriptions SET state = ${state}, updated_at = now() WHERE id = ${id}`;
 }
 
-/** Accepted subscriptions whose actor host matches (for the ingest gate). */
-export async function acceptedSubscriptionHosts(sql: Sql): Promise<Set<string>> {
-  const rows = await sql<{ actor_host: string }[]>`SELECT actor_host FROM gateway_subscriptions WHERE state = 'accepted'`;
-  return new Set(rows.map(r => r.actor_host));
+/** Exact accepted actor ids. Host matching is insufficient: many actors share a host. */
+export async function acceptedSubscriptionActors(sql: Sql): Promise<Set<string>> {
+  const rows = await sql<{ actor_url: string }[]>`SELECT actor_url FROM gateway_subscriptions WHERE state = 'accepted'`;
+  return new Set(rows.map(r => r.actor_url));
+}
+
+/** Atomically rotate correlation id before sending a retry. */
+export async function setPendingFollowId(sql: Sql, id: string, followId: string): Promise<boolean> {
+  const rows = await sql`
+    UPDATE gateway_subscriptions
+    SET state = 'pending', follow_activity_id = ${followId}, updated_at = now()
+    WHERE id = ${id} AND state IN ('pending','rejected','disabled')
+    RETURNING id`;
+  return rows.length === 1;
 }
 
 /** Find a subscription by the Follow activity id we sent (for Accept/Reject correlation). */
