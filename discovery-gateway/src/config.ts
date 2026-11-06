@@ -52,7 +52,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (originUrl.pathname !== '/' || originUrl.search || originUrl.hash || originUrl.username || originUrl.password) {
     throw new Error('GATEWAY_ORIGIN must be a bare origin without paths, query, fragment or credentials.');
   }
-  if (originUrl.protocol !== 'https:' && originUrl.hostname !== 'localhost' && originUrl.hostname !== '127.0.0.1') {
+  if (originUrl.protocol !== 'https:' && !(originUrl.protocol === 'http:' && (originUrl.hostname === 'localhost' || originUrl.hostname === '127.0.0.1'))) {
     throw new Error('GATEWAY_ORIGIN must be an https URL (http allowed only for localhost dev).');
   }
   // The discovery store holds canonical posts, keys and subscriptions;
@@ -74,7 +74,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       if (u.pathname !== '/' || u.search || u.hash || u.username || u.password) {
         throw new Error('CORS origins must not contain paths or credentials.');
       }
-      if (u.protocol !== 'https:' && u.hostname !== 'localhost' && u.hostname !== '127.0.0.1') {
+      if (u.protocol !== 'https:' && !(u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1'))) {
         throw new Error(`CORS origin ${JSON.stringify(o)} must be https (localhost excepted).`);
       }
       return u.origin;

@@ -8,6 +8,13 @@ describe('gateway startup config', () => {
     expect(() => loadConfig({ ...base, DATABASE_URL: '' })).toThrow();
     expect(() => loadConfig({ ...base, GATEWAY_ORIGIN: 'http://relay.example.org' })).toThrow();
   });
+  test('does not accept arbitrary localhost URL schemes or credentials', () => {
+    expect(() => loadConfig({ ...base, GATEWAY_ORIGIN: 'ftp://localhost' })).toThrow();
+    expect(() => loadConfig({ ...base, GATEWAY_CORS_ORIGINS: 'file://localhost' })).toThrow();
+    expect(() => loadConfig({ ...base, GATEWAY_CORS_ORIGINS: 'https://user:pass@app.example' })).toThrow();
+    expect(() => loadConfig({ ...base, GATEWAY_ORIGIN: 'https://gateway.example/a' })).toThrow();
+    expect(loadConfig({ ...base, GATEWAY_ORIGIN: 'http://localhost:4100' }).origin).toBe('http://localhost:4100');
+  });
   test('validates CORS allowlist and integer limits', () => {
     expect(loadConfig({ ...base, GATEWAY_CORS_ORIGINS: 'https://app.example.org' }).corsAllowlist).toEqual(['https://app.example.org']);
     expect(() => loadConfig({ ...base, GATEWAY_CORS_ORIGINS: 'http://evil.example' })).toThrow();
