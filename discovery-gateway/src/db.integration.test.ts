@@ -5,6 +5,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import postgres, { type Sql } from 'postgres';
 import { Service } from '@fedify/vocab';
+import { InProcessMessageQueue, MemoryKvStore } from '@fedify/fedify';
+import { buildGateway } from './federation.ts';
+import { createHandler } from './http.ts';
+import { loadConfig } from './config.ts';
 import {
   acceptedSubscriptionActors, createSubscription, deleteItem, getSubscription,
   initSchema, insertItem, listFacets, loadKeyPair, pruneItems, queryItems,
@@ -154,6 +158,64 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(result.ok).toBe(true);
     expect(recordedId).toMatch(/^https:\/\/gateway\.example\/activities\//);
     expect((await subscriptionByFollowId(sql, recordedId))?.state).toBe('pending');
+  });
+
+  dbTest('Fedify serves a stable service actor with its persistent public key', async () => {
+    const cfg = loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
+      DATABASE_URL: databaseUrl!,
+    });
+    const gateway = buildGateway(cfg, {
+      kv: new MemoryKvStore(),
+      queue: new InProcessMessageQueue(),
+      sql,
+    });
+    const req = new Request('https://gateway.example/actor', {
+      headers: { Accept: 'application/activity+json' },
+    });
+    const first = await gateway.fetch(req);
+    expect(first.status).toBe(200);
+    const actor = await first.json() as Record<string, unknown>;
+    expect(actor['type']).toBe('Service');
+    expect(actor['id']).toBe('https://gateway.example/actors/gateway');
+    expect(actor['inbox']).toBe('https://gateway.example/actors/gateway/inbox');
+    expect(actor['publicKey']).toBeDefined();
+    const pair = await loadKeyPair(sql, 'gateway');
+    expect(pair?.privateKey).toBeDefined();
+    const second = await gateway.fetch(req);
+    expect(second.status).toBe(200);
+    expect(await loadKeyPair(sql, 'gateway')).toEqual(pair);
+  });
+
+  dbTest('public read endpoint and admin mutations enforce credentials', async () => {
+    const cfg = loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
+      GATEWAY_CORS_ORIGINS: 'https://app.example',
+      DATABASE_URL: databaseUrl!,
+    });
+    const gateway = {
+      fetch: async () => new Response('Not found', { status: 404 }),
+      lookupActor: async () => null,
+    } as unknown as Gateway;
+    const handle = createHandler({ cfg, gateway, sql });
+    const anonymous = await handle(new Request('https://gateway.example/admin/subscriptions'));
+    expect(anonymous.status).toBe(401);
+    const headers = { Authorization: `Bearer ${cfg.adminToken}` };
+    const wrongMethod = await handle(new Request('https://gateway.example/admin/subscriptions', {
+      method: 'POST', headers, body: JSON.stringify([]),
+    }));
+    expect(wrongMethod.status).toBe(400);
+    const pub = await handle(new Request('https://gateway.example/api/v1/items?limit=2', {
+      headers: { Origin: 'https://app.example' },
+    }));
+    expect(pub.status).toBe(200);
+    expect(pub.headers.get('access-control-allow-origin')).toBe('https://app.example');
+    const data = await pub.json() as { items: unknown[]; nextCursor: string | null };
+    expect(Array.isArray(data.items)).toBe(true);
+    const blocked = await handle(new Request('https://gateway.example/api/v1/items?tag=../secret'));
+    expect(blocked.status).toBe(400);
   });
 
   dbTest('Mastodon relay adapter fails closed before actor lookup or storage', async () => {
