@@ -20,6 +20,8 @@ import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileFedizenFeed, useActivitySummary } from './FedizenMobile';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
+import { Spotlight } from '@/components/social/Spotlight';
+import { VoicesToKnow } from '@/components/social/VoicesToKnow';
 import { describeProfile, type DeviceProfile } from '@/lib/device-profile';
 import { useDeviceProfile } from '@/lib/use-device-profile';
 import { registerAppServiceWorker } from '@/lib/register-sw';
@@ -38,10 +40,10 @@ function pickTheme(profile: DeviceProfile): Theme {
 
 const NAV_WIDTH = { rail: 88, sidebar: 280 } as const;
 const LAYOUT_KEYS = ['layout', 'nav', 'panes', 'span', 'form'] as const;
-const LAYOUT_VARS = ['--atlas-list-w', '--atlas-hinge', '--atlas-top-h', '--atlas-bottom-y', '--f7-panel-width'];
+const LAYOUT_VARS = ['--atlas-main-w', '--atlas-rail-w', '--atlas-hinge', '--atlas-top-h', '--atlas-bottom-y', '--f7-panel-width'];
 
 /** Applies the device profile to Framework7: navigation (tab bar, side tab bar, rail, sidebar, tabletop deck),
- *  panes (single, list + stories, split at the fold). Layout comes from window size and the fold only. */
+ *  panes (single column, or the desktop-style feed + voices column, split at the fold when folded). Layout comes from window size and the fold only. */
 function useAdaptiveLayout(profile: DeviceProfile) {
   useEffect(() => {
     const html = document.documentElement;
@@ -49,11 +51,13 @@ function useAdaptiveLayout(profile: DeviceProfile) {
     const navW = profile.nav === 'rail' || profile.nav === 'sidebar' ? NAV_WIDTH[profile.nav] : 0;
     const [a, b] = profile.segs ?? [];
     if (profile.panes === 'fold' && a && b) {
+      // Folded: the feed fills the first screen, the voices column the second.
       const foldX = a.x + a.width;
-      html.style.setProperty('--atlas-list-w', `${Math.max(240, foldX - navW)}px`);
+      html.style.setProperty('--atlas-main-w', `${Math.max(240, foldX - navW)}px`);
       html.style.setProperty('--atlas-hinge', `${Math.max(0, b.x - foldX)}px`);
     } else if (profile.panes === 'flat') {
-      html.style.setProperty('--atlas-list-w', `${Math.round(Math.min(420, Math.max(300, (profile.width - navW) * 0.38)))}px`);
+      // Flat: like the desktop page, a wide feed and a ~260–320px "Voices to know" column.
+      html.style.setProperty('--atlas-rail-w', `${Math.round(Math.min(320, Math.max(260, (profile.width - navW) * 0.3)))}px`);
       html.style.setProperty('--atlas-hinge', '0px');
     }
     if (profile.layout === 'tabletop' && a && b) {
@@ -138,6 +142,31 @@ export default function AtlasMobileApp() {
   const activityText = useActivitySummary();
   const savedPosts = posts.filter(p => saved.includes(p.id));
 
+  // Wide windows (and folded spans) mirror the desktop Discover page.
+  const wide = profile.panes !== 'single';
+  const creatorList = (
+    <>
+      <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:person_2_square_stack" md="material:groups" /> Creators</span></BlockTitle>
+      <List strong inset dividers mediaList className="atlas-creator-list">
+        {results.map(c => (
+          <ListItem key={c.id} title={c.name}
+            onClick={() => setCreatorOpen(c)} style={{ cursor: 'pointer' }}>
+            <span slot="text">{linkifyHashtagsWith(c.bio, tag => setTagFeed({ creatorId: c.id, tag }))}</span>
+            <span slot="subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {c.handle} · <NetworkBadge network={c.network} />
+            </span>
+            <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={44} height={44} style={{ borderRadius: 22 }} />
+            <Button slot="after" small round fill={!followed.includes(c.id)} tonal={followed.includes(c.id)}
+              onClick={(e: any) => { e.stopPropagation(); toggleFollow(c.id); }}>
+              {followed.includes(c.id) ? 'Following' : 'Follow'}
+            </Button>
+          </ListItem>
+        ))}
+        {results.length === 0 && <ListItem title="No creators match your search" />}
+      </List>
+    </>
+  );
+
   const postCard = (p: (typeof posts)[number]) => {
     const c = creatorOf(p.creatorId);
     if (!c) return null;
@@ -219,39 +248,36 @@ export default function AtlasMobileApp() {
           </Toolbar>
           <Tabs>
             <Tab id="tab-discover" className="page-content atlas-discover" onTabShow={() => setTitle('Discover')} tabActive>
-              {/* Two panes on wide windows (creators | stories), split exactly at the fold when folded. */}
-              <div className="atlas-pane atlas-pane-list">
-              <Searchbar placeholder="Search creators" disableButton={false} onInput={(e: any) => setQuery(e.target.value)} onClickClear={() => setQuery('')} />
-              <Block>
-                <Segmented strong round>
-                  {networks.map(n => <Button key={n} small active={network === n} onClick={() => setNetwork(n)}>{n.replace(' networks', '')}</Button>)}
-                </Segmented>
-              </Block>
-              <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:person_2_square_stack" md="material:groups" /> Creators</span></BlockTitle>
-              <List strong inset dividers mediaList className="atlas-creator-list">
-                {results.map(c => (
-                  <ListItem key={c.id} title={c.name}
-                    onClick={() => setCreatorOpen(c)} style={{ cursor: 'pointer' }}>
-                    <span slot="text">{linkifyHashtagsWith(c.bio, tag => setTagFeed({ creatorId: c.id, tag }))}</span>
-                    <span slot="subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      {c.handle} · <NetworkBadge network={c.network} />
-                    </span>
-                    <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={44} height={44} style={{ borderRadius: 22 }} />
-                    <Button slot="after" small round fill={!followed.includes(c.id)} tonal={followed.includes(c.id)}
-                      onClick={(e: any) => { e.stopPropagation(); toggleFollow(c.id); }}>
-                      {followed.includes(c.id) ? 'Following' : 'Follow'}
-                    </Button>
-                  </ListItem>
-                ))}
-                {results.length === 0 && <ListItem title="No creators match your search" />}
-              </List>
-              <Block className="px-3"><GatewayDiscovery /></Block>
+              {/* Phones: one column. Wide windows mirror the desktop Discover page (main feed + "Voices to know"
+                  column); when folded, the feed sits on one screen and the voices on the other. */}
+              {wide && (
+                <div className="atlas-hero">
+                  <p className="atlas-hero-eyebrow"><span className="social-status-dot" />Discover the open social web</p>
+                  <h1>A world of independent voices.</h1>
+                  <p>Find creators, fresh perspectives, and conversations beyond your usual circle.</p>
+                </div>
+              )}
+              <div className="atlas-d-main">
+                <Searchbar placeholder="Search creators" disableButton={false} onInput={(e: any) => setQuery(e.target.value)} onClickClear={() => setQuery('')} />
+                <Block>
+                  <Segmented strong round>
+                    {networks.map(n => <Button key={n} small active={network === n} onClick={() => setNetwork(n)}>{n.replace(' networks', '')}</Button>)}
+                  </Segmented>
+                </Block>
+                {!wide && creatorList}
+                <Block className="px-3"><GatewayDiscovery /></Block>
+                {wide && <Block className="atlas-d-spotlight"><div className="atlas-desktop-embed"><Spotlight /></div></Block>}
+                <MobileRecentArticles />
+                <BlockTitle>Stories</BlockTitle>
+                <div className="atlas-story-grid">{posts.map(postCard)}</div>
               </div>
-              <div className="atlas-pane atlas-pane-stories">
-              <MobileRecentArticles />
-              <BlockTitle>Stories</BlockTitle>
-              {posts.map(postCard)}
-              </div>
+              {wide && (
+                <aside className="atlas-d-rail" aria-label="Creator discovery">
+                  <BlockTitle className="atlas-rail-title">Voices to know</BlockTitle>
+                  <Block><div className="atlas-desktop-embed"><VoicesToKnow /></div></Block>
+                  {creatorList}
+                </aside>
+              )}
             </Tab>
 
             <Tab id="tab-following" className="page-content" onTabShow={() => setTitle('Following')}>
