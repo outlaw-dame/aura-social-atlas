@@ -18,12 +18,14 @@ import { originOf, checkRemoteUrl } from './urlguard.ts';
 
 export const AS_PUBLIC = PUBLIC_COLLECTION.href;
 
-type IdLike = { href?: string } | string | null | undefined;
+type IdLike = { href?: string; id?: string | URL } | string | null | undefined;
 
 function idHref(v: IdLike): string | null {
   if (v == null) return null;
   if (typeof v === 'string') return v;
-  return typeof v.href === 'string' ? v.href : null;
+  if (typeof v.href === 'string') return v.href;
+  if (typeof v.id === 'string') return v.id;
+  return v.id instanceof URL ? v.id.href : null;
 }
 
 /** True when as:Public appears in to or cc of the given raw audience arrays. */
