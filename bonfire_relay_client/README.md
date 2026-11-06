@@ -30,10 +30,24 @@ hashtag/instance rules. It lives in the Atlas repo because no writable
   warnings. Database constraints, insert races, compare-and-set, claims,
   leases, the volume counter and rule round-trips are covered by the
   `:pg` suite.
+- Co-op Cloud documentation recheck (2026-11-06): compilation with
+  warnings-as-errors and format check pass on Elixir 1.18.5 / OTP 27;
+  all **86 tests pass twice**, seeds `0` and `314159`, including all nine
+  PostgreSQL 16.15 cases on a throwaway loopback database. A leaked fake
+  actor-resolver setting between test modules was fixed with teardown/reset;
+  federation and production code were unchanged. Full host integration
+  remains unverified.
 
 ### Remaining integration steps (in order)
 
-1. Apply `upstream_patches/*.patch` to activity_pub, bonfire_federate_activitypub
+For Fedizen's provider-confirmed **Co-op Cloud (Abra), Community** deployment,
+start with [deployment/COOP_CLOUD.md](deployment/COOP_CLOUD.md). Its reported
+`1.1.0-beta25` is not image provenance. The verified upstream release spelling
+is `v1.1.0-beta.25`; matching Fedizen requires the host's actual digest and
+source/flavour/dependency revisions. The patch HEADs below are **not** a
+beta-25 compatibility claim.
+
+1. Match the host build first, then rebase and apply `upstream_patches/*.patch` to activity_pub, bonfire_federate_activitypub
    and bonfire_ui_me. Then compile and run Bonfire's own suites, including
    `bonfire_federate_activitypub/lib/testing/` and the Fedify tester.
 2. Add this package as a Bonfire extension, copy both migrations and run them.
@@ -163,7 +177,12 @@ protocol is refused, never silently switched.
 
 ## Integration into Bonfire
 
-1. Add the dependency in Bonfire's `deps.flavour.path` / `mix.exs`:
+These are source integration steps, not an Abra deployment command. Do not
+edit a running container: compile the extension into a custom Community
+image and pin its digest as described in the Co-op Cloud guide.
+
+1. Add the dependency in the matched Community flavour's dependency manifest
+   (confirm its layout at that revision) / app `mix.exs`:
    `{:bonfire_relay_client, path: "extensions/bonfire_relay_client"}`.
 2. Copy `priv/repo/migrations/*` into Bonfire's migrations and run them.
 3. Apply the three patches in `upstream_patches/` to activity_pub,
@@ -176,6 +195,9 @@ protocol is refused, never silently switched.
 
 See `upstream_patches/README.md`. The five hooks are implemented there as
 patches against the current upstream sources.
+
+Those sources are the explicitly recorded HEADs, not necessarily the
+dependencies bundled in `v1.1.0-beta.25` or Fedizen's installed image.
 
 ## Configuration
 
