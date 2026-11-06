@@ -141,9 +141,10 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
     const summaryRaw = typeof embedded?.['summary'] === 'string' ? embedded['summary'] : null;
     const name = typeof embedded?.['name'] === 'string' ? embedded['name'] : null;
     const urlField = embedded?.['url'];
-    const canonicalUrl = typeof urlField === 'string' ? urlField
+    const requestedUrl = typeof urlField === 'string' ? urlField
       : urlField && typeof urlField === 'object' && typeof (urlField as { href?: unknown }).href === 'string' ? (urlField as { href: string }).href
       : decision.objectId;
+    const canonicalUrl = checkRemoteUrl(requestedUrl).ok ? requestedUrl : decision.objectId;
     const published = typeof embedded?.['published'] === 'string' ? embedded['published'] : null;
 
     // Author attribution from the embedded object only; never invent an author.
@@ -158,7 +159,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
         const authorHost = hostOf(decision.authorId);
         authorHandle = authorHost ? `@${cleanText(a['preferredUsername'], 64)}@${authorHost}` : null;
       }
-      if (typeof a['url'] === 'string') authorUrl = a['url'];
+      if (typeof a['url'] === 'string' && checkRemoteUrl(a['url']).ok) authorUrl = a['url'];
     }
 
     const text = htmlToText(content || name || '', cfg.maxTextLength);
@@ -198,8 +199,9 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
       const subs = await listSubscriptions(stores.sql);
       const known = subs.find(s => s.kind === 'litepub' && s.actorUrl === follow.actorId?.href && (s.state === 'pending' || s.state === 'accepted'));
       const followId = follow.id?.href;
-      if (!known || !followId) {
-        if (followId) {
+      const forServiceActor = follow.objectId?.href === ctx.getActorUri(ACTOR_IDENTIFIER).href;
+      if (!known || !followId || !forServiceActor) {
+        if (followId && follow.actorId) {
           const reject = new Reject({ id: new URL(`${cfg.origin}/activities/${crypto.randomUUID()}`), actor: ctx.getActorUri(ACTOR_IDENTIFIER), object: follow });
           await ctx.sendActivity({ identifier: ACTOR_IDENTIFIER }, follow.actorId!, reject);
         }
