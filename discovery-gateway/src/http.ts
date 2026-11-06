@@ -53,11 +53,11 @@ export class RateLimiter {
   }
 }
 
-function clientKey(req: Request): string {
-  // Behind a reverse proxy the operator should set X-Forwarded-For; we take the
-  // first hop only and never trust it for anything stronger than rate limiting.
-  const fwd = req.headers.get('x-forwarded-for');
-  return fwd?.split(',')[0]?.trim() || 'unknown';
+function clientKey(_req: Request): string {
+  // Never trust a client-provided X-Forwarded-For header as an identity:
+  // attackers could rotate it to evade limits. Until a proxy-signed address
+  // can be supplied by trusted infrastructure, share a conservative bucket.
+  return 'untrusted-public';
 }
 
 function corsHeaders(cfg: GatewayConfig, req: Request): Record<string, string> {
