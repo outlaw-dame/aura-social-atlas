@@ -65,6 +65,11 @@ export async function subscribe(gateway: Gateway, sql: Sql, origin: string, inpu
     return { ok: false, status: 502, error: 'could not resolve remote actor' };
   }
   if (!actor || !actor.id) return { ok: false, status: 404, error: 'no ActivityPub actor at that URL' };
+  // A malicious actor document can advertise an inbox on an internal or
+  // unrelated host even when the actor URL itself was safe to fetch.
+  if (!actor.inboxId || !checkRemoteUrl(actor.inboxId).ok || hostOf(actor.inboxId) !== actorHost) {
+    return { ok: false, status: 400, error: 'relay inbox is private, invalid or crosses to an unapproved host' };
+  }
   // The resolved actor id must stay on the same origin we asked for — a
   // redirect to a different host is not the actor the operator approved.
   if (hostOf(actor.id.href) !== actorHost) return { ok: false, status: 400, error: 'resolved actor is on a different host than requested' };
