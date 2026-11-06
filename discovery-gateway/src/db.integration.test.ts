@@ -607,7 +607,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     } });
 
     const workerStop = new AbortController();
-    const worker = gw.federation.startQueue({ contextData: undefined, signal: workerStop.signal });
+    const worker = gw.federation.startQueue(undefined, { signal: workerStop.signal });
     try {
     const followId = prefix + 'positive-signed-follow';
     const subscription = await createSubscription(sql, {
@@ -636,7 +636,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       type: 'Accept', actor: actorId, object: followId,
       to: ['https://www.w3.org/ns/activitystreams#Public'],
     });
-    console.log('SIGNED_ACCEPT_RESULT', JSON.stringify({ status: accepted.status, reports: authenticationReports }));
+    expect(authenticationReports.some(report => (report.authentication as { status?: string }).status === 'verified')).toBe(true);
     expect(accepted.status).toBeLessThan(300);
     expect(await poll(async () => (await getSubscription(sql, subscription.subscription.id))?.state === 'accepted')).toBe(true);
 
