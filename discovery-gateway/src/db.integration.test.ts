@@ -5,7 +5,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import postgres, { type Sql } from 'postgres';
 import { Service } from '@fedify/vocab';
-import { InProcessMessageQueue, MemoryKvStore } from '@fedify/fedify';
+import { InProcessMessageQueue, MemoryKvStore, generateCryptoKeyPair, signRequest } from '@fedify/fedify';
+import { getDocumentLoader, type DocumentLoaderFactory } from '@fedify/vocab-runtime';
 import { buildGateway } from './federation.ts';
 import { createHandler } from './http.ts';
 import { loadConfig } from './config.ts';
@@ -546,6 +547,107 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(unsub).toMatchObject({ ok: true });
     expect(delivered).toBe(0);
     expect((await getSubscription(sql, sub.subscription.id))?.state).toBe('disabled');
+  });
+
+  dbTest('positive signed ActivityPub Accept, Create and Announce via real Fedify inbox', async () => {
+    // All remote actor and origin documents are synthetic. The network guard
+    // in test-preload.ts rejects every non-fixture external request.
+    const actorId = 'https://relay.integration.example/actor';
+    const keyId = new URL(actorId + '#main-key');
+    const { privateKey, publicKey } = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    const spki = new Uint8Array(await crypto.subtle.exportKey('spki', publicKey));
+    const b64 = btoa(Array.from(spki, x => String.fromCharCode(x)).join(''));
+    const pem = '-----BEGIN PUBLIC KEY-----\\n' + b64.match(/.{1,64}/g)!.join('\\n') + '\\n-----END PUBLIC KEY-----';
+    const actorDoc = {
+      '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'],
+      id: actorId, type: 'Service', inbox: actorId + '/inbox',
+      publicKey: { id: keyId.href, owner: actorId, publicKeyPem: pem },
+    };
+    const originId = `https://origin.integration.example/notes/${crypto.randomUUID()}`;
+    const authorId = 'https://origin.integration.example/actors/author';
+    const originalNote = {
+      '@context': 'https://www.w3.org/ns/activitystreams',
+      id: originId, type: 'Note', attributedTo: authorId,
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+      content: '<p>Original author public post</p>',
+      tag: [{ type: 'Hashtag', name: '#integration' }],
+    };
+    const fixtures = new Map<string, unknown>([[actorId, actorDoc], [keyId.href, actorDoc], [originId, originalNote]]);
+    const documentLoaderFactory: DocumentLoaderFactory = options => {
+      const defaultLoader = getDocumentLoader({ ...options, allowPrivateAddress: false });
+      return async url => {
+        const fixture = fixtures.get(url);
+        if (fixture) return { contextUrl: null, documentUrl: url, document: fixture };
+        return defaultLoader(url);
+      };
+    };
+    const cfg = loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
+      DATABASE_URL: databaseUrl!,
+    });
+    const gw = buildGateway(cfg, {
+      kv: new MemoryKvStore(),
+      queue: new InProcessMessageQueue(),
+      sql,
+    }, { documentLoaderFactory });
+
+    const followId = prefix + 'positive-signed-follow';
+    const subscription = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: actorId, actorHost: 'relay.integration.example',
+      selector: null, followActivityId: followId,
+    });
+    const inbox = 'https://gateway.example/actors/gateway/inbox';
+    async function postSigned(activity: Record<string, unknown>) {
+      const request = new Request(inbox, {
+        method: 'POST', headers: { 'content-type': 'application/activity+json' },
+        body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', ...activity }),
+      });
+      const signed = await signRequest(request, privateKey, keyId, { spec: 'draft-cavage-http-signatures-12' });
+      return gw.fetch(signed);
+    }
+    async function poll(assertion: () => Promise<boolean>): Promise<boolean> {
+      for (let tries = 0; tries < 25; tries++) {
+        if (await assertion()) return true;
+        await Bun.sleep(20);
+      }
+      return false;
+    }
+
+    const accepted = await postSigned({
+      id: actorId + '/activities/accept-' + crypto.randomUUID(),
+      type: 'Accept', actor: actorId, object: followId,
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+    });
+    expect(accepted.status).toBeLessThan(300);
+    expect(await poll(async () => (await getSubscription(sql, subscription.subscription.id))?.state === 'accepted')).toBe(true);
+
+    const authoredId = `https://relay.integration.example/notes/${crypto.randomUUID()}`;
+    const created = await postSigned({
+      id: actorId + '/activities/create-' + crypto.randomUUID(),
+      type: 'Create', actor: actorId,
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+      object: {
+        id: authoredId, type: 'Note', attributedTo: actorId,
+        to: ['https://www.w3.org/ns/activitystreams#Public'],
+        content: '<p>Verified relay-authored public post</p>',
+      },
+    });
+    expect(created.status).toBeLessThan(300);
+    expect(await poll(async () => (await queryItems(sql, { limit: 50 })).items.some(x => x.id === authoredId))).toBe(true);
+
+    const announced = await postSigned({
+      id: actorId + '/activities/announce-' + crypto.randomUUID(),
+      type: 'Announce', actor: actorId,
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+      object: originId,
+    });
+    expect(announced.status).toBeLessThan(300);
+    expect(await poll(async () => (await queryItems(sql, { limit: 50 })).items.some(x => x.id === originId))).toBe(true);
+    const stored = (await queryItems(sql, { limit: 50 })).items.find(x => x.id === originId);
+    expect(stored?.authorId).toBe(authorId);
+    expect(stored?.relayActor).toBe(actorId);
+    expect(stored?.hashtags).toEqual(['integration']);
   });
 
   dbTest('Mastodon relay adapter fails closed before actor lookup or storage', async () => {
