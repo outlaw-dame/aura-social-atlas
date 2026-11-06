@@ -12,7 +12,7 @@
 
 import type { Sql } from 'postgres';
 import type { Gateway } from './federation.ts';
-import { createSubscription, getSubscription, listSubscriptions, setSubscriptionState, type Subscription, type SubscriptionKind } from './db.ts';
+import { createSubscription, getSubscription, listSubscriptions, setSubscriptionState, setPendingFollowId, type Subscription, type SubscriptionKind } from './db.ts';
 import { checkRemoteUrl, fediBuzzActorUrl, hostOf } from './urlguard.ts';
 
 export type SubscribeInput =
@@ -71,7 +71,7 @@ export async function subscribe(gateway: Gateway, sql: Sql, origin: string, inpu
   if (!created) return { ok: true, subscription, created: false };
 
   try {
-    await gateway.sendFollow(actor, followActivityId);
+    await gateway.sendFollow(actor, followActivityId, target.kind);
   } catch {
     // Persist-before-send: the row exists so an operator can retry or disable;
     // mark it pending and report the delivery failure honestly.
@@ -106,9 +106,11 @@ export async function retrySubscription(gateway: Gateway, sql: Sql, origin: stri
   const actor = await gateway.lookupActor(sub.actorUrl).catch(() => null);
   if (!actor) return { ok: false, status: 502, error: 'could not resolve remote actor' };
   const followActivityId = `${origin}/activities/${crypto.randomUUID()}`;
-  await setSubscriptionState(sql, sub.id, 'pending');
+  if (!(await setPendingFollowId(sql, sub.id, followActivityId))) {
+    return { ok: false, status: 409, error: 'subscription cannot be retried in this state' };
+  }
   try {
-    await gateway.sendFollow(actor, followActivityId);
+    await gateway.sendFollow(actor, followActivityId, sub.kind);
   } catch {
     return { ok: false, status: 502, error: 'Follow delivery failed' };
   }
