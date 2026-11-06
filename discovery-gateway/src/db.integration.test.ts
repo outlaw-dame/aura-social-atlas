@@ -9,6 +9,7 @@ import { InProcessMessageQueue, MemoryKvStore } from '@fedify/fedify';
 import { buildGateway } from './federation.ts';
 import { createHandler } from './http.ts';
 import { loadConfig } from './config.ts';
+import { authorizeIngest } from './policy.ts';
 import {
   acceptedSubscriptionActors, createSubscription, deleteItem, getSubscription,
   initSchema, insertItem, listFacets, loadKeyPair, pruneItems, queryItems,
@@ -237,6 +238,82 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(Array.isArray(data.items)).toBe(true);
     const blocked = await handle(new Request('https://gateway.example/api/v1/items?tag=../secret'));
     expect(blocked.status).toBe(400);
+  });
+
+  dbTest('unsigned remote Accept cannot activate a pending relay subscription', async () => {
+    const cfg = loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
+      DATABASE_URL: databaseUrl!,
+    });
+    const gw = buildGateway(cfg, {
+      kv: new MemoryKvStore(), queue: new InProcessMessageQueue(), sql,
+    });
+    const actor = 'https://unsigned.example/actors/relay';
+    const followId = prefix + 'unsigned-follow';
+    const sub = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: actor, actorHost: 'unsigned.example',
+      selector: null, followActivityId: followId,
+    });
+    expect(sub.subscription.state).toBe('pending');
+    const response = await gw.fetch(new Request('https://gateway.example/actors/gateway/inbox', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/activity+json' },
+      body: JSON.stringify({
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: prefix + 'unsigned-accept', type: 'Accept', actor,
+        object: followId, to: ['https://www.w3.org/ns/activitystreams#Public'],
+      }),
+    }));
+    // Some inbox implementations deliberately acknowledge unverified traffic
+    // with 202 to prevent signature probing. The durable state is authoritative.
+    expect(response.status).toBeLessThan(500);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect((await getSubscription(sql, sub.subscription.id))?.state).toBe('pending');
+  });
+
+  dbTest('unsigned public Create cannot bypass inbox verification or create a discovery record', async () => {
+    const cfg = loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
+      DATABASE_URL: databaseUrl!,
+    });
+    const gw = buildGateway(cfg, {
+      kv: new MemoryKvStore(), queue: new InProcessMessageQueue(), sql,
+    });
+    const actor = 'https://unsigned.example/actors/announcer';
+    const sub = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: actor, actorHost: 'unsigned.example',
+      selector: null, followActivityId: prefix + 'announcer-follow',
+    });
+    await setSubscriptionState(sql, sub.subscription.id, 'accepted');
+    // A same-origin Create contains everything necessary for the ingestion
+    // policy to accept it if authentication is ever accidentally bypassed.
+    // Unlike Announce, it does not require a remote origin lookup fixture.
+    const id = `https://unsigned.example/notes/${crypto.randomUUID()}`;
+    const activity = {
+      '@context': 'https://www.w3.org/ns/activitystreams',
+      id: `https://unsigned.example/activities/${crypto.randomUUID()}`,
+      type: 'Create', actor,
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+      object: {
+        id, type: 'Note', attributedTo: actor,
+        to: ['https://www.w3.org/ns/activitystreams#Public'],
+        content: 'Unsigned activity must not be cached',
+      },
+    };
+    // Prove the otherwise-public payload would pass our content policy.
+    // The inbox signature verification is the only remaining barrier.
+    expect(authorizeIngest({ body: activity, subscribedActors: new Set([actor]) }).ok).toBe(true);
+    const response = await gw.fetch(new Request('https://gateway.example/actors/gateway/inbox', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/activity+json' },
+      body: JSON.stringify(activity),
+    }));
+    expect(response.status).toBeLessThan(500);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    const found = await queryItems(sql, { limit: 50 });
+    expect(found.items.some(item => item.id === id)).toBe(false);
   });
 
   dbTest('Mastodon relay adapter fails closed before actor lookup or storage', async () => {
