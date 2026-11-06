@@ -418,6 +418,64 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect((await getSubscription(sql, first.subscription.id))?.state).toBe('accepted');
   });
 
+  dbTest('legacy disabled alias is canonicalized without Follow or state bypass', async () => {
+    const alias = 'https://relay.example/@legacy-disabled';
+    const canonical = 'https://relay.example/actors/legacy-disabled';
+    const previous = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: alias, actorHost: 'relay.example',
+      selector: null, followActivityId: prefix + 'legacy-disabled-follow',
+    });
+    await setSubscriptionState(sql, previous.subscription.id, 'disabled');
+    let delivered = 0;
+    const gateway = {
+      lookupActor: async () => new Service({
+        id: new URL(canonical), inbox: new URL('https://relay.example/inbox'),
+      }),
+      sendFollow: async () => { delivered++; },
+    } as unknown as Gateway;
+    const result = await subscribe(gateway, sql, 'https://gateway.example',
+      { type: 'actor', value: alias, kind: 'litepub' });
+    expect(result).toMatchObject({ ok: false, status: 409 });
+    expect(delivered).toBe(0);
+    const migrated = await getSubscription(sql, previous.subscription.id);
+    expect(migrated?.actorUrl).toBe(canonical);
+    expect(migrated?.state).toBe('disabled');
+    expect(migrated?.followActivityId).toBe(prefix + 'legacy-disabled-follow');
+    const all = await listSubscriptions(sql);
+    expect(all.filter(x => x.actorUrl === canonical)).toHaveLength(1);
+    expect(all.filter(x => x.actorUrl === alias)).toHaveLength(0);
+  });
+
+  dbTest('conflicting legacy and canonical rows never merge or reactivate silently', async () => {
+    const alias = 'https://relay.example/@legacy-conflict';
+    const canonical = 'https://relay.example/actors/legacy-conflict';
+    const old = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: alias, actorHost: 'relay.example',
+      selector: null, followActivityId: prefix + 'legacy-conflict-follow',
+    });
+    const canonicalRow = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: canonical, actorHost: 'relay.example',
+      selector: null, followActivityId: prefix + 'canonical-conflict-follow',
+    });
+    await setSubscriptionState(sql, old.subscription.id, 'disabled');
+    await setSubscriptionState(sql, canonicalRow.subscription.id, 'accepted');
+    let delivered = 0;
+    const gateway = {
+      lookupActor: async () => new Service({
+        id: new URL(canonical), inbox: new URL('https://relay.example/inbox'),
+      }),
+      sendFollow: async () => { delivered++; },
+    } as unknown as Gateway;
+    const result = await subscribe(gateway, sql, 'https://gateway.example',
+      { type: 'actor', value: alias, kind: 'litepub' });
+    expect(result).toMatchObject({ ok: false, status: 409 });
+    expect(delivered).toBe(0);
+    expect((await getSubscription(sql, old.subscription.id))?.state).toBe('disabled');
+    expect((await getSubscription(sql, old.subscription.id))?.actorUrl).toBe(alias);
+    expect((await getSubscription(sql, canonicalRow.subscription.id))?.state).toBe('accepted');
+    expect((await getSubscription(sql, canonicalRow.subscription.id))?.actorUrl).toBe(canonical);
+  });
+
   dbTest('forged actor IDs and cross-origin inboxes are rejected before persistence or delivery', async () => {
     const target = 'https://relay.example/actors/selection';
     let followed = 0;
