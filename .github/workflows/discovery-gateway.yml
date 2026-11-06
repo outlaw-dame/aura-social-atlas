@@ -76,7 +76,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Type-check Atlas client
         run: bunx tsc --noEmit
-      - name: Fedizen OAuth state security tests
-        run: bun test tests/fedizen.server.test.ts
+      - name: Atlas security and response-boundary tests
+        run: bun test tests
       - name: Build Atlas client
         run: bun run build
