@@ -9,8 +9,12 @@ describe('source URL validation', () => {
     }
   });
   test('constructs selective URLs with validated segments', () => {
-    expect(fediBuzzActorUrl('tag', '#Knitting')).toMatchObject({ ok: true, url: new URL('https://relay.fedi.buzz/tag/knitting') });
-    expect(fediBuzzActorUrl('instance', 'Fluffy.Family')).toMatchObject({ ok: true, url: new URL('https://relay.fedi.buzz/instance/fluffy.family') });
+    const tag = fediBuzzActorUrl('tag', '#Knitting');
+    const instance = fediBuzzActorUrl('instance', 'Fluffy.Family');
+    expect(tag.ok).toBe(true);
+    expect(instance.ok).toBe(true);
+    if (tag.ok) expect(tag.url.href).toBe('https://relay.fedi.buzz/tag/knitting');
+    if (instance.ok) expect(instance.url.href).toBe('https://relay.fedi.buzz/instance/fluffy.family');
     expect(fediBuzzActorUrl('tag', '../admin').ok).toBe(false);
     expect(fediBuzzActorUrl('instance', 'localhost').ok).toBe(false);
   });
