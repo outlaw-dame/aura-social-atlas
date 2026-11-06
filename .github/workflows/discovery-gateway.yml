@@ -12,7 +12,7 @@ on:
       - 'src/components/social/GatewayDiscovery.tsx'
       - 'src/lib/discovery-gateway.ts'
       - 'src/lib/fedizen.server.ts'
-      - 'src/lib/fedizen.server.test.ts'
+      - 'tests/fedizen.server.test.ts'
       - '.github/workflows/discovery-gateway.yml'
 
 permissions:
@@ -61,6 +61,6 @@ jobs:
       - name: Type-check Atlas client
         run: bunx tsc --noEmit
       - name: Fedizen OAuth state security tests
-        run: bun test src/lib/fedizen.server.test.ts
+        run: bun test tests/fedizen.server.test.ts
       - name: Build Atlas client
         run: bun run build
