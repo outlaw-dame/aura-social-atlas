@@ -122,7 +122,9 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     const attempts = await Promise.all(Array.from({ length: 12 }, (_, i) =>
       settlePendingFollow(sql, newFollow, actorUrl, i % 2 ? 'rejected' : 'accepted')));
     expect(attempts.filter(Boolean).length).toBe(1);
-    expect(['accepted', 'rejected']).toContain((await getSubscription(sql, sub.subscription.id))?.state);
+    const settled = await getSubscription(sql, sub.subscription.id);
+    expect(settled).not.toBeNull();
+    expect(['accepted', 'rejected']).toContain(settled!.state);
     expect(await settlePendingFollow(sql, newFollow, actorUrl, 'accepted')).toBe(false);
   });
 
