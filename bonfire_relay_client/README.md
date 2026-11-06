@@ -114,6 +114,13 @@ subscription was performed; full patched RC Community build is not verified.
   `trusted_relay: false` and `no_follow_graph: true`. The relay is never the
   author or booster.
 
+That is the extension's intended contract, **not yet a verified host result**:
+RC Incoming uses `relayed_by` in mirrored-group / `publish_in` mapping, and the
+candidate ingest hook does not preserve authentication metadata. These and
+publisher unsigned-fallback behavior must be resolved/tested in the full
+host before claiming the no-side-effects contract in production; see the
+deployment guide's semantic blockers.
+
 ## Admin UI
 
 `Bonfire.RelayClient.Web.RelaysLive` is a stateful LiveComponent, mounted as

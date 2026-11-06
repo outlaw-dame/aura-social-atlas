@@ -56,13 +56,18 @@ RC Community build, host deployment, or live federation is verified.
    created.
 3. **Signed extra-inbox publishing.** `RelayHooks.deliver/3` and
    `deliver_local/2` go through `Publisher.enqueue_one(APPublisher, actor, …)`
-   and always pass the signing actor. The unsigned `publish_one(%{json: …})`
-   path is never reachable from here.
+   and pass signing-actor identifiers. RC `APPublisher` can still exhaust
+   lookups and fall back to unsigned publishing; an always-signed guarantee
+   requires a fail-closed relay-job guard and host tests, not these arguments alone.
 4. **Fetch without ingestion, then safe ingest.**
    `RelayHooks.fetch_without_ingest/1` uses
    `Fetcher.fetch_remote_object_from_id/2`, which returns data and does not
-   insert it. `Incoming.receive_relayed/2` stores the already-checked object
-   as its author's and sets the virtual `relayed_by` field.
+   insert the object (it can update instance metadata/observers, and fetch
+   signing is optional upstream). `Incoming.receive_relayed/2` stores the
+   already-checked object and sets virtual `relayed_by`. Empty insert options
+   do not retain fetch/LD authentication metadata; RC Incoming consumes this
+   field in mirrored-group / `publish_in` mapping. Provenance-only behavior
+   is an intended contract, not established by the candidate patch.
 5. **Service-actor Announce.** `RelayHooks.announce/2` sends a public
    Announce of a LOCAL, public object from the service actor to one relay
    inbox.
@@ -83,8 +88,10 @@ RC Community build, host deployment, or live federation is verified.
   `actor_ap_id` and `actor_username`, the same as upstream's `Forwarder`.
   The publisher worker can then always find the signer. Upstream
   `APPublisher.publish_one/1` falls back to an unsigned POST when no signer is
-  found; relays reject unsigned POSTs, so this fails safe. Removing that
-  fallback for relay jobs would be a worthwhile upstream follow-up.
+  found. Do not rely on the recipient rejecting an unsigned POST as a
+  production safety guarantee; removing that fallback for relay jobs is
+  a host integration blocker, alongside authentication metadata preservation
+  and testing relay-derived group mapping.
 
 **Not verified:**
 - Compiling or testing inside a full Bonfire app (needs the whole Bonfire

@@ -35,6 +35,15 @@ Atlas nor the separate `relay/` server can install this extension on Fedizen.
   a custom-extension image, or recommended deployment pins. Host platform is
   not established by observing an amd64 tag. Resolve OCI index/platform
   relationships with the provider before selecting an artifact.
+- Additional anonymous registry manifest/config GETs verify the multi-platform
+  tag [`1.1.0-rc.1-community`](https://hub.docker.com/v2/repositories/bonfirenetworks/bonfire/tags/1.1.0-rc.1-community):
+  OCI index `sha256:c2c4bf0a6162d94453257f7353d20503527c97554b4dbaec4c9f77d920c46e24`,
+  amd64 manifest as above, arm64 manifest
+  `sha256:59ff149aa1b7f65d4b4bac63ce38259159d46098e5d38f8670e01e4f4ebbdeab`.
+  Both platform configs declare OCI revision
+  `7815b3394031e384f00415f44fac1596070c8157`. Publisher labels support the
+  published source association, not independent reproducibility or proof of
+  compiled dependency contents. The annotated GitHub tag is unsigned.
 
 **Mandatory host evidence:** request the **live service image digest and
 installed recipe revision** after the upgrade, plus app/flavour/dependency
@@ -70,6 +79,24 @@ textual/API inspection**. It does **not** verify the hooks' runtime behavior,
 full Community compilation, Surface mount, signer failure safety, ingestion
 semantics or federation tests. Apply/review again against the host's actual
 dependency revisions; preserve fail-closed gates until full host checks pass.
+
+**Semantic blockers identified at these RC pins (not fixed by patch fit):**
+
+- `APPublisher.publish_one/1` can exhaust actor lookups and fall back to an
+  unsigned POST. Supplying actor identifiers is not an unconditional signer
+  guarantee; host integration must fail closed for relay jobs on lookup failure.
+- The ingest hook inserts with empty authentication options; it does not
+  preserve fetch/LD proof metadata or `data_received`. Host integration needs
+  authenticated-object and cached-object tests without inventing proof.
+- Incoming consumes `relayed_by` through `mirrored_group(..., create: true)`
+  and derives `publish_in`; it is **not proven inert provenance**. Verify or
+  adapt that mapping before claiming no relay-bot/group/boost side effects.
+- The UI patch adds a handler and body, not a sidebar navigation entry;
+  Surface wrapper/context propagation needs full-host testing.
+
+These are production integration blockers, not reasons to weaken existing
+verification. No production-code or patch behavior was changed in this
+release-targeting update.
 
 ### Archived previous beta-25 evidence (not the reported current baseline)
 
