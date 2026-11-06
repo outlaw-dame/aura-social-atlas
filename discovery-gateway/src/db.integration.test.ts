@@ -166,6 +166,8 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(await insertItem(sql, item(id, undefined, ['fediverse', 'testing']))).toBe(true);
     const row = await sql`SELECT jsonb_typeof(hashtags) AS kind FROM gateway_items WHERE id = ${id}`;
     expect(row[0]?.kind).toBe('array');
+    const inspect = await sql`SELECT hashtags, hashtags @> '["fediverse"]'::jsonb AS match_literal, hashtags @> ${JSON.stringify(['fediverse'])}::jsonb AS match_bound FROM gateway_items WHERE id = ${id}`;
+    console.log('GATEWAY_TAG_SQL_DIAGNOSTIC', JSON.stringify(inspect[0]));
     const tagPage = await queryItems(sql, { tag: 'fediverse', limit: 10 });
     expect(tagPage.items.some(result => result.id === id && result.hashtags.includes('testing'))).toBe(true);
 
