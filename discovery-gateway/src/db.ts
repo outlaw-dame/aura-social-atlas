@@ -147,6 +147,20 @@ export async function setSubscriptionState(sql: Sql, id: string, state: Subscrip
   await sql`UPDATE gateway_subscriptions SET state = ${state}, updated_at = now() WHERE id = ${id}`;
 }
 
+/** Complete an exact pending Follow; stale Accept/Reject messages must not
+ * overwrite a newer retry, an administrator's disable, or a newer state.
+ * The actor URL and activity ID are checked in the SAME atomic SQL update. */
+export async function settlePendingFollow(
+  sql: Sql, followActivityId: string, actorUrl: string, newState: 'accepted' | 'rejected',
+): Promise<boolean> {
+  const rows = await sql`
+    UPDATE gateway_subscriptions SET state = ${newState}, updated_at = now()
+    WHERE follow_activity_id = ${followActivityId} AND actor_url = ${actorUrl}
+      AND state = 'pending'
+    RETURNING id`;
+  return rows.length === 1;
+}
+
 /** Exact accepted actor ids. Host matching is insufficient: many actors share a host. */
 export async function acceptedSubscriptionActors(sql: Sql): Promise<Set<string>> {
   const rows = await sql<{ actor_url: string }[]>`SELECT actor_url FROM gateway_subscriptions WHERE state = 'accepted'`;

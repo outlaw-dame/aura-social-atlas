@@ -85,7 +85,14 @@ export async function subscribe(gateway: Gateway, sql: Sql, origin: string, inpu
     selector: target.selector,
     followActivityId,
   });
-  if (!created) return { ok: true, subscription, created: false };
+  if (!created) {
+    // Do not silently report a disabled/rejected source as successfully
+    // subscribed. Recovery is an explicit, audited operator retry action.
+    if (subscription.state === 'disabled' || subscription.state === 'rejected') {
+      return { ok: false, status: 409, error: 'subscription is disabled or rejected; use the explicit retry action to re-enable' };
+    }
+    return { ok: true, subscription, created: false };
+  }
 
   try {
     await gateway.sendFollow(actor, followActivityId, target.kind);

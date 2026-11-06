@@ -20,7 +20,7 @@ import { generateCryptoKeyPair, exportJwk, importJwk } from '@fedify/fedify';
 import { Accept, Announce, Create, Delete, Follow, Reject, Service, Undo, PUBLIC_COLLECTION, type Activity, type Actor } from '@fedify/vocab';
 import type { Sql } from 'postgres';
 import type { GatewayConfig } from './config.ts';
-import { acceptedSubscriptionActors, deleteItem, insertItem, listSubscriptions, loadKeyPair, pruneItems, saveKeyPair, setSubscriptionState, subscriptionByFollowId } from './db.ts';
+import { acceptedSubscriptionActors, deleteItem, insertItem, listSubscriptions, loadKeyPair, pruneItems, saveKeyPair, settlePendingFollow } from './db.ts';
 import { authorizeIngest, isControlPlane } from './policy.ts';
 import { cleanText, hashtagNames, htmlToText } from './sanitize.ts';
 import { hostOf, checkRemoteUrl } from './urlguard.ts';
@@ -228,38 +228,20 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
       log('follow.accepted', { host: followerHost });
     })
     .on(Accept, async (_ctx, accept) => {
-      if (!stores.sql) return;
-      const objectId = accept.objectId?.href;
-      if (!objectId) return;
-      const sub = await subscriptionByFollowId(stores.sql, objectId);
-      if (sub && sub.state === 'pending' && sub.actorUrl === accept.actorId?.href) {
-        await setSubscriptionState(stores.sql, sub.id, 'accepted');
-        log('subscription.accepted', { host: sub.actorHost });
-      }
+      if (!stores.sql || !accept.actorId || !accept.objectId) return;
+      const settled = await settlePendingFollow(stores.sql, accept.objectId.href, accept.actorId.href, 'accepted');
+      if (settled) log('subscription.accepted', { host: hostOf(accept.actorId) });
     })
     .on(Reject, async (_ctx, reject) => {
-      if (!stores.sql) return;
-      const objectId = reject.objectId?.href;
-      if (!objectId) return;
-      const sub = await subscriptionByFollowId(stores.sql, objectId);
-      if (sub && sub.actorUrl === reject.actorId?.href) {
-        await setSubscriptionState(stores.sql, sub.id, 'rejected');
-        log('subscription.rejected', { host: sub.actorHost });
-      }
+      if (!stores.sql || !reject.actorId || !reject.objectId) return;
+      const settled = await settlePendingFollow(stores.sql, reject.objectId.href, reject.actorId.href, 'rejected');
+      if (settled) log('subscription.rejected', { host: hostOf(reject.actorId) });
     })
     .on(Undo, async (_ctx, undo) => {
-      // A relay undoing its follow of us: nothing to tear down content-wise,
-      // but record it so the ingest gate stops trusting that actor.
-      if (!stores.sql) return;
-      const actorHost = hostOf(undo.actorId);
-      if (!actorHost) return;
-      const subs = await listSubscriptions(stores.sql);
-      for (const sub of subs) {
-        if (sub.actorUrl === undo.actorId?.href && sub.state === 'accepted') {
-          await setSubscriptionState(stores.sql, sub.id, 'disabled');
-          log('subscription.disabled-by-remote', { host: actorHost });
-        }
-      }
+      // A remote relay Undoing its reciprocal Follow does NOT undo our
+      // outbound subscription. Never let an arbitrary signed Undo disable a
+      // selected discovery source. Treat it as reciprocal-follow metadata.
+      log('follow.reciprocal_undo_observed', { host: hostOf(undo.actorId) });
     })
     .on(Create, ingest)
     .on(Announce, ingest)

@@ -13,7 +13,7 @@ import { authorizeIngest } from './policy.ts';
 import {
   acceptedSubscriptionActors, createSubscription, deleteItem, getSubscription,
   initSchema, insertItem, listFacets, loadKeyPair, pruneItems, queryItems,
-  saveKeyPair, setPendingFollowId, setSubscriptionState, subscriptionByFollowId,
+  saveKeyPair, setPendingFollowId, setSubscriptionState, settlePendingFollow, subscriptionByFollowId,
   type GatewayItem,
 } from './db.ts';
 import { retrySubscription, subscribe } from './subscribe.ts';
@@ -70,6 +70,83 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(await setPendingFollowId(sql, first.subscription.id, `${prefix}retry`)).toBe(true);
     expect(await subscriptionByFollowId(sql, input.followActivityId)).toBeNull();
     expect((await subscriptionByFollowId(sql, `${prefix}retry`))?.state).toBe('pending');
+  });
+
+  dbTest('IDOR: only the admin bearer may mutate even a known subscription UUID', async () => {
+    const sub = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: 'https://relay.example/actors/idortest',
+      actorHost: 'relay.example', selector: null, followActivityId: prefix + 'idor-follow',
+    });
+    const cfg = loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
+      DATABASE_URL: databaseUrl!,
+    });
+    let remoteCalls = 0;
+    const gateway = {
+      lookupActor: async () => { remoteCalls++; return null; },
+      sendFollow: async () => { remoteCalls++; },
+      sendUndoFollow: async () => { remoteCalls++; },
+      fetch: async () => new Response('not found', { status: 404 }),
+    } as unknown as Gateway;
+    const handle = createHandler({ cfg, gateway, sql });
+    const target = `https://gateway.example/admin/subscriptions/${sub.subscription.id}`;
+    for (const method of ['DELETE', 'POST'] as const) {
+      const url = method === 'POST' ? target + '/retry' : target;
+      for (const authorization of [undefined, 'Bearer wrong-token']) {
+        const headers = authorization ? { Authorization: authorization } : undefined;
+        const response = await handle(new Request(url, { method, headers }));
+        expect(response.status).toBe(401);
+      }
+    }
+    expect((await getSubscription(sql, sub.subscription.id))?.state).toBe('pending');
+    expect(remoteCalls).toBe(0);
+  });
+
+  dbTest('late signed responses cannot accept disabled, mismatched, or rotated subscriptions', async () => {
+    const actorUrl = 'https://relay.example/actors/state-test';
+    const oldFollow = prefix + 'state-old';
+    const sub = await createSubscription(sql, {
+      kind: 'litepub', actorUrl, actorHost: 'relay.example', selector: null,
+      followActivityId: oldFollow,
+    });
+    expect(await settlePendingFollow(sql, oldFollow, 'https://other.example/actor', 'accepted')).toBe(false);
+    expect(await settlePendingFollow(sql, prefix + 'fake', actorUrl, 'accepted')).toBe(false);
+    await setSubscriptionState(sql, sub.subscription.id, 'disabled');
+    expect(await settlePendingFollow(sql, oldFollow, actorUrl, 'accepted')).toBe(false);
+    expect((await getSubscription(sql, sub.subscription.id))?.state).toBe('disabled');
+
+    const newFollow = prefix + 'state-new';
+    expect(await setPendingFollowId(sql, sub.subscription.id, newFollow)).toBe(true);
+    expect(await settlePendingFollow(sql, oldFollow, actorUrl, 'accepted')).toBe(false);
+    const attempts = await Promise.all(Array.from({ length: 12 }, (_, i) =>
+      settlePendingFollow(sql, newFollow, actorUrl, i % 2 ? 'rejected' : 'accepted')));
+    expect(attempts.filter(Boolean).length).toBe(1);
+    const settled = await getSubscription(sql, sub.subscription.id);
+    expect(settled).not.toBeNull();
+    expect(['accepted', 'rejected']).toContain(settled!.state);
+    expect(await settlePendingFollow(sql, newFollow, actorUrl, 'accepted')).toBe(false);
+  });
+
+  dbTest('disabled sources cannot be silently reenabled through duplicate subscribe', async () => {
+    const actorUrl = 'https://relay.example/actors/disabled-source';
+    const sub = await createSubscription(sql, {
+      kind: 'litepub', actorUrl, actorHost: 'relay.example', selector: null,
+      followActivityId: prefix + 'disabled-source-follow',
+    });
+    await setSubscriptionState(sql, sub.subscription.id, 'disabled');
+    let followCalls = 0;
+    const gateway = {
+      lookupActor: async () => new Service({
+        id: new URL(actorUrl), inbox: new URL('https://relay.example/inbox'),
+      }),
+      sendFollow: async () => { followCalls++; },
+    } as unknown as Gateway;
+    const result = await subscribe(gateway, sql, 'https://gateway.example',
+      { type: 'actor', value: actorUrl, kind: 'litepub' });
+    expect(result).toMatchObject({ ok: false, status: 409 });
+    expect(followCalls).toBe(0);
+    expect((await getSubscription(sql, sub.subscription.id))?.state).toBe('disabled');
   });
 
   dbTest('concurrent duplicate subscription inserts admit exactly one winner', async () => {
