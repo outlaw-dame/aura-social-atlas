@@ -69,7 +69,6 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
     .setActorDispatcher(`/actors/{identifier}`, async (ctx, identifier) => {
       if (identifier !== ACTOR_IDENTIFIER) return null;
       const keys = await ctx.getActorKeyPairs(identifier);
-      log('actor.key_dispatch_result', { identifier, count: keys.length });
       return new Service({
         id: ctx.getActorUri(identifier),
         preferredUsername: 'atlas-discovery-gateway',
@@ -85,7 +84,6 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
     })
     .mapActorAlias('/actor', ACTOR_IDENTIFIER)
     .setKeyPairsDispatcher(async (_ctx, identifier) => {
-      log('actor.keypair_callback', { identifier, hasSql: !!stores.sql });
       if (identifier !== ACTOR_IDENTIFIER || !stores.sql) return [];
       try {
       const existing = await loadKeyPair(stores.sql, identifier);
@@ -99,12 +97,10 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
       const pair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
       const [privateJwk, publicJwk] = await Promise.all([exportJwk(pair.privateKey), exportJwk(pair.publicKey)]);
       await saveKeyPair(stores.sql, identifier, privateJwk, publicJwk);
-      log('actor.keypair_db_write_complete');
       // Concurrent workers may race on INSERT ... DO NOTHING. Always load
       // the winning durable key, never sign with a key we did not persist.
       const stored = await loadKeyPair(stores.sql, identifier);
       if (!stored) throw new Error('service actor signing key was not persisted');
-      log('actor.keypair_db_read_types', { privateType: typeof stored.privateKey, publicType: typeof stored.publicKey });
       const [persistedPrivate, persistedPublic] = await Promise.all([
         importJwk(stored.privateKey as JsonWebKey, 'private'),
         importJwk(stored.publicKey as JsonWebKey, 'public'),
