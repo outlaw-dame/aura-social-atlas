@@ -125,6 +125,10 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineF
   const ingest = async (ctx: InboxCtx, activity: Activity) => {
     if (!stores.sql) return;
     const body = (await activity.toJsonLd({ format: 'compact' })) as Record<string, unknown>;
+    // Fedify's compact JSON-LD can serialize as:Public as "Public" or an
+    // alias; only its parsed, typed URL audience is authoritative.
+    body['to'] = activity.toIds.map(url => url.href);
+    body['cc'] = activity.ccIds.map(url => url.href);
     const activityId = activity.id?.href;
     if (!activityId) { log('ingest.dropped', { reason: 'activity has no id' }); return; }
     const subscribedActors = await acceptedSubscriptionActors(stores.sql);
@@ -147,7 +151,10 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineF
       if (!original || original.id?.href !== originId) {
         log('ingest.dropped', { reason: 'origin object fetch failed' }); return;
       }
-      body['object'] = await original.toJsonLd({ format: 'compact' });
+      const canonical = (await original.toJsonLd({ format: 'compact' })) as Record<string, unknown>;
+      canonical['to'] = original.toIds.map(url => url.href);
+      canonical['cc'] = original.ccIds.map(url => url.href);
+      body['object'] = canonical;
     }
     const decision = authorizeIngest({ body, subscribedActors });
     if (!decision.ok) {
