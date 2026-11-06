@@ -14,8 +14,8 @@
  *    explicitly subscribed relay actors.
  */
 
-import { createFederation, getAuthenticatedDocumentLoader, type Context, type Federation, type InboxContext, type KvStore, type MessageQueue } from '@fedify/fedify';
-import { getDocumentLoader } from '@fedify/vocab-runtime';
+import { createFederation, getAuthenticatedDocumentLoader, type Context, type Federation, type InboxContext, type InboxRequestReport, type KvStore, type MessageQueue } from '@fedify/fedify';
+import { getDocumentLoader, type AuthenticatedDocumentLoaderFactory, type DocumentLoaderFactory } from '@fedify/vocab-runtime';
 import { generateCryptoKeyPair, exportJwk, importJwk } from '@fedify/fedify';
 import { Accept, Announce, Create, Delete, Follow, Reject, Service, Undo, PUBLIC_COLLECTION, type Activity, type Actor } from '@fedify/vocab';
 import type { Sql } from 'postgres';
@@ -29,6 +29,11 @@ const checkSourceUrl = (id: string) => checkRemoteUrl(id).ok;
 export const ACTOR_IDENTIFIER = 'gateway';
 
 export type GatewayStores = { kv: KvStore; queue: MessageQueue; sql: Sql | null };
+
+/** The optional factory is used only by offline interoperability tests to
+ * resolve synthetic actors without network access. Production callers omit
+ * this argument and always use the guarded Fedify document loader. */
+export type OfflineFixtureLoaders = { documentLoaderFactory: DocumentLoaderFactory; authenticatedDocumentLoaderFactory?: AuthenticatedDocumentLoaderFactory; onRequestFinished?: (report: InboxRequestReport) => void };
 
 type Ctx = Context<unknown>;
 type InboxCtx = InboxContext<unknown>;
@@ -56,13 +61,13 @@ export type Gateway = {
   lookupActor: (url: string) => Promise<Actor | null>;
 };
 
-export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway {
+export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineFixtures?: OfflineFixtureLoaders): Gateway {
   const federation = createFederation<unknown>({
     kv: stores.kv,
     queue: stores.queue,
     origin: cfg.origin,
-    documentLoaderFactory: (o) => getDocumentLoader({ ...o, ...loaderOptions(cfg) }),
-    authenticatedDocumentLoaderFactory: (identity, o) => getAuthenticatedDocumentLoader(identity, { ...o, ...loaderOptions(cfg) }),
+    documentLoaderFactory: offlineFixtures?.documentLoaderFactory ?? ((o) => getDocumentLoader({ ...o, ...loaderOptions(cfg) })),
+    authenticatedDocumentLoaderFactory: offlineFixtures?.authenticatedDocumentLoaderFactory ?? ((identity, o) => getAuthenticatedDocumentLoader(identity, { ...o, ...loaderOptions(cfg) })),
   });
 
   federation
@@ -120,6 +125,10 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
   const ingest = async (ctx: InboxCtx, activity: Activity) => {
     if (!stores.sql) return;
     const body = (await activity.toJsonLd({ format: 'compact' })) as Record<string, unknown>;
+    // Fedify's compact JSON-LD can serialize as:Public as "Public" or an
+    // alias; only its parsed, typed URL audience is authoritative.
+    body['to'] = activity.toIds.map(url => url.href);
+    body['cc'] = activity.ccIds.map(url => url.href);
     const activityId = activity.id?.href;
     if (!activityId) { log('ingest.dropped', { reason: 'activity has no id' }); return; }
     const subscribedActors = await acceptedSubscriptionActors(stores.sql);
@@ -142,7 +151,10 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
       if (!original || original.id?.href !== originId) {
         log('ingest.dropped', { reason: 'origin object fetch failed' }); return;
       }
-      body['object'] = await original.toJsonLd({ format: 'compact' });
+      const canonical = (await original.toJsonLd({ format: 'compact' })) as Record<string, unknown>;
+      canonical['to'] = original.toIds.map(url => url.href);
+      canonical['cc'] = original.ccIds.map(url => url.href);
+      body['object'] = canonical;
     }
     const decision = authorizeIngest({ body, subscribedActors });
     if (!decision.ok) {
@@ -203,6 +215,9 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
   };
 
   const control = federation.setInboxListeners(`/actors/{identifier}/inbox`, `/inbox`);
+  if (offlineFixtures?.onRequestFinished) {
+    control.onRequestFinished((_ctx, report) => offlineFixtures.onRequestFinished?.(report));
+  }
 
   control
     .on(Follow, async (ctx, follow) => {

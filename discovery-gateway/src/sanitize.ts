@@ -42,10 +42,12 @@ export function cleanText(text: string, maxLength: number): string {
 
 /** Extract hashtag names from an ActivityStreams tag array (already parsed JSON). */
 export function hashtagNames(tags: unknown): string[] {
-  if (!Array.isArray(tags)) return [];
+  // Compact JSON-LD can collapse a single `tag` value to an object.
+  // Accept that shape without accepting primitive or arbitrary tag lists.
+  const values = Array.isArray(tags) ? tags : tags && typeof tags === 'object' ? [tags] : [];
   const out: string[] = [];
-  for (const t of tags) {
-    if (t && typeof t === 'object' && (t as { type?: unknown }).type === 'Hashtag') {
+  for (const t of values) {
+    if (t && typeof t === 'object' && ((t as { type?: unknown }).type === 'Hashtag' || (t as { type?: unknown }).type === 'https://www.w3.org/ns/activitystreams#Hashtag')) {
       const name = (t as { name?: unknown }).name;
       if (typeof name === 'string') {
         const clean = name.replace(/^#/, '').trim().toLowerCase();
