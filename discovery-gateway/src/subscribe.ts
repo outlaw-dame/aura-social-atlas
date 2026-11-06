@@ -13,9 +13,10 @@
  */
 
 import type { Sql } from 'postgres';
+import type { Actor } from '@fedify/vocab';
 import type { Gateway } from './federation.ts';
-import { createSubscription, getSubscription, listSubscriptions, setSubscriptionState, setPendingFollowId, type Subscription, type SubscriptionKind } from './db.ts';
-import { checkRemoteUrl, fediBuzzActorUrl, hostOf } from './urlguard.ts';
+import { createSubscription, getSubscription, listSubscriptions, reconcileLegacySubscriptionAlias, setSubscriptionState, setPendingFollowId, type Subscription, type SubscriptionKind } from './db.ts';
+import { checkRemoteUrl, fediBuzzActorUrl, hostOf, originOf } from './urlguard.ts';
 
 export type SubscribeInput =
   | { type: 'tag'; value: string }
@@ -42,6 +43,31 @@ export function resolveSubscriptionTarget(input: SubscribeInput): { ok: true; ac
   return { ok: true, actorUrl: check.url.href, kind: input.kind ?? 'mastodon', selector: null };
 }
 
+/**
+ * Actor URLs may be aliases, but the ActivityPub actor's canonical ID is
+ * authoritative for Accept/Reject correlation. Never trust a redirected ID,
+ * inbox, scheme or port outside the administrator-approved origin.
+ */
+function validateRelayActor(
+  actor: Actor | null,
+  requestedUrl: string,
+  kind: SubscriptionKind,
+): { ok: true; canonicalActorUrl: string } | { ok: false; error: string } {
+  if (!actor?.id) return { ok: false, error: 'remote ActivityPub actor could not be resolved' };
+  const canonical = checkRemoteUrl(actor.id);
+  if (!canonical.ok || originOf(actor.id) !== originOf(requestedUrl)) {
+    return { ok: false, error: 'resolved actor identity is not a safe canonical URL on the approved origin' };
+  }
+  const inbox = actor.inboxId ? checkRemoteUrl(actor.inboxId) : null;
+  if (!inbox?.ok || originOf(inbox.url) !== originOf(requestedUrl)) {
+    return { ok: false, error: 'relay inbox is not a safe URL on the approved origin' };
+  }
+  if (kind.startsWith('fedibuzz-') && canonical.url.href !== requestedUrl) {
+    return { ok: false, error: 'selected FediBuzz actor identity differs from the requested topic or instance' };
+  }
+  return { ok: true, canonicalActorUrl: canonical.url.href };
+}
+
 export async function subscribe(gateway: Gateway, sql: Sql, origin: string, input: SubscribeInput): Promise<SubscribeResult> {
   const target = resolveSubscriptionTarget(input);
   if (!target.ok) return { ok: false, status: 400, error: target.error };
@@ -64,23 +90,18 @@ export async function subscribe(gateway: Gateway, sql: Sql, origin: string, inpu
   } catch {
     return { ok: false, status: 502, error: 'could not resolve remote actor' };
   }
-  if (!actor || !actor.id) return { ok: false, status: 404, error: 'no ActivityPub actor at that URL' };
-  // A malicious actor document can advertise an inbox on an internal or
-  // unrelated host even when the actor URL itself was safe to fetch.
-  if (!actor.inboxId || !checkRemoteUrl(actor.inboxId).ok || hostOf(actor.inboxId) !== actorHost) {
-    return { ok: false, status: 400, error: 'relay inbox is private, invalid or crosses to an unapproved host' };
-  }
-  // The resolved actor id must stay on the same origin we asked for — a
-  // redirect to a different host is not the actor the operator approved.
-  if (hostOf(actor.id.href) !== actorHost) return { ok: false, status: 400, error: 'resolved actor is on a different host than requested' };
-  if (target.kind.startsWith('fedibuzz-') && actor.id.href !== target.actorUrl) {
-    return { ok: false, status: 400, error: 'selected FediBuzz actor identity does not match the requested topic or instance' };
-  }
+  if (!actor) return { ok: false, status: 404, error: 'remote ActivityPub actor could not be resolved' };
+  const identity = validateRelayActor(actor, target.actorUrl, target.kind);
+  if (!identity.ok) return { ok: false, status: 400, error: identity.error };
 
+  const reconciled = await reconcileLegacySubscriptionAlias(sql, target.actorUrl, identity.canonicalActorUrl);
+  if (reconciled === 'conflict') {
+    return { ok: false, status: 409, error: 'alias and canonical relay actor subscriptions conflict; resolve explicitly as an operator' };
+  }
   const followActivityId = `${origin}/activities/${crypto.randomUUID()}`;
   const { subscription, created } = await createSubscription(sql, {
     kind: target.kind,
-    actorUrl: target.actorUrl,
+    actorUrl: identity.canonicalActorUrl,
     actorHost,
     selector: target.selector,
     followActivityId,
@@ -112,7 +133,9 @@ export async function unsubscribe(gateway: Gateway, sql: Sql, id: string): Promi
     if (sub.followActivityId) {
       try {
         const actor = await gateway.lookupActor(sub.actorUrl);
-        if (actor) await gateway.sendUndoFollow(actor, sub.followActivityId, sub.kind);
+        if (validateRelayActor(actor, sub.actorUrl, sub.kind).ok && actor) {
+          await gateway.sendUndoFollow(actor, sub.followActivityId, sub.kind);
+        }
       } catch {
         // State is already disabled locally; a failed Undo delivery is logged
         // but does not re-enable the subscription.
@@ -130,6 +153,10 @@ export async function retrySubscription(gateway: Gateway, sql: Sql, origin: stri
   if (sub.kind === 'mastodon') return { ok: false, status: 501, error: 'Mastodon relay transport verification is not implemented' };
   const actor = await gateway.lookupActor(sub.actorUrl).catch(() => null);
   if (!actor) return { ok: false, status: 502, error: 'could not resolve remote actor' };
+  const identity = validateRelayActor(actor, sub.actorUrl, sub.kind);
+  if (!identity.ok || identity.canonicalActorUrl !== sub.actorUrl) {
+    return { ok: false, status: 502, error: 'remote actor identity or inbox could not be safely validated' };
+  }
   const followActivityId = `${origin}/activities/${crypto.randomUUID()}`;
   if (!(await setPendingFollowId(sql, sub.id, followActivityId))) {
     return { ok: false, status: 409, error: 'subscription cannot be retried in this state' };
