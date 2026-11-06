@@ -185,7 +185,7 @@ export async function insertItem(sql: Sql, item: Omit<GatewayItem, 'ingestedAt'>
   const rows = await sql`
     INSERT INTO gateway_items (id, activity_id, relay_actor, author_id, author_name, author_handle, author_url, object_origin, url, summary, text, hashtags, published_at)
     VALUES (${item.id}, ${item.activityId}, ${item.relayActor}, ${item.authorId}, ${item.authorName}, ${item.authorHandle}, ${item.authorUrl}, ${item.objectOrigin}, ${item.url}, ${item.summary}, ${item.text}, ${JSON.stringify(item.hashtags)}, ${item.publishedAt})
-    ON CONFLICT (id) DO NOTHING
+    ON CONFLICT DO NOTHING
     RETURNING id`;
   return rows.length === 1;
 }
