@@ -133,6 +133,35 @@ export async function createSubscription(sql: Sql, sub: { kind: SubscriptionKind
   return { subscription: toSubscription(existing[0]), created: false };
 }
 
+/**
+ * Upgrade an old alias-keyed source to the resolved canonical actor ID without
+ * touching state, follow correlation, or timestamps. On conflicting rows,
+ * fail closed: operator intervention is safer than merging distinct state.
+ */
+export async function reconcileLegacySubscriptionAlias(
+  sql: Sql, aliasUrl: string, canonicalUrl: string,
+): Promise<'none' | 'migrated' | 'conflict'> {
+  if (aliasUrl === canonicalUrl) return 'none';
+  const rows = await sql`SELECT id FROM gateway_subscriptions WHERE actor_url = ${aliasUrl}`;
+  if (rows.length === 0) return 'none';
+  try {
+    const updated = await sql`
+      UPDATE gateway_subscriptions
+      SET actor_url = ${canonicalUrl}
+      WHERE actor_url = ${aliasUrl}
+        AND NOT EXISTS (
+          SELECT 1 FROM gateway_subscriptions WHERE actor_url = ${canonicalUrl}
+        )
+      RETURNING id`;
+    return updated.length === 1 ? 'migrated' : 'conflict';
+  } catch (error) {
+    // Concurrent canonical insert or an existing canonical row.
+    if (typeof error === 'object' && error !== null &&
+        'code' in error && error.code === '23505') return 'conflict';
+    throw error;
+  }
+}
+
 export async function listSubscriptions(sql: Sql): Promise<Subscription[]> {
   const rows = await sql<SubRow[]>`SELECT * FROM gateway_subscriptions ORDER BY created_at ASC`;
   return rows.map(toSubscription);
