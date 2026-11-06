@@ -119,8 +119,8 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
         const domain = url.searchParams.get('domain');
         const search = url.searchParams.get('q');
         const cursor = url.searchParams.get('cursor');
-        if ((tag && !/^#?[\\p{L}\\p{N}_-]{1,100}$/u.test(tag)) ||
-            (domain && (domain.length > 253 || !/^[a-z0-9-]+(\\.[a-z0-9-]+)+$/i.test(domain))) ||
+        if ((tag && !/^#?[\p{L}\p{N}_-]{1,100}$/u.test(tag)) ||
+            (domain && (domain.length > 253 || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(domain))) ||
             (search && search.length > 120) ||
             (cursor && cursor.length > 2048)) {
           return json({ error: 'invalid discovery filter' }, { status: 400 }, cors);
