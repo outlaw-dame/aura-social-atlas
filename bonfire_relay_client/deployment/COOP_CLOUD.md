@@ -1,7 +1,7 @@
 # Co-op Cloud / Abra: optional Bonfire relay-client integration
 
 Status: **operator procedure only; no deployment or relay connection performed**.
-Fedizen's provider confirms Bonfire **Community**, Co-op Cloud (Abra), reported
+Fedizen's provider confirms Bonfire **Community**, Co-op Cloud (Abra),
 upgraded to reported baseline **`v1.1.0-rc.1`**. The former reported
 `1.1.0-beta25` is **archival only**, not the current running image.
 This identifies a deployment family, not an image,
@@ -9,6 +9,89 @@ source revision, or dependency set. Atlas is only a Fedizen client; neither
 Atlas nor the separate `relay/` server can install this extension on Fedizen.
 
 ## 1. Verified upstream evidence (2026-11-06 UTC)
+
+### Official recipe catalogue and revision-specific source audit
+
+The [official recipe page](https://recipes.coopcloud.tech/bonfire) links to
+the [canonical recipe repository](https://git.coopcloud.tech/coop-cloud/bonfire).
+Rendered catalogue content was read via website-fetch on 2026-11-06: it
+describes the recipe as **alpha**, lists versions through
+`2.0.2+1.0.7-social-amd64`, and leaves Backups/Tests/Healthcheck metadata
+blank. The page is not proof of the host's installed recipe, app version,
+digest or tested RC compatibility. Blank backup metadata is not proof that
+no backup implementation exists. Its mutable `latest-alpha` suggestion is
+**not** accepted by this immutable-image procedure.
+
+Canonical [tags API](https://git.coopcloud.tech/api/v1/repos/coop-cloud/bonfire/tags?limit=100)
+and source history show two different image-variable families:
+
+| Exact observed recipe revision | Application image expression | Meaning |
+|---|---|---|
+| Historical [`5f22200a764db9dd0f47cd1a69edd21dcaa1b7b5`](https://git.coopcloud.tech/coop-cloud/bonfire/src/commit/5f22200a764db9dd0f47cd1a69edd21dcaa1b7b5/compose.yml), and pre-release [`df3229884d144f48ca5541f25bd88d874a68c044`](https://git.coopcloud.tech/coop-cloud/bonfire/src/commit/df3229884d144f48ca5541f25bd88d874a68c044/compose.yml) | `image: ${APP_DOCKER_IMAGE}` | Complete image reference; no suffix added by Compose |
+| Release preparation [`d74f05c0d150be6f78b69df743cba2ea14b7d00b`](https://git.coopcloud.tech/coop-cloud/bonfire/src/commit/d74f05c0d150be6f78b69df743cba2ea14b7d00b/compose.yml) | `${CONTAINER_REGISTRY:-bonfirenetworks/bonfire}:${APP_VERSION:-1.0.5}-${APP_FLAVOUR:-social}-${APP_PLATFORM:-amd64}` | Repository plus composed tag, not complete-image override |
+| Published `1.0.0+1.0.5-social-amd64` (`79a43dbadc54e1d3abc24f379f39ac2e8d2f8ebc`) and `2.0.0+1.0.5-social-amd64` (`ead44b7103ec0665d3df83d9a489c7e9ad158b8d`) | Same composition, default app `1.0.5` | Published releases use newer family |
+| Published `2.0.1+1.0.6-social-amd64` (`a49cdecfd89f8aed6426694b85644e3b2a46714b`) | Same composition, default app `1.0.6` | Not a complete `APP_DOCKER_IMAGE` input |
+| Published [`2.0.2+1.0.7-social-amd64`](https://git.coopcloud.tech/coop-cloud/bonfire/src/commit/90f5ff3fbb0226d9394b9c017a7f0e96f3a6626a/compose.yml) (`90f5ff3fbb0226d9394b9c017a7f0e96f3a6626a`), observed main `a0077148036faa7d189a36c18fc3ea868bc1c81c` | Same composition, default app `1.0.7` | Neither is established as Fedizen's revision |
+
+No published tag returned in this audit used `APP_DOCKER_IMAGE`; that design
+was verified at historical commits. Do not infer the family from the Bonfire
+RC version or a variable found in an old sample: inspect the host's actual
+`compose.yml` and enabled overlays at its exact recipe commit.
+
+Reviewed at observed main `a0077148036faa7d189a36c18fc3ea868bc1c81c`:
+
+- [`.env.sample`](https://git.coopcloud.tech/coop-cloud/bonfire/src/commit/a0077148036faa7d189a36c18fc3ea868bc1c81c/.env.sample)
+  documents `APP_FLAVOUR` (default social), `APP_VERSION`, and `APP_PLATFORM`
+  (default amd64, sample alternative aarch64). `APP_PLATFORM` is a **tag
+  component**, not Docker `platform:` enforcement; verify the actual RC tag
+  and OCI platform (arm64 versus legacy aarch64 suffixes), never assume all
+  combinations exist. Historical samples instead use `FLAVOUR` and construct
+  their complete `APP_DOCKER_IMAGE` value. This does not change build-time
+  `FLAVOUR=community` requirements for the compiled custom image.
+- The sample explicitly warns **DO NOT CHANGE DOMAIN AFTER DEPLOYMENT**.
+  Compose passes it as app `HOSTNAME` and Traefik routing. This is documented
+  federation immutability, not an enforced recipe lock; aliases are not a
+  migration of the canonical actor origin.
+- [`entrypoint.sh.tmpl`](https://git.coopcloud.tech/coop-cloud/bonfire/src/commit/a0077148036faa7d189a36c18fc3ea868bc1c81c/entrypoint.sh.tmpl)
+  optionally loads a Meilisearch secret and ends in `exec "$@"`; Compose
+  invokes `./bin/bonfire start`. It neither rewrites the image tag nor itself
+  runs migration commands. `DISABLE_DB_AUTOMIGRATION` is passed through to
+  the release: actual startup/migration semantics must be checked in the
+  matched app, not inferred from this shell wrapper.
+- [`abra.sh`](https://git.coopcloud.tech/coop-cloud/bonfire/src/commit/a0077148036faa7d189a36c18fc3ea868bc1c81c/abra.sh)
+  sets `APP_ENTRYPOINT_VERSION=v4` while Compose's fallback is `v3`; it sets
+  `PG_BACKUP_VERSION=v6`. Record recipe/config versions and preserve existing
+  Swarm configs rather than assuming fallback versions were deployed.
+- [`README`](https://git.coopcloud.tech/coop-cloud/bonfire/src/commit/a0077148036faa7d189a36c18fc3ea868bc1c81c/README.md)
+  warns custom app versions can be incompatible and are not recommended for
+  production without verification. Optional static/nginx and database/search
+  overlays depend on the active `COMPOSE_FILE`; inspect the complete set.
+- App mounts `upload-data` at `/opt/app/data/uploads` and references existing
+  secret-file inputs including secret key base, signing/encryption salts and
+  release cookie. Preserve their existing references/versions, not their
+  values in reports. These runtime salts are **not** substitutes for stored
+  ActivityPub actor signing keys: preserve the database and service identity
+  too. Never seed a replacement service actor during image installation.
+
+### Backup support: configuration is not a verified recovery guarantee
+
+The sample enables `ENABLE_BACKUPS=true`; app labels opt into backupbot.
+The [PostgreSQL overlay](https://git.coopcloud.tech/coop-cloud/bonfire/src/commit/a0077148036faa7d189a36c18fc3ea868bc1c81c/compose.postgres.yml)
+has DB backupbot pre-hook `/pg_backup.sh backup`, volume path `backup.sql`,
+and restore post-hook `/pg_backup.sh restore`. The
+[`pg_backup.sh`](https://git.coopcloud.tech/coop-cloud/bonfire/src/commit/a0077148036faa7d189a36c18fc3ea868bc1c81c/pg_backup.sh)
+writes `pg_dump` to a temporary file and atomically replaces `backup.sql`.
+Its restore path **drops/recreates the database** and temporarily alters local
+DB authentication. Do not execute this for routine image rollback.
+
+Request the provider's enabled DB overlay, backupbot version/schedule,
+off-host retention, uploads-volume and any S3-object coverage, secure
+identity/config recovery, and a successful isolated restore test. Labels,
+`ENABLE_BACKUPS`, or a local dump do not establish those outcomes. The newer
+DB overlay also composes `DB_DOCKER_IMAGE:DB_DOCKER_VERSION` (observed defaults
+PostGIS `17-3.5`); installing this extension must **not silently upgrade the
+database image/major version** while selecting a different recipe. Preserve
+the provider's actual DB service, volumes and migration strategy.
 
 ### Current reported target: RC.1 (not a verified live image)
 
@@ -136,7 +219,9 @@ source match merely because a tag exists. No literal `beta25` tag is assumed.
 > Please provide only these nonsecret deployment facts:
 >
 > - Installed Abra version, Co-op Cloud Bonfire recipe release and exact
->   recipe commit, including any local/custom recipe modifications.
+>   recipe commit, including local modifications and active COMPOSE_FILE
+>   overlays; report the app image expression and whether it consumes
+>   APP_DOCKER_IMAGE, CONTAINER_REGISTRY, or a custom full-image override.
 > - Application-reported version, `APP_VERSION`, `APP_FLAVOUR`,
 >   `APP_PLATFORM`, and actual node OS/CPU architecture.
 > - Application service name, image repository, complete resolved
@@ -208,7 +293,9 @@ inspect the registry through its normal tooling, without exposing auth.
 Service spec and task images must agree; report any unresolved tag.
 
 The operator may read the existing app config privately and report only
-`APP_VERSION`, `APP_FLAVOUR`, `APP_PLATFORM` and image repository. No command
+`APP_VERSION`, flavour selector (`APP_FLAVOUR` or historical `FLAVOUR`),
+`APP_PLATFORM`, full-image variable/repository, and active overlay filenames.
+No command
 here dumps container environment, secrets, configs, process arguments, logs
 or app configuration. Do not use `docker inspect` without a narrow format,
 `abra app config`, `abra app secret`, `docker secret inspect`, or raw env dumps
@@ -275,13 +362,25 @@ no live deploy/update/run commands in this guide.
   tested artifact on the same target platform. If platforms differ, test
   each platform artifact and record manifest/index relationships.
 
-### Required versioned recipe change for a full digest reference
+### Select immutable-image override by the host's actual recipe revision
 
-The inspected recipe appends `:VERSION-FLAVOUR-PLATFORM` to
-`CONTAINER_REGISTRY`. **Do not put a full digest into that variable**; it
-would produce an invalid reference. Maintain a reviewed custom recipe
-commit that permits a complete app-image override, e.g. replace only the
-app service image field with:
+**Host-specific method cannot be confirmed until its exact recipe commit,
+local diff and active overlays are supplied.** Use the source-audited branch
+below; a historical sample alone is insufficient.
+
+1. **Complete-reference family** (`image: ${APP_DOCKER_IMAGE}`): replace its
+   active app-image assignment with the approved complete
+   `repository@sha256:<64-hex-digest>` using `APP_DOCKER_IMAGE`. No recipe
+   suffix is added. Remove conflicting duplicate assignments privately;
+   retain compiled Community identity and verified platform as metadata.
+   This is source-derived support, not a live Abra deployment test.
+2. **Composed-tag family** (`CONTAINER_REGISTRY:VERSION-FLAVOUR-PLATFORM`):
+   `APP_DOCKER_IMAGE` is **unused** by the app image expression, and
+   `CONTAINER_REGISTRY` is a repository prefix despite its name. A full
+   digest there is followed by a literal colon/tag suffix and is invalid;
+   empty values do not remove `:-` defaults. For an arbitrary complete custom
+   image reference, use a reviewed versioned recipe change replacing only
+   `services.app.image`, e.g.:
 
 ```yaml
 services:
@@ -290,6 +389,19 @@ services:
 ```
 
 This is a source edit example, **not a complete Compose override to apply**.
+`BONFIRE_IMAGE` is our proposed custom variable, **not a built-in official
+recipe feature**. A reviewed last-loaded overlay could instead explicitly
+consume `APP_DOCKER_IMAGE`; that is an added override, not evidence the base
+composed-tag recipe supports it. Do not change the base image blindly to an
+old variable name and assume the current provider config defines it.
+
+The newer expression can mathematically form `repo:tag@sha256:...` by placing
+the digest suffix at the end of `APP_PLATFORM`. That tagged-digest syntax is
+not inherently invalid, but it overloads a platform field and has **not**
+been validated with the provider's Abra/recipe tooling. This guide recommends
+the explicit full-reference recipe/overlay for clarity and CI validation,
+not presenting that interpolation trick as confirmed deployment support.
+
 If the provider uses an override file, prove that its installed Abra version
 actually includes it; never assume it does. Keep the remaining recipe
 configs, secrets, networks, uploads volume, service name, hostname routing
@@ -299,6 +411,11 @@ CI must reject `BONFIRE_IMAGE` without a valid approved SHA-256 digest and
 assert the rendered app image matches it; inspect rendered configuration
 privately because it can contain sensitive environment values. The provider
 must test its recipe fork/deploy method on staging before using production.
+For either family, CI must compare the actual final app image field with the
+approved digest and inspect platform resolution; no mutable `latest` tag.
+Preserve existing DOMAIN, signing-secret references, actor keys/database,
+uploads volumes, DB image and enabled overlays. Never regenerate secrets or
+create user follows as part of selecting an image.
 
 ## 6. Staging and canary acceptance
 
@@ -396,7 +513,14 @@ warnings-as-errors compilation and format check passed. Fixed test-only
 actor-resolver state leakage; no extension production logic changed.
 RC targeting recheck: the same 86 tests pass again with both seeds, including
 all nine loopback PostgreSQL cases; compilation and formatting pass.
-No live migration was run. This guide introduces no deploy script or live connection.
+Official recipe audit additionally verified catalogue content, historical
+full-reference versus published composed-tag families, current environment,
+entrypoint/config-version and backup implementation facts. Override advice
+is source-derived, **not tested on the host**; actual recipe revision, rendered
+image, backup operation and staging rollout are still provider-run gates.
+This documentation-only audit did not rerun the prior 86 tests; no Elixir,
+patch or application code changed. No live migration was run. This guide
+introduces no deploy script or live connection.
 
 Still required from the host: installed recipe/Abra details, actual image
 digest/provenance and matched flavour/dependency revisions; rebase/compile
