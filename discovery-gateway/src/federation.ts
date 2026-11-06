@@ -69,6 +69,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
     .setActorDispatcher(`/actors/{identifier}`, async (ctx, identifier) => {
       if (identifier !== ACTOR_IDENTIFIER) return null;
       const keys = await ctx.getActorKeyPairs(identifier);
+      log('actor.key_dispatch_result', { identifier, count: keys.length });
       return new Service({
         id: ctx.getActorUri(identifier),
         preferredUsername: 'atlas-discovery-gateway',
