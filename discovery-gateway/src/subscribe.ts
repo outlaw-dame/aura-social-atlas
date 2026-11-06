@@ -15,7 +15,7 @@
 import type { Sql } from 'postgres';
 import type { Actor } from '@fedify/vocab';
 import type { Gateway } from './federation.ts';
-import { createSubscription, getSubscription, listSubscriptions, setSubscriptionState, setPendingFollowId, type Subscription, type SubscriptionKind } from './db.ts';
+import { createSubscription, getSubscription, listSubscriptions, reconcileLegacySubscriptionAlias, setSubscriptionState, setPendingFollowId, type Subscription, type SubscriptionKind } from './db.ts';
 import { checkRemoteUrl, fediBuzzActorUrl, hostOf, originOf } from './urlguard.ts';
 
 export type SubscribeInput =
@@ -94,6 +94,10 @@ export async function subscribe(gateway: Gateway, sql: Sql, origin: string, inpu
   const identity = validateRelayActor(actor, target.actorUrl, target.kind);
   if (!identity.ok) return { ok: false, status: 400, error: identity.error };
 
+  const reconciled = await reconcileLegacySubscriptionAlias(sql, target.actorUrl, identity.canonicalActorUrl);
+  if (reconciled === 'conflict') {
+    return { ok: false, status: 409, error: 'alias and canonical relay actor subscriptions conflict; resolve explicitly as an operator' };
+  }
   const followActivityId = `${origin}/activities/${crypto.randomUUID()}`;
   const { subscription, created } = await createSubscription(sql, {
     kind: target.kind,
