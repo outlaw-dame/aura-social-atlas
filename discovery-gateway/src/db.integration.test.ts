@@ -107,6 +107,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       saveKeyPair(sql, id, { kty: 'RSA', n: String(i) }, { kty: 'RSA', n: 'public' })));
     const value = await loadKeyPair(sql, id);
     expect(value?.privateKey).toBeDefined();
+    expect(typeof value?.privateKey).toBe('object');
     const initial = JSON.stringify(value?.privateKey);
     await saveKeyPair(sql, id, { kty: 'RSA', n: 'replacement' }, { kty: 'RSA', n: 'other' });
     expect(JSON.stringify((await loadKeyPair(sql, id))?.privateKey)).toBe(initial);
@@ -180,8 +181,6 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(actor['type']).toBe('Service');
     expect(actor['id']).toBe('https://gateway.example/actor');
     expect(actor['inbox']).toBe('https://gateway.example/actors/gateway/inbox');
-    console.log('GATEWAY_ACTOR_FIELDS', JSON.stringify(Object.keys(actor)));
-    console.log('GATEWAY_ACTOR_KEY_SHAPES', JSON.stringify({ publicKey: actor['publicKey'] != null, assertionMethod: actor['assertionMethod'] != null, publicKeys: actor['publicKeys'] != null }));
     expect(actor['publicKey'] ?? actor['publicKeys'] ?? actor['assertionMethod']).toBeDefined();
     const pair = await loadKeyPair(sql, 'gateway');
     expect(pair?.privateKey).toBeDefined();
