@@ -8,6 +8,13 @@ This identifies a deployment family, not an image,
 source revision, or dependency set. Atlas is only a Fedizen client; neither
 Atlas nor the separate `relay/` server can install this extension on Fedizen.
 
+**Provider-confirmed constraint: there is NO existing staging instance.**
+The package is **NOT installed and NOT production-ready**. Full patched
+Bonfire Community compilation/runtime tests and the upstream security
+blockers below remain unresolved. Production is not a substitute test bed.
+Only a provider-approved tiny temporary non-production staging environment
+or isolated ephemeral local/CI reproduction can satisfy the acceptance gate.
+
 ## 1. Verified upstream evidence (2026-11-06 UTC)
 
 ### Official recipe catalogue and revision-specific source audit
@@ -118,6 +125,23 @@ the provider's actual DB service, volumes and migration strategy.
   a custom-extension image, or recommended deployment pins. Host platform is
   not established by observing an amd64 tag. Resolve OCI index/platform
   relationships with the provider before selecting an artifact.
+- User-supplied Docker Hub RC.1 Community image-link identifier (recorded
+  exactly as supplied):
+  `sha256-3e959f5574f95829d122be847ef755758d43071318a97fc722c10c9759777115`.
+  The message supplies the **URL ending only**, not the complete URL; do not
+  invent the missing path. The independently recorded tag API URL above is
+  a separate reference, not a transcription of that link. This identifies
+  the **published Linux/amd64 platform image artifact** recorded above; it
+  is not evidence that Fedizen's live Docker service uses that manifest.
+  Obtain the full original link from the provider for the evidence bundle.
+  An OCI **index** references platform manifests (and can include attestations);
+  a platform **manifest** references its image config and layers; an image
+  **config** digest / Docker image ID is a different object, not a deployment
+  manifest pin. A tag's top-level digest can therefore differ from the
+  platform manifest digest. Verify media types and selected platform rather
+  than comparing unlike digest objects. The live service spec/task image may
+  differ from all published references here. None is the future patched
+  custom Community image digest.
 - Additional anonymous registry manifest/config GETs verify the multi-platform
   tag [`1.1.0-rc.1-community`](https://hub.docker.com/v2/repositories/bonfirenetworks/bonfire/tags/1.1.0-rc.1-community):
   OCI index `sha256:c2c4bf0a6162d94453257f7353d20503527c97554b4dbaec4c9f77d920c46e24`,
@@ -213,7 +237,8 @@ source match merely because a tag exists. No literal `beta25` tag is assumed.
 ## 2. Provider-facing request (copy/paste)
 
 > We want to evaluate an optional Bonfire-native relay-client extension on
-> staging first, not change live Fedizen or subscribe it to any relay yet.
+> isolated non-production testing first, not change live Fedizen or subscribe
+> it to any relay yet. You confirmed there is NO existing staging instance.
 > You confirmed the upgrade to Community on Co-op Cloud / Abra, reporting
 > v1.1.0-rc.1. The former beta25 is archival, not our current target.
 > Please provide only these nonsecret deployment facts:
@@ -231,8 +256,14 @@ source match merely because a tag exists. No literal `beta25` tag is assumed.
 >   (especially activity_pub, bonfire_federate_activitypub, bonfire_ui_me).
 >   Mark unavailable provenance explicitly rather than guessing from the tag.
 > - Whether you support a custom immutable Community image and versioned
->   recipe image override, staging with a separate domain/database/volumes,
->   approved outbound networking, backups and maintenance-window migrations.
+>   recipe image override, and permission for either a tiny temporary staging
+>   environment or isolated ephemeral local/CI reproduction on non-production
+>   infrastructure, with synthetic data, a new domain/identity and blocked
+>   outbound federation by default. If neither is permitted, installation
+>   remains blocked; we will not test against live Fedizen.
+> - Approval requirements for controlled isolated relay interop, consistent
+>   backups and isolated restore drills, and a maintenance-window single-step
+>   installation using the exact tested custom image with the feature off.
 > - Confirmation that production DOMAIN, service actor ID/signing identity,
 >   existing storage, and rollback image can be preserved.
 >
@@ -358,8 +389,8 @@ no live deploy/update/run commands in this guide.
 - Push to the provider-approved repository with a unique release identifier,
   resolve the OCI digest and scan/sign the artifact under host policy.
   Deployment must reference `repository@sha256:...`, not `latest`, a mutable
-  version tag, or an invented digest. Staging and production use the same
-  tested artifact on the same target platform. If platforms differ, test
+  version tag, or an invented digest. Isolated acceptance and production use
+  the same tested artifact on the same target platform. If platforms differ, test
   each platform artifact and record manifest/index relationships.
 
 ### Select immutable-image override by the host's actual recipe revision
@@ -410,73 +441,112 @@ and entrypoint unchanged. Record `APP_VERSION`, `APP_FLAVOUR=community`,
 CI must reject `BONFIRE_IMAGE` without a valid approved SHA-256 digest and
 assert the rendered app image matches it; inspect rendered configuration
 privately because it can contain sensitive environment values. The provider
-must test its recipe fork/deploy method on staging before using production.
+must test its recipe fork/deploy method in the approved isolated reproduction
+or temporary staging environment before using production. No existing
+provider staging environment is assumed.
 For either family, CI must compare the actual final app image field with the
 approved digest and inspect platform resolution; no mutable `latest` tag.
 Preserve existing DOMAIN, signing-secret references, actor keys/database,
 uploads volumes, DB image and enabled overlays. Never regenerate secrets or
 create user follows as part of selecting an image.
 
-## 6. Staging and canary acceptance
+## 6. No existing staging: isolated acceptance alternative
 
-1. Create a **separate staging app**, domain, database, volumes and service
-   identity through the host's normal Abra process. Never change production
-   `DOMAIN`. Use synthetic data, or a scrubbed restore with production keys
-   and queued federation jobs removed; do not clone production identity into
-   a second federating instance. Block outbound federation during restore.
-2. Back up staging, deploy the custom digest using the reviewed recipe, and
+1. Obtain provider permission for **either** a tiny temporary non-production
+   staging app **or** a reproducible ephemeral local/CI environment. Neither
+   exists or has been created here. If both are unavailable, stop: there is
+   no acceptable production-testing fallback. Use non-production hardware,
+   VM/runner, Docker context and registry access, never the production node,
+   database, domain, volumes or live signing keys.
+2. Record a reproducible harness: exact RC.1 base platform manifest/source
+   and reconciled Community/dependency pins, patch/extension revision,
+   custom build digest, target platform, recipe/overlay revision, test
+   commands and sanitized results. The published RC.1 image is a baseline
+   startup comparison, not an image containing this extension; acceptance
+   requires the **full patched Community custom build**, not merely running
+   the unmodified base image or standalone extension tests.
+3. Provision disposable PostgreSQL, app storage, queues and controlled relay
+   fixtures using synthetic accounts/posts only. Assign a fresh test domain
+   and service actor/signing identity, unrelated to production. Use a local
+   internal container network and host/runner firewall enforcement: block
+   outbound federation, public DNS/HTTP egress and production-network access
+   by default, including from workers. Build-time dependency retrieval must
+   be separately scoped; it is not runtime federation permission. Local test
+   TLS/domain resolution must point exclusively to isolated fixtures.
+   Do not import production data or keys into the acceptance harness.
+4. Back up the synthetic environment, install the custom digest using the reviewed recipe, and
    verify the digest in service spec/tasks. Review the recipe entrypoint and
    app release migration behavior: it may run migrations at startup. Do not
    run a second migration concurrently. Verify both new migrations and
    schema with the host's release-supported migration runner.
-3. With feature **off**, check normal login/feed/GraphQL behavior, restart,
+5. Run full Community ExUnit/federation tests, PostgreSQL migration,
+   constraint/concurrency/retry tests, LiveView/Surface compilation and
+   admin/non-admin event/render tests, assets and production-release startup.
+   With feature **off**, check normal login/feed/GraphQL behavior, restart,
    persistent storage and queue lifecycle. Visit instance Relays as admin;
    refuse non-admin access/events. Creation must leave connections idle and
    must send nothing. Neither migration, release startup nor UI mount may
    auto-follow.
-4. Only with a **separate, explicit staging approval**, allow a controlled
+6. Only with **separate explicit isolated-interop approval**, allow a controlled
    relay origin (the optional `relay/` service is itself not deployed here).
-   Enable the staging feature; have the staging admin resolve/add one relay
+   Keep all public/production egress blocked; permit only fixture-to-fixture
+   traffic on the local network. Enable the test feature; have the test admin resolve/add one relay
    and explicitly enable that connection. Test Mastodon and LitePub against
    separate identities/origins, including reciprocal LitePub Follow and
    selective tag/instance actors. Never test using a real production relay
-   or FediBuzz without explicit approval.
-5. Verify signed Follow/Accept/Announce, original-author attribution,
+   or FediBuzz. Do not use Fedizen itself as a test target.
+7. Verify signed Follow/Accept/Announce, original-author attribution,
    same-author LD proof or origin re-fetch, SSRF/redirect restrictions,
    public-only filtering, duplicate/concurrent deliveries, temporary
    fetch/ingest retry, queue limits, disable/Undo and restart. Verify there
    are **no user follows, profile relay bots or relay-as-booster entries**.
    Check that local rules are filters, not a promise of complete coverage.
-6. Observe bounded queues, rates and errors with sanitized monitoring.
-   Record results and disable staging connections afterwards. Stop on
+8. Observe bounded queues, rates and errors with sanitized monitoring.
+   Record results and disable test connections afterwards, then destroy
+   ephemeral resources and test identities under the approved procedure. Stop on
    missing signer, privacy failure, unstable queues or identity mismatch.
 
-Staging is the canary. Do not operate a second production identity on the
+The isolated environment is the acceptance canary, **not a live Fedizen
+canary**. Any backup recovery drill involving protected production backups
+is a separate provider-controlled, offline, non-federating exercise; keep
+keys/data out of CI and evidence reports. Do not operate a second production identity on the
 same domain, or concurrently run an old binary that cannot handle the new
-hooks merely to create a rolling canary. The provider chooses a maintenance
-or fully verified rollout compatible with its actual queue/migration model.
+hooks merely to create a rolling canary. There is no testing against live
+Fedizen. The future installation uses the maintenance-window procedure below.
 
 ## 7. Production operator procedure (future approval required)
 
-1. Obtain a signed-off staging report, full-host checks and deployment
+1. Obtain a signed-off isolated acceptance report, resolved upstream security
+   blockers, full patched Community build/runtime checks and explicit provider deployment
    approval. Keep relay enablement/subscription as a **separate approval**.
 2. Record current app digest, recipe/config revisions, service actor URI and
    safe public-key fingerprint, database/migration state, storage and queue
    state. Never export the private signing key into a report.
 3. Take provider-controlled consistent database and uploads/storage backups,
    plus secure recovery of existing configuration/identity material. Verify
-   a restore on isolated staging. Keep backup credentials off this project.
+   backup integrity and a restore drill on approved offline non-production
+   infrastructure before the window, with outbound federation blocked and
+   protected identity material confined to the provider's recovery process.
+   Keep backup credentials/data off this project and out of CI.
 4. Preserve production `DOMAIN`, stack/service identity, actor IDs/keys,
    database, volume attachments, routing, secrets and existing auth settings.
    Do not generate a new service actor or rotate signing keys as part of
    installing the extension. Quiesce workers/federation if required by the
    host's migration procedure; ensure a single migration runner.
-5. Deploy the **same tested immutable custom image** via the reviewed recipe
-   in the agreed window, feature/outbound still **off**. Verify actual task
+5. Perform a **single-step maintenance-window installation**, not a rolling
+   production experiment: select the exact tested immutable custom image via
+   the reviewed recipe, feature **`enabled: false`** and
+   **`outbound_enabled: false`**, with fail-closed hook/capability gates. Verify actual task
    digests, migrations, hooks/modules, admin UI, login/content regression
-   checks and identity continuity. No live Follow should have been emitted.
+   health/readiness checks and identity continuity. Check database connectivity,
+   migration completion, normal release startup, bounded queues and sanitized
+   errors against pre-agreed abort thresholds. These are post-install health
+   checks, not relay tests against Fedizen. No live Follow should have been emitted.
+   If a gate fails, stop/quiesce under the approved recovery plan; do not
+   blindly swap binaries or reverse migrations on the live database.
 6. Only after further instance-admin authorization, enable the feature and
-   selected idle connections with explicit confirmation. Start inbound-only
+   selected idle connections with explicit confirmation in a future separately
+   approved operational phase, not this installation or an interop test. Start inbound-only
    with one approved allowlisted relay and conservative volume/queue limits.
    Outbound is a separate opt-in; do not auto-follow at boot, via config
    seeding or through any user account.
@@ -517,7 +587,7 @@ Official recipe audit additionally verified catalogue content, historical
 full-reference versus published composed-tag families, current environment,
 entrypoint/config-version and backup implementation facts. Override advice
 is source-derived, **not tested on the host**; actual recipe revision, rendered
-image, backup operation and staging rollout are still provider-run gates.
+image, backup operation and isolated acceptance are still provider-run gates.
 This documentation-only audit did not rerun the prior 86 tests; no Elixir,
 patch or application code changed. No live migration was run. This guide
 introduces no deploy script or live connection.
@@ -526,7 +596,10 @@ Still required from the host: installed recipe/Abra details, actual image
 digest/provenance and matched flavour/dependency revisions; rebase/compile
 and test patches in that full Community release; confirm Surface integration,
 production release migration runner, immutable recipe override, network and
-queue safeguards, backup/restore and staging signed federation interop.
+queue safeguards, backup/restore drills and isolated signed federation interop.
+The provider confirms no existing staging. This no-staging/artifact update
+is documentation only: no source or patch changes, test rerun, custom image
+build, environment provisioning or contact with live Fedizen was performed.
 No host access, image build, Fedizen migration, or live S2S delivery was
 verified here. Do not describe the extension as installed or production-ready
 until those gates pass.
