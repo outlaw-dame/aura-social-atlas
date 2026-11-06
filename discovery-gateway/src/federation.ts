@@ -93,7 +93,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
         ]);
         return [{ privateKey, publicKey }];
       }
-      const pair = await generateCryptoKeyPair('RS256');
+      const pair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
       const [privateJwk, publicJwk] = await Promise.all([exportJwk(pair.privateKey), exportJwk(pair.publicKey)]);
       await saveKeyPair(stores.sql, identifier, privateJwk, publicJwk);
       // Concurrent workers may race on INSERT ... DO NOTHING. Always load
@@ -202,14 +202,22 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
       const forServiceActor = follow.objectId?.href === ctx.getActorUri(ACTOR_IDENTIFIER).href;
       if (!known || !followId || !forServiceActor) {
         if (followId && follow.actorId) {
-          const reject = new Reject({ id: new URL(`${cfg.origin}/activities/${crypto.randomUUID()}`), actor: ctx.getActorUri(ACTOR_IDENTIFIER), object: follow });
-          await ctx.sendActivity({ identifier: ACTOR_IDENTIFIER }, follow.actorId!, reject);
+          const remote = await ctx.lookupObject(follow.actorId.href);
+          if (remote && 'inboxId' in remote && remote.inboxId) {
+            const reject = new Reject({ id: new URL(`${cfg.origin}/activities/${crypto.randomUUID()}`), actor: ctx.getActorUri(ACTOR_IDENTIFIER), object: follow });
+            await ctx.sendActivity({ identifier: ACTOR_IDENTIFIER }, remote as Actor, reject);
+          }
         }
         log('follow.rejected', { host: followerHost });
         return;
       }
+      const remote = await ctx.lookupObject(follow.actorId!.href);
+      if (!remote || !('inboxId' in remote) || !remote.inboxId) {
+        log('follow.rejected', { reason: 'missing verified recipient inbox' });
+        return;
+      }
       const accept = new Accept({ id: new URL(`${cfg.origin}/activities/${crypto.randomUUID()}`), actor: ctx.getActorUri(ACTOR_IDENTIFIER), object: follow });
-      await ctx.sendActivity({ identifier: ACTOR_IDENTIFIER }, follow.actorId!, accept);
+      await ctx.sendActivity({ identifier: ACTOR_IDENTIFIER }, remote as Actor, accept);
       log('follow.accepted', { host: followerHost });
     })
     .on(Accept, async (_ctx, accept) => {
