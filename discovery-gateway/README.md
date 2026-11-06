@@ -1,6 +1,6 @@
 # Atlas Discovery Gateway
 
-**Status: prototype on an isolated feature branch. Not deployed.** This is an independent ActivityPub **subscriber**, not the existing `relay/` relay server and not a native Bonfire extension.
+**Status: merged prototype on `main`; not deployed and not production-ready.** This is an independent ActivityPub **subscriber**, not the existing `relay/` relay server and not a native Bonfire extension.
 
 The gateway runs on its own HTTPS origin with a service actor, durable PostgreSQL, Fedify-based signed Follow/Undo delivery and authenticated inbox handling, and a public read-only discovery API. It never uses Fedizen's signing keys or modifies Fedizen's database.
 
@@ -20,7 +20,7 @@ bun run start
 ### Real PostgreSQL integration tests
 
 The CI workflow starts a disposable PostgreSQL 16 service and runs both the
-standalone tests and database/HTTP integration tests (24 passing as of
+standalone tests and database/HTTP integration tests (including positive signed Accept, Create, and Announce tests as of
 2026-11-06). To reproduce locally, use a **disposable test database**:
 
 ```sh
@@ -32,7 +32,7 @@ isolation. Never supply the production gateway database, Fedizen's database,
 or a database containing unrelated application tables. The tests verify real
 actor response/key persistence, deduplication under concurrency, subscriptions,
 Follow retry correlation, source filters, and read/admin HTTP responses.
-They do not establish real signed remote server interoperability.
+The suite now exercises signed synthetic Accept, Create, and Announce through a real Fedify inbox, including independent origin fetching and original-author attribution. These fixtures prove internal signed processing only; they do not establish interoperability with external relay servers.
 
 The browser frontend needs **only** `VITE_DISCOVERY_GATEWAY_URL=https://your-gateway-host`. Configure `GATEWAY_CORS_ORIGINS` on the gateway for the exact Atlas deployment origin. Keep the admin token on the gateway's server only, never in `VITE_*` variables.
 
@@ -47,6 +47,6 @@ The browser frontend needs **only** `VITE_DISCOVERY_GATEWAY_URL=https://your-gat
 
 The service uses Fedify's verified inbox processing and HTTPS document loaders that reject private network addresses. For Announce activities the original object must be independently fetched from origin, and matching an accepted **actor ID**, not merely its hostname, is required. Stored content is text-only with original-author provenance.
 
-**This is not yet production ready.** Full signed interop, database migration/restart tests, publication provenance, server-to-server Delete authorization, key rotation, moderation, redirect/DNS rebinding protection at the egress layer, rate limits across multiple instances, and deployment backup/restore have not been verified. Mastodon-style relay delivery of originals needs separate verification (original-author LD signatures / source route); original Create activities not made by the subscribed relay are currently rejected rather than trusted. FediBuzz selective-actor and LitePub-style Announce are the initial supported design targets.
+**This is not yet production ready.** External-server signed interoperability, database migration/restart tests, publication provenance, server-to-server Delete authorization, key rotation, moderation, redirect/DNS rebinding protection at the egress layer, rate limits across multiple instances, and deployment backup/restore have not been verified. Mastodon-style relay delivery of originals needs separate verification (original-author LD signatures / source route); original Create activities not made by the subscribed relay are currently rejected rather than trusted. FediBuzz selective-actor and LitePub-style Announce are the initial supported design targets.
 
 The gateway cannot cause remote posts to enter Bonfire's native timelines. Phase 2 requires a supported Bonfire ingestion hook that checks original-author authenticity and instance moderation before writing content. See `../bonfire_relay_client/`. No direct writes to `fedizen.net`.
