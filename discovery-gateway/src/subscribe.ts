@@ -88,7 +88,7 @@ export async function unsubscribe(gateway: Gateway, sql: Sql, id: string): Promi
     if (sub.followActivityId) {
       try {
         const actor = await gateway.lookupActor(sub.actorUrl);
-        if (actor) await gateway.sendUndoFollow(actor, sub.followActivityId);
+        if (actor) await gateway.sendUndoFollow(actor, sub.followActivityId, sub.kind);
       } catch {
         // State is already disabled locally; a failed Undo delivery is logged
         // but does not re-enable the subscription.
