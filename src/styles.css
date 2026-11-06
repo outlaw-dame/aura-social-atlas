@@ -312,3 +312,56 @@
 .atlas-author-tag .atlas-author-follow { flex: 0 0 36px; width: 36px; height: 36px; color: var(--accent); }
 .atlas-author-chevron { flex: 0 0 14px; color: var(--muted-foreground); }
 .atlas-story-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; font-size: 12px; }
+
+/* ── /app adaptive layout (src/lib/device-profile.ts) ─────────────────────────────
+   The device profile sets data-layout / data-nav / data-panes on <html> while /app is mounted.
+   Layout follows window size and the fold only (Apple HIG for iPhone Duo; WebKit: feature detection). */
+:root {
+  --atlas-crease: 24px;     /* clear zone for controls either side of a fold (no pixel figure is published) */
+  --atlas-side-tab: 76px;
+  /* Each edge's real inset straight from env(): Framework7 zeroes --f7-safe-area-* at the root and only
+     re-applies env() on .safe-areas, panels, sheets and popups. Insets can be asymmetric — every edge on its own. */
+  --atlas-sa-top: env(safe-area-inset-top, 0px);
+  --atlas-sa-right: env(safe-area-inset-right, 0px);
+  --atlas-sa-bottom: env(safe-area-inset-bottom, 0px);
+  --atlas-sa-left: env(safe-area-inset-left, 0px);
+}
+
+/* Rail (regular width) and sidebar (expanded): the same Framework7 panel, held open. */
+/* visibility (not display) so the trailing navbar buttons keep their place. */
+html[data-nav="rail"] .atlas-nav-menu, html[data-nav="sidebar"] .atlas-nav-menu { visibility: hidden; pointer-events: none; }
+html.atlas-rail .atlas-panel .atlas-hide-in-rail, html.atlas-rail .atlas-panel .item-after { display: none; }
+html.atlas-rail .atlas-panel .atlas-brand { font-size: 0 !important; padding: 0; margin: 0; }
+html.atlas-rail .atlas-panel .list { margin-left: 6px; margin-right: 6px; }
+html.atlas-rail .atlas-panel .item-content { flex-direction: column; justify-content: center; padding: 8px 0 !important; min-height: 60px; }
+html.atlas-rail .atlas-panel .item-media { padding: 0 !important; margin: 0 !important; min-width: 0 !important; }
+html.atlas-rail .atlas-panel .item-inner { padding: 0 !important; margin: 0 !important; min-height: 0 !important; justify-content: center; }
+html.atlas-rail .atlas-panel .item-inner::after, html.atlas-rail .atlas-panel .item-inner::before, html.atlas-rail .atlas-panel .item-link .item-inner::before { display: none; }
+html.atlas-rail .atlas-panel .item-title { font-size: 10px; font-weight: 600; }
+
+/* Side tab bar: wide-but-short compact windows (iPhone Duo cover display in landscape, phones in landscape),
+   mirroring iOS placing tab bars on the trailing edge on iPhone Duo. */
+html[data-nav="tabbar-side"] .view-main { margin-right: calc(var(--atlas-side-tab) + var(--atlas-sa-right)); --f7-safe-area-right: 0px; }
+html[data-nav="tabbar-side"] .atlas-tabbar { position: fixed; top: 0; bottom: 0; right: 0; left: auto; width: calc(var(--atlas-side-tab) + var(--atlas-sa-right)); height: auto; padding: var(--atlas-sa-top) var(--atlas-sa-right) var(--atlas-sa-bottom) 0; }
+html[data-nav="tabbar-side"] .atlas-tabbar::before { display: none; }
+html[data-nav="tabbar-side"] .atlas-tabbar .toolbar-inner { position: static; flex-direction: column; justify-content: center; gap: 6px; height: 100%; padding: 0; }
+html[data-nav="tabbar-side"] .atlas-tabbar .tab-link { flex: 0 0 auto; width: 100%; min-width: 0; padding: 0 4px; height: 58px; }
+html[data-nav="tabbar-side"] .view-main .page-content { padding-bottom: calc(16px + var(--atlas-sa-bottom)); }
+html[data-nav="tabbar-side"] .atlas-fab, html[data-nav="rail"] .atlas-fab, html[data-nav="sidebar"] .atlas-fab { margin-bottom: var(--atlas-sa-bottom) !important; }
+
+/* Panes: creators and stories side by side on wide windows; split exactly at the fold when folded.
+   Each pane scrolls on its own. Scrolling content may cross the crease; controls keep clear of it. */
+html[data-panes="flat"] .atlas-discover.tab-active, html[data-panes="fold"] .atlas-discover.tab-active {
+  display: grid; grid-template-columns: var(--atlas-list-w, 360px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden;
+}
+html[data-panes="flat"] .atlas-discover .atlas-pane, html[data-panes="fold"] .atlas-discover .atlas-pane { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(24px + var(--atlas-sa-bottom)); }
+html[data-panes="flat"] .atlas-discover .atlas-pane-list { border-right: 1px solid var(--f7-list-outline-border-color, rgba(0,0,0,.12)); }
+html[data-panes="fold"] .atlas-discover .atlas-pane-list { padding-right: calc(var(--atlas-hinge, 0px) + var(--atlas-crease)); border-right: 0; }
+html[data-panes="fold"] .atlas-discover .atlas-pane-stories { padding-left: var(--atlas-crease); }
+
+/* Tabletop / Flex mode: content above the fold; tab bar and buttons on the stable bottom half. */
+html[data-layout="tabletop"] .view-main .tabs .page-content { height: var(--atlas-top-h, 100%); }
+html[data-nav="deck"] .atlas-tabbar { top: var(--atlas-bottom-y, auto); bottom: 0; height: auto; }
+html[data-nav="deck"] .atlas-tabbar .toolbar-inner { padding-top: var(--atlas-crease); align-items: flex-start; }
+html[data-nav="deck"] .atlas-tabbar .tab-link { height: 72px; }
+html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--atlas-crease) + 84px) !important; bottom: auto !important; margin-bottom: 0 !important; }
