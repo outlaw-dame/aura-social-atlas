@@ -4,9 +4,11 @@
  * correlation id), and is idempotent (re-subscribing the same actor returns
  * the existing row). The Follow object distinction:
  *
- *  - Mastodon-style / FediBuzz: we Follow the relay actor; it Accepts and then
- *    Announces matching public posts to our inbox.
- *  - LitePub-style: we Follow the relay actor AND it follows us back
+ *  - FediBuzz: Follow the selected tag/instance relay actor; it sends
+ *    Announce activities for observed public objects.
+ *  - Mastodon-style: requires Follow(Public) to sharedInbox and verified
+ *    forwarded originals; currently refused (501), not silently simulated.
+ *  - LitePub-style: Follow the relay actor AND it follows us back
  *    (reciprocal); our Follow handler accepts only subscribed actors.
  */
 
@@ -43,6 +45,13 @@ export function resolveSubscriptionTarget(input: SubscribeInput): { ok: true; ac
 export async function subscribe(gateway: Gateway, sql: Sql, origin: string, input: SubscribeInput): Promise<SubscribeResult> {
   const target = resolveSubscriptionTarget(input);
   if (!target.ok) return { ok: false, status: 400, error: target.error };
+  // Standard Mastodon relays subscribe via their shared inbox and forward
+  // original-author activities, not actor-authored Announce. The 2.4.5
+  // gateway cannot safely attribute that transport in an inbox listener yet.
+  // Refuse rather than report a working subscription that never populates.
+  if (target.kind === 'mastodon') {
+    return { ok: false, status: 501, error: 'Mastodon relay shared-inbox transport verification is not yet implemented' };
+  }
 
   const actorHost = hostOf(target.actorUrl);
   if (!actorHost) return { ok: false, status: 400, error: 'actor URL has no host' };
@@ -59,6 +68,9 @@ export async function subscribe(gateway: Gateway, sql: Sql, origin: string, inpu
   // The resolved actor id must stay on the same origin we asked for — a
   // redirect to a different host is not the actor the operator approved.
   if (hostOf(actor.id.href) !== actorHost) return { ok: false, status: 400, error: 'resolved actor is on a different host than requested' };
+  if (target.kind.startsWith('fedibuzz-') && actor.id.href !== target.actorUrl) {
+    return { ok: false, status: 400, error: 'selected FediBuzz actor identity does not match the requested topic or instance' };
+  }
 
   const followActivityId = `${origin}/activities/${crypto.randomUUID()}`;
   const { subscription, created } = await createSubscription(sql, {
@@ -103,6 +115,7 @@ export async function retrySubscription(gateway: Gateway, sql: Sql, origin: stri
   const sub = await getSubscription(sql, id);
   if (!sub) return { ok: false, status: 404, error: 'subscription not found' };
   if (sub.state === 'accepted') return { ok: true, subscription: sub, created: false };
+  if (sub.kind === 'mastodon') return { ok: false, status: 501, error: 'Mastodon relay transport verification is not implemented' };
   const actor = await gateway.lookupActor(sub.actorUrl).catch(() => null);
   if (!actor) return { ok: false, status: 502, error: 'could not resolve remote actor' };
   const followActivityId = `${origin}/activities/${crypto.randomUUID()}`;
