@@ -16,8 +16,9 @@
 
 import { createFederation, getAuthenticatedDocumentLoader, type Context, type Federation, type InboxContext, type KvStore, type MessageQueue } from '@fedify/fedify';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
-import { Accept, Announce, Create, Delete, Follow, Reject, Service, Undo, PUBLIC_COLLECTION, generateCryptoKeyPair, exportJwk, importJwk, type Activity, type Actor } from '@fedify/fedify';
+import { Accept, Announce, Create, Delete, Follow, Reject, Service, Undo, generateCryptoKeyPair, exportJwk, importJwk, type Activity, type Actor } from '@fedify/fedify';
 import type { Sql } from 'postgres';
+import { PUBLIC_COLLECTION } from '@fedify/vocab';
 import type { GatewayConfig } from './config.ts';
 import { acceptedSubscriptionActors, deleteItem, insertItem, listSubscriptions, loadKeyPair, pruneItems, saveKeyPair, setSubscriptionState, subscriptionByFollowId } from './db.ts';
 import { authorizeIngest, isControlPlane } from './policy.ts';
@@ -50,7 +51,7 @@ export type Gateway = {
   /** Send a Follow to a resolved relay actor and return the activity id used. */
   sendFollow: (relayActor: Actor, followActivityId: string, protocol: 'mastodon' | 'litepub' | 'fedibuzz-tag' | 'fedibuzz-instance') => Promise<void>;
   /** Send an Undo{Follow} for an existing subscription. */
-  sendUndoFollow: (relayActor: Actor, followActivityId: string) => Promise<void>;
+  sendUndoFollow: (relayActor: Actor, followActivityId: string, protocol: 'mastodon' | 'litepub' | 'fedibuzz-tag' | 'fedibuzz-instance') => Promise<void>;
   /** Resolve a remote actor through the guarded loader. */
   lookupActor: (url: string) => Promise<Actor | null>;
 };
@@ -92,8 +93,16 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
       const pair = await generateCryptoKeyPair('RS256');
       const [privateJwk, publicJwk] = await Promise.all([exportJwk(pair.privateKey), exportJwk(pair.publicKey)]);
       await saveKeyPair(stores.sql, identifier, privateJwk, publicJwk);
-      log('actor.keys.generated', {});
-      return [pair];
+      // Concurrent workers may race on INSERT ... DO NOTHING. Always load
+      // the winning durable key, never sign with a key we did not persist.
+      const stored = await loadKeyPair(stores.sql, identifier);
+      if (!stored) throw new Error('service actor signing key was not persisted');
+      const [persistedPrivate, persistedPublic] = await Promise.all([
+        importJwk(stored.privateKey as JsonWebKey, 'private'),
+        importJwk(stored.publicKey as JsonWebKey, 'public'),
+      ]);
+      log('actor.keys.ready', {});
+      return [{ privateKey: persistedPrivate, publicKey: persistedPublic }];
     });
 
   federation.setOutboxDispatcher(`/actor/outbox`, () => null); // we never publish
@@ -260,12 +269,12 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
       });
       await ctx.sendActivity({ identifier: ACTOR_IDENTIFIER }, relayActor, follow);
     },
-    sendUndoFollow: async (relayActor, followActivityId) => {
+    sendUndoFollow: async (relayActor, followActivityId, protocol) => {
       const ctx = await requestContext();
       const undo = new Undo({
         id: new URL(`${cfg.origin}/activities/${crypto.randomUUID()}`),
         actor: ctx.getActorUri(ACTOR_IDENTIFIER),
-        object: new Follow({ id: new URL(followActivityId), actor: ctx.getActorUri(ACTOR_IDENTIFIER), object: relayActor.id! }),
+        object: new Follow({ id: new URL(followActivityId), actor: ctx.getActorUri(ACTOR_IDENTIFIER), object: protocol === 'mastodon' ? PUBLIC_COLLECTION : relayActor.id! }),
       });
       await ctx.sendActivity({ identifier: ACTOR_IDENTIFIER }, relayActor, undo);
     },
