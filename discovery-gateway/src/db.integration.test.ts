@@ -239,6 +239,69 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(blocked.status).toBe(400);
   });
 
+  dbTest('unsigned remote Accept cannot activate a pending relay subscription', async () => {
+    const cfg = loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
+      DATABASE_URL: databaseUrl!,
+    });
+    const gw = buildGateway(cfg, {
+      kv: new MemoryKvStore(), queue: new InProcessMessageQueue(), sql,
+    });
+    const actor = 'https://unsigned.example/actors/relay';
+    const followId = prefix + 'unsigned-follow';
+    const sub = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: actor, actorHost: 'unsigned.example',
+      selector: null, followActivityId: followId,
+    });
+    expect(sub.subscription.state).toBe('pending');
+    const response = await gw.fetch(new Request('https://gateway.example/actors/gateway/inbox', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/activity+json' },
+      body: JSON.stringify({
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: prefix + 'unsigned-accept', type: 'Accept', actor,
+        object: followId, to: ['https://www.w3.org/ns/activitystreams#Public'],
+      }),
+    }));
+    // Some inbox implementations deliberately acknowledge unverified traffic
+    // with 202 to prevent signature probing. The durable state is authoritative.
+    expect(response.status).toBeLessThan(500);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect((await getSubscription(sql, sub.subscription.id))?.state).toBe('pending');
+  });
+
+  dbTest('unsigned relay Announce cannot create a public discovery record', async () => {
+    const cfg = loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
+      DATABASE_URL: databaseUrl!,
+    });
+    const gw = buildGateway(cfg, {
+      kv: new MemoryKvStore(), queue: new InProcessMessageQueue(), sql,
+    });
+    const actor = 'https://unsigned.example/actors/announcer';
+    const sub = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: actor, actorHost: 'unsigned.example',
+      selector: null, followActivityId: prefix + 'announcer-follow',
+    });
+    await setSubscriptionState(sql, sub.subscription.id, 'accepted');
+    const id = prefix + 'unsigned-post';
+    const response = await gw.fetch(new Request('https://gateway.example/actors/gateway/inbox', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/activity+json' },
+      body: JSON.stringify({
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: prefix + 'unsigned-announce', type: 'Announce', actor,
+        object: id, to: ['https://www.w3.org/ns/activitystreams#Public'],
+      }),
+    }));
+    expect(response.status).toBeLessThan(500);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    const found = await queryItems(sql, { limit: 50 });
+    expect(found.items.some(item => item.id === id)).toBe(false);
+  });
+
   dbTest('Mastodon relay adapter fails closed before actor lookup or storage', async () => {
     let called = false;
     const gateway = { lookupActor: async () => { called = true; return null; } } as unknown as Gateway;
