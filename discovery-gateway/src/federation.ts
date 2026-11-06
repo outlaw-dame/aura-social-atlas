@@ -78,7 +78,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
         outbox: ctx.getOutboxUri(identifier),
         url: ctx.getActorUri(identifier),
         manuallyApprovesFollowers: false,
-        publicKey: keys[0]?.cryptographicKey,
+        publicKeys: keys.map(key => key.cryptographicKey),
         assertionMethods: keys.map(key => key.multikey),
       });
     })
