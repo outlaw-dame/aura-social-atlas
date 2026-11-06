@@ -15,7 +15,7 @@
  */
 
 import { createFederation, getAuthenticatedDocumentLoader, type Context, type Federation, type InboxContext, type InboxRequestReport, type KvStore, type MessageQueue } from '@fedify/fedify';
-import { getDocumentLoader, type DocumentLoaderFactory } from '@fedify/vocab-runtime';
+import { getDocumentLoader, type AuthenticatedDocumentLoaderFactory, type DocumentLoaderFactory } from '@fedify/vocab-runtime';
 import { generateCryptoKeyPair, exportJwk, importJwk } from '@fedify/fedify';
 import { Accept, Announce, Create, Delete, Follow, Reject, Service, Undo, PUBLIC_COLLECTION, type Activity, type Actor } from '@fedify/vocab';
 import type { Sql } from 'postgres';
@@ -33,7 +33,7 @@ export type GatewayStores = { kv: KvStore; queue: MessageQueue; sql: Sql | null 
 /** The optional factory is used only by offline interoperability tests to
  * resolve synthetic actors without network access. Production callers omit
  * this argument and always use the guarded Fedify document loader. */
-export type OfflineFixtureLoaders = { documentLoaderFactory: DocumentLoaderFactory; onRequestFinished?: (report: InboxRequestReport) => void };
+export type OfflineFixtureLoaders = { documentLoaderFactory: DocumentLoaderFactory; authenticatedDocumentLoaderFactory?: AuthenticatedDocumentLoaderFactory; onRequestFinished?: (report: InboxRequestReport) => void };
 
 type Ctx = Context<unknown>;
 type InboxCtx = InboxContext<unknown>;
@@ -67,7 +67,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineF
     queue: stores.queue,
     origin: cfg.origin,
     documentLoaderFactory: offlineFixtures?.documentLoaderFactory ?? ((o) => getDocumentLoader({ ...o, ...loaderOptions(cfg) })),
-    authenticatedDocumentLoaderFactory: (identity, o) => getAuthenticatedDocumentLoader(identity, { ...o, ...loaderOptions(cfg) }),
+    authenticatedDocumentLoaderFactory: offlineFixtures?.authenticatedDocumentLoaderFactory ?? ((identity, o) => getAuthenticatedDocumentLoader(identity, { ...o, ...loaderOptions(cfg) })),
   });
 
   federation
