@@ -566,11 +566,14 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     const originId = `https://origin.integration.example/notes/${crypto.randomUUID()}`;
     const authorId = 'https://origin.integration.example/actors/author';
     const originalNote = {
-      '@context': 'https://www.w3.org/ns/activitystreams',
+      '@context': [
+        'https://www.w3.org/ns/activitystreams',
+        { Hashtag: 'as:Hashtag' },
+      ],
       id: originId, type: 'Note', attributedTo: authorId,
       to: ['https://www.w3.org/ns/activitystreams#Public'],
       content: '<p>Original author public post</p>',
-      tag: [{ type: 'Hashtag', name: '#integration' }],
+      tag: [{ type: 'Hashtag', href: 'https://origin.integration.example/tags/integration', name: '#integration' }],
     };
     const fixtures = new Map<string, unknown>([[actorId, actorDoc], [keyId.href, actorDoc], [originId, originalNote]]);
     const documentLoaderFactory: DocumentLoaderFactory = options => {
