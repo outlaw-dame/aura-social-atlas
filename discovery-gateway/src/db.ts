@@ -98,13 +98,17 @@ export async function initSchema(sql: Sql): Promise<void> {
 export async function loadKeyPair(sql: Sql, identifier: string): Promise<{ privateKey: unknown; publicKey: unknown } | null> {
   const rows = await sql`SELECT private_key, public_key FROM gateway_keys WHERE actor_identifier = ${identifier}`;
   const row = rows[0] as { private_key: unknown; public_key: unknown } | undefined;
-  return row ? { privateKey: row.private_key, publicKey: row.public_key } : null;
+  if (!row) return null;
+  // Historical rows written with JSON.stringify could be jsonb *strings*.
+  // Accept both legacy string-encoded and proper jsonb object representations.
+  const decode = (value: unknown): unknown => typeof value === 'string' ? JSON.parse(value) as unknown : value;
+  return { privateKey: decode(row.private_key), publicKey: decode(row.public_key) };
 }
 
 export async function saveKeyPair(sql: Sql, identifier: string, privateKey: unknown, publicKey: unknown): Promise<void> {
   await sql`
     INSERT INTO gateway_keys (actor_identifier, private_key, public_key)
-    VALUES (${identifier}, ${JSON.stringify(privateKey)}, ${JSON.stringify(publicKey)})
+    VALUES (${identifier}, ${sql.json(privateKey)}, ${sql.json(publicKey)})
     ON CONFLICT (actor_identifier) DO NOTHING`;
 }
 
