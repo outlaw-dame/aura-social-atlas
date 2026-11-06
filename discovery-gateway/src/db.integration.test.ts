@@ -586,11 +586,22 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
       DATABASE_URL: databaseUrl!,
     });
+    const authenticationReports: Array<{ authentication: unknown; outcome: unknown; checks: unknown }> = [];
     const gw = buildGateway(cfg, {
       kv: new MemoryKvStore(),
       queue: new InProcessMessageQueue(),
       sql,
-    }, { documentLoaderFactory });
+    }, { documentLoaderFactory, onRequestFinished: report => {
+      authenticationReports.push({
+        authentication: report.authentication, outcome: report.outcome,
+        checks: report.attempts.map(attempt => ({
+          mechanism: attempt.mechanism, verified: attempt.verified,
+          checks: attempt.checks.map(check => ({
+            verified: check.verified, reason: check.reason, keyId: check.declaredKeyId,
+          })),
+        })),
+      });
+    } });
 
     const followId = prefix + 'positive-signed-follow';
     const subscription = await createSubscription(sql, {
@@ -619,6 +630,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       type: 'Accept', actor: actorId, object: followId,
       to: ['https://www.w3.org/ns/activitystreams#Public'],
     });
+    console.log('SIGNED_ACCEPT_RESULT', JSON.stringify({ status: accepted.status, reports: authenticationReports }));
     expect(accepted.status).toBeLessThan(300);
     expect(await poll(async () => (await getSubscription(sql, subscription.subscription.id))?.state === 'accepted')).toBe(true);
 
