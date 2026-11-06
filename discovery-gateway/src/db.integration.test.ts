@@ -606,6 +606,9 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       });
     } });
 
+    const workerStop = new AbortController();
+    const worker = gw.federation.startQueue({ contextData: undefined, signal: workerStop.signal });
+    try {
     const followId = prefix + 'positive-signed-follow';
     const subscription = await createSubscription(sql, {
       kind: 'litepub', actorUrl: actorId, actorHost: 'relay.integration.example',
@@ -663,6 +666,10 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(stored?.authorId).toBe(authorId);
     expect(stored?.relayActor).toBe(actorId);
     expect(stored?.hashtags).toEqual(['integration']);
+    } finally {
+      workerStop.abort();
+      await worker;
+    }
   });
 
   dbTest('Mastodon relay adapter fails closed before actor lookup or storage', async () => {
