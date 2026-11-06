@@ -1,6 +1,7 @@
 name: Discovery gateway and Atlas checks
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - feature/discovery-gateway-atlas-phase1
@@ -39,5 +40,7 @@ jobs:
         with:
           bun-version: '1.3.4'
       - run: bun install --frozen-lockfile
+      - name: Type-check Atlas client
+        run: bunx tsc --noEmit
       - name: Build Atlas client
         run: bun run build
