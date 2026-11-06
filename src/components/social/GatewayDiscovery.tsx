@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Compass, RefreshCw, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { discoveryGatewayOrigin, fetchDiscoveryPage, safeExternalUrl, type DiscoveryItem } from '@/lib/discovery-gateway';
@@ -19,30 +19,34 @@ export function GatewayDiscovery() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
+  const generation = useRef(0);
 
   useEffect(() => {
     if (!configured) return;
     const controller = new AbortController();
+    const currentGeneration = ++generation.current;
     setItems([]); setCursor(null); setError(null); setLoading(true);
     void fetchDiscoveryPage({ [mode === 'hashtags' ? 'tag' : mode === 'instances' ? 'domain' : 'q']: query || undefined }, controller.signal)
-      .then(page => { if (!controller.signal.aborted) { setItems(page.items); setCursor(page.nextCursor); } })
-      .catch(err => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Discovery unavailable'); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
+      .then(page => { if (!controller.signal.aborted && generation.current === currentGeneration) { setItems(page.items); setCursor(page.nextCursor); } })
+      .catch(err => { if (!controller.signal.aborted && generation.current === currentGeneration) setError(err instanceof Error ? err.message : 'Discovery unavailable'); })
+      .finally(() => { if (!controller.signal.aborted && generation.current === currentGeneration) setLoading(false); });
+    return () => { controller.abort(); generation.current++; };
   }, [configured, mode, query, revision]);
 
   async function loadMore() {
     if (!cursor || loading) return;
+    const currentGeneration = generation.current;
     setLoading(true); setError(null);
     try {
       const page = await fetchDiscoveryPage({ [mode === 'hashtags' ? 'tag' : mode === 'instances' ? 'domain' : 'q']: query || undefined, cursor }, new AbortController().signal);
+      if (generation.current !== currentGeneration) return;
       setItems(current => {
         const seen = new Set(current.map(item => item.id));
         return [...current, ...page.items.filter(item => !seen.has(item.id))];
       });
       setCursor(page.nextCursor);
-    } catch (err) { setError(err instanceof Error ? err.message : 'Discovery unavailable'); }
-    finally { setLoading(false); }
+    } catch (err) { if (generation.current === currentGeneration) setError(err instanceof Error ? err.message : 'Discovery unavailable'); }
+    finally { if (generation.current === currentGeneration) setLoading(false); }
   }
 
   if (!configured) return (
