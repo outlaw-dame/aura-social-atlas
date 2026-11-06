@@ -247,10 +247,12 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
     .on(Create, ingest)
     .on(Announce, ingest)
     .on(Delete, async (_ctx, del) => {
-      // A subscribed relay can transport Deletes, but it cannot authorize
-      // deletion of an arbitrary third-party object. Until provenance-aware
-      // original-author verification is implemented, do not delete content.
-      log('delete.requires_author_verification', { actor: hostOf(del.actorId) });
+      // Fedify verifies the Delete actor before this listener. Never let a
+      // relay delete another person's post: delete only if it is precisely
+      // the stored original author. A relay-authored Delete is not sufficient.
+      if (!stores.sql || !del.actorId || !del.objectId) return;
+      const removed = await deleteItem(stores.sql, del.objectId.href, del.actorId.href);
+      log('delete.author_scoped', { removed });
     })
     .onError((_ctx, error) => {
       log('inbox.error', { reason: error instanceof Error ? error.name : 'unknown' });
