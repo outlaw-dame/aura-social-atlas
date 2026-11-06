@@ -178,7 +178,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(first.status).toBe(200);
     const actor = await first.json() as Record<string, unknown>;
     expect(actor['type']).toBe('Service');
-    expect(actor['id']).toBe('https://gateway.example/actors/gateway');
+    expect(actor['id']).toBe('https://gateway.example/actor');
     expect(actor['inbox']).toBe('https://gateway.example/actors/gateway/inbox');
     expect(actor['publicKey']).toBeDefined();
     const pair = await loadKeyPair(sql, 'gateway');
