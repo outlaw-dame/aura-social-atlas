@@ -9,6 +9,7 @@ import { InProcessMessageQueue, MemoryKvStore } from '@fedify/fedify';
 import { buildGateway } from './federation.ts';
 import { createHandler } from './http.ts';
 import { loadConfig } from './config.ts';
+import { authorizeIngest } from './policy.ts';
 import {
   acceptedSubscriptionActors, createSubscription, deleteItem, getSubscription,
   initSchema, insertItem, listFacets, loadKeyPair, pruneItems, queryItems,
@@ -290,20 +291,24 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     // policy to accept it if authentication is ever accidentally bypassed.
     // Unlike Announce, it does not require a remote origin lookup fixture.
     const id = `https://unsigned.example/notes/${crypto.randomUUID()}`;
+    const activity = {
+      '@context': 'https://www.w3.org/ns/activitystreams',
+      id: `https://unsigned.example/activities/${crypto.randomUUID()}`,
+      type: 'Create', actor,
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+      object: {
+        id, type: 'Note', attributedTo: actor,
+        to: ['https://www.w3.org/ns/activitystreams#Public'],
+        content: 'Unsigned activity must not be cached',
+      },
+    };
+    // Prove the otherwise-public payload would pass our content policy.
+    // The inbox signature verification is the only remaining barrier.
+    expect(authorizeIngest({ body: activity, subscribedActors: new Set([actor]) }).ok).toBe(true);
     const response = await gw.fetch(new Request('https://gateway.example/actors/gateway/inbox', {
       method: 'POST',
       headers: { 'Content-Type': 'application/activity+json' },
-      body: JSON.stringify({
-        '@context': 'https://www.w3.org/ns/activitystreams',
-        id: `https://unsigned.example/activities/${crypto.randomUUID()}`,
-        type: 'Create', actor,
-        to: ['https://www.w3.org/ns/activitystreams#Public'],
-        object: {
-          id, type: 'Note', attributedTo: actor,
-          to: ['https://www.w3.org/ns/activitystreams#Public'],
-          content: 'Unsigned activity must not be cached',
-        },
-      }),
+      body: JSON.stringify(activity),
     }));
     expect(response.status).toBeLessThan(500);
     await new Promise(resolve => setTimeout(resolve, 30));
