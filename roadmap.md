@@ -1,4 +1,5 @@
 # Atlas social discovery
+- [ ] Retarget Co-op Cloud integration to reported RC.1, preserve beta archival provenance, verify canonical release/registry and RC-pinned patch compatibility; rerun extension tests without live changes.
 - [x] Adapt relay-client integration documentation to provider-confirmed Co-op Cloud Community; verify upstream beta.25/version/recipe evidence, document immutable custom-image and staged operator procedure, fix test-state isolation; all 86 tests pass twice including PostgreSQL. No deployment. Host digest/provenance and full matched Bonfire integration remain provider-run gates.
 - [x] Audit current Bonfire authorization, recent callback/session evidence, embedded and direct browser behavior, and auth regressions; fix and retest session initialization. Fresh credentialed Fedizen callback remains a user-run check, not an automated success.
 - [x] Add more sample posts and reusable Mastodon-style creator attribution with profile, follow, and creator-tag feeds; verify phone and desktop flows.
