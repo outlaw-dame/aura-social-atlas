@@ -17,5 +17,9 @@ describe('remote-content presentation', () => {
       { type: 'Mention', name: '#NotAHashtag' },
       { type: 'Hashtag', name: '#My_Tag' },
     ])).toEqual(['activitypub', 'my_tag']);
+    expect(hashtagNames({ type: 'Hashtag', name: '#OneTag' })).toEqual(['onetag']);
+    expect(hashtagNames({ type: 'https://www.w3.org/ns/activitystreams#Hashtag', name: '#Canonical' })).toEqual(['canonical']);
+    expect(hashtagNames({ type: 'Mention', name: '#Incorrect' })).toEqual([]);
+    expect(hashtagNames('#not-structured')).toEqual([]);
   });
 });
