@@ -1,0 +1,43 @@
+name: Discovery gateway and Atlas checks
+
+on:
+  push:
+    branches:
+      - feature/discovery-gateway-atlas-phase1
+  pull_request:
+    paths:
+      - 'discovery-gateway/**'
+      - 'src/components/social/Discovery.tsx'
+      - 'src/components/social/GatewayDiscovery.tsx'
+      - 'src/lib/discovery-gateway.ts'
+      - '.github/workflows/discovery-gateway.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: discovery-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.4'
+      - run: bun install
+      - name: Type-check
+        run: bun run typecheck
+      - name: Gateway unit tests
+        run: bun test src
+  atlas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.4'
+      - run: bun install --frozen-lockfile
+      - name: Build Atlas client
+        run: bun run build
