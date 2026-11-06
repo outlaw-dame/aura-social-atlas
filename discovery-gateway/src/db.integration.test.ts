@@ -184,9 +184,29 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(actor['publicKey'] ?? actor['publicKeys'] ?? actor['assertionMethod']).toBeDefined();
     const pair = await loadKeyPair(sql, 'gateway');
     expect(pair?.privateKey).toBeDefined();
-    const second = await gateway.fetch(req);
+    // Simulate a new process with fresh in-memory Fedify caches and the same
+    // durable PostgreSQL state. The public signing identity must not rotate.
+    const restarted = buildGateway(cfg, {
+      kv: new MemoryKvStore(),
+      queue: new InProcessMessageQueue(),
+      sql,
+    });
+    const second = await restarted.fetch(req);
     expect(second.status).toBe(200);
+    const restartedActor = await second.json() as Record<string, unknown>;
+    expect(restartedActor['publicKey'] ?? restartedActor['publicKeys'] ?? restartedActor['assertionMethod'])
+      .toEqual(actor['publicKey'] ?? actor['publicKeys'] ?? actor['assertionMethod']);
     expect(await loadKeyPair(sql, 'gateway')).toEqual(pair);
+
+    // Assert persisted signing keys can still create verifiable signatures.
+    // This checks cryptographic key integrity, not full HTTP-signature interop.
+    const message = new TextEncoder().encode('gateway key persistence regression');
+    const privateKey = await crypto.subtle.importKey('jwk', pair!.privateKey as JsonWebKey,
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+    const publicKey = await crypto.subtle.importKey('jwk', pair!.publicKey as JsonWebKey,
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', privateKey, message);
+    expect(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', publicKey, signature, message)).toBe(true);
   });
 
   dbTest('public read endpoint and admin mutations enforce credentials', async () => {
