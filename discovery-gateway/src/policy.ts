@@ -14,7 +14,7 @@
  */
 
 import { PUBLIC_COLLECTION } from '@fedify/vocab';
-import { hostOf, originOf } from './urlguard.ts';
+import { originOf, checkRemoteUrl } from './urlguard.ts';
 
 export const AS_PUBLIC = PUBLIC_COLLECTION.href;
 
@@ -83,6 +83,12 @@ export function authorizeIngest({ body, subscribedActors }: IngestInput): Ingest
   let authorId: string | null = null;
   if (embedded) {
     authorId = idHref(embedded['attributedTo'] as IdLike) ?? idHref(embedded['actor'] as IdLike);
+  }
+  // A remote host must not be able to attribute its own object to an actor
+  // on another host without an independently verified delegated identity.
+  // For the initial implementation, require a clear same-origin author.
+  if (!authorId || !checkRemoteUrl(authorId).ok || originOf(authorId) !== objectOrigin) {
+    return { ok: false, reason: 'original author is missing or has a different origin' };
   }
   if (type === 'Create') {
     if (authorId && authorId !== actorId) return { ok: false, reason: 'Create author does not match verified actor' };
