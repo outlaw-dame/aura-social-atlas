@@ -557,7 +557,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     const { privateKey, publicKey } = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
     const spki = new Uint8Array(await crypto.subtle.exportKey('spki', publicKey));
     const b64 = btoa(Array.from(spki, x => String.fromCharCode(x)).join(''));
-    const pem = '-----BEGIN PUBLIC KEY-----\\n' + b64.match(/.{1,64}/g)!.join('\\n') + '\\n-----END PUBLIC KEY-----';
+    const pem = '-----BEGIN PUBLIC KEY-----\n' + b64.match(/.{1,64}/g)!.join('\n') + '\n-----END PUBLIC KEY-----';
     const actorDoc = {
       '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'],
       id: actorId, type: 'Service', inbox: actorId + '/inbox',
