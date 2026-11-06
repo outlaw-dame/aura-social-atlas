@@ -87,6 +87,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
     .setKeyPairsDispatcher(async (_ctx, identifier) => {
       log('actor.keypair_callback', { identifier, hasSql: !!stores.sql });
       if (identifier !== ACTOR_IDENTIFIER || !stores.sql) return [];
+      try {
       const existing = await loadKeyPair(stores.sql, identifier);
       if (existing) {
         const [privateKey, publicKey] = await Promise.all([
@@ -98,6 +99,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
       const pair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
       const [privateJwk, publicJwk] = await Promise.all([exportJwk(pair.privateKey), exportJwk(pair.publicKey)]);
       await saveKeyPair(stores.sql, identifier, privateJwk, publicJwk);
+      log('actor.keypair_db_write_complete');
       // Concurrent workers may race on INSERT ... DO NOTHING. Always load
       // the winning durable key, never sign with a key we did not persist.
       const stored = await loadKeyPair(stores.sql, identifier);
@@ -108,6 +110,12 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
       ]);
       log('actor.keys.ready', {});
       return [{ privateKey: persistedPrivate, publicKey: persistedPublic }];
+      } catch (error) {
+        // Never log JWK material; Fedify may otherwise turn dispatcher
+        // failures into an empty actor key list, so diagnose explicitly.
+        log('actor.keypair_failure', { type: error instanceof Error ? error.name : 'unknown' });
+        throw error;
+      }
     });
 
   federation.setOutboxDispatcher(`/actors/{identifier}/outbox`, () => null); // we never publish
