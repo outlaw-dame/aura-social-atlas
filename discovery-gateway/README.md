@@ -2,7 +2,7 @@
 
 **Status: prototype on an isolated feature branch. Not deployed.** This is an independent ActivityPub **subscriber**, not the existing `relay/` relay server and not a native Bonfire extension.
 
-The gateway runs on its own HTTPS origin with a service actor, durable PostgreSQL, HTTP-signed Fedify inbox/outbox activity delivery, and a public read-only discovery API. It never uses Fedizen's signing keys or modifies Fedizen's database.
+The gateway runs on its own HTTPS origin with a service actor, durable PostgreSQL, Fedify-based signed Follow/Undo delivery and authenticated inbox handling, and a public read-only discovery API. It never uses Fedizen's signing keys or modifies Fedizen's database.
 
 ## Run locally
 
@@ -12,9 +12,27 @@ Requires Bun, PostgreSQL, and HTTPS for real remote federation. Copy `.env.examp
 cd discovery-gateway
 bun install
 bun run typecheck
+# With GATEWAY_TEST_DATABASE_URL unset, PostgreSQL integration cases skip.
 bun test src
 bun run start
 ```
+
+### Real PostgreSQL integration tests
+
+The CI workflow starts a disposable PostgreSQL 16 service and runs both the
+standalone tests and database/HTTP integration tests (24 passing as of
+2026-11-06). To reproduce locally, use a **disposable test database**:
+
+```sh
+GATEWAY_TEST_DATABASE_URL=postgres://test:test@127.0.0.1:5432/gateway_test bun test src
+```
+
+The integration tests **TRUNCATE their gateway-owned tables** to ensure
+isolation. Never supply the production gateway database, Fedizen's database,
+or a database containing unrelated application tables. The tests verify real
+actor response/key persistence, deduplication under concurrency, subscriptions,
+Follow retry correlation, source filters, and read/admin HTTP responses.
+They do not establish real signed remote server interoperability.
 
 The browser frontend needs **only** `VITE_DISCOVERY_GATEWAY_URL=https://your-gateway-host`. Configure `GATEWAY_CORS_ORIGINS` on the gateway for the exact Atlas deployment origin. Keep the admin token on the gateway's server only, never in `VITE_*` variables.
 
