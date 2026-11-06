@@ -16,6 +16,7 @@ defmodule Bonfire.RelayClient.AdminTest do
     Application.put_env(:bonfire_relay_client, :test_fail, [])
     Application.delete_env(:bonfire_relay_client, :test_on_follow)
     Application.delete_env(:bonfire_relay_client, :test_resolve)
+    on_exit(fn -> Application.delete_env(:bonfire_relay_client, :test_resolve) end)
     {:ok, srv} = start_supervised(Memory)
 
     {:ok, cfg} =

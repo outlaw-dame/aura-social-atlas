@@ -15,6 +15,7 @@ defmodule Bonfire.RelayClientTest do
     Application.put_env(:bonfire_relay_client, :test_objects, %{})
     Application.put_env(:bonfire_relay_client, :test_fail, [])
     Application.delete_env(:bonfire_relay_client, :test_on_follow)
+    Application.delete_env(:bonfire_relay_client, :test_resolve)
     {:ok, srv} = start_supervised(Memory)
 
     {:ok, cfg} =

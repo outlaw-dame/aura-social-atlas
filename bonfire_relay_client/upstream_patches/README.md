@@ -4,6 +4,13 @@ These are unified diffs against the bonfire-networks repositories. They are
 NOT applied anywhere: Fedizen is not modified. Check them with `patch -p1
 --dry-run` from each repository root.
 
+**Co-op Cloud compatibility:** these are integration candidates, not patches
+verified against Fedizen's image or the beta-25 dependency set. Follow
+[the Co-op Cloud guide](../deployment/COOP_CLOUD.md) to identify the actual
+Community flavour and dependency revisions, rebase each diff, and compile
+the full host application. The public app tag is `v1.1.0-beta.25`, not a
+guessed `beta25` tag; neither spelling proves a deployed digest.
+
 | Patch | Repository | Checked against | What it adds |
 |---|---|---|---|
 | `activity_pub-relay-hooks.patch` | bonfire-networks/activity_pub | HEAD `9aa7c64` (written on `a6d1f3d`) | `ActivityPub.RelayHooks` (hooks 2, 3, 4, 5) and the verified-signer inbox hook in `ReceiverHelpers.handle_received/2` (hook 1) |
