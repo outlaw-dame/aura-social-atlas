@@ -229,8 +229,13 @@ export async function listFacets(sql: Sql): Promise<{ tags: string[]; domains: s
   };
 }
 
-export async function deleteItem(sql: Sql, objectId: string): Promise<void> {
-  await sql`DELETE FROM gateway_items WHERE id = ${objectId}`;
+/** A verified original author may remove only their own cached object. */
+export async function deleteItem(sql: Sql, objectId: string, verifiedAuthorId: string): Promise<boolean> {
+  const rows = await sql`
+    DELETE FROM gateway_items
+    WHERE id = ${objectId} AND author_id = ${verifiedAuthorId}
+    RETURNING id`;
+  return rows.length > 0;
 }
 
 /** Keep the table bounded; removes the oldest rows beyond maxItems. */
