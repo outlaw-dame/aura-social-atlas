@@ -12,7 +12,7 @@ export type GatewayConfig = {
   adminToken: string;
   /** Origins allowed to call the public read API cross-origin (CORS). Empty = same-origin only. */
   corsAllowlist: string[];
-  /** Local dev/tests only: in-memory Fedify stores + no database. */
+  /** Reserved for compatibility; always false because PostgreSQL is required. */
   devMemoryStore: boolean;
   /** Port for Bun.serve. */
   port: number;
@@ -49,17 +49,31 @@ function intInRange(name: string, raw: string | undefined, fallback: number, min
 export function loadConfig(env: Record<string, string | undefined> = process.env): GatewayConfig {
   const origin = required(env, 'GATEWAY_ORIGIN').replace(/\/+$/, '');
   const originUrl = new URL(origin);
+  if (originUrl.pathname !== '/' || originUrl.search || originUrl.hash || originUrl.username || originUrl.password) {
+    throw new Error('GATEWAY_ORIGIN must be a bare origin without paths, query, fragment or credentials.');
+  }
   if (originUrl.protocol !== 'https:' && originUrl.hostname !== 'localhost' && originUrl.hostname !== '127.0.0.1') {
     throw new Error('GATEWAY_ORIGIN must be an https URL (http allowed only for localhost dev).');
   }
-  const devMemoryStore = env['GATEWAY_DEV_MEMORY'] === '1';
-  const databaseUrl = devMemoryStore ? null : required(env, 'DATABASE_URL');
+  // The discovery store holds canonical posts, keys and subscriptions;
+  // unlike Fedify's in-memory queue, these cannot safely run without a DB.
+  if (env['GATEWAY_DEV_MEMORY'] === '1') {
+    throw new Error('GATEWAY_DEV_MEMORY is unsupported: PostgreSQL is required even in development.');
+  }
+  const devMemoryStore = false;
+  const databaseUrl = required(env, 'DATABASE_URL');
+  if (!/^postgres(ql)?:\/\//.test(databaseUrl)) {
+    throw new Error('DATABASE_URL must use a PostgreSQL connection URL.');
+  }
   const adminToken = required(env, 'GATEWAY_ADMIN_TOKEN');
   if (adminToken.length < 32) throw new Error('GATEWAY_ADMIN_TOKEN must be at least 32 characters.');
   const corsAllowlist = (env['GATEWAY_CORS_ORIGINS'] ?? '')
     .split(',').map(s => s.trim()).filter(Boolean)
     .map(o => {
       const u = new URL(o);
+      if (u.pathname !== '/' || u.search || u.hash || u.username || u.password) {
+        throw new Error('CORS origins must not contain paths or credentials.');
+      }
       if (u.protocol !== 'https:' && u.hostname !== 'localhost' && u.hostname !== '127.0.0.1') {
         throw new Error(`CORS origin ${JSON.stringify(o)} must be https (localhost excepted).`);
       }
