@@ -19,6 +19,22 @@ permissions:
 jobs:
   gateway:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gateway_ci
+          POSTGRES_PASSWORD: gateway_ci_password
+          POSTGRES_DB: gateway_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gateway_ci -d gateway_integration"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      GATEWAY_TEST_DATABASE_URL: postgres://gateway_ci:gateway_ci_password@127.0.0.1:5432/gateway_integration
     defaults:
       run:
         working-directory: discovery-gateway
@@ -30,7 +46,7 @@ jobs:
       - run: bun install
       - name: Type-check
         run: bun run typecheck
-      - name: Gateway unit tests
+      - name: Gateway unit and PostgreSQL integration tests
         run: bun test src
   atlas:
     runs-on: ubuntu-latest
