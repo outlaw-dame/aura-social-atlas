@@ -169,7 +169,8 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
       }
       const subMatch = /^\/admin\/subscriptions\/([0-9a-f-]{36})(\/retry)?$/.exec(path);
       if (subMatch) {
-        const [, id, action] = subMatch as [string, string, string | undefined];
+        const id = subMatch[1]!;
+        const action = subMatch[2];
         if (req.method === 'DELETE' && !action) {
           const result = await unsubscribe(gateway, sql, id);
           if (!result.ok) return json({ error: result.error }, { status: result.status });
