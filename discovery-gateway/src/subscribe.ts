@@ -40,7 +40,7 @@ export function resolveSubscriptionTarget(input: SubscribeInput): { ok: true; ac
   return { ok: true, actorUrl: check.url.href, kind: input.kind ?? 'mastodon', selector: null };
 }
 
-export async function subscribe(gateway: Gateway, sql: Sql, input: SubscribeInput): Promise<SubscribeResult> {
+export async function subscribe(gateway: Gateway, sql: Sql, origin: string, input: SubscribeInput): Promise<SubscribeResult> {
   const target = resolveSubscriptionTarget(input);
   if (!target.ok) return { ok: false, status: 400, error: target.error };
 
@@ -60,7 +60,7 @@ export async function subscribe(gateway: Gateway, sql: Sql, input: SubscribeInpu
   // redirect to a different host is not the actor the operator approved.
   if (hostOf(actor.id.href) !== actorHost) return { ok: false, status: 400, error: 'resolved actor is on a different host than requested' };
 
-  const followActivityId = `${gatewayOrigin(gateway)}/activities/${crypto.randomUUID()}`;
+  const followActivityId = `${origin}/activities/${crypto.randomUUID()}`;
   const { subscription, created } = await createSubscription(sql, {
     kind: target.kind,
     actorUrl: target.actorUrl,
@@ -99,13 +99,13 @@ export async function unsubscribe(gateway: Gateway, sql: Sql, id: string): Promi
   return { ok: true, subscription: { ...sub, state: 'disabled' }, created: false };
 }
 
-export async function retrySubscription(gateway: Gateway, sql: Sql, id: string): Promise<SubscribeResult> {
+export async function retrySubscription(gateway: Gateway, sql: Sql, origin: string, id: string): Promise<SubscribeResult> {
   const sub = await getSubscription(sql, id);
   if (!sub) return { ok: false, status: 404, error: 'subscription not found' };
   if (sub.state === 'accepted') return { ok: true, subscription: sub, created: false };
   const actor = await gateway.lookupActor(sub.actorUrl).catch(() => null);
   if (!actor) return { ok: false, status: 502, error: 'could not resolve remote actor' };
-  const followActivityId = `${gatewayOrigin(gateway)}/activities/${crypto.randomUUID()}`;
+  const followActivityId = `${origin}/activities/${crypto.randomUUID()}`;
   await setSubscriptionState(sql, sub.id, 'pending');
   try {
     await gateway.sendFollow(actor, followActivityId);
@@ -117,10 +117,4 @@ export async function retrySubscription(gateway: Gateway, sql: Sql, id: string):
 
 export async function listAll(sql: Sql): Promise<Subscription[]> {
   return listSubscriptions(sql);
-}
-
-function gatewayOrigin(gateway: Gateway): string {
-  // The origin is embedded in every URI the federation builds; recover it from
-  // the actor URI rather than threading config through every call site.
-  return new URL(gateway.federation.getActorUri?.('gateway')?.href ?? 'https://invalid.local').origin;
 }
