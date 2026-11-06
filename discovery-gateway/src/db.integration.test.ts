@@ -12,11 +12,11 @@ import { loadConfig } from './config.ts';
 import { authorizeIngest } from './policy.ts';
 import {
   acceptedSubscriptionActors, createSubscription, deleteItem, getSubscription,
-  initSchema, insertItem, listFacets, loadKeyPair, pruneItems, queryItems,
+  initSchema, insertItem, listFacets, listSubscriptions, loadKeyPair, pruneItems, queryItems,
   saveKeyPair, setPendingFollowId, setSubscriptionState, settlePendingFollow, subscriptionByFollowId,
   type GatewayItem,
 } from './db.ts';
-import { retrySubscription, subscribe } from './subscribe.ts';
+import { retrySubscription, subscribe, unsubscribe } from './subscribe.ts';
 import type { Gateway } from './federation.ts';
 
 const databaseUrl = process.env.GATEWAY_TEST_DATABASE_URL;
@@ -391,6 +391,85 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     await new Promise(resolve => setTimeout(resolve, 30));
     const found = await queryItems(sql, { limit: 50 });
     expect(found.items.some(item => item.id === id)).toBe(false);
+  });
+
+  dbTest('relay alias resolves to canonical actor ID for Follow and acceptance correlation', async () => {
+    const alias = 'https://relay.example/@selective';
+    const canonical = 'https://relay.example/actors/selective';
+    const followIds: string[] = [];
+    const gateway = {
+      lookupActor: async () => new Service({
+        id: new URL(canonical), inbox: new URL('https://relay.example/inbox'),
+      }),
+      sendFollow: async (_actor: unknown, followId: string) => { followIds.push(followId); },
+    } as unknown as Gateway;
+    const first = await subscribe(gateway, sql, 'https://gateway.example',
+      { type: 'actor', value: alias, kind: 'litepub' });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.subscription.actorUrl).toBe(canonical);
+    expect(first.created).toBe(true);
+    expect(followIds).toHaveLength(1);
+    expect(await settlePendingFollow(sql, followIds[0]!, canonical, 'accepted')).toBe(true);
+    const repeated = await subscribe(gateway, sql, 'https://gateway.example',
+      { type: 'actor', value: alias, kind: 'litepub' });
+    expect(repeated).toMatchObject({ ok: true, created: false });
+    expect(followIds).toHaveLength(1);
+    expect((await getSubscription(sql, first.subscription.id))?.state).toBe('accepted');
+  });
+
+  dbTest('forged actor IDs and cross-origin inboxes are rejected before persistence or delivery', async () => {
+    const target = 'https://relay.example/actors/selection';
+    let followed = 0;
+    const cases = [
+      { id: 'https://attacker.example/actor', inbox: 'https://relay.example/inbox' },
+      { id: 'http://relay.example/actor', inbox: 'https://relay.example/inbox' },
+      { id: 'https://relay.example:8443/actor', inbox: 'https://relay.example/inbox' },
+      { id: 'https://relay.example/actors/selection', inbox: 'https://attacker.example/inbox' },
+      { id: 'https://relay.example/actors/selection', inbox: 'http://relay.example/inbox' },
+    ];
+    for (const bad of cases) {
+      const gateway = {
+        lookupActor: async () => new Service({
+          id: new URL(bad.id), inbox: new URL(bad.inbox),
+        }),
+        sendFollow: async () => { followed++; },
+      } as unknown as Gateway;
+      const result = await subscribe(gateway, sql, 'https://gateway.example',
+        { type: 'actor', value: target, kind: 'litepub' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.status).toBe(400);
+    }
+    expect(followed).toBe(0);
+    const all = await listSubscriptions(sql);
+    expect(all.some(x => x.actorUrl === target)).toBe(false);
+  });
+
+  dbTest('retries fail closed if the previously accepted actor moves identity or inbox', async () => {
+    const url = 'https://relay.example/actors/retry-canonical';
+    const sub = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: url, actorHost: 'relay.example',
+      selector: null, followActivityId: prefix + 'retry-canonical-initial',
+    });
+    await setSubscriptionState(sql, sub.subscription.id, 'rejected');
+    let delivered = 0;
+    const maliciousGateway = {
+      lookupActor: async () => new Service({
+        id: new URL(url), inbox: new URL('https://attacker.example/inbox'),
+      }),
+      sendFollow: async () => { delivered++; },
+      sendUndoFollow: async () => { delivered++; },
+    } as unknown as Gateway;
+    const outcome = await retrySubscription(maliciousGateway, sql,
+      'https://gateway.example', sub.subscription.id);
+    expect(outcome).toMatchObject({ ok: false, status: 502 });
+    expect(delivered).toBe(0);
+    expect((await getSubscription(sql, sub.subscription.id))?.followActivityId)
+      .toBe(prefix + 'retry-canonical-initial');
+    const unsub = await unsubscribe(maliciousGateway, sql, sub.subscription.id);
+    expect(unsub).toMatchObject({ ok: true });
+    expect(delivered).toBe(0);
+    expect((await getSubscription(sql, sub.subscription.id))?.state).toBe('disabled');
   });
 
   dbTest('Mastodon relay adapter fails closed before actor lookup or storage', async () => {
