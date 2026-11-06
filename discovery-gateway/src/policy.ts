@@ -40,20 +40,19 @@ export type IngestInput = {
   /** Raw parsed activity JSON-LD body (already signature-verified by Fedify). */
   body: Record<string, unknown>;
   /** Hosts of relay actors with a currently-accepted subscription. */
-  subscribedHosts: Set<string>;
+  subscribedActors: Set<string>;
 };
 
 /**
  * Decides whether an inbound Create/Announce may be ingested, and extracts the
  * object identity + provenance. Fail closed on any ambiguity.
  */
-export function authorizeIngest({ body, subscribedHosts }: IngestInput): IngestDecision {
+export function authorizeIngest({ body, subscribedActors }: IngestInput): IngestDecision {
   const type = body['type'];
   if (type !== 'Create' && type !== 'Announce') return { ok: false, reason: 'unsupported activity type' };
 
   const actorId = idHref(body['actor'] as IdLike);
-  const actorHost = hostOf(actorId);
-  if (!actorHost || !subscribedHosts.has(actorHost)) return { ok: false, reason: 'actor is not an accepted subscription' };
+  if (!actorId || !subscribedActors.has(actorId)) return { ok: false, reason: 'actor is not an accepted subscription' };
 
   if (!addressesPublic(body['to'], body['cc'])) return { ok: false, reason: 'activity is not public' };
 
@@ -68,11 +67,12 @@ export function authorizeIngest({ body, subscribedHosts }: IngestInput): IngestD
   if (!objectId) return { ok: false, reason: 'activity object has no id' };
 
   const objectOrigin = originOf(objectId);
-  if (!objectOrigin || objectOrigin === 'null') return { ok: false, reason: 'object id is not an absolute URL' };
+  if (!objectOrigin || !objectOrigin.startsWith('https://')) return { ok: false, reason: 'object id is not an absolute URL' };
 
   // For Announce with an embedded object, the embedded copy must also be public
   // and must not contradict the announced id (a relay could embed anything).
-  if (type === 'Announce' && embedded) {
+  if (type === 'Announce') {
+    if (!embedded) return { ok: false, reason: 'announced object must be origin-fetched' };
     if (!addressesPublic(embedded['to'], embedded['cc'])) return { ok: false, reason: 'announced object is not public' };
   }
 
