@@ -191,7 +191,7 @@ const CASES: [string, DeviceEnv, string, string, string, string, string][] = [
     env({ ...aPhone, screenW: 1114, screenH: 720 }, 1114, 720, { segs: spanSegs }),
     "Android foldable · inner display",
     "expanded",
-    "rail",
+    "sidebar",
     "fold",
     "md",
   ],
@@ -238,11 +238,20 @@ describe("layout never depends on device identity", () => {
     const c = detectProfile(env(aTab, 951, 620));
     for (const p of [b, c]) expect([p.layout, p.nav, p.panes]).toEqual([a.layout, a.nav, a.panes]);
   });
-  test("folding only rebalances the panes; navigation stays put", () => {
-    const flat = pickLayout(951, 620, "none");
-    const folded = pickLayout(951, 620, "columns");
-    expect(folded.nav).toBe(flat.nav);
-    expect([flat.panes, folded.panes]).toEqual(["flat", "fold"]);
+  test("folding only rebalances the panes; navigation stays put at every size class", () => {
+    // regular (iPhone Duo inner), expanded (dual-screen spanned, large foldables), wide desktop-class
+    for (const [w, h] of [
+      [951, 620],
+      [1114, 720],
+      [1280, 800],
+      [2048, 1536],
+    ]) {
+      const flat = pickLayout(w, h, "none");
+      const folded = pickLayout(w, h, "columns");
+      expect(folded.nav).toBe(flat.nav);
+      expect(folded.layout).toBe(flat.layout);
+      expect([flat.panes, folded.panes]).toEqual(["flat", "fold"]);
+    }
   });
   test("an iPhone Duo requesting the desktop site is not mistaken for an iPad", () => {
     const p = detectProfile(env({ ...duoInner, ua: UA.macSafari }, 951, 620));

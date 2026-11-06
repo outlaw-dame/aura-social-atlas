@@ -356,7 +356,9 @@ html[data-panes="flat"] .atlas-discover.tab-active, html[data-panes="fold"] .atl
 }
 html[data-panes="flat"] .atlas-discover .atlas-pane, html[data-panes="fold"] .atlas-discover .atlas-pane { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(24px + var(--atlas-sa-bottom)); }
 html[data-panes="flat"] .atlas-discover .atlas-pane-list { border-right: 1px solid var(--f7-list-outline-border-color, rgba(0,0,0,.12)); }
-html[data-panes="fold"] .atlas-discover .atlas-pane-list { padding-right: calc(var(--atlas-hinge, 0px) + var(--atlas-crease)); border-right: 0; }
+/* A physical hinge gap is reserved between the columns, so each pane sits wholly on its own screen. */
+html[data-panes="fold"] .atlas-discover.tab-active { column-gap: var(--atlas-hinge, 0px); }
+html[data-panes="fold"] .atlas-discover .atlas-pane-list { padding-right: var(--atlas-crease); border-right: 0; }
 html[data-panes="fold"] .atlas-discover .atlas-pane-stories { padding-left: var(--atlas-crease); }
 
 /* Tabletop / Flex mode: content above the fold; tab bar and buttons on the stable bottom half. */

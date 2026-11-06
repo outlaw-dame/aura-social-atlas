@@ -21,6 +21,26 @@ const PRECACHE = [SHELL_URL, '/manifest.webmanifest', '/icon-192.png', '/icon-51
 const NETWORK_ONLY_PATHS = ['/api/', '/auth', '/fedizen.callback', '/_serverFn/', '/_server'];
 const isNetworkOnly = (url) => NETWORK_ONLY_PATHS.some((p) => url.pathname.startsWith(p));
 
+// Only same-origin hashed build assets are ever precached.
+const MAX_PRECACHE_ASSETS = 100;
+function buildAssetUrls(urls) {
+  const out = new Set();
+  for (const raw of urls) {
+    try {
+      const url = new URL(raw, self.location.origin);
+      if (url.origin === self.location.origin && url.pathname.startsWith('/assets/')) out.add(url.pathname);
+    } catch { /* not a URL */ }
+    if (out.size >= MAX_PRECACHE_ASSETS) break;
+  }
+  return [...out];
+}
+async function precacheAssets(urls) {
+  const cache = await caches.open(ASSET_CACHE);
+  await Promise.allSettled(buildAssetUrls(urls).map(async (path) => {
+    if (!(await cache.match(path))) await cache.add(path);
+  }));
+}
+
 self.addEventListener('install', (event) => {
   // Static routing: let the browser bypass this worker for network-only traffic.
   if (typeof event.addRoutes === 'function') {
@@ -35,6 +55,13 @@ self.addEventListener('install', (event) => {
     const cache = await caches.open(SHELL_CACHE);
     // addAll is all-or-nothing; one missing file must not abort the install.
     await Promise.allSettled(PRECACHE.map((url) => cache.add(new Request(url, { cache: 'reload' }))));
+    // The page's own requests happened before this worker controlled it, so cache the scripts and
+    // styles the shell HTML references now; otherwise an offline reload could not render it.
+    const shell = await cache.match(SHELL_URL);
+    if (shell) {
+      const html = await shell.clone().text();
+      await precacheAssets(html.match(/\/assets\/[^"'\s<>)]+/g) || []);
+    }
     await self.skipWaiting();
   })());
 });
@@ -49,6 +76,13 @@ self.addEventListener('activate', (event) => {
     }
     await self.clients.claim();
   })());
+});
+
+// Lazily loaded chunks (the Framework7 app itself) aren't in the HTML: the page reports what it loaded.
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || data.type !== 'atlas-precache' || !Array.isArray(data.urls)) return;
+  event.waitUntil(precacheAssets(data.urls.filter((u) => typeof u === 'string')));
 });
 
 async function trim(cacheName, max) {

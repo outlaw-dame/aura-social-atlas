@@ -100,9 +100,9 @@ export function pickLayout(
       ? width > height
         ? "tabbar-side"
         : "tabbar"
-      : layout === "regular" || span === "columns"
+      : layout === "regular"
         ? "rail"
-        : "sidebar";
+        : "sidebar"; // never depends on the fold: folding changes only the panes
   const panes: Panes =
     span === "columns" ? "fold" : layout !== "compact" && width >= PANES_MIN_W ? "flat" : "single";
   return { layout, nav, panes };
