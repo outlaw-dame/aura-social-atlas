@@ -16,9 +16,9 @@
 
 import { createFederation, getAuthenticatedDocumentLoader, type Context, type Federation, type InboxContext, type KvStore, type MessageQueue } from '@fedify/fedify';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
-import { Accept, Announce, Create, Delete, Follow, Reject, Service, Undo, generateCryptoKeyPair, exportJwk, importJwk, type Activity, type Actor } from '@fedify/fedify';
+import { generateCryptoKeyPair, exportJwk, importJwk } from '@fedify/fedify';
+import { Accept, Announce, Create, Delete, Follow, Reject, Service, Undo, PUBLIC_COLLECTION, type Activity, type Actor } from '@fedify/vocab';
 import type { Sql } from 'postgres';
-import { PUBLIC_COLLECTION } from '@fedify/vocab';
 import type { GatewayConfig } from './config.ts';
 import { acceptedSubscriptionActors, deleteItem, insertItem, listSubscriptions, loadKeyPair, pruneItems, saveKeyPair, setSubscriptionState, subscriptionByFollowId } from './db.ts';
 import { authorizeIngest, isControlPlane } from './policy.ts';
