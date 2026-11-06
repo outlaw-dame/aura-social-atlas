@@ -5,11 +5,36 @@ NOT applied anywhere: Fedizen is not modified. Check them with `patch -p1
 --dry-run` from each repository root.
 
 **Co-op Cloud compatibility:** these are integration candidates, not patches
-verified against Fedizen's image or the beta-25 dependency set. Follow
+verified against Fedizen's actual image. The new reported target is
+**`v1.1.0-rc.1`**; beta-25 provenance is archival only. Follow
 [the Co-op Cloud guide](../deployment/COOP_CLOUD.md) to identify the actual
 Community flavour and dependency revisions, rebase each diff, and compile
-the full host application. The public app tag is `v1.1.0-beta.25`, not a
-guessed `beta25` tag; neither spelling proves a deployed digest.
+the full host application. Require the host's live image digest and installed
+recipe revision; a reported version does not prove either.
+
+## RC.1 release-pinned compatibility (2026-11-06)
+
+Canonical RC tag object `d3e774208432f89a74896fece39321b2a9d7cba6` resolves to
+app commit `7815b3394031e384f00415f44fac1596070c8157`, whose
+[`mix.lock`](https://github.com/bonfire-networks/bonfire-app/blob/7815b3394031e384f00415f44fac1596070c8157/mix.lock)
+pins Community `a58f2fbc65ba3bf468b319d7f1e9d9a892ffb8a3` and:
+
+| Patch repository | Exact RC lockfile source | Check |
+|---|---|---|
+| activity_pub | `2931ec3757bce29b8043d84290403007b5b81def` | Existing patch dry-run/applies with zero fuzz; receiver/hooks parse |
+| bonfire_federate_activitypub | `e5489e30c8e7869ea695736f7867eb3c3167f137` | Existing patch dry-run/applies with zero fuzz; Incoming parses |
+| bonfire_ui_me | `803be49d039d5cdc8d89ce4f985de1519120f67c` | Both hunks apply with zero fuzz; LiveView `.ex` parses, `.sface` compilation unverified |
+
+Checks used temporary source archives at these pins, **not HEAD**; the app
+lockfile pins were also read at the resolved source commit. No patch changes
+were necessary. Source API comparison retains service-actor lookup, id
+minting, fetch without ingest, actor/object lookup, signed publisher queue
+arguments, virtual relay/signer fields, proof/signer receiver context,
+Object-based Incoming handling and instance-settings template context.
+See the deployment guide for source links and precise limitations. No full
+RC Community build, host deployment, or live federation is verified.
+
+## Historical HEAD checks (not the release target)
 
 | Patch | Repository | Checked against | What it adds |
 |---|---|---|---|

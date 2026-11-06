@@ -2,11 +2,76 @@
 
 Status: **operator procedure only; no deployment or relay connection performed**.
 Fedizen's provider confirms Bonfire **Community**, Co-op Cloud (Abra), reported
-version **`1.1.0-beta25`**. This identifies a deployment family, not an image,
+upgraded to reported baseline **`v1.1.0-rc.1`**. The former reported
+`1.1.0-beta25` is **archival only**, not the current running image.
+This identifies a deployment family, not an image,
 source revision, or dependency set. Atlas is only a Fedizen client; neither
 Atlas nor the separate `relay/` server can install this extension on Fedizen.
 
 ## 1. Verified upstream evidence (2026-11-06 UTC)
+
+### Current reported target: RC.1 (not a verified live image)
+
+- Canonical [GitHub release](https://github.com/bonfire-networks/bonfire-app/releases/tag/v1.1.0-rc.1)
+  and [release API](https://api.github.com/repos/bonfire-networks/bonfire-app/releases/tags/v1.1.0-rc.1)
+  report `v1.1.0-rc.1`, published `2026-11-05T17:09:52Z`.
+- [Tag ref API](https://api.github.com/repos/bonfire-networks/bonfire-app/git/ref/tags/v1.1.0-rc.1)
+  returns **annotated tag object** `d3e774208432f89a74896fece39321b2a9d7cba6`;
+  [tag object API](https://api.github.com/repos/bonfire-networks/bonfire-app/git/tags/d3e774208432f89a74896fece39321b2a9d7cba6)
+  resolves it to **source commit** `7815b3394031e384f00415f44fac1596070c8157`.
+  Do not conflate the tag-object SHA, release `target_commitish`, or archive
+  directory name with the source commit.
+- [`mix.exs` at the resolved commit](https://github.com/bonfire-networks/bonfire-app/blob/7815b3394031e384f00415f44fac1596070c8157/mix.exs#L411)
+  declares `version: "1.1.0-rc.1"`; project version still uses `Mixer.version(config())`.
+- The [RC build workflow](https://github.com/bonfire-networks/bonfire-app/blob/7815b3394031e384f00415f44fac1596070c8157/.github/workflows/_docker_build.yaml)
+  prepares build-time `FLAVOUR` and builds `Dockerfile.release`; the image is
+  compiled, not extended by runtime `APP_FLAVOUR` changes.
+- [Public Docker Hub tag API](https://hub.docker.com/v2/repositories/bonfirenetworks/bonfire/tags/1.1.0-rc.1-community-amd64)
+  verifies tag `bonfirenetworks/bonfire:1.1.0-rc.1-community-amd64`:
+  top-level digest `sha256:29ba7c625f89809a93d14f24ce5f03351d43b42cf529a26e29533e4aad4d0704`;
+  listed Linux/amd64 image digest
+  `sha256:3e959f5574f95829d122be847ef755758d43071318a97fc722c10c9759777115`.
+  These are registry metadata, **not Fedizen's live digest**, build provenance,
+  a custom-extension image, or recommended deployment pins. Host platform is
+  not established by observing an amd64 tag. Resolve OCI index/platform
+  relationships with the provider before selecting an artifact.
+
+**Mandatory host evidence:** request the **live service image digest and
+installed recipe revision** after the upgrade, plus app/flavour/dependency
+provenance and platform. No running Fedizen image has been inspected here.
+
+### RC-pinned source compatibility (not HEAD)
+
+The resolved RC app [`mix.lock`](https://github.com/bonfire-networks/bonfire-app/blob/7815b3394031e384f00415f44fac1596070c8157/mix.lock)
+pins the following sources. The Community flavour is pinned to
+[`a58f2fbc65ba3bf468b319d7f1e9d9a892ffb8a3`](https://github.com/bonfire-networks/community/tree/a58f2fbc65ba3bf468b319d7f1e9d9a892ffb8a3);
+its dependency manifest includes moving repository entries, so the app lock
+is an audit baseline, not proof a published or host-custom build retained it.
+
+| Existing patch | RC app lockfile revision | Result on exact source archive |
+|---|---|---|
+| `activity_pub-relay-hooks.patch` | [`2931ec3757bce29b8043d84290403007b5b81def`](https://github.com/bonfire-networks/activity_pub/tree/2931ec3757bce29b8043d84290403007b5b81def) | Dry-run and application pass with `--fuzz=0`; patched receiver and new hooks parse |
+| `bonfire_federate_activitypub-receive-relayed.patch` | [`e5489e30c8e7869ea695736f7867eb3c3167f137`](https://github.com/bonfire-networks/bonfire_federate_activitypub/tree/e5489e30c8e7869ea695736f7867eb3c3167f137) | Dry-run and application pass with `--fuzz=0`; patched incoming module parses |
+| `bonfire_ui_me-relays-tab.patch` | [`803be49d039d5cdc8d89ce4f985de1519120f67c`](https://github.com/bonfire-networks/bonfire_ui_me/tree/803be49d039d5cdc8d89ce4f985de1519120f67c) | Both `.ex` and `.sface` hunks apply with `--fuzz=0`; `.ex` parses, Surface compilation unverified |
+
+Compared to the older HEAD checks, the AP and federating-extension revisions
+are different; UI matches the previously recorded `803be49` revision.
+No patch edits were needed for textual application. Source inspection finds
+`Utils.service_actor/0`, `generate_object_id/0,1`,
+`Fetcher.fetch_remote_object_from_id/1,2`, `Publisher.enqueue_one/3`,
+`Actor.get_cached_or_fetch/1,2`, `Object.get_ap_id/1`, `Object.insert/2,3,4`,
+and virtual `relayed_by` / `signed_by` fields. The receiver retains
+HTTP-signer options and LD/integrity-proof branches; Incoming retains the
+Object-based pipeline and relayed-local handling; instance settings retain
+the tab handler/template context used by the patch.
+
+This raises compatibility evidence from **HEAD-only** to **RC-lockfile
+textual/API inspection**. It does **not** verify the hooks' runtime behavior,
+full Community compilation, Surface mount, signer failure safety, ingestion
+semantics or federation tests. Apply/review again against the host's actual
+dependency revisions; preserve fail-closed gates until full host checks pass.
+
+### Archived previous beta-25 evidence (not the reported current baseline)
 
 | Evidence | Verified result | What it does not establish |
 |---|---|---|
@@ -23,7 +88,7 @@ it as the running Bonfire version. `APP_FLAVOUR=community` selects a
 source build. An environment change cannot add an extension to an existing
 release binary.
 
-Public registry GET inspection found tag
+Archived beta registry GET inspection found tag
 `bonfirenetworks/bonfire:1.1.0-beta.25-community-amd64` at the
 [Docker Hub tag API](https://hub.docker.com/v2/repositories/bonfirenetworks/bonfire/tags/1.1.0-beta.25-community-amd64):
 
@@ -39,7 +104,8 @@ source match merely because a tag exists. No literal `beta25` tag is assumed.
 
 > We want to evaluate an optional Bonfire-native relay-client extension on
 > staging first, not change live Fedizen or subscribe it to any relay yet.
-> You confirmed Community on Co-op Cloud / Abra, displaying 1.1.0-beta25.
+> You confirmed the upgrade to Community on Co-op Cloud / Abra, reporting
+> v1.1.0-rc.1. The former beta25 is archival, not our current target.
 > Please provide only these nonsecret deployment facts:
 >
 > - Installed Abra version, Co-op Cloud Bonfire recipe release and exact
@@ -127,11 +193,11 @@ no live deploy/update/run commands in this guide.
 1. Record an operator-reviewed bill of materials: actual baseline app,
    Community flavour and extension commits, dependency revisions/lockfile,
    recipe revision/patches, platform and baseline image digest. Treat missing
-   provenance as a blocker to an exact match. The public beta-25 commit is
+   provenance as a blocker to an exact match. The public RC.1 source commit is
    a **candidate** only until reconciled with the host.
 2. In a separate build workspace, acquire the matched app and Community
    flavour at immutable revisions, using the release's flavour mechanism.
-   The beta-25 workflow invokes `just _clone_flavour_apps`,
+   The RC.1 workflow invokes `just _clone_flavour_apps`,
    `just _config_flavour community`, `just _flavour_install community --yes`,
    `just flavour_make_symlinks community`, then `just _rel-prepare`.
    These steps can fetch moving dependencies: pin and review every fetched
@@ -143,8 +209,8 @@ no live deploy/update/run commands in this guide.
    host-provided Ecto/LiveView dependencies and original lockfile constraints.
    A path dependency needs files in the image build context, not on the host.
 4. Rebase the three `upstream_patches/` diffs against those actual dependency
-   revisions. The previously verified HEADs are not beta-25 compatibility
-   evidence. Verify all five capabilities (verified signer, preminted Follow,
+   revisions. The RC-lockfile application checks above are not evidence of
+   the live host's dependency set or a full build. Verify all five capabilities (verified signer, preminted Follow,
    signed extra-inbox publishing, origin fetch/safe ingest, service Announce),
    including the `.sface` instance-settings mount. Stop on any API mismatch.
    Never bypass the signer, verification or ingestion gates to make it build.
@@ -292,13 +358,18 @@ or fully verified rollout compatible with its actual queue/migration model.
 
 ## 9. Verification and unresolved gates
 
-Verified here: public pinned source/recipe/build-workflow GET evidence above;
+Verified here: canonical RC release/annotated-tag resolution, Community
+registry tag metadata, RC app-lock dependency snapshots, all three unchanged
+patches dry-run/applied with zero fuzz in temporary copies, and all four
+patched Elixir files parsed; archived beta and recipe evidence retained above;
 standalone Elixir compilation, formatting and regression results recorded
 in the README: **86/86 passed with seeds 0 and 314159**, including nine
 PostgreSQL 16.15 cases (both migrations up/down/up), on Elixir 1.18.5 / OTP 27;
 warnings-as-errors compilation and format check passed. Fixed test-only
 actor-resolver state leakage; no extension production logic changed.
-This guide introduces no deploy script or live connection.
+RC targeting recheck: the same 86 tests pass again with both seeds, including
+all nine loopback PostgreSQL cases; compilation and formatting pass.
+No live migration was run. This guide introduces no deploy script or live connection.
 
 Still required from the host: installed recipe/Abra details, actual image
 digest/provenance and matched flavour/dependency revisions; rebase/compile

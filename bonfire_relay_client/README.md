@@ -23,9 +23,10 @@ hashtag/instance rules. It lives in the Atlas repo because no writable
   `ActivityPub.RelayHooks.version() == 1` and `Incoming.receive_relayed/2`
   exist (see `upstream_patches/`), every call returns
   `{:error, {:upstream_hook_required, _}}`.
-- The upstream patches apply cleanly to current upstream HEADs (re-checked
-  2026-11-05) and parse, but have **not** been compiled or run inside a
-  Bonfire app.
+- The upstream patches apply with zero fuzz to the **RC.1 app-lockfile
+  dependency revisions** (2026-11-06); all four patched Elixir files parse.
+  Older HEAD checks are historical. Full Community compilation, Surface
+  integration and runtime federation remain **unverified**.
 - The migrations were run up, down and up again on PostgreSQL 16 with no
   warnings. Database constraints, insert races, compare-and-set, claims,
   leases, the volume counter and rule round-trips are covered by the
@@ -42,10 +43,19 @@ hashtag/instance rules. It lives in the Atlas repo because no writable
 
 For Fedizen's provider-confirmed **Co-op Cloud (Abra), Community** deployment,
 start with [deployment/COOP_CLOUD.md](deployment/COOP_CLOUD.md). Its reported
-`1.1.0-beta25` is not image provenance. The verified upstream release spelling
-is `v1.1.0-beta.25`; matching Fedizen requires the host's actual digest and
-source/flavour/dependency revisions. The patch HEADs below are **not** a
-beta-25 compatibility claim.
+**`v1.1.0-rc.1` is the new reported baseline**; former `1.1.0-beta25` and
+canonical `v1.1.0-beta.25` evidence are archival only, not the current image.
+The RC annotated tag resolves to app commit
+`7815b3394031e384f00415f44fac1596070c8157`. The guide records the verified
+Community registry tag/digests and RC-pinned patch checks. Matching Fedizen
+still requires the host's **live image digest and installed recipe revision**,
+source/flavour/dependency provenance and platform. A reported version or
+public registry digest is not proof of the running build.
+
+RC targeting regression check (2026-11-06): warnings-as-errors compilation
+and formatting pass; all **86 tests pass again**, seeds `0` and `314159`,
+including nine isolated PostgreSQL tests. No deployment, live migration or
+subscription was performed; full patched RC Community build is not verified.
 
 1. Match the host build first, then rebase and apply `upstream_patches/*.patch` to activity_pub, bonfire_federate_activitypub
    and bonfire_ui_me. Then compile and run Bonfire's own suites, including
@@ -194,10 +204,11 @@ image and pin its digest as described in the Co-op Cloud guide.
 ### Upstream touchpoints
 
 See `upstream_patches/README.md`. The five hooks are implemented there as
-patches against the current upstream sources.
+patches checked against explicitly recorded sources.
 
-Those sources are the explicitly recorded HEADs, not necessarily the
-dependencies bundled in `v1.1.0-beta.25` or Fedizen's installed image.
+See the RC.1 lockfile compatibility table in the deployment guide and patch
+README. Textual/API checks against those exact pins do not establish the
+dependencies inside Fedizen's installed image or a full host build.
 
 ## Configuration
 
