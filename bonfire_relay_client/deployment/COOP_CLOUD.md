@@ -294,7 +294,11 @@ or fully verified rollout compatible with its actual queue/migration model.
 
 Verified here: public pinned source/recipe/build-workflow GET evidence above;
 standalone Elixir compilation, formatting and regression results recorded
-in the README. This guide introduces no deploy script or live connection.
+in the README: **86/86 passed with seeds 0 and 314159**, including nine
+PostgreSQL 16.15 cases (both migrations up/down/up), on Elixir 1.18.5 / OTP 27;
+warnings-as-errors compilation and format check passed. Fixed test-only
+actor-resolver state leakage; no extension production logic changed.
+This guide introduces no deploy script or live connection.
 
 Still required from the host: installed recipe/Abra details, actual image
 digest/provenance and matched flavour/dependency revisions; rebase/compile

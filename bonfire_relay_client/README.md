@@ -30,6 +30,13 @@ hashtag/instance rules. It lives in the Atlas repo because no writable
   warnings. Database constraints, insert races, compare-and-set, claims,
   leases, the volume counter and rule round-trips are covered by the
   `:pg` suite.
+- Co-op Cloud documentation recheck (2026-11-06): compilation with
+  warnings-as-errors and format check pass on Elixir 1.18.5 / OTP 27;
+  all **86 tests pass twice**, seeds `0` and `314159`, including all nine
+  PostgreSQL 16.15 cases on a throwaway loopback database. A leaked fake
+  actor-resolver setting between test modules was fixed with teardown/reset;
+  federation and production code were unchanged. Full host integration
+  remains unverified.
 
 ### Remaining integration steps (in order)
 
