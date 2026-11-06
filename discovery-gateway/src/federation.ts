@@ -66,8 +66,9 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
   });
 
   federation
-    .setActorDispatcher(`/actor`, async (ctx, identifier) => {
+    .setActorDispatcher(`/actors/{identifier}`, async (ctx, identifier) => {
       if (identifier !== ACTOR_IDENTIFIER) return null;
+      const keys = await ctx.getActorKeyPairs(identifier);
       return new Service({
         id: ctx.getActorUri(identifier),
         preferredUsername: 'atlas-discovery-gateway',
@@ -77,9 +78,11 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
         outbox: ctx.getOutboxUri(identifier),
         url: ctx.getActorUri(identifier),
         manuallyApprovesFollowers: false,
-        published: new Date('2026-01-01T00:00:00Z'),
+        publicKey: keys[0]?.cryptographicKey,
+        assertionMethods: keys.map(key => key.multikey),
       });
     })
+    .mapActorAlias('/actor', ACTOR_IDENTIFIER)
     .setKeyPairsDispatcher(async (_ctx, identifier) => {
       if (identifier !== ACTOR_IDENTIFIER || !stores.sql) return [];
       const existing = await loadKeyPair(stores.sql, identifier);
@@ -105,7 +108,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
       return [{ privateKey: persistedPrivate, publicKey: persistedPublic }];
     });
 
-  federation.setOutboxDispatcher(`/actor/outbox`, () => null); // we never publish
+  federation.setOutboxDispatcher(`/actors/{identifier}/outbox`, () => null); // we never publish
 
   const ingest = async (ctx: InboxCtx, activity: Activity) => {
     if (!stores.sql) return;
@@ -184,7 +187,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
     }
   };
 
-  const control = federation.setInboxListeners(`/actor/inbox`, `/inbox`);
+  const control = federation.setInboxListeners(`/actors/{identifier}/inbox`, `/inbox`);
 
   control
     .on(Follow, async (ctx, follow) => {
