@@ -595,9 +595,12 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       authenticationReports.push({
         authentication: report.authentication, outcome: report.outcome,
         checks: report.attempts.map(attempt => ({
-          fields: Object.keys(attempt),
+          mechanism: attempt.mechanism, status: attempt.status, reason: attempt.reason,
           checks: attempt.checks.map(check => ({
-            fields: Object.keys(check), declaredKeyId: check.declaredKeyId,
+            mechanism: check.mechanism, status: check.status, reason: check.reason,
+            keyId: check.declaredKeyId, triedKeys: check.triedKeys.map(key => ({
+              fields: Object.keys(key), id: key.id,
+            })),
           })),
         })),
       });
