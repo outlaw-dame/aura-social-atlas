@@ -265,7 +265,7 @@ export async function queryItems(sql: Sql, q: ItemQuery): Promise<ItemPage> {
   const search = q.search?.trim() || null;
   const rows = await sql<ItemRow[]>`
     SELECT * FROM gateway_items
-    WHERE (${tag}::text IS NULL OR hashtags @> ${JSON.stringify([tag ?? ''])}::jsonb)
+    WHERE (${tag}::text IS NULL OR hashtags @> ${sql.json([tag ?? ''])}::jsonb)
       AND (${domain}::text IS NULL OR object_origin = ${'https://' + (domain ?? '')})
       AND (${search}::text IS NULL OR text ILIKE ${'%' + (search ?? '') + '%'} OR author_name ILIKE ${'%' + (search ?? '') + '%'} OR author_handle ILIKE ${'%' + (search ?? '') + '%'})
       AND (${cursorRow?.id ?? null}::text IS NULL OR (ingested_at, id) < (${cursorRow?.ingested_at ?? new Date(0)}, ${cursorRow?.id ?? ''}))
