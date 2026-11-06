@@ -271,7 +271,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect((await getSubscription(sql, sub.subscription.id))?.state).toBe('pending');
   });
 
-  dbTest('unsigned relay Announce cannot create a public discovery record', async () => {
+  dbTest('unsigned public Create cannot bypass inbox verification or create a discovery record', async () => {
     const cfg = loadConfig({
       GATEWAY_ORIGIN: 'https://gateway.example',
       GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
@@ -286,14 +286,23 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       selector: null, followActivityId: prefix + 'announcer-follow',
     });
     await setSubscriptionState(sql, sub.subscription.id, 'accepted');
-    const id = prefix + 'unsigned-post';
+    // A same-origin Create contains everything necessary for the ingestion
+    // policy to accept it if authentication is ever accidentally bypassed.
+    // Unlike Announce, it does not require a remote origin lookup fixture.
+    const id = `https://unsigned.example/notes/${crypto.randomUUID()}`;
     const response = await gw.fetch(new Request('https://gateway.example/actors/gateway/inbox', {
       method: 'POST',
       headers: { 'Content-Type': 'application/activity+json' },
       body: JSON.stringify({
         '@context': 'https://www.w3.org/ns/activitystreams',
-        id: prefix + 'unsigned-announce', type: 'Announce', actor,
-        object: id, to: ['https://www.w3.org/ns/activitystreams#Public'],
+        id: `https://unsigned.example/activities/${crypto.randomUUID()}`,
+        type: 'Create', actor,
+        to: ['https://www.w3.org/ns/activitystreams#Public'],
+        object: {
+          id, type: 'Note', attributedTo: actor,
+          to: ['https://www.w3.org/ns/activitystreams#Public'],
+          content: 'Unsigned activity must not be cached',
+        },
       }),
     }));
     expect(response.status).toBeLessThan(500);
