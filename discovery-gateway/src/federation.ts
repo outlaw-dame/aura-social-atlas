@@ -85,6 +85,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
     })
     .mapActorAlias('/actor', ACTOR_IDENTIFIER)
     .setKeyPairsDispatcher(async (_ctx, identifier) => {
+      log('actor.keypair_callback', { identifier, hasSql: !!stores.sql });
       if (identifier !== ACTOR_IDENTIFIER || !stores.sql) return [];
       const existing = await loadKeyPair(stores.sql, identifier);
       if (existing) {
