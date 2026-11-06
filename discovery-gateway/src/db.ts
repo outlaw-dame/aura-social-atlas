@@ -224,14 +224,24 @@ export async function claimActivity(sql: Sql, activityId: string): Promise<boole
 
 type ItemRow = { id: string; activity_id: string; relay_actor: string; author_id: string | null; author_name: string | null; author_handle: string | null; author_url: string | null; object_origin: string; url: string | null; summary: string | null; text: string; hashtags: string[]; published_at: Date | null; ingested_at: Date };
 
+/** Decode historical JSONB strings and only expose bounded tag arrays. */
+export function normalizeStoredHashtags(value: unknown): string[] {
+  let parsed: unknown = value;
+  if (typeof parsed === 'string') {
+    try { parsed = JSON.parse(parsed) as unknown; } catch { return []; }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((tag): tag is string => typeof tag === 'string' && tag.length <= 100).slice(0, 64);
+}
+
 function toItem(r: ItemRow): GatewayItem {
-  return { id: r.id, activityId: r.activity_id, relayActor: r.relay_actor, authorId: r.author_id, authorName: r.author_name, authorHandle: r.author_handle, authorUrl: r.author_url, objectOrigin: r.object_origin, url: r.url, summary: r.summary, text: r.text, hashtags: r.hashtags ?? [], publishedAt: r.published_at?.toISOString() ?? null, ingestedAt: r.ingested_at.toISOString() };
+  return { id: r.id, activityId: r.activity_id, relayActor: r.relay_actor, authorId: r.author_id, authorName: r.author_name, authorHandle: r.author_handle, authorUrl: r.author_url, objectOrigin: r.object_origin, url: r.url, summary: r.summary, text: r.text, hashtags: normalizeStoredHashtags(r.hashtags), publishedAt: r.published_at?.toISOString() ?? null, ingestedAt: r.ingested_at.toISOString() };
 }
 
 export async function insertItem(sql: Sql, item: Omit<GatewayItem, 'ingestedAt'>): Promise<boolean> {
   const rows = await sql`
     INSERT INTO gateway_items (id, activity_id, relay_actor, author_id, author_name, author_handle, author_url, object_origin, url, summary, text, hashtags, published_at)
-    VALUES (${item.id}, ${item.activityId}, ${item.relayActor}, ${item.authorId}, ${item.authorName}, ${item.authorHandle}, ${item.authorUrl}, ${item.objectOrigin}, ${item.url}, ${item.summary}, ${item.text}, ${JSON.stringify(item.hashtags)}, ${item.publishedAt})
+    VALUES (${item.id}, ${item.activityId}, ${item.relayActor}, ${item.authorId}, ${item.authorName}, ${item.authorHandle}, ${item.authorUrl}, ${item.objectOrigin}, ${item.url}, ${item.summary}, ${item.text}, ${sql.json(item.hashtags)}, ${item.publishedAt})
     ON CONFLICT DO NOTHING
     RETURNING id`;
   return rows.length === 1;
@@ -255,7 +265,7 @@ export async function queryItems(sql: Sql, q: ItemQuery): Promise<ItemPage> {
   const search = q.search?.trim() || null;
   const rows = await sql<ItemRow[]>`
     SELECT * FROM gateway_items
-    WHERE (${tag}::text IS NULL OR hashtags @> ${JSON.stringify([tag ?? ''])}::jsonb)
+    WHERE (${tag}::text IS NULL OR hashtags @> ${sql.json([tag ?? ''])}::jsonb)
       AND (${domain}::text IS NULL OR object_origin = ${'https://' + (domain ?? '')})
       AND (${search}::text IS NULL OR text ILIKE ${'%' + (search ?? '') + '%'} OR author_name ILIKE ${'%' + (search ?? '') + '%'} OR author_handle ILIKE ${'%' + (search ?? '') + '%'})
       AND (${cursorRow?.id ?? null}::text IS NULL OR (ingested_at, id) < (${cursorRow?.ingested_at ?? new Date(0)}, ${cursorRow?.id ?? ''}))

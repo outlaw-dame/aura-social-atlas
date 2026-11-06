@@ -27,6 +27,31 @@ export function safeExternalUrl(value: string): string | null {
   } catch { return null; }
 }
 
+/** Browser boundary: the remote read-only gateway can be old or malformed.
+ * Never pass unexpected JSONB tags into React where .map would throw. */
+export function normalizeDiscoveryItem(value: unknown): DiscoveryItem | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const data = value as Record<string, unknown>;
+  if (typeof data.id !== 'string' || typeof data.text !== 'string' ||
+      typeof data.url !== 'string' || typeof data.origin !== 'string') return null;
+  const tags = Array.isArray(data.hashtags)
+    ? data.hashtags.filter((tag): tag is string => typeof tag === 'string' && tag.length <= 100).slice(0, 64)
+    : [];
+  const rawAuthor = data.author;
+  const author = rawAuthor && typeof rawAuthor === 'object' && !Array.isArray(rawAuthor)
+    ? rawAuthor as Record<string, unknown> : null;
+  const nullable = (v: unknown) => typeof v === 'string' ? v : null;
+  return {
+    id: data.id, url: data.url, text: data.text,
+    summary: nullable(data.summary),
+    author: author ? { name: nullable(author.name), handle: nullable(author.handle), url: nullable(author.url), id: nullable(author.id) } : null,
+    origin: data.origin, hashtags: tags,
+    publishedAt: nullable(data.publishedAt),
+    ingestedAt: typeof data.ingestedAt === 'string' ? data.ingestedAt : '',
+    via: typeof data.via === 'string' ? data.via : '',
+  };
+}
+
 export async function fetchDiscoveryPage(filters: DiscoveryFilters, signal: AbortSignal): Promise<DiscoveryPage> {
   const origin = discoveryGatewayOrigin();
   if (!origin) throw new Error('Discovery gateway is not configured');
@@ -41,5 +66,5 @@ export async function fetchDiscoveryPage(filters: DiscoveryFilters, signal: Abor
   const value: unknown = await response.json();
   if (!value || typeof value !== 'object' || !Array.isArray((value as DiscoveryPage).items)) throw new Error('Invalid discovery response');
   const data = value as DiscoveryPage;
-  return { items: data.items.filter(item => typeof item.id === 'string' && typeof item.text === 'string' && typeof item.url === 'string'), nextCursor: typeof data.nextCursor === 'string' ? data.nextCursor : null };
+  return { items: data.items.map(normalizeDiscoveryItem).filter((item): item is DiscoveryItem => item !== null), nextCursor: typeof data.nextCursor === 'string' ? data.nextCursor : null };
 }
