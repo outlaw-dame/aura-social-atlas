@@ -591,7 +591,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       kv: new MemoryKvStore(),
       queue: new InProcessMessageQueue(),
       sql,
-    }, { documentLoaderFactory, onRequestFinished: report => {
+    }, { documentLoaderFactory, authenticatedDocumentLoaderFactory: (_identity, options) => documentLoaderFactory(options), onRequestFinished: report => {
       authenticationReports.push({
         authentication: report.authentication, outcome: report.outcome,
         checks: report.attempts.map(attempt => ({
