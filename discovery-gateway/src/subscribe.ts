@@ -90,6 +90,7 @@ export async function subscribe(gateway: Gateway, sql: Sql, origin: string, inpu
   } catch {
     return { ok: false, status: 502, error: 'could not resolve remote actor' };
   }
+  if (!actor) return { ok: false, status: 404, error: 'remote ActivityPub actor could not be resolved' };
   const identity = validateRelayActor(actor, target.actorUrl, target.kind);
   if (!identity.ok) return { ok: false, status: 400, error: identity.error };
 
@@ -147,6 +148,7 @@ export async function retrySubscription(gateway: Gateway, sql: Sql, origin: stri
   if (sub.state === 'accepted') return { ok: true, subscription: sub, created: false };
   if (sub.kind === 'mastodon') return { ok: false, status: 501, error: 'Mastodon relay transport verification is not implemented' };
   const actor = await gateway.lookupActor(sub.actorUrl).catch(() => null);
+  if (!actor) return { ok: false, status: 502, error: 'could not resolve remote actor' };
   const identity = validateRelayActor(actor, sub.actorUrl, sub.kind);
   if (!identity.ok || identity.canonicalActorUrl !== sub.actorUrl) {
     return { ok: false, status: 502, error: 'remote actor identity or inbox could not be safely validated' };
