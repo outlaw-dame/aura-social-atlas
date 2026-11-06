@@ -98,13 +98,17 @@ export async function initSchema(sql: Sql): Promise<void> {
 export async function loadKeyPair(sql: Sql, identifier: string): Promise<{ privateKey: unknown; publicKey: unknown } | null> {
   const rows = await sql`SELECT private_key, public_key FROM gateway_keys WHERE actor_identifier = ${identifier}`;
   const row = rows[0] as { private_key: unknown; public_key: unknown } | undefined;
-  return row ? { privateKey: row.private_key, publicKey: row.public_key } : null;
+  if (!row) return null;
+  // Historical rows written with JSON.stringify could be jsonb *strings*.
+  // Accept both legacy string-encoded and proper jsonb object representations.
+  const decode = (value: unknown): unknown => typeof value === 'string' ? JSON.parse(value) as unknown : value;
+  return { privateKey: decode(row.private_key), publicKey: decode(row.public_key) };
 }
 
 export async function saveKeyPair(sql: Sql, identifier: string, privateKey: unknown, publicKey: unknown): Promise<void> {
   await sql`
     INSERT INTO gateway_keys (actor_identifier, private_key, public_key)
-    VALUES (${identifier}, ${JSON.stringify(privateKey)}, ${JSON.stringify(publicKey)})
+    VALUES (${identifier}, ${sql.json(privateKey as Parameters<typeof sql.json>[0])}, ${sql.json(publicKey as Parameters<typeof sql.json>[0])})
     ON CONFLICT (actor_identifier) DO NOTHING`;
 }
 
@@ -143,10 +147,20 @@ export async function setSubscriptionState(sql: Sql, id: string, state: Subscrip
   await sql`UPDATE gateway_subscriptions SET state = ${state}, updated_at = now() WHERE id = ${id}`;
 }
 
-/** Accepted subscriptions whose actor host matches (for the ingest gate). */
-export async function acceptedSubscriptionHosts(sql: Sql): Promise<Set<string>> {
-  const rows = await sql<{ actor_host: string }[]>`SELECT actor_host FROM gateway_subscriptions WHERE state = 'accepted'`;
-  return new Set(rows.map(r => r.actor_host));
+/** Exact accepted actor ids. Host matching is insufficient: many actors share a host. */
+export async function acceptedSubscriptionActors(sql: Sql): Promise<Set<string>> {
+  const rows = await sql<{ actor_url: string }[]>`SELECT actor_url FROM gateway_subscriptions WHERE state = 'accepted'`;
+  return new Set(rows.map(r => r.actor_url));
+}
+
+/** Atomically rotate correlation id before sending a retry. */
+export async function setPendingFollowId(sql: Sql, id: string, followId: string): Promise<boolean> {
+  const rows = await sql`
+    UPDATE gateway_subscriptions
+    SET state = 'pending', follow_activity_id = ${followId}, updated_at = now()
+    WHERE id = ${id} AND state IN ('pending','rejected','disabled')
+    RETURNING id`;
+  return rows.length === 1;
 }
 
 /** Find a subscription by the Follow activity id we sent (for Accept/Reject correlation). */
@@ -175,7 +189,7 @@ export async function insertItem(sql: Sql, item: Omit<GatewayItem, 'ingestedAt'>
   const rows = await sql`
     INSERT INTO gateway_items (id, activity_id, relay_actor, author_id, author_name, author_handle, author_url, object_origin, url, summary, text, hashtags, published_at)
     VALUES (${item.id}, ${item.activityId}, ${item.relayActor}, ${item.authorId}, ${item.authorName}, ${item.authorHandle}, ${item.authorUrl}, ${item.objectOrigin}, ${item.url}, ${item.summary}, ${item.text}, ${JSON.stringify(item.hashtags)}, ${item.publishedAt})
-    ON CONFLICT (id) DO NOTHING
+    ON CONFLICT DO NOTHING
     RETURNING id`;
   return rows.length === 1;
 }
@@ -219,8 +233,13 @@ export async function listFacets(sql: Sql): Promise<{ tags: string[]; domains: s
   };
 }
 
-export async function deleteItem(sql: Sql, objectId: string): Promise<void> {
-  await sql`DELETE FROM gateway_items WHERE id = ${objectId}`;
+/** A verified original author may remove only their own cached object. */
+export async function deleteItem(sql: Sql, objectId: string, verifiedAuthorId: string): Promise<boolean> {
+  const rows = await sql`
+    DELETE FROM gateway_items
+    WHERE id = ${objectId} AND author_id = ${verifiedAuthorId}
+    RETURNING id`;
+  return rows.length > 0;
 }
 
 /** Keep the table bounded; removes the oldest rows beyond maxItems. */

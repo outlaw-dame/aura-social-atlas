@@ -53,11 +53,11 @@ export class RateLimiter {
   }
 }
 
-function clientKey(req: Request): string {
-  // Behind a reverse proxy the operator should set X-Forwarded-For; we take the
-  // first hop only and never trust it for anything stronger than rate limiting.
-  const fwd = req.headers.get('x-forwarded-for');
-  return fwd?.split(',')[0]?.trim() || 'unknown';
+function clientKey(_req: Request): string {
+  // Never trust a client-provided X-Forwarded-For header as an identity:
+  // attackers could rotate it to evade limits. Until a proxy-signed address
+  // can be supplied by trusted infrastructure, share a conservative bucket.
+  return 'untrusted-public';
 }
 
 function corsHeaders(cfg: GatewayConfig, req: Request): Record<string, string> {
@@ -114,6 +114,17 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
       if (req.method !== 'GET') return json({ error: 'method not allowed' }, { status: 405 }, cors);
 
       if (path === '/api/v1/items') {
+        // Bound query size before allocating strings or constructing DB filters.
+        const tag = url.searchParams.get('tag');
+        const domain = url.searchParams.get('domain');
+        const search = url.searchParams.get('q');
+        const cursor = url.searchParams.get('cursor');
+        if ((tag && !/^#?[\p{L}\p{N}_-]{1,100}$/u.test(tag)) ||
+            (domain && (domain.length > 253 || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(domain))) ||
+            (search && search.length > 120) ||
+            (cursor && cursor.length > 2048)) {
+          return json({ error: 'invalid discovery filter' }, { status: 400 }, cors);
+        }
         const limitRaw = url.searchParams.get('limit');
         const limit = limitRaw && /^\d+$/.test(limitRaw) ? Math.min(Math.max(Number(limitRaw), 1), 50) : 20;
         const page = await queryItems(sql, {
@@ -145,8 +156,10 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
       if (path === '/admin/subscriptions' && req.method === 'POST') {
         const bytes = await readLimited(req, 16_384);
         if (!bytes) return json({ error: 'payload too large' }, { status: 413 });
-        let body: Partial<SubscribeInput> & { type?: string };
-        try { body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { return json({ error: 'invalid JSON' }, { status: 400 }); }
+        let parsed: unknown;
+        try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { return json({ error: 'invalid JSON' }, { status: 400 }); }
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return json({ error: 'expected a JSON object' }, { status: 400 });
+        const body = parsed as Partial<SubscribeInput> & { type?: string };
         if (body.type !== 'tag' && body.type !== 'instance' && body.type !== 'actor') return json({ error: 'type must be tag, instance or actor' }, { status: 400 });
         if (typeof body.value !== 'string' || !body.value.trim() || body.value.length > 500) return json({ error: 'value is required' }, { status: 400 });
         if (body.type === 'actor' && body.kind !== undefined && body.kind !== 'mastodon' && body.kind !== 'litepub') return json({ error: 'kind must be mastodon or litepub' }, { status: 400 });
@@ -156,7 +169,8 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
       }
       const subMatch = /^\/admin\/subscriptions\/([0-9a-f-]{36})(\/retry)?$/.exec(path);
       if (subMatch) {
-        const [, id, action] = subMatch as [string, string, string | undefined];
+        const id = subMatch[1]!;
+        const action = subMatch[2];
         if (req.method === 'DELETE' && !action) {
           const result = await unsubscribe(gateway, sql, id);
           if (!result.ok) return json({ error: result.error }, { status: result.status });

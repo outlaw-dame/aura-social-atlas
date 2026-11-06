@@ -18,6 +18,7 @@ import { avatarPreset } from '@/lib/atlas-avatars';
 import { ProfilePopup, EditProfileSheet } from './ProfilePopup';
 import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileFedizenFeed, useActivitySummary } from './FedizenMobile';
+import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
 
 Framework7.use(Framework7React);
@@ -189,6 +190,7 @@ export default function AtlasMobileApp() {
                 ))}
                 {results.length === 0 && <ListItem title="No creators match your search" />}
               </List>
+              <Block className="px-3"><GatewayDiscovery /></Block>
               <MobileRecentArticles />
               <BlockTitle>Stories</BlockTitle>
               {posts.map(postCard)}

@@ -5,11 +5,11 @@
  */
 export const delivered: { url: string; body: Record<string, unknown> }[] = [];
 export const blocked: string[] = [];
-globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+globalThis.fetch = (async (input: Request | string | URL, init?: RequestInit) => {
   const req = new Request(input, init);
   const u = new URL(req.url); const host = req.headers.get('host') ?? u.host;
   const url = `${u.protocol}//${host}${u.pathname}`;
-  if (req.method === 'POST') { delivered.push({ url, body: await req.json().catch(() => ({})) }); return new Response(null, { status: 202 }); }
+  if (req.method === 'POST') { const value: unknown = await req.json().catch(() => ({})); const body: Record<string, unknown> = value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; delivered.push({ url, body }); return new Response(null, { status: 202 }); }
   blocked.push(url);
   throw new TypeError(`network disabled in tests: ${url}`);
 }) as typeof fetch;

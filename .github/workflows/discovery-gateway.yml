@@ -1,0 +1,62 @@
+name: Discovery gateway and Atlas checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/discovery-gateway-atlas-phase1
+  pull_request:
+    paths:
+      - 'discovery-gateway/**'
+      - 'src/components/social/Discovery.tsx'
+      - 'src/components/social/GatewayDiscovery.tsx'
+      - 'src/lib/discovery-gateway.ts'
+      - '.github/workflows/discovery-gateway.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gateway_ci
+          POSTGRES_PASSWORD: gateway_ci_password
+          POSTGRES_DB: gateway_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gateway_ci -d gateway_integration"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      GATEWAY_TEST_DATABASE_URL: postgres://gateway_ci:gateway_ci_password@127.0.0.1:5432/gateway_integration
+    defaults:
+      run:
+        working-directory: discovery-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.4'
+      - run: bun install
+      - name: Type-check
+        run: bun run typecheck
+      - name: Gateway unit and PostgreSQL integration tests
+        run: bun test src
+  atlas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.4'
+      - run: bun install --frozen-lockfile
+      - name: Type-check Atlas client
+        run: bunx tsc --noEmit
+      - name: Build Atlas client
+        run: bun run build

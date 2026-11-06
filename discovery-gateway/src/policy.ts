@@ -14,16 +14,18 @@
  */
 
 import { PUBLIC_COLLECTION } from '@fedify/vocab';
-import { hostOf, originOf } from './urlguard.ts';
+import { originOf, checkRemoteUrl } from './urlguard.ts';
 
 export const AS_PUBLIC = PUBLIC_COLLECTION.href;
 
-type IdLike = { href?: string } | string | null | undefined;
+type IdLike = { href?: string; id?: string | URL } | string | null | undefined;
 
 function idHref(v: IdLike): string | null {
   if (v == null) return null;
   if (typeof v === 'string') return v;
-  return typeof v.href === 'string' ? v.href : null;
+  if (typeof v.href === 'string') return v.href;
+  if (typeof v.id === 'string') return v.id;
+  return v.id instanceof URL ? v.id.href : null;
 }
 
 /** True when as:Public appears in to or cc of the given raw audience arrays. */
@@ -40,20 +42,19 @@ export type IngestInput = {
   /** Raw parsed activity JSON-LD body (already signature-verified by Fedify). */
   body: Record<string, unknown>;
   /** Hosts of relay actors with a currently-accepted subscription. */
-  subscribedHosts: Set<string>;
+  subscribedActors: Set<string>;
 };
 
 /**
  * Decides whether an inbound Create/Announce may be ingested, and extracts the
  * object identity + provenance. Fail closed on any ambiguity.
  */
-export function authorizeIngest({ body, subscribedHosts }: IngestInput): IngestDecision {
+export function authorizeIngest({ body, subscribedActors }: IngestInput): IngestDecision {
   const type = body['type'];
   if (type !== 'Create' && type !== 'Announce') return { ok: false, reason: 'unsupported activity type' };
 
   const actorId = idHref(body['actor'] as IdLike);
-  const actorHost = hostOf(actorId);
-  if (!actorHost || !subscribedHosts.has(actorHost)) return { ok: false, reason: 'actor is not an accepted subscription' };
+  if (!actorId || !subscribedActors.has(actorId)) return { ok: false, reason: 'actor is not an accepted subscription' };
 
   if (!addressesPublic(body['to'], body['cc'])) return { ok: false, reason: 'activity is not public' };
 
@@ -68,11 +69,12 @@ export function authorizeIngest({ body, subscribedHosts }: IngestInput): IngestD
   if (!objectId) return { ok: false, reason: 'activity object has no id' };
 
   const objectOrigin = originOf(objectId);
-  if (!objectOrigin || objectOrigin === 'null') return { ok: false, reason: 'object id is not an absolute URL' };
+  if (!objectOrigin || !objectOrigin.startsWith('https://')) return { ok: false, reason: 'object id is not an absolute URL' };
 
   // For Announce with an embedded object, the embedded copy must also be public
   // and must not contradict the announced id (a relay could embed anything).
-  if (type === 'Announce' && embedded) {
+  if (type === 'Announce') {
+    if (!embedded) return { ok: false, reason: 'announced object must be origin-fetched' };
     if (!addressesPublic(embedded['to'], embedded['cc'])) return { ok: false, reason: 'announced object is not public' };
   }
 
@@ -83,6 +85,12 @@ export function authorizeIngest({ body, subscribedHosts }: IngestInput): IngestD
   let authorId: string | null = null;
   if (embedded) {
     authorId = idHref(embedded['attributedTo'] as IdLike) ?? idHref(embedded['actor'] as IdLike);
+  }
+  // A remote host must not be able to attribute its own object to an actor
+  // on another host without an independently verified delegated identity.
+  // For the initial implementation, require a clear same-origin author.
+  if (!authorId || !checkRemoteUrl(authorId).ok || originOf(authorId) !== objectOrigin) {
+    return { ok: false, reason: 'original author is missing or has a different origin' };
   }
   if (type === 'Create') {
     if (authorId && authorId !== actorId) return { ok: false, reason: 'Create author does not match verified actor' };
