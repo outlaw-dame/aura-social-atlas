@@ -104,6 +104,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores): Gateway
       // the winning durable key, never sign with a key we did not persist.
       const stored = await loadKeyPair(stores.sql, identifier);
       if (!stored) throw new Error('service actor signing key was not persisted');
+      log('actor.keypair_db_read_types', { privateType: typeof stored.privateKey, publicType: typeof stored.publicKey });
       const [persistedPrivate, persistedPublic] = await Promise.all([
         importJwk(stored.privateKey as JsonWebKey, 'private'),
         importJwk(stored.publicKey as JsonWebKey, 'public'),
