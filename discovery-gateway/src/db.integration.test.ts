@@ -12,7 +12,7 @@ import { loadConfig } from './config.ts';
 import { authorizeIngest } from './policy.ts';
 import {
   acceptedSubscriptionActors, createSubscription, deleteItem, getSubscription,
-  initSchema, insertItem, listFacets, listSubscriptions, loadKeyPair, pruneItems, queryItems,
+  initSchema, insertItem, listFacets, listSubscriptions, loadKeyPair, normalizeStoredHashtags, pruneItems, queryItems,
   saveKeyPair, setPendingFollowId, setSubscriptionState, settlePendingFollow, subscriptionByFollowId,
   type GatewayItem,
 } from './db.ts';
@@ -159,6 +159,24 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       createSubscription(sql, { ...input, followActivityId: `${prefix}race-${i}` })));
     expect(attempts.filter(a => a.created).length).toBe(1);
     expect(new Set(attempts.map(a => a.subscription.id)).size).toBe(1);
+  });
+
+  dbTest('hashtags persist as indexed JSONB arrays, filter correctly, and legacy strings do not break reads', async () => {
+    const id = prefix + 'hashtag-shape';
+    expect(await insertItem(sql, item(id, undefined, ['fediverse', 'testing']))).toBe(true);
+    const row = await sql`SELECT jsonb_typeof(hashtags) AS kind FROM gateway_items WHERE id = ${id}`;
+    expect(row[0]?.kind).toBe('array');
+    const tagPage = await queryItems(sql, { tag: 'fediverse', limit: 10 });
+    expect(tagPage.items.some(result => result.id === id && result.hashtags.includes('testing'))).toBe(true);
+
+    // Simulate historical JSON.stringify() being inserted into a JSONB column.
+    await sql`UPDATE gateway_items SET hashtags = ${sql.json(JSON.stringify(['legacy', 'valid']))} WHERE id = ${id}`;
+    const legacy = await queryItems(sql, { limit: 30 });
+    expect(legacy.items.find(result => result.id === id)?.hashtags).toEqual(['legacy', 'valid']);
+
+    expect(normalizeStoredHashtags('not json')).toEqual([]);
+    expect(normalizeStoredHashtags('{"unexpected":true}')).toEqual([]);
+    expect(normalizeStoredHashtags(['ok', 42, null, 'x'])).toEqual(['ok', 'x']);
   });
 
   dbTest('concurrent duplicate posts store exactly one row', async () => {
