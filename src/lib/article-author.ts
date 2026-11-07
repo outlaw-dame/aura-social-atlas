@@ -53,6 +53,44 @@ export function isPublicHttpsUrl(raw: string | undefined | null): raw is string 
   return true;
 }
 
+const v4ToInt = (ip: string) => ip.split(".").reduce((n, o) => (n << 8) + Number(o), 0) >>> 0;
+const V4_BLOCKED: [string, number][] = [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.88.99.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4],
+];
+
+/** True only for globally routable unicast addresses (IPv4, or IPv6 in 2000::/3 minus special blocks). */
+export function isPublicIp(ip: string): boolean {
+  const v = ip.trim().toLowerCase();
+  if (IPV4.test(v)) {
+    if (v.split(".").some((o) => Number(o) > 255)) return false;
+    const n = v4ToInt(v);
+    return !V4_BLOCKED.some(([base, bits]) => n >>> (32 - bits) === v4ToInt(base) >>> (32 - bits));
+  }
+  if (!v.includes(":")) return false;
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(v);
+  if (mapped) return isPublicIp(mapped[1]);
+  const first = parseInt(v.split(":")[0] || "0", 16);
+  if (Number.isNaN(first) || (first & 0xe000) !== 0x2000) return false; // not 2000::/3
+  if (first === 0x2002) return false; // 6to4
+  if (/^2001:0?db8:/.test(v)) return false; // documentation
+  if (/^2001:0{0,4}:/.test(v) || v.startsWith("2001::")) return false; // Teredo
+  return true;
+}
+
 export const normalizeHost = (host: string) =>
   host
     .toLowerCase()
@@ -83,19 +121,12 @@ export function isArticleObject(o: unknown): o is Json {
   return isObj(o) && typesOf(o).some((t) => ARTICLE_TYPES.has(t)) && o.attributedTo != null;
 }
 
-/** attributedTo may be a URL, an embedded actor, or a list of either. Returns embedded actors or ids. */
-export function attributedActors(article: Json): (string | Json)[] {
+/** attributedTo may be a URL, an embedded actor, or a list of either. Returns actor ids only: an embedded
+ *  actor is publisher-supplied, so it is always re-fetched from its own server before it is trusted. */
+export function attributedActors(article: Json): string[] {
   return list(article.attributedTo)
-    .map((a) =>
-      typeof a === "string"
-        ? a
-        : isObj(a)
-          ? typesOf(a).some((t) => ACTOR_TYPES.has(t))
-            ? a
-            : str(a.id)
-          : undefined,
-    )
-    .filter((a): a is string | Json => !!a)
+    .map((a) => (typeof a === "string" ? a : isObj(a) ? str(a.id) : undefined))
+    .filter((a): a is string => isPublicHttpsUrl(a))
     .slice(0, MAX_AUTHORS);
 }
 

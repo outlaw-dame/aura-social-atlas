@@ -5,12 +5,14 @@ import {
   parseArticleHead,
   parseHandle,
   actorToAuthor,
+  isPublicIp,
 } from "../src/lib/article-author";
 import {
   clearAuthorCache,
   resolveArticleAuthors,
   resolveAuthorsFor,
   safeFetch,
+  type Lookup,
 } from "../src/lib/article-author.server";
 import { bonfireAuthor, linkAuthor } from "../src/lib/spotlight";
 
@@ -53,6 +55,13 @@ const actor = (id: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
+/* Fake DNS: every host is public unless listed. */
+const publicDns: Lookup = async () => ["93.184.216.34"];
+const dns =
+  (overrides: Record<string, string[] | null>): Lookup =>
+  async (h) =>
+    h in overrides ? overrides[h] : ["93.184.216.34"];
+
 beforeEach(() => clearAuthorCache());
 
 describe("ActivityPub-native articles (what Mastodon's link previews ignore)", () => {
@@ -61,7 +70,11 @@ describe("ActivityPub-native articles (what Mastodon's link previews ignore)", (
       "https://blog.example.org/post/1": { body: article("https://blog.example.org/users/jane") },
       "https://blog.example.org/users/jane": { body: actor("https://blog.example.org/users/jane") },
     });
-    const [a] = await resolveArticleAuthors("https://blog.example.org/post/1", fetchImpl);
+    const [a] = await resolveArticleAuthors(
+      "https://blog.example.org/post/1",
+      fetchImpl,
+      publicDns,
+    );
     expect(a).toEqual({
       name: "Jane Writer",
       acct: "@jane@blog.example.org",
@@ -80,7 +93,11 @@ describe("ActivityPub-native articles (what Mastodon's link previews ignore)", (
       },
       "https://blog.example.org/users/jane": { body: actor("https://blog.example.org/users/jane") },
     });
-    const authors = await resolveArticleAuthors("https://blog.example.org/post/1", fetchImpl);
+    const authors = await resolveArticleAuthors(
+      "https://blog.example.org/post/1",
+      fetchImpl,
+      publicDns,
+    );
     expect(authors.map((a) => a.acct)).toEqual(["@jane@blog.example.org"]);
   });
 
@@ -89,7 +106,9 @@ describe("ActivityPub-native articles (what Mastodon's link previews ignore)", (
     const { fetchImpl, seen } = net({
       "https://blog.example.org/post/1": { type: "text/html", body: html },
     });
-    expect(await resolveArticleAuthors("https://blog.example.org/post/1", fetchImpl)).toEqual([]);
+    expect(
+      await resolveArticleAuthors("https://blog.example.org/post/1", fetchImpl, publicDns),
+    ).toEqual([]);
     expect(seen).not.toContain("https://evil.example.net/ap");
   });
 
@@ -101,7 +120,11 @@ describe("ActivityPub-native articles (what Mastodon's link previews ignore)", (
       },
     };
     expect(
-      await resolveArticleAuthors("https://blog.example.org/post/1", net(routes).fetchImpl),
+      await resolveArticleAuthors(
+        "https://blog.example.org/post/1",
+        net(routes).fetchImpl,
+        publicDns,
+      ),
     ).toEqual([]);
     clearAuthorCache();
     routes["https://social.example.net/users/jane"] = {
@@ -110,6 +133,7 @@ describe("ActivityPub-native articles (what Mastodon's link previews ignore)", (
     const [a] = await resolveArticleAuthors(
       "https://blog.example.org/post/1",
       net(routes).fetchImpl,
+      publicDns,
     );
     expect(a?.acct).toBe("@jane@social.example.net");
   });
@@ -126,6 +150,7 @@ describe("ActivityPub-native articles (what Mastodon's link previews ignore)", (
     const authors = await resolveArticleAuthors(
       "https://blog.example.org/post/1",
       net(routes).fetchImpl,
+      publicDns,
     );
     expect(authors.map((a) => a.name)).toEqual(["a", "b", "c"]);
   });
@@ -139,7 +164,100 @@ describe("ActivityPub-native articles (what Mastodon's link previews ignore)", (
       },
       "https://other.example.net/jane": { body: actor("https://blog.example.org/users/jane") },
     });
-    expect(await resolveArticleAuthors("https://blog.example.org/post/1", fetchImpl)).toEqual([]);
+    expect(
+      await resolveArticleAuthors("https://blog.example.org/post/1", fetchImpl, publicDns),
+    ).toEqual([]);
+  });
+});
+
+describe("Codex review fixes", () => {
+  test("an embedded actor is re-fetched from its own server; forged consent is ignored", async () => {
+    const victim = "https://social.example.net/users/jane";
+    const forged = actor(victim, { attributionDomains: ["blog.example.org"] });
+    const { fetchImpl, seen } = net({
+      "https://blog.example.org/post/1": { body: article(forged) },
+      [victim]: { body: actor(victim) }, // the real actor never allowed blog.example.org
+    });
+    expect(
+      await resolveArticleAuthors("https://blog.example.org/post/1", fetchImpl, publicDns),
+    ).toEqual([]);
+    expect(seen).toContain(victim);
+  });
+
+  test("an embedded actor still counts when its own document agrees", async () => {
+    const id = "https://social.example.net/users/jane";
+    const { fetchImpl } = net({
+      "https://blog.example.org/post/1": { body: article(actor(id)) },
+      [id]: { body: actor(id, { attributionDomains: ["blog.example.org"] }) },
+    });
+    const [a] = await resolveArticleAuthors(
+      "https://blog.example.org/post/1",
+      fetchImpl,
+      publicDns,
+    );
+    expect(a?.acct).toBe("@jane@social.example.net");
+  });
+
+  test("a public-looking name that resolves to a private address is never fetched", async () => {
+    const { fetchImpl, seen } = net({
+      "https://127.0.0.1.nip.io/post": { type: "text/html", body: "<head></head>" },
+    });
+    const lookup = dns({ "127.0.0.1.nip.io": ["127.0.0.1"] });
+    expect(
+      await safeFetch("https://127.0.0.1.nip.io/post", "text/html", fetchImpl, lookup),
+    ).toBeNull();
+    expect(seen).toEqual([]);
+  });
+
+  test("a redirect to a host resolving privately is stopped before it is fetched", async () => {
+    const { fetchImpl, seen } = net({
+      "https://blog.example.org/post/1": { status: 302, location: "https://rebind.example.net/x" },
+      "https://rebind.example.net/x": { type: "text/html", body: "secret" },
+    });
+    const lookup = dns({ "rebind.example.net": ["93.184.216.34", "10.0.0.5"] });
+    expect(
+      await safeFetch("https://blog.example.org/post/1", "text/html", fetchImpl, lookup),
+    ).toBeNull();
+    expect(seen).toEqual(["https://blog.example.org/post/1"]);
+  });
+
+  test("an unresolvable host fails closed", async () => {
+    const { fetchImpl, seen } = net({
+      "https://gone.example.org/": { type: "text/html", body: "" },
+    });
+    expect(
+      await safeFetch(
+        "https://gone.example.org/",
+        "text/html",
+        fetchImpl,
+        dns({ "gone.example.org": null }),
+      ),
+    ).toBeNull();
+    expect(seen).toEqual([]);
+  });
+
+  test.each([
+    ["93.184.216.34", true],
+    ["8.8.8.8", true],
+    ["127.0.0.1", false],
+    ["10.1.2.3", false],
+    ["172.20.0.1", false],
+    ["192.168.1.1", false],
+    ["169.254.169.254", false],
+    ["100.64.0.1", false],
+    ["0.0.0.0", false],
+    ["224.0.0.1", false],
+    ["2606:4700:4700::1111", true],
+    ["::1", false],
+    ["fd00::1", false],
+    ["fe80::1", false],
+    ["::ffff:127.0.0.1", false],
+    ["::ffff:8.8.8.8", true],
+    ["2001:db8::1", false],
+    ["2002:7f00:1::1", false],
+    ["64:ff9b::7f00:1", false],
+  ])("isPublicIp(%s) = %p", (ip, ok) => {
+    expect(isPublicIp(ip)).toBe(ok);
   });
 });
 
@@ -166,7 +284,11 @@ describe("fediverse:creator (Mastodon's mechanism, same verification)", () => {
         }),
       },
     });
-    const [a] = await resolveArticleAuthors("https://blog.example.org/post/1", fetchImpl);
+    const [a] = await resolveArticleAuthors(
+      "https://blog.example.org/post/1",
+      fetchImpl,
+      publicDns,
+    );
     expect(a).toMatchObject({ acct: "@jane@social.example.net", verifiedBy: "fediverse-creator" });
   });
 
@@ -181,7 +303,9 @@ describe("fediverse:creator (Mastodon's mechanism, same verification)", () => {
         body: actor("https://social.example.net/users/jane"),
       },
     });
-    expect(await resolveArticleAuthors("https://blog.example.org/post/1", fetchImpl)).toEqual([]);
+    expect(
+      await resolveArticleAuthors("https://blog.example.org/post/1", fetchImpl, publicDns),
+    ).toEqual([]);
   });
 });
 
@@ -207,7 +331,9 @@ describe("safe fetching", () => {
         location: "http://169.254.169.254/latest/meta-data",
       },
     });
-    expect(await safeFetch("https://blog.example.org/post/1", "text/html", fetchImpl)).toBeNull();
+    expect(
+      await safeFetch("https://blog.example.org/post/1", "text/html", fetchImpl, publicDns),
+    ).toBeNull();
     expect(seen).toEqual(["https://blog.example.org/post/1"]);
   });
 
@@ -219,7 +345,7 @@ describe("safe fetching", () => {
         location: `https://blog.example.org/${i + 1}`,
       };
     expect(
-      await safeFetch("https://blog.example.org/0", "text/html", net(routes).fetchImpl),
+      await safeFetch("https://blog.example.org/0", "text/html", net(routes).fetchImpl, publicDns),
     ).toBeNull();
   });
 
@@ -228,7 +354,7 @@ describe("safe fetching", () => {
       "https://slow.example.org/a": { type: "text/html", body: "<head></head>", delayMs: 400 },
     });
     const t0 = Date.now();
-    const out = await resolveAuthorsFor(["https://slow.example.org/a"], 100, fetchImpl);
+    const out = await resolveAuthorsFor(["https://slow.example.org/a"], 100, fetchImpl, publicDns);
     expect(Date.now() - t0).toBeLessThan(350);
     expect(out.get("https://slow.example.org/a")).toBeUndefined();
   });
