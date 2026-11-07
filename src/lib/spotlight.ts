@@ -1,9 +1,13 @@
 /** Browser-safe Spotlight types and normalizers (Mastodon trending links + Bonfire articles). */
+import type { FediAuthor } from './article-author';
+
 export type SpotlightItem = {
   id: string; source: 'Mastodon' | 'Bonfire'; title: string; description: string; url: string;
   image?: string; provider: string; author?: string; shares?: number; published?: string;
-  /** Mastodon 4.3+ author attribution (fediverse:creator) — a verified fediverse account for the writer. */
-  authorAccount?: { name: string; acct: string; url: string; avatar?: string };
+  /** First verified fediverse author (kept for existing callers). */
+  authorAccount?: FediAuthor;
+  /** Every verified fediverse author, up to three — Mastodon only ever shows one. */
+  authorAccounts?: FediAuthor[];
   authorUrl?: string;
 };
 
@@ -12,16 +16,31 @@ type MastodonLink = { url: string; title: string; description?: string; image?: 
 
 const httpOnly = (u?: string) => (u && /^https?:\/\//i.test(u) ? u : undefined);
 
-/** Picks the first author with a linked fediverse account, as Mastodon's "More from" byline does. */
+/** Authors with a linked fediverse account, as Mastodon's "More from" byline credits them (Mastodon
+ *  has already verified these against the account's attribution domains). Mastodon shows only the first. */
 export function linkAuthor(l: Pick<MastodonLink, 'authors' | 'author_name' | 'author_url'>) {
-  const a = l.authors?.find(x => x.account?.acct && httpOnly(x.account.url));
-  const acc = a?.account;
-  const acct = acc?.acct ? (acc.acct.includes('@') ? acc.acct : `${acc.acct}@mastodon.social`) : '';
+  const accounts: FediAuthor[] = (l.authors ?? [])
+    .filter(x => x.account?.acct && httpOnly(x.account.url))
+    .slice(0, 3)
+    .map(x => {
+      const acc = x.account!;
+      const acct = acc.acct!.includes('@') ? acc.acct! : `${acc.acct}@mastodon.social`;
+      return { name: acc.display_name || acc.username || acct, acct: `@${acct.replace(/^@/, '')}`, url: acc.url!, avatar: httpOnly(acc.avatar), verifiedBy: 'mastodon' as const };
+    });
+  const first = l.authors?.find(x => x.account?.acct && httpOnly(x.account.url));
   return {
-    author: acc?.display_name || a?.name || l.author_name || undefined,
-    authorUrl: httpOnly(a?.url || l.author_url),
-    authorAccount: acc && acct ? { name: acc.display_name || acc.username || acct, acct: `@${acct.replace(/^@/, '')}`, url: acc.url!, avatar: httpOnly(acc.avatar) } : undefined,
+    author: first?.account?.display_name || first?.name || l.authors?.[0]?.name || l.author_name || undefined,
+    authorUrl: httpOnly(first?.url || l.authors?.[0]?.url || l.author_url),
+    authorAccount: accounts[0],
+    authorAccounts: accounts.length ? accounts : undefined,
   };
+}
+
+/** A Fedizen (Bonfire) article's author as a fediverse account: Fedizen already resolved the actor. */
+export function bonfireAuthor(a: Pick<BonfireArticle, 'author' | 'handle' | 'avatar' | 'authorUrl'>): FediAuthor | undefined {
+  if (!a.handle || !a.authorUrl) return undefined;
+  const user = a.handle.replace(/^@/, '');
+  return { name: a.author, acct: `@${user.includes('@') ? user : `${user}@fedizen.net`}`, url: a.authorUrl, avatar: a.avatar, verifiedBy: 'fedizen' };
 }
 type MastodonStatus = { id: string; url?: string | null; uri: string; content?: string; created_at?: string; account?: { display_name?: string; acct?: string }; card?: { title?: string; description?: string; image?: string | null; url?: string } | null; reblogs_count?: number };
 
@@ -60,6 +79,8 @@ export function mixSpotlight(a: SpotlightItem[], b: SpotlightItem[]): SpotlightI
 export type BonfireArticle = {
   id: string; title: string; summary: string; paragraphs: string[]; url: string; date?: string;
   author: string; handle?: string; avatar?: string; image?: string; likes: number; boosts: number; replies: number;
+  /** The author's actor/profile URL on the fediverse. */
+  authorUrl?: string;
 };
 
 export type BonfireActivityNode = {
@@ -90,7 +111,9 @@ export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticl
     if (paragraphs[0]?.toLowerCase() === title.toLowerCase()) paragraphs.shift();
     const image = n.media?.find(m => m.mediaType?.startsWith('image/') && isHttp(m.url))?.url;
     const avatar = n.subject?.profile?.icon;
+    const actorUrl = n.subject?.character?.canonicalUri;
     return [{
+      authorUrl: isHttp(actorUrl) && actorUrl!.startsWith('https://') ? actorUrl : undefined,
       id: n.id, title, summary: decode(pc?.summary ?? '').trim() || paragraphs[0]?.slice(0, 220) || '', paragraphs,
       url: isHttp(n.canonicalUri) ? n.canonicalUri! : `https://fedizen.net/post/${n.id}`, date: n.date,
       author: n.subject?.profile?.name || n.subject?.character?.username || 'Fedizen author',

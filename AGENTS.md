@@ -1,6 +1,7 @@
 # Architecture
 - Initialize account state through the subscribe-first session observer and associate loaded profiles with their user ID; delayed reads must not overwrite newer auth events or display another account's profile.
 - Share article creator attribution through CreatorTag across phone and desktop feeds; profile and follow actions use the existing discovery state so author interactions stay consistent.
+- Open-web article authors (Spotlight, readers): resolve in src/lib/article-author(.server).ts — the article's ActivityPub attributedTo first, then fediverse:creator via WebFinger, else the plain byline. Credit an actor only if it shares the article's host or lists that domain in attributionDomains; fetch only through safeFetch (public https, re-validated redirects, timeout, size cap) and never block Spotlight past its time budget.
 - Phone Profile is a separate Framework7 popup with local section selection, using shared account and discovery state; never seed fictional personal content for its empty sections.
 - Keep creator catalogue and filtering in browser-safe modules, separate from presentation, so sample discovery can later be replaced by a live source.
 - Share session-only follow/save state through a root provider across discovery routes; do not imply account persistence until connected.
