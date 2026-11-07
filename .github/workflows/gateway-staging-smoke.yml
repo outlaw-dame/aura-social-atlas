@@ -69,7 +69,7 @@ jobs:
           assert status == 200, f'Actor endpoint: {status}'
           assert_edge(headers)
           actor = json.loads(payload)
-          assert actor.get('id') == base + '/actors/gateway', 'Incorrect canonical actor identity'
+          assert actor.get('id') == base + '/actors/gateway', f"Incorrect canonical actor identity: {actor.get('id')!r}"
           assert actor.get('inbox', '').startswith(base + '/'), 'Incorrect actor inbox origin'
           assert actor.get('publicKey') or actor.get('assertionMethod'), 'Actor signing key missing'
           print('PASS: canonical Fedify ActivityPub actor and public signing keys')
