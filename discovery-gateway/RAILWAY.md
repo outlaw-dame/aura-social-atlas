@@ -1,5 +1,7 @@
 # Atlas Discovery Gateway — Railway staging
 
+> **Live staging update (November 2026):** This original provisioning runbook predates the deployed Railway gateway. The gateway is online, signed federation interop passed, and public admin is now bound to a separate private port. **Do not attach/retain a public Railway domain in the final architecture**: an external test demonstrated a forged-Host bypass of Cloudflare WAF on the direct Railway origin. Follow [CLOUDFLARE_TUNNEL.md](./CLOUDFLARE_TUNNEL.md) for the staged tunnel migration, exact security gates, and rollback procedure. The Tunnel connector and DNS cutover are NOT complete as of this update.
+
 Use this runbook only for a **new, isolated staging project/environment**. No step should reuse Fedizen's database, keys, secrets, actor URL, or production subscribers. This repository does not auto-provision Railway resources. Review cost and access before creating services.
 
 Railway supports independent persistent services for web APIs and background workers, internal service networking, and PostgreSQL. The gateway needs **both** roles continuously running; a cron or request-driven function cannot replace its durable queue worker.
@@ -26,7 +28,7 @@ Internet / controlled staging relay
 
 1. Create a staging Railway project, add a dedicated PostgreSQL service, and enable the backup policy appropriate for the experiment.
 2. Create two **persistent** services with GitHub source `outlaw-dame/aura-social-atlas`, branch `main`, **root directory `discovery-gateway`**, and its `Dockerfile`. Confirm both use the same tested source revision/image. For staging, begin with one replica per role.
-3. Set `GATEWAY_ROLE=web` on `atlas-discovery-web`. Attach a Railway-generated HTTPS domain **only** to that service. Set `GATEWAY_ROLE=worker` on the worker service, and do not attach a domain.
+3. Set `GATEWAY_ROLE=web` on `atlas-discovery-web`; set `GATEWAY_ROLE=worker` on the worker service. **For temporary commissioning only**, a Railway-generated web domain may be used with clear expiry and isolated staging. The final exposed hostname must use Cloudflare Tunnel over the Railway private network, with Railway public web domains removed. The worker must never have a public domain.
 4. Define `DATABASE_URL` on **both** services as a Railway *reference variable* to the staging Postgres service's `DATABASE_URL`; use Railway's variable picker so the referenced service name matches exactly. This is a private internal connection, not `DATABASE_PUBLIC_URL`.
 5. Set `GATEWAY_ORIGIN` on **both** services to the exact web service public HTTPS origin (no trailing slash). Set a unique high-entropy `GATEWAY_ADMIN_TOKEN` in the server-side secret store. Never commit or display it. Restrict `GATEWAY_CORS_ORIGINS` to the exact staging web frontend origin, or leave it empty while testing the gateway alone.
 6. Set `NODE_ENV=production`, `PORT=4100`, and `GATEWAY_ADMIN_PORT=4101` (private-network-only, never publicly routed) on the web service. Configure the web healthcheck as `/healthz`, a one-minute initialization grace period, and a restart policy appropriate for persistent work. Use the same restart policy on the worker, whose readiness must be inferred from its structured startup log and ongoing queue processing rather than an HTTP healthcheck.
