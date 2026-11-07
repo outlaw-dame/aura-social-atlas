@@ -41,6 +41,34 @@ The gateway's bearer token is **not** by itself an adequate production network i
 
 Set a service-specific egress firewall or network policy that blocks access to private/reserved IPv4 and IPv6 destinations (except narrowly permitted private PostgreSQL and DNS infrastructure). Validate that protections cover redirect chains, cloud metadata endpoints, and DNS-rebinding attempts. **Fedify's address pinning is defense in depth, not proof of the host's egress firewall.** Railway platform networking controls must be evaluated on the actual deployment before production promotion.
 
+## Cloudflare to Railway origin-authentication gate
+
+Cloudflare WAF alone cannot prevent callers from reaching a discoverable Railway
+origin with a forged public `Host` header. For the staging domain, configure
+a Cloudflare **Request Header Transform Rule** in phase
+`http_request_late_transform` matching only the exact staging hostname,
+with action `rewrite`, operation `set`, header `x-atlas-edge-auth` and
+a unique random 32+-byte secret. `set` must **overwrite** any caller-supplied
+value. Store the same secret server-side on `gateway-web` as
+`GATEWAY_EDGE_SECRET`; never expose it in frontend code or log it.
+
+Deploy reviewed code *before* enabling the secret. Confirm the Cloudflare
+rewrite works before requiring the header at the application. Once enforced,
+**all** public paths, including `/healthz`, require the injected header.
+The Railway platform's direct-origin healthcheck must be removed before
+enabling this policy (its checks do not carry the Cloudflare header); rely
+on externally monitored Cloudflare HTTPS health plus deployment status until
+a secure private-readiness channel is implemented. The private admin port
+4101 authenticates independently using the server-side bearer token.
+
+Verify with an independent external runner: the Cloudflare hostname serves
+`/healthz`, actor and WebFinger; the Railway direct origin with a forged
+public `Host` receives 403 for `/healthz`, `/actor`, and public discovery
+regardless of user-supplied spoofed forwarding headers. The Cloudflare
+WAF continues returning 403 on public `/admin/*`. Never disable the
+origin secret without a documented rollback because doing so reopens the
+origin-bypass path. Avoid caching signed federation, health, and admin traffic.
+
 ## Staging acceptance procedure
 
 Run the following against a **controlled synthetic relay**, never against arbitrary production Fediverse accounts:
