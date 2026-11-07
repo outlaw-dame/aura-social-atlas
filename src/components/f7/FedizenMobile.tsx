@@ -28,7 +28,13 @@ export function MobileRecentArticles() {
         {open && <Block>
           {open.image && <img src={open.image} alt="" style={{ width: '100%', borderRadius: 16 }} />}
           <h1 style={{ fontFamily: 'Instrument Serif, serif', fontWeight: 400, fontSize: 30, lineHeight: 1.15 }}>{open.title}</h1>
-          <p style={{ opacity: .6, fontSize: 12 }}>{open.handle} · {when(open.date)} · ♥ {open.likes} · ↻ {open.boosts}</p>
+          {open.authorUrl
+            ? <Link external target="_blank" href={open.authorUrl} aria-label={`More from ${open.author} on the fediverse`} style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'inherit', margin: '4px 0 8px' }}>
+                {open.avatar && <img src={open.avatar} alt="" width={36} height={36} referrerPolicy="no-referrer" style={{ borderRadius: 10, objectFit: 'cover' }} />}
+                <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}><b style={{ fontSize: 14 }}>{open.author}</b><span style={{ opacity: .6, fontSize: 12 }}>{open.handle}</span></span>
+              </Link>
+            : null}
+          <p style={{ opacity: .6, fontSize: 12 }}>{open.authorUrl ? '' : `${open.handle ?? ''} · `}{when(open.date)} · ♥ {open.likes} · ↻ {open.boosts}</p>
           {open.paragraphs.map((p, i) => <p key={i} style={{ lineHeight: 1.6 }}>{p}</p>)}
           <Button fill round external target="_blank" href={open.url} style={{ marginTop: 16 }}>Open on Fedizen</Button>
         </Block>}
