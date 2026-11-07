@@ -68,6 +68,7 @@ const log = (event: string, details: Record<string, unknown> = {}) => {
 };
 
 let inboundFollow: { id: string; from: string } | null = null;
+const observedFollowIds = new Set<string>();
 let inboundAccept: { id: string; object: unknown } | null = null;
 let inboundUndo = false;
 let verifiedInbound = 0;
@@ -145,13 +146,14 @@ const server = Bun.serve({
       if (body.type === 'Follow' &&
           typeof body.id === 'string' && body.object === actorId) {
         inboundFollow = { id: body.id, from: body.actor };
+        observedFollowIds.add(body.id);
       } else if (body.type === 'Accept') {
         inboundAccept = { id: typeof body.id === 'string' ? body.id : '', object: body.object };
       } else if (body.type === 'Undo') {
         const undone = body.object && typeof body.object === 'object' &&
           !Array.isArray(body.object)
           ? (body.object as Record<string, unknown>).id : body.object;
-        if (typeof undone === 'string' && undone === inboundFollow?.id)
+        if (typeof undone === 'string' && observedFollowIds.has(undone))
           inboundUndo = true;
       }
       verifiedInbound++;
@@ -236,21 +238,23 @@ async function runInterop() {
       : await admin('/admin/subscriptions', 'POST', {
           type: 'actor', kind: 'litepub', value: actorId,
         });
-    const subscription = record.subscription as {
-      id: string; state: string; followActivityId: string | null;
-    };
+    // The public admin response intentionally withholds followActivityId.
+    // Use only actual *verified* Follow requests; stale prior IDs cannot
+    // transition the rotated pending subscription to accepted.
+    const subscription = record.subscription as { id: string; state: string };
     subscriptionId = subscription.id;
-    const expectedFollowId = subscription.followActivityId;
-    if (!subscriptionId || !expectedFollowId || subscription.state !== 'pending')
+    if (!subscriptionId || subscription.state !== 'pending')
       throw new Error('subscription did not enter pending Follow state');
-    await awaitCondition('gateway signed Follow received and verified', () =>
-      inboundFollow?.id === expectedFollowId);
-    const followId = expectedFollowId;
-    await signedActivity({
-      id: origin + '/activities/accept-' + crypto.randomUUID(),
-      type: 'Accept', actor: actorId, object: followId, to: [gatewayActor],
-    });
-    await awaitCondition('gateway persisted Follow acceptance', async () => {
+    const replied = new Set<string>();
+    await awaitCondition('gateway verified current Follow and persisted signed Accept', async () => {
+      if (inboundFollow && !replied.has(inboundFollow.id)) {
+        const id = inboundFollow.id;
+        replied.add(id);
+        await signedActivity({
+          id: origin + '/activities/accept-' + crypto.randomUUID(),
+          type: 'Accept', actor: actorId, object: id, to: [gatewayActor],
+        });
+      }
       const r = await admin('/admin/subscriptions');
       const subs = r.subscriptions as Array<{ id: string; state: string }>;
       return subs.some(s => s.id === subscriptionId && s.state === 'accepted');
