@@ -64,6 +64,18 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Build gateway staging image with frozen production dependencies
         run: docker build --pull -t atlas-gateway-ci .
+      - name: Validate staging process isolation and syntax
+        run: |
+          python3 - <<'PY'
+          import tomllib
+          with open('fly.staging.example.toml', 'rb') as file:
+              config = tomllib.load(file)
+          assert set(config['processes']) == {'web', 'worker'}
+          assert config['http_service']['processes'] == ['web']
+          assert 'GATEWAY_ROLE=web' in config['processes']['web']
+          assert 'GATEWAY_ROLE=worker' in config['processes']['worker']
+          assert config['http_service']['force_https'] is True
+          PY
       - name: Type-check
         run: bun run typecheck
       - name: Gateway unit and PostgreSQL integration tests
