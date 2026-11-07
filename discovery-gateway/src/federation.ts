@@ -24,6 +24,7 @@ import { acceptedSubscriptionActors, deleteItem, insertItem, listSubscriptions, 
 import { authorizeIngest, isControlPlane } from './policy.ts';
 import { cleanText, hashtagNames, htmlToText } from './sanitize.ts';
 import { hostOf, checkRemoteUrl } from './urlguard.ts';
+import { validateRelayActor } from './subscribe.ts';
 const checkSourceUrl = (id: string) => checkRemoteUrl(id).ok;
 
 export const ACTOR_IDENTIFIER = 'gateway';
@@ -229,20 +230,23 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineF
       const known = subs.find(s => s.kind === 'litepub' && s.actorUrl === follow.actorId?.href && (s.state === 'pending' || s.state === 'accepted'));
       const followId = follow.id?.href;
       const forServiceActor = follow.objectId?.href === ctx.getActorUri(ACTOR_IDENTIFIER).href;
-      if (!known || !followId || !forServiceActor) {
-        if (followId && follow.actorId) {
-          const remote = await ctx.lookupObject(follow.actorId.href);
-          if (remote && 'inboxId' in remote && remote.inboxId) {
-            const reject = new Reject({ id: new URL(`${cfg.origin}/activities/${crypto.randomUUID()}`), actor: ctx.getActorUri(ACTOR_IDENTIFIER), object: follow });
-            await ctx.sendActivity({ identifier: ACTOR_IDENTIFIER }, remote as Actor, reject);
-          }
-        }
+      // An unapproved signed Follow must not make us resolve attacker-selected
+      // actor documents or generate outbound Reject deliveries. No reciprocal
+      // relationship was agreed to, so fail closed without network egress.
+      if (!known || !followId || !forServiceActor || !follow.actorId || !checkSourceUrl(follow.actorId.href)) {
         log('follow.rejected', { host: followerHost });
         return;
       }
-      const remote = await ctx.lookupObject(follow.actorId!.href);
-      if (!remote || !('inboxId' in remote) || !remote.inboxId) {
+      const remote = await ctx.lookupObject(follow.actorId.href);
+      if (!(remote instanceof Service) && (!remote || !('inboxId' in remote))) {
         log('follow.rejected', { reason: 'missing verified recipient inbox' });
+        return;
+      }
+      // The remote actor must still own the exact approved ID and a safe
+      // same-origin inbox at delivery time; do not trust substituted inboxes.
+      const checked = validateRelayActor(remote as Actor, follow.actorId.href, 'litepub');
+      if (!checked.ok || checked.canonicalActorUrl !== follow.actorId.href) {
+        log('follow.rejected', { reason: 'remote actor identity or inbox changed' });
         return;
       }
       const accept = new Accept({ id: new URL(`${cfg.origin}/activities/${crypto.randomUUID()}`), actor: ctx.getActorUri(ACTOR_IDENTIFIER), object: follow });
@@ -305,6 +309,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineF
       await ctx.sendActivity({ identifier: ACTOR_IDENTIFIER }, relayActor, undo);
     },
     lookupActor: async (url) => {
+      if (!checkSourceUrl(url)) return null;
       const ctx = await requestContext();
       const obj = await ctx.lookupObject(url);
       if (obj && 'inboxId' in obj && obj.inboxId) return obj as Actor;
