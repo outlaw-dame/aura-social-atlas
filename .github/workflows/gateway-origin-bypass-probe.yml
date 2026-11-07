@@ -2,6 +2,8 @@ name: Gateway staging origin-bypass security probe
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '37 9 * * 1'
   pull_request:
     paths:
       - '.github/workflows/gateway-origin-bypass-probe.yml'
@@ -58,4 +60,15 @@ jobs:
           assert admin == 403, f'Forged Host admin did not receive edge-secret 403: {admin}'
           assert not forged_headers.get('Cf-Ray'), 'Probe unexpectedly passed through Cloudflare'
           print('PASS: direct Railway origin and forged Host explicitly denied (404/403)')
+          # Positive-path assertion: origin authentication must not break
+          # legitimate Cloudflare-forwarded traffic or public key discovery.
+          cloudflare_url = 'https://' + public_host + '/healthz'
+          with opener.open(urllib.request.Request(cloudflare_url,
+                      headers={'User-Agent': 'AtlasSecurityOriginProbe/1.0'}), timeout=12) as res:
+              assert res.status == 200, 'Cloudflare HTTPS health is not available'
+              assert res.headers.get('Cf-Ray'), 'Cloudflare proxy header missing'
+              assert res.headers.get('Cache-Control') == 'no-store'
+              assert res.read(4096).strip() == b'{"ok":true}', 'Gateway database-backed health failed'
+          print('PASS: legitimate Cloudflare HTTPS still reaches healthy gateway')
+
           PY
