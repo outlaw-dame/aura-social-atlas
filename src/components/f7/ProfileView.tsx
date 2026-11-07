@@ -6,15 +6,18 @@ import { avatarPreset } from '@/lib/atlas-avatars';
 import { creators, posts, fullHandle, type Creator } from '@/lib/social-catalogue';
 import { CreatorTag } from '@/components/social/CreatorTag';
 import { linkifyHashtags, extractHashtags, hashtagUrl } from '@/lib/hashtags';
+import type { Collection } from '@/lib/collections';
+import { MyCollections } from './Collections';
 
-/* Profile tabs follow Bluesky's profile: Posts, Replies, Media, then the owner-only private tab (Bluesky's
-   Likes/Saved; Atlas's Saved), then Feeds and Lists. Follows are not a tab: they open from the Following count. */
-const sections = ['Posts', 'Replies', 'Media', 'Saved', 'Feeds', 'Lists'] as const;
+/* Profile tabs follow Bluesky's profile: Posts, Replies, Media, Collections (Mastodon 4.6's curated account
+   collections), then the owner-only private tab (Bluesky's Likes/Saved; Atlas's Saved), then Feeds and Lists. Follows are not a tab: they open from the Following count. */
+const sections = ['Posts', 'Replies', 'Media', 'Collections', 'Saved', 'Feeds', 'Lists'] as const;
 type Section = (typeof sections)[number];
 const emptySections: Record<Section, { ios: string; md: string; title: string; detail: string }> = {
   Posts: { ios: 'f7:square_pencil', md: 'material:edit_note', title: 'No posts yet', detail: 'Your posts will appear here once publishing is connected.' },
   Replies: { ios: 'f7:bubble_left_bubble_right', md: 'material:forum', title: 'No replies yet', detail: 'Your replies will appear here once publishing is connected.' },
   Media: { ios: 'f7:photo_on_rectangle', md: 'material:photo_library', title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
+  Collections: { ios: 'f7:square_stack_3d_up', md: 'material:collections_bookmark', title: 'No collections yet', detail: '' },
   Saved: { ios: 'f7:bookmark', md: 'material:bookmark_border', title: 'Nothing saved yet', detail: 'Stories you save appear here. Only you can see this tab.' },
   Feeds: { ios: 'f7:rectangle_stack', md: 'material:dynamic_feed', title: 'No feeds yet', detail: 'Custom feeds you create will appear here.' },
   Lists: { ios: 'f7:list_bullet', md: 'material:format_list_bulleted', title: 'No lists yet', detail: 'Your creator lists will appear here when lists are available.' },
@@ -70,7 +73,7 @@ export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose
 
 /** The signed-in person's profile — the dock's avatar tab, laid out like a Bluesky profile: banner, avatar,
  *  Edit profile, name, handle, counts (Following opens the list of follows), bio, then the tab strip. */
-export function ProfileView({ onEditProfile, onOpenCreator }: { onEditProfile: () => void; onOpenCreator: (creator: Creator) => void }) {
+export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: { onEditProfile: () => void; onOpenCreator: (creator: Creator) => void; onOpenCollection: (c: Collection) => void }) {
   const { user, profile, signOut } = useAtlasAuth();
   const { followed, saved, toggleSave, toggleFollow } = useSocial();
   const [section, setSection] = useState<Section>('Posts');
@@ -128,7 +131,8 @@ export function ProfileView({ onEditProfile, onOpenCreator }: { onEditProfile: (
         ))}
       </div>
       <section id="atlas-profile-content" className="atlas-profile-content" role="tabpanel" aria-labelledby={`atlas-profile-tab-${section.toLowerCase()}`}>
-        {!hasContent && <div className="atlas-profile-empty">
+        {section === 'Collections' && <MyCollections onOpen={onOpenCollection} />}
+        {!hasContent && section !== 'Collections' && <div className="atlas-profile-empty">
           <div className="atlas-profile-empty-icon"><Icon ios={empty.ios} md={empty.md} /></div>
           <h2>{empty.title}</h2>
           <p>{empty.detail}</p>
