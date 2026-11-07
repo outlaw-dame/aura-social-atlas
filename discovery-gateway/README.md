@@ -4,6 +4,8 @@
 
 The gateway runs on its own HTTPS origin with a service actor, durable PostgreSQL, Fedify-based signed Follow/Undo delivery and authenticated inbox handling, and a public read-only discovery API. It never uses Fedizen's signing keys or modifies Fedizen's database.
 
+For isolated container staging, separated web/worker processes, database connection requirements, backups, and the go/no-go checklist, see [DEPLOYMENT.md](./DEPLOYMENT.md). No hosting resources are provisioned by this repository.
+
 ## Run locally
 
 Requires **Bun 1.4.3 or newer**, PostgreSQL, and HTTPS for real remote federation. Earlier Bun runtimes are rejected at startup because they can bypass Fedify's pinned-address SSRF protection when proxy environment variables are set. Copy `.env.example` into your own ignored `.env` and supply a secure `GATEWAY_ADMIN_TOKEN` (do not commit it).
