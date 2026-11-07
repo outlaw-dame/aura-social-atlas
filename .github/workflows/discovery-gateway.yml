@@ -97,8 +97,23 @@ jobs:
             exit 1
           fi
           docker inspect --format '{{.State.Running}}' gateway-ci-web | grep -qx true
-          docker inspect --format '{{.State.Running}}' gateway-ci-worker | grep -qx true
-          docker logs gateway-ci-worker | grep -q gateway.worker_started
+          # Worker has no HTTP listener. Wait for its own structured startup event.
+          worker_ready=0
+          for attempt in {1..30}; do
+            if ! docker inspect --format '{{.State.Running}}' gateway-ci-worker | grep -qx true; then
+              docker logs gateway-ci-worker
+              exit 1
+            fi
+            if docker logs gateway-ci-worker 2>&1 | grep -q '"event":"gateway.worker_started"'; then
+              worker_ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$worker_ready" -ne 1 ]; then
+            docker logs gateway-ci-worker
+            exit 1
+          fi
       - name: Validate staging process isolation and syntax
         run: |
           python3 - <<'PY'
