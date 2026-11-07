@@ -247,8 +247,10 @@ async function runInterop() {
       throw new Error('subscription did not enter pending Follow state');
     const replied = new Set<string>();
     await awaitCondition('gateway verified current Follow and persisted signed Accept', async () => {
-      if (inboundFollow && !replied.has(inboundFollow.id)) {
-        const id = inboundFollow.id;
+      // Retried Follow deliveries can arrive out of order; never allow a
+      // stale Follow to hide the new correlated ID in a last-value slot.
+      for (const id of observedFollowIds) {
+        if (replied.has(id)) continue;
         replied.add(id);
         await signedActivity({
           id: origin + '/activities/accept-' + crypto.randomUUID(),
