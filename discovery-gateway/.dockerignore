@@ -6,7 +6,7 @@ coverage
 .git
 .github
 README.md
-*.test.ts
+**/*.test.ts
 test-preload.ts
 bunfig.toml
 tsconfig.json
