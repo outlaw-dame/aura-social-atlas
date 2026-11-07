@@ -122,3 +122,52 @@ export function groupsFromBonfire(edges: unknown): Group[] {
 
 /** The group's full federated address, as Bonfire shows it: `&name@instance` (`+name@instance` for a topic). */
 export const groupHandle = (g: Group) => (g.username ? `${g.type === 'topic' ? '+' : '&'}${g.username.includes('@') ? g.username : `${g.username}@${g.host}`}` : undefined);
+
+/* ── Membership (the signed-in person's, through their Fedizen connection) ─────────────────────────── */
+
+export type Membership = 'member' | 'requested' | 'none';
+/** "follow" for announcement channels (people follow them; only moderators post), "join" for everything else. */
+export type GroupAction = 'join' | 'follow';
+export type MembershipProblem = 'signed-out' | 'not-connected' | 'needs-permission' | 'expired' | 'failed';
+
+export const actionFor = (g: Pick<Group, 'announcements'>): GroupAction => (g.announcements ? 'follow' : 'join');
+
+/**
+ * Bonfire's join/leave reply (`{ following, requested, group: { member } }`) or a Mastodon Relationship
+ * (`{ following, requested }`) → membership. A pending request is "requested" until a moderator accepts.
+ */
+export function membershipFrom(rel: unknown): Membership {
+  if (!rel || typeof rel !== 'object') return 'none';
+  const r = rel as { following?: unknown; requested?: unknown; group?: { member?: unknown } | null };
+  if (r.group?.member === true) return 'member';
+  if (r.requested === true) return 'requested';
+  if (r.group && r.group.member === false) return 'none';
+  return r.following === true ? 'member' : 'none';
+}
+
+/** Fedizen's answer to a write → what went wrong, in terms the page can act on. */
+export const problemFromStatus = (status: number): MembershipProblem => (status === 401 ? 'expired' : status === 403 ? 'needs-permission' : 'failed');
+
+export const MEMBERSHIP_PROBLEM: Record<MembershipProblem, string> = {
+  'signed-out': 'Sign in to join groups.',
+  'not-connected': 'Connect your Fedizen account to join groups.',
+  'needs-permission': 'Reconnect Fedizen so Atlas can join groups for you.',
+  expired: 'Fedizen ended Atlas’s access. Connect again to join groups.',
+  failed: 'Fedizen couldn’t do that right now. Try again.',
+};
+
+/** The membership button's label for a group, given your current state. */
+export function membershipLabel(g: Pick<Group, 'announcements' | 'joinMode'>, state: Membership | MembershipProblem | 'loading'): string {
+  switch (state) {
+    case 'signed-out': return g.announcements ? 'Sign in to follow' : 'Sign in to join';
+    case 'not-connected': return 'Connect Fedizen';
+    case 'needs-permission': case 'expired': return 'Reconnect Fedizen';
+    case 'loading': return g.announcements ? 'Follow' : 'Join';
+    case 'member': return g.announcements ? 'Following' : 'Joined';
+    case 'requested': return 'Requested';
+    default:
+      if (g.announcements) return 'Follow';
+      if (g.joinMode === 'invite') return 'Invite only';
+      return g.joinMode === 'request' ? 'Ask to join' : 'Join';
+  }
+}

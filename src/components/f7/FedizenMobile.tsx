@@ -50,7 +50,7 @@ export function MobileFedizenFeed() {
     {!f.signedIn ? <Block strong inset>Sign in to Atlas to see your Fedizen feed. <Link href="/auth" external>Sign in</Link></Block>
       : f.loading ? <Block strong inset>Loading your Fedizen feed…</Block>
       : !f.data?.connected || f.data.error === 'expired' ? <Block strong inset>
-        <p style={{ marginTop: 0 }}>{f.data?.error === 'expired' ? 'Fedizen ended Atlas’s access. Connect again to keep reading.' : 'Let Atlas read your Fedizen timeline and notifications. Atlas can only read — it can’t post, follow or change anything.'}</p>
+        <p style={{ marginTop: 0 }}>{f.data?.error === 'expired' ? 'Fedizen ended Atlas’s access. Connect again to keep reading.' : 'Connect your Fedizen account to see your timeline and notifications here, and to join groups and follow people from Atlas.'}</p>
         {f.embedded ? <Button fill round external target="_blank" href={`${window.location.origin}/app`}>Open Atlas in a new tab to connect</Button> : <Button fill round onClick={f.connect}>Connect Fedizen</Button>}
         {f.error && <p role="alert" style={{ color: 'var(--f7-theme-color)' }}>{f.error}</p>}
       </Block>
@@ -80,13 +80,13 @@ const noticeIcon: Record<string, { ios: string; md: string }> = {
   collection_update: { ios: 'f7:square_stack_3d_up', md: 'material:collections_bookmark' },
 };
 
-/** Activity tab: the person's real Fedizen notifications (read-only). */
+/** Activity tab: the person's real Fedizen notifications. */
 export function MobileActivity() {
   const f = useFedizen();
   if (!f.signedIn) return <Block strong inset>Sign in to Atlas to see who followed, mentioned or boosted you. <Link href="/auth" external>Sign in</Link></Block>;
   if (f.loading) return <Block strong inset>Loading your activity…</Block>;
   if (!f.data?.connected || f.data.error === 'expired') return <Block strong inset>
-    <p style={{ marginTop: 0 }}>{f.data?.error === 'expired' ? 'Fedizen ended Atlas’s access. Connect again to see your activity.' : 'Connect Fedizen to see your notifications here. Atlas can only read — it can’t post, follow or change anything.'}</p>
+    <p style={{ marginTop: 0 }}>{f.data?.error === 'expired' ? 'Fedizen ended Atlas’s access. Connect again to see your activity.' : 'Connect your Fedizen account to see your notifications here, and to join groups and follow people from Atlas.'}</p>
     {f.embedded ? <Button fill round external target="_blank" href={`${window.location.origin}/app`}>Open Atlas in a new tab to connect</Button> : <Button fill round onClick={f.connect}>Connect Fedizen</Button>}
     {f.error && <p role="alert" style={{ color: 'var(--f7-theme-color)' }}>{f.error}</p>}
   </Block>;

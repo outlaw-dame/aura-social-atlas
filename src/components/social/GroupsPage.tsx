@@ -1,8 +1,9 @@
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, ArrowUpRight, Copy, Hash, Lock, Megaphone, Users } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, ArrowUpRight, Check, Copy, Hash, Lock, Megaphone, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useGroup, useGroups } from './useGroups';
-import { groupAccessLabel, groupHandle, type Group, type GroupPost } from '@/lib/groups';
+import { useGroup, useGroupMembership, useGroups } from './useGroups';
+import { groupAccessLabel, groupHandle, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 const members = (n?: number) => (n == null ? null : `${n.toLocaleString()} ${n === 1 ? 'member' : 'members'}`);
@@ -30,6 +31,34 @@ function Post({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
     {p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
     <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Open on Fedizen<ArrowUpRight className="size-3" /></a>
   </article>;
+}
+
+/** Join / leave (follow, for an announcement channel) as you, on Fedizen. Leaving asks first. */
+function MembershipButton({ g }: { g: Group }) {
+  const m = useGroupMembership(g);
+  const [confirming, setConfirming] = useState(false);
+  const label = membershipLabel(g, m.state);
+  const inGroup = m.state === 'member' || m.state === 'requested';
+  const onClick = () => {
+    if (m.state === 'signed-out') { window.location.assign('/auth'); return; }
+    if (m.state === 'not-connected' || m.state === 'needs-permission' || m.state === 'expired') { void m.connect(); return; }
+    if (inGroup) setConfirming(true); else m.join();
+  };
+  const disabled = m.busy || m.state === 'loading' || (m.state === 'none' && g.joinMode === 'invite' && !g.announcements);
+  return <div className="mb-1 flex flex-col items-end gap-1">
+    <div className="flex items-center gap-2">
+      {confirming ? <>
+        <span className="text-xs text-muted-foreground">{m.state === 'requested' ? 'Cancel your request?' : g.announcements ? 'Unfollow?' : 'Leave this group?'}</span>
+        <Button variant="outline" size="sm" className="rounded-full" onClick={() => setConfirming(false)}>Keep</Button>
+        <Button variant="destructive" size="sm" className="rounded-full" onClick={() => { setConfirming(false); m.leave(); }}>{m.state === 'requested' ? 'Cancel request' : g.announcements ? 'Unfollow' : 'Leave'}</Button>
+      </> : <>
+        <Button variant={inGroup ? 'outline' : 'default'} className="rounded-full" disabled={disabled} onClick={onClick}>{inGroup && <Check />}{m.busy ? '…' : label}</Button>
+        <Button asChild variant="ghost" size="icon" className="rounded-full" title="Open on Fedizen"><a href={g.url} target="_blank" rel="noopener noreferrer" aria-label="Open on Fedizen"><ArrowUpRight /></a></Button>
+      </>}
+    </div>
+    {m.error && <p role="alert" className="text-xs text-destructive">{m.error}</p>}
+    {m.state === 'needs-permission' && !m.error && <p className="text-xs text-muted-foreground">Atlas needs your OK to join groups for you.</p>}
+  </div>;
 }
 
 const note = (children: React.ReactNode) => <div className="rounded-2xl border border-border p-6 text-sm text-muted-foreground">{children}</div>;
@@ -73,17 +102,16 @@ function Detail({ id }: { id: string }) {
     <header className="px-2 sm:px-6">
       <div className="-mt-10 flex items-end justify-between gap-4">
         <GroupAvatar g={g} className="size-20 border-4 border-background" />
-        <Button asChild className="mb-1 rounded-full"><a href={g.url} target="_blank" rel="noopener noreferrer">{g.announcements || g.joinMode === 'invite' ? 'Follow on Fedizen' : g.joinMode === 'request' ? 'Ask to join on Fedizen' : 'Join on Fedizen'}<ArrowUpRight /></a></Button>
+        <MembershipButton g={g} />
       </div>
       <h1 className="mt-3 font-serif text-4xl leading-tight [overflow-wrap:anywhere]">{g.name}</h1>
       {handle && <button type="button" title="Copy the address" onClick={() => { void navigator.clipboard?.writeText(handle).catch(() => undefined); }} className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground [overflow-wrap:anywhere] hover:text-foreground">{handle}<Copy className="size-3" aria-hidden="true" /></button>}
       <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">{members(g.members) && <span>{members(g.members)}</span>}<Access g={g} />{g.host !== 'fedizen.net' && <span>Hosted on {g.host}</span>}</p>
       {g.summary.length > 0 && <div className="mt-4 max-w-2xl space-y-2 text-sm leading-relaxed">{g.summary.map((t, i) => <p key={i}>{t}</p>)}</div>}
-      <p className="mt-3 text-xs text-muted-foreground">Joining and posting happen on Fedizen. Atlas only reads.</p>
       {!!topics.length && <div className="mt-5 flex flex-wrap gap-2" aria-label="Topics">{topics.map(t => <Button key={t.id} asChild variant="outline" size="sm" className="rounded-full"><Link to="/groups" search={{ group: t.id }}><Hash className="size-3" />{t.name}</Link></Button>)}</div>}
     </header>
     <section className="mt-10"><h2 className="mb-2 font-serif text-2xl italic">Latest posts</h2>
-      {g.membersOnlyContent && <p className="mb-4 text-sm text-muted-foreground">Posts here are for members. Join on Fedizen to read them.</p>}
+      {g.membersOnlyContent && <p className="mb-4 text-sm text-muted-foreground">Posts here are for members. Join to read them.</p>}
       {q.data.postsError ? <p className="text-sm text-muted-foreground">Posts couldn’t be loaded. <Button variant="link" size="sm" className="px-1" onClick={() => q.refetch()}>Try again</Button></p>
         : posts.length ? posts.map(p => <Post key={p.id} p={p} />) : <p className="text-sm text-muted-foreground">No public posts here yet.</p>}
     </section>

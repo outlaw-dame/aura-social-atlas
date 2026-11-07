@@ -6,12 +6,14 @@ const admin = async () => (await import('@/integrations/supabase/client.server')
 
 async function appFor(redirectUri: string) {
   const db = await admin();
-  const { data } = await db.from('fedizen_oauth_apps').select('client_id, client_secret').eq('redirect_uri', redirectUri).maybeSingle();
-  if (data) return data;
+  const { data } = await db.from('fedizen_oauth_apps').select('client_id, client_secret, scopes').eq('redirect_uri', redirectUri).maybeSingle();
+  // An app registered for fewer scopes can't be granted more: register a new one for the current scopes.
+  if (data && data.scopes === FEDIZEN_API_SCOPE) return data;
   const res = await fetch(`${FEDIZEN}/api/v1/apps`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_name: 'Atlas', redirect_uris: redirectUri, scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin }), signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`Fedizen app registration failed [${res.status}]`);
   const j = await res.json() as { client_id: string; client_secret: string };
-  await db.from('fedizen_oauth_apps').insert({ redirect_uri: redirectUri, client_id: j.client_id, client_secret: j.client_secret });
+  const { error } = await db.from('fedizen_oauth_apps').upsert({ redirect_uri: redirectUri, client_id: j.client_id, client_secret: j.client_secret, scopes: FEDIZEN_API_SCOPE });
+  if (error) throw new Error('Could not save the Fedizen app registration.');
   return j;
 }
 
@@ -57,7 +59,7 @@ export async function finishConnect(userId: string, code: string, state: string)
 
 export async function tokenFor(userId: string) {
   const db = await admin();
-  const { data } = await db.from('fedizen_connections').select('access_token, account_handle').eq('user_id', userId).maybeSingle();
+  const { data } = await db.from('fedizen_connections').select('access_token, account_handle, scope').eq('user_id', userId).maybeSingle();
   return data;
 }
 
@@ -65,6 +67,16 @@ export async function disconnect(userId: string): Promise<void> {
   const db = await admin();
   const { error } = await db.from('fedizen_connections').delete().eq('user_id', userId);
   if (error) throw new Error('Could not disconnect Fedizen account.');
+}
+
+/** A write on the person's behalf (join, leave, follow…). Only JSON objects are returned; never the token. */
+export async function fedizenSend(token: string, method: 'POST' | 'DELETE', path: string): Promise<{ status: number; data: Record<string, unknown> | null }> {
+  try {
+    const res = await fetch(`${FEDIZEN}${path}`, { method, headers: { authorization: `Bearer ${token}`, accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
+    const j = res.headers.get('content-type')?.includes('json') ? await res.json().catch(() => null) : null;
+    if (!res.ok) console.error(`Fedizen ${method} ${path} failed [${res.status}]`);
+    return { status: res.status, data: j && typeof j === 'object' && !Array.isArray(j) ? j as Record<string, unknown> : null };
+  } catch (e) { console.error(`Fedizen ${method} ${path} error`, e); return { status: 0, data: null }; }
 }
 
 export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {

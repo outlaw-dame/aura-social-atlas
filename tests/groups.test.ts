@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { groupAccessLabel, groupFromBonfire, groupHandle, groupsFromBonfire, joinModeOf, mediaUrl } from "../src/lib/groups";
-import { getGroup, latestInGroups, net } from "../src/lib/groups.server";
+import { actionFor, groupAccessLabel, groupFromBonfire, groupHandle, groupsFromBonfire, joinModeOf, mediaUrl, membershipFrom, membershipLabel } from "../src/lib/groups";
+import { getGroup, latestInGroups, memberships, membershipNet, net, setMembership } from "../src/lib/groups.server";
 
 /* Boundary dimensions of Bonfire v1.1.0-rc.1's group presets (bonfire_classify RuntimeConfig.group_presets). */
 const presets = {
@@ -137,5 +137,66 @@ describe("groups.server", () => {
   test("a group Fedizen doesn't return is not-found", async () => {
     net.fetch = (async () => new Response(JSON.stringify({ data: { category: null, categories: { edges: [] }, feedActivities: { edges: [] } } }))) as unknown as typeof fetch;
     expect(await getGroup("01JGROUPAAAAAAAAAAAAAAAAAA")).toBe("not-found");
+  });
+});
+
+describe("membership", () => {
+  afterEach(() => { membershipNet.token = undefined; membershipNet.send = undefined; membershipNet.get = undefined; });
+  const open = groupFromBonfire(category(presets.open_network))!;
+  const channel = groupFromBonfire(category(presets.announcement_channel))!;
+  const club = groupFromBonfire(category(presets.private_club))!;
+
+  test("reads Bonfire's join reply and Mastodon relationships", () => {
+    expect(membershipFrom({ following: true, requested: false, group: { member: true, role: null } })).toBe("member");
+    expect(membershipFrom({ following: false, requested: true, group: { member: false } })).toBe("requested");
+    expect(membershipFrom({ following: true, group: { member: false } })).toBe("none");
+    expect(membershipFrom({ id: "x", following: true })).toBe("member");
+    expect(membershipFrom(null)).toBe("none");
+  });
+
+  test("labels follow the group's preset and your state", () => {
+    expect(membershipLabel(open, "none")).toBe("Join");
+    expect(membershipLabel(club, "none")).toBe("Ask to join");
+    expect(membershipLabel(channel, "none")).toBe("Follow");
+    expect(membershipLabel(channel, "member")).toBe("Following");
+    expect(membershipLabel(open, "requested")).toBe("Requested");
+    expect(membershipLabel(open, "needs-permission")).toBe("Reconnect Fedizen");
+    expect(actionFor(channel)).toBe("follow");
+    expect(actionFor(open)).toBe("join");
+  });
+
+  test("joins through Bonfire's groups API with the person's token", async () => {
+    const calls: string[] = [];
+    membershipNet.token = async () => ({ access_token: "tok", scope: "read write follow" });
+    membershipNet.send = (async (token: string, method: string, path: string) => { calls.push(`${method} ${path} ${token}`); return { status: 200, data: { id: open.id, following: true, requested: false, group: { member: true, role: null } } }; }) as never;
+    expect(await setMembership("u1", open.id, "join", true)).toEqual({ ok: true, membership: "member" });
+    expect(await setMembership("u1", channel.id, "follow", false)).toEqual({ ok: true, membership: "member" });
+    expect(calls).toEqual([`POST /api/v1-bonfire/groups/${open.id}/join tok`, `POST /api/v1/accounts/${channel.id}/unfollow tok`]);
+  });
+
+  test("an older read-only connection must reconnect before writing; nothing is sent", async () => {
+    let sent = false;
+    membershipNet.token = async () => ({ access_token: "tok", scope: "read" });
+    membershipNet.send = (async () => { sent = true; return { status: 200, data: {} }; }) as never;
+    expect(await setMembership("u1", open.id, "join", true)).toEqual({ ok: false, reason: "needs-permission" });
+    expect(sent).toBe(false);
+  });
+
+  test("Fedizen's refusals map to what the page can do", async () => {
+    membershipNet.token = async () => ({ access_token: "tok", scope: "read write" });
+    for (const [status, reason] of [[401, "expired"], [403, "needs-permission"], [500, "failed"]] as const) {
+      membershipNet.send = (async () => ({ status, data: null })) as never;
+      expect(await setMembership("u1", open.id, "join", true)).toEqual({ ok: false, reason });
+    }
+    membershipNet.token = async () => null;
+    expect(await setMembership("u1", open.id, "join", true)).toEqual({ ok: false, reason: "not-connected" });
+  });
+
+  test("reads memberships from relationships", async () => {
+    let path = "";
+    membershipNet.token = async () => ({ access_token: "tok", scope: "read" });
+    membershipNet.get = (async (_t: string, p: string) => { path = p; return { status: 200, data: [{ id: "g1", following: true }, { id: "g2", requested: true }, { id: "g3" }] }; }) as never;
+    expect(await memberships("u1", ["g1", "g2", "g3"])).toEqual({ ok: true, memberships: { g1: "member", g2: "requested", g3: "none" } });
+    expect(path).toBe("/api/v1/accounts/relationships?id[]=g1&id[]=g2&id[]=g3");
   });
 });

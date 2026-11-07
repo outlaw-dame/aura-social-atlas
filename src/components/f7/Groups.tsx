@@ -1,6 +1,6 @@
 import { Block, BlockFooter, BlockTitle, Button, Card, CardContent, CardFooter, Icon, Link, List, ListItem, Navbar, NavLeft, NavRight, Page, Popup, f7 } from 'framework7-react';
-import { useGroup, useGroups } from '@/components/social/useGroups';
-import { groupAccessLabel, groupHandle, type Group, type GroupPost } from '@/lib/groups';
+import { useGroup, useGroupMembership, useGroups } from '@/components/social/useGroups';
+import { groupAccessLabel, groupHandle, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 const members = (n?: number) => (n == null ? '' : `${n.toLocaleString()} ${n === 1 ? 'member' : 'members'}`);
@@ -56,6 +56,34 @@ export function MobileGroups({ onOpen }: { onOpen: (g: Group) => void }) {
   </>;
 }
 
+/** Join / leave (or follow, for an announcement channel) as you, on Fedizen. Leaving asks first, as an
+ *  action sheet with the destructive choice in red (Apple HIG). */
+function MembershipButton({ g }: { g: Group }) {
+  const m = useGroupMembership(g);
+  const label = membershipLabel(g, m.state);
+  const inGroup = m.state === 'member' || m.state === 'requested';
+  const onClick = () => {
+    if (m.state === 'signed-out') { window.location.assign('/auth'); return; }
+    if (m.state === 'not-connected' || m.state === 'needs-permission' || m.state === 'expired') { void m.connect(); return; }
+    if (!inGroup) { m.join(); return; }
+    f7.actions.create({ buttons: [[
+      { text: m.state === 'requested' ? 'Your request to join is waiting for a moderator.' : g.name, label: true },
+      { text: m.state === 'requested' ? 'Cancel request' : g.announcements ? 'Unfollow' : 'Leave group', color: 'red', onClick: m.leave },
+    ], [{ text: 'Cancel', strong: true }]] }).open();
+  };
+  const disabled = m.busy || m.state === 'loading' || (m.state === 'none' && g.joinMode === 'invite' && !g.announcements);
+  return <div className="atlas-group-actions-col">
+    <div className="atlas-group-actions">
+      <Button fill={!inGroup} tonal={inGroup} round disabled={disabled} onClick={onClick}>
+        {inGroup && <Icon ios="f7:checkmark" md="material:check" />}{m.busy ? '…' : label}
+      </Button>
+      <Button tonal round external target="_blank" href={g.url} aria-label="Open on Fedizen"><Icon ios="f7:arrow_up_right_square" md="material:open_in_new" /></Button>
+    </div>
+    {m.error && <p className="atlas-group-error" role="alert">{m.error}</p>}
+    {(m.state === 'needs-permission') && !m.error && <p className="atlas-group-note">Atlas needs your OK to join groups for you. You’ll come back here after.</p>}
+  </div>;
+}
+
 /** One group: banner, avatar, name, address, how to take part, about, topics and latest posts. */
 export function GroupPopup({ group, onClose, onOpen }: { group: Group | null; onClose: () => void; onOpen: (g: Group) => void }) {
   const q = useGroup(group?.id);
@@ -87,13 +115,10 @@ export function GroupPopup({ group, onClose, onOpen }: { group: Group | null; on
           {handle && <button type="button" className="atlas-group-address" onClick={copyAddress} aria-label={`Copy address ${handle}`}>{handle}</button>}
           <p className="atlas-group-meta">{meta(g)}</p>
           {g.host !== 'fedizen.net' && <p className="atlas-group-meta">Hosted on {g.host} · followed by Fedizen</p>}
-          <div className="atlas-group-actions">
-            <Button fill round external target="_blank" href={g.url}>{g.announcements || g.joinMode === 'invite' ? 'Follow on Fedizen' : g.joinMode === 'request' ? 'Ask to join on Fedizen' : 'Join on Fedizen'}</Button>
-          </div>
-          <p className="atlas-group-note">Joining and posting happen on Fedizen. Atlas only reads.</p>
+          <MembershipButton g={g} />
         </header>
         {g.summary.length > 0 && <><BlockTitle>About</BlockTitle><Block strong inset className="atlas-group-about">{g.summary.map((t, i) => <p key={i}>{t}</p>)}</Block></>}
-        {g.membersOnlyContent && <Block strong inset>Posts here are for members. Join on Fedizen to read them.</Block>}
+        {g.membersOnlyContent && <Block strong inset>Posts here are for members. Join to read them.</Block>}
         {!!detail?.topics.length && <>
           <BlockTitle>Topics</BlockTitle>
           <List strong inset dividers>

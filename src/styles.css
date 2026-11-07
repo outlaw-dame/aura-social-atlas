@@ -485,3 +485,7 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-group-in { color: var(--muted-foreground); font-weight: 400; }
 .atlas-group-post p { line-height: 1.5; overflow-wrap: anywhere; }
 .atlas-group-post-image { width: 100%; border-radius: 12px; }
+.atlas-group-actions-col { display: flex; flex-direction: column; align-items: center; }
+.atlas-group-actions .button { gap: 4px; min-height: 44px; }
+.atlas-group-actions .button .icon { font-size: 18px; }
+.atlas-group-error { margin: 8px 0 0; font-size: 13px; color: var(--destructive); }

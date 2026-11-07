@@ -1,11 +1,13 @@
 /**
  * Groups — public reads from Fedizen's Bonfire GraphQL API (v1.1.0-rc.1). No sign-in: Bonfire applies each
  * group's boundaries for an anonymous reader, so hidden groups and members-only posts are never returned.
- * Joining, posting and moderating happen on Fedizen (Atlas's Fedizen permission is read-only).
+ * Membership (join, leave, follow, and whether you're in) goes through the person's own Fedizen connection:
+ * Bonfire's `/api/v1-bonfire/groups/:id/join|leave` and, for announcement channels, Mastodon follow/unfollow.
  */
 import { FEDIZEN } from './fedizen-feed';
 import { fromBonfirePosts, type BonfireActivityNode } from './spotlight';
-import { groupFromBonfire, groupsFromBonfire, type Group, type GroupPost } from './groups';
+import { groupFromBonfire, groupsFromBonfire, membershipFrom, problemFromStatus, type Group, type GroupAction, type GroupPost, type Membership, type MembershipProblem } from './groups';
+import { hasScope } from './fedizen-feed';
 
 const GRAPHQL = `${FEDIZEN}/api/graphql`;
 const GROUP_FIELDS = 'id name summary type membersCount isDisabled parentCategoryId boundaries{key slug} character{username canonicalUri} profile{name summary icon image}';
@@ -61,4 +63,35 @@ export async function getGroup(id: string): Promise<{ group: Group; topics: Grou
 export async function latestInGroups(): Promise<GroupPost[] | null> {
   const d = await gql<{ feedActivities?: { edges?: { node: BonfireActivityNode }[] } }>(FEED, { subjects: null });
   return d?.feedActivities ? groupPosts((d.feedActivities.edges ?? []).map(e => e.node)) : null;
+}
+
+/* ── Membership through the person's Fedizen connection ─────────────────────────────────────────── */
+
+type Conn = { access_token: string; scope?: string | null } | null;
+export const membershipNet: { token?: (userId: string) => Promise<Conn>; send?: typeof import('./fedizen.server').fedizenSend; get?: typeof import('./fedizen.server').fedizenGet } = {};
+const fz = () => import('./fedizen.server');
+
+/** Your membership of each group, from Fedizen's relationships (members follow their groups). */
+export async function memberships(userId: string, ids: string[]): Promise<{ ok: true; memberships: Record<string, Membership> } | { ok: false; reason: MembershipProblem }> {
+  const t = await (membershipNet.token ?? (await fz()).tokenFor)(userId);
+  if (!t) return { ok: false, reason: 'not-connected' };
+  const q = ids.map(id => `id[]=${encodeURIComponent(id)}`).join('&');
+  const r = await (membershipNet.get ?? (await fz()).fedizenGet)(t.access_token, `/api/v1/accounts/relationships?${q}`);
+  if (r.status !== 200) return { ok: false, reason: problemFromStatus(r.status) };
+  const out: Record<string, Membership> = {};
+  for (const rel of r.data) if (rel && typeof rel === 'object' && typeof (rel as { id?: unknown }).id === 'string') out[(rel as { id: string }).id] = membershipFrom(rel);
+  return { ok: true, memberships: out };
+}
+
+/** Joins (or follows, for an announcement channel) or leaves a group as the signed-in person. */
+export async function setMembership(userId: string, id: string, action: GroupAction, on: boolean): Promise<{ ok: true; membership: Membership } | { ok: false; reason: MembershipProblem }> {
+  const t = await (membershipNet.token ?? (await fz()).tokenFor)(userId);
+  if (!t) return { ok: false, reason: 'not-connected' };
+  if (!hasScope(t.scope, 'write')) return { ok: false, reason: 'needs-permission' };
+  const path = action === 'follow'
+    ? `/api/v1/accounts/${encodeURIComponent(id)}/${on ? 'follow' : 'unfollow'}`
+    : `/api/v1-bonfire/groups/${encodeURIComponent(id)}/${on ? 'join' : 'leave'}`;
+  const r = await (membershipNet.send ?? (await fz()).fedizenSend)(t.access_token, 'POST', path);
+  if (r.status < 200 || r.status >= 300) return { ok: false, reason: problemFromStatus(r.status) };
+  return { ok: true, membership: membershipFrom(r.data) };
 }
