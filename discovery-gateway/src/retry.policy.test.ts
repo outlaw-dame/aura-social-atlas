@@ -1,7 +1,7 @@
 /** Verify the actual pinned Fedify retry policy and Postgres queue contract.
  * No network or clock sleeps: retry delays are inspected deterministically. */
 import { describe, expect, test } from 'bun:test';
-import { createExponentialBackoffPolicy } from '@fedify/fedify';
+import { createExponentialBackoffPolicy, type MessageQueue } from '@fedify/fedify';
 import { PostgresMessageQueue } from '@fedify/postgres';
 import { Temporal } from 'temporal-polyfill';
 import type { Sql } from 'postgres';
@@ -13,7 +13,7 @@ const context = (attempts: number) => ({
 
 describe('Fedify 2.4.5 durable PostgreSQL delivery retry contract', () => {
   test('PostgreSQL queue delegates retry scheduling to Fedify, not two layers', () => {
-    const queue = new PostgresMessageQueue({} as Sql);
+    const queue: MessageQueue = new PostgresMessageQueue({} as Sql);
     expect(queue.nativeRetrial).not.toBe(true);
   });
 
