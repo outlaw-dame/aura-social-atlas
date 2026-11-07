@@ -61,7 +61,71 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.4.3'
-      - run: bun install
+      - run: bun install --frozen-lockfile
+      - name: Build gateway staging image with frozen production dependencies
+        run: docker build --pull -t atlas-gateway-ci .
+      - name: Smoke-test isolated gateway web and worker containers
+        env:
+          GATEWAY_ORIGIN: https://gateway.example
+          GATEWAY_ADMIN_TOKEN: abcdefghijklmnopqrstuvwxyz123456
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker stop -t 10 gateway-ci-web gateway-ci-worker >/dev/null 2>&1 || true
+            docker rm -f gateway-ci-web gateway-ci-worker >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for role in web worker; do
+            docker run --detach --name "gateway-ci-${role}" --network host \
+              --env "GATEWAY_ROLE=${role}" \
+              --env "GATEWAY_ORIGIN=${GATEWAY_ORIGIN}" \
+              --env "GATEWAY_ADMIN_TOKEN=${GATEWAY_ADMIN_TOKEN}" \
+              --env "DATABASE_URL=${GATEWAY_TEST_DATABASE_URL}" \
+              --env PORT=4100 \
+              atlas-gateway-ci >/dev/null
+          done
+          healthy=0
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:4100/healthz >/dev/null 2>&1; then
+              healthy=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$healthy" -ne 1 ]; then
+            docker logs gateway-ci-web
+            exit 1
+          fi
+          docker inspect --format '{{.State.Running}}' gateway-ci-web | grep -qx true
+          # Worker has no HTTP listener. Wait for its own structured startup event.
+          worker_ready=0
+          for attempt in {1..30}; do
+            if ! docker inspect --format '{{.State.Running}}' gateway-ci-worker | grep -qx true; then
+              docker logs gateway-ci-worker
+              exit 1
+            fi
+            if docker logs gateway-ci-worker 2>&1 | grep -q '"event":"gateway.worker_started"'; then
+              worker_ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$worker_ready" -ne 1 ]; then
+            docker logs gateway-ci-worker
+            exit 1
+          fi
+      - name: Validate staging process isolation and syntax
+        run: |
+          python3 - <<'PY'
+          import tomllib
+          with open('fly.staging.example.toml', 'rb') as file:
+              config = tomllib.load(file)
+          assert set(config['processes']) == {'web', 'worker'}
+          assert config['http_service']['processes'] == ['web']
+          assert 'GATEWAY_ROLE=web' in config['processes']['web']
+          assert 'GATEWAY_ROLE=worker' in config['processes']['worker']
+          assert config['http_service']['force_https'] is True
+          PY
       - name: Type-check
         run: bun run typecheck
       - name: Gateway unit and PostgreSQL integration tests

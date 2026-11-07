@@ -1,0 +1,38 @@
+# Copy to fly.staging.toml and replace app with your own isolated staging app.
+# This template does not create any resources or connect to Fedizen.
+app = "REPLACE-WITH-YOUR-ATLAS-GATEWAY-STAGING-APP"
+primary_region = "iad"
+kill_signal = "SIGTERM"
+kill_timeout = 120
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "4100"
+
+[processes]
+  web = "env GATEWAY_ROLE=web bun src/main.ts"
+  worker = "env GATEWAY_ROLE=worker bun src/main.ts"
+
+[http_service]
+  internal_port = 4100
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["web"]
+
+[[http_service.checks]]
+  grace_period = "30s"
+  interval = "15s"
+  method = "GET"
+  path = "/healthz"
+  timeout = "3s"
+
+[[vm]]
+  processes = ["web", "worker"]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1gb"
