@@ -46,7 +46,10 @@ export function MobileGroups({ onOpen }: { onOpen: (g: Group) => void }) {
       </ListItem>)}
     </List>
     <BlockFooter>Groups federate across the fediverse, so you can also find communities from Lemmy, Mbin and Mobilizon here.</BlockFooter>
-    {!!q.data?.latest.length && <>
+    {q.data?.latestError ? <>
+      <BlockTitle>Latest in groups</BlockTitle>
+      <Block strong inset>Recent posts couldn’t be loaded. <Link onClick={() => q.refetch()}>Try again</Link></Block>
+    </> : !!q.data?.latest.length && <>
       <BlockTitle>Latest in groups</BlockTitle>
       {q.data.latest.slice(0, 12).map(p => <PostCard key={p.id} p={p} showGroup />)}
     </>}
@@ -102,6 +105,7 @@ export function GroupPopup({ group, onClose, onOpen }: { group: Group | null; on
         <BlockTitle>Latest posts</BlockTitle>
         {q.isLoading ? <Block>Loading posts…</Block>
           : q.data && !q.data.group ? <Block strong inset>{q.data.error === 'not-found' ? 'This group can’t be opened. It may be private or archived.' : 'Fedizen couldn’t be reached right now.'}</Block>
+          : detail?.postsError ? <Block strong inset>Posts couldn’t be loaded. <Link onClick={() => q.refetch()}>Try again</Link></Block>
           : detail?.posts.length ? detail.posts.map(p => <PostCard key={p.id} p={p} />)
           : <Block strong inset>No public posts here yet.</Block>}
       </>}

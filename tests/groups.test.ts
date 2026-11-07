@@ -121,6 +121,19 @@ describe("groups.server", () => {
     expect(await getGroup("01JGROUPAAAAAAAAAAAAAAAAAA")).toBeNull();
   });
 
+  test("a failed posts read is reported, not shown as an empty group", async () => {
+    net.fetch = (async (_url: string, init?: RequestInit) => {
+      const q = JSON.parse(String(init?.body)).query as string;
+      if (q.includes("feedActivities")) return new Response(JSON.stringify({ errors: [{ message: "timeout" }] }));
+      if (q.includes("category(categoryId")) return reply({ category: category(presets.open_network) });
+      return reply({ categories: { edges: [] } });
+    }) as typeof fetch;
+    const r = await getGroup("01JGROUPAAAAAAAAAAAAAAAAAA");
+    if (!r || r === "not-found") throw new Error("expected a group");
+    expect(r.posts).toEqual([]);
+    expect(r.postsError).toBe("unavailable");
+  });
+
   test("a group Fedizen doesn't return is not-found", async () => {
     net.fetch = (async () => new Response(JSON.stringify({ data: { category: null, categories: { edges: [] }, feedActivities: { edges: [] } } }))) as unknown as typeof fetch;
     expect(await getGroup("01JGROUPAAAAAAAAAAAAAAAAAA")).toBe("not-found");

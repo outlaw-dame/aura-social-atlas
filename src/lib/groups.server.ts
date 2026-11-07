@@ -38,8 +38,8 @@ export async function listGroups(): Promise<Group[] | null> {
   return d?.categories ? groupsFromBonfire(d.categories.edges) : null;
 }
 
-/** One group, its topics, and its latest posts; 'not-found' when Fedizen has no such group you can see, null when Fedizen can't be read. */
-export async function getGroup(id: string): Promise<{ group: Group; topics: Group[]; posts: GroupPost[] } | 'not-found' | null> {
+/** One group, its topics, and its latest posts (with `postsError` when only the posts couldn't be read); 'not-found' when Fedizen has no such group you can see, null when Fedizen can't be read. */
+export async function getGroup(id: string): Promise<{ group: Group; topics: Group[]; posts: GroupPost[]; postsError?: 'unavailable' } | 'not-found' | null> {
   const [one, all, feed] = await Promise.all([
     gql<{ category?: unknown }>(`query($id:ID){category(categoryId:$id){${GROUP_FIELDS}}}`, { id }),
     listGroups(),
@@ -52,6 +52,8 @@ export async function getGroup(id: string): Promise<{ group: Group; topics: Grou
     group,
     topics: (all ?? []).filter(g => g.parentId === id),
     posts: groupPosts((feed?.feedActivities?.edges ?? []).map(e => e.node)),
+    // A failed feed read is not an empty group: say so, so the page can offer a retry.
+    ...(feed?.feedActivities ? {} : { postsError: 'unavailable' as const }),
   };
 }
 

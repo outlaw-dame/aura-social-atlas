@@ -54,6 +54,7 @@ function Directory() {
       </li>)}
     </ul>
     <p className="mt-3 text-xs text-muted-foreground">Groups federate across the fediverse, so communities from Lemmy, Mbin and Mobilizon that Fedizen follows show up here too.</p>
+    {q.data?.latestError && <section className="mt-12"><h2 className="mb-2 font-serif text-2xl italic">Latest in groups</h2><p className="text-sm text-muted-foreground">Recent posts couldn’t be loaded. <Button variant="link" size="sm" className="px-1" onClick={() => q.refetch()}>Try again</Button></p></section>}
     {!!q.data?.latest.length && <section className="mt-12"><h2 className="mb-2 font-serif text-2xl italic">Latest in groups</h2>{q.data.latest.slice(0, 15).map(p => <Post key={p.id} p={p} showGroup />)}</section>}
   </>;
 }
@@ -83,7 +84,8 @@ function Detail({ id }: { id: string }) {
     </header>
     <section className="mt-10"><h2 className="mb-2 font-serif text-2xl italic">Latest posts</h2>
       {g.membersOnlyContent && <p className="mb-4 text-sm text-muted-foreground">Posts here are for members. Join on Fedizen to read them.</p>}
-      {posts.length ? posts.map(p => <Post key={p.id} p={p} />) : <p className="text-sm text-muted-foreground">No public posts here yet.</p>}
+      {q.data.postsError ? <p className="text-sm text-muted-foreground">Posts couldn’t be loaded. <Button variant="link" size="sm" className="px-1" onClick={() => q.refetch()}>Try again</Button></p>
+        : posts.length ? posts.map(p => <Post key={p.id} p={p} />) : <p className="text-sm text-muted-foreground">No public posts here yet.</p>}
     </section>
   </div>;
 }

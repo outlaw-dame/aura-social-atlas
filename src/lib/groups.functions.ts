@@ -4,14 +4,15 @@ import type { Group, GroupPost } from './groups';
 
 const server = () => import('./groups.server');
 
-export type GroupsResult = { groups: Group[]; latest: GroupPost[]; error?: 'unavailable' };
-export type GroupResult = { group: Group; topics: Group[]; posts: GroupPost[] } | { group: null; error: 'not-found' | 'unavailable' };
+export type GroupsResult = { groups: Group[]; latest: GroupPost[]; latestError?: 'unavailable'; error?: 'unavailable' };
+export type GroupResult = { group: Group; topics: Group[]; posts: GroupPost[]; postsError?: 'unavailable' } | { group: null; error: 'not-found' | 'unavailable' };
 
 /** Fedizen's groups directory and the latest posts across groups. Public, read-only. */
 export const getGroups = createServerFn({ method: 'GET' }).handler(async (): Promise<GroupsResult> => {
   const s = await server();
   const [groups, latest] = await Promise.all([s.listGroups(), s.latestInGroups()]);
-  return groups ? { groups, latest: latest ?? [] } : { groups: [], latest: [], error: 'unavailable' };
+  if (!groups) return { groups: [], latest: [], error: 'unavailable' };
+  return latest ? { groups, latest } : { groups, latest: [], latestError: 'unavailable' };
 });
 
 export const getGroup = createServerFn({ method: 'GET' })
