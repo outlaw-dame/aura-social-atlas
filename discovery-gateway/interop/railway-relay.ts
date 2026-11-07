@@ -114,6 +114,12 @@ const server = Bun.serve({
         log('signature_rejected', { reason: verified.reason?.type ?? 'unknown' });
         return new Response('unauthorized', { status: 401 });
       }
+      // Cryptographic validity alone does not bind the signed request to its
+      // ActivityPub actor. Verify key ownership independently of body.actor.
+      if (verified.key.ownerId()?.href !== gatewayActor) {
+        log('signature_rejected', { reason: 'wrong_key_owner' });
+        return new Response('unauthorized', { status: 401 });
+      }
       let body: Record<string, unknown>;
       try { body = JSON.parse(await readBounded(request)) as Record<string, unknown>; }
       catch { return new Response('invalid body', { status: 400 }); }
@@ -124,7 +130,11 @@ const server = Bun.serve({
       } else if (body.type === 'Accept') {
         inboundAccept = { id: typeof body.id === 'string' ? body.id : '', object: body.object };
       } else if (body.type === 'Undo') {
-        inboundUndo = true;
+        const undone = body.object && typeof body.object === 'object' &&
+          !Array.isArray(body.object)
+          ? (body.object as Record<string, unknown>).id : body.object;
+        if (typeof undone === 'string' && undone === inboundFollow?.id)
+          inboundUndo = true;
       }
       verifiedInbound++;
       log('signed_inbox_activity', { type: body.type });
@@ -270,6 +280,9 @@ async function runInterop() {
     );
 
     await admin('/admin/subscriptions/' + encodeURIComponent(subscriptionId), 'DELETE');
+    // Persisted disabled state is insufficient evidence that the remote relay
+    // received an Undo; check its verified HTTP signature and Follow ID.
+    await awaitCondition('signed Undo for original Follow received', () => inboundUndo);
     await awaitCondition('subscription disabled after Undo', async () => {
       const r = await admin('/admin/subscriptions');
       const subs = r.subscriptions as Array<{ id: string; state: string }>;
