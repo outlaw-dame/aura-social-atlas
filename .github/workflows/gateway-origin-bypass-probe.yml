@@ -48,12 +48,14 @@ jobs:
           print('Forged Host direct-origin /admin status:', admin)
           print('Cloudflare proxy headers on direct probe:', bool(forged_headers.get('Cf-Ray')))
 
-          # Status 401 on /admin means the origin bypasses the Cloudflare 403.
-          # Treat it as an ingress flaw even though bearer authentication remains.
-          assert direct not in (200, 202), 'Direct Railway service hostname still reaches public API'
-          assert forged not in (200, 202), 'Forged Host bypasses Cloudflare and reaches live gateway'
-          assert admin not in (200, 202, 401), (
-              'Direct public admin endpoint bypasses Cloudflare host-scoped WAF'
-          )
-          print('PASS: public Railway origin cannot bypass Cloudflare WAF')
+          # Require positive ingress denial; app-generated 429/503 cannot
+          # prove origin isolation and must never make this release gate pass.
+          # 404 from the unmapped Railway host is a routing-level denial.
+          assert direct == 404, f'Direct Railway hostname was not rejected by routing: {direct}'
+          # Forging the public Host must fail the gateway's edge secret check
+          # before /healthz or /admin can reach application handlers.
+          assert forged == 403, f'Forged Host bypass did not receive edge-secret 403: {forged}'
+          assert admin == 403, f'Forged Host admin did not receive edge-secret 403: {admin}'
+          assert not forged_headers.get('Cf-Ray'), 'Probe unexpectedly passed through Cloudflare'
+          print('PASS: direct Railway origin and forged Host explicitly denied (404/403)')
           PY
