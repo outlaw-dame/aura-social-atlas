@@ -1,0 +1,125 @@
+name: Gateway encrypted offsite backup and independent restore checks
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-offsite-backup.yml'
+      - 'discovery-gateway/offsite-backup/**'
+permissions:
+  contents: read
+jobs:
+  encrypted-backup-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      source:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: backup_ci
+          POSTGRES_PASSWORD: synthetic_only
+          POSTGRES_DB: source
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U backup_ci -d source"
+          --health-interval 2s --health-timeout 2s --health-retries 12
+      restore:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: restore_ci
+          POSTGRES_PASSWORD: synthetic_only
+          POSTGRES_DB: restore
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U restore_ci -d restore"
+          --health-interval 2s --health-timeout 2s --health-retries 12
+    env:
+      SOURCE_DATABASE_URL: postgres://backup_ci:synthetic_only@127.0.0.1:5432/source
+      RESTORE_DATABASE_URL: postgres://restore_ci:synthetic_only@127.0.0.1:5433/restore
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build rootless encrypted backup container
+        run: docker build -t atlas-backup-ci discovery-gateway/offsite-backup
+      - name: Seed synthetic actor-key and subscription records
+        run: |
+          set -euo pipefail
+          docker run --rm -i --network host postgres:18-alpine \
+            psql "$SOURCE_DATABASE_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE gateway_keys (
+            actor_identifier text PRIMARY KEY,
+            private_key jsonb NOT NULL,
+            public_key jsonb NOT NULL
+          );
+          INSERT INTO gateway_keys VALUES
+            ('gateway','{"synthetic":"private-ci-only"}','{"synthetic":"public-ci-only"}');
+          CREATE TABLE gateway_subscriptions (actor_url text PRIMARY KEY);
+          INSERT INTO gateway_subscriptions VALUES ('https://synthetic.invalid/actor');
+          SQL
+      - name: Generate ephemeral age keypair without displaying private key
+        run: |
+          set -euo pipefail
+          mkdir -p scratch
+          chmod 700 scratch
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --entrypoint age-keygen -v "$PWD/scratch:/scratch" \
+            atlas-backup-ci -o /scratch/identity.txt >/dev/null
+          recipient="$(docker run --rm --user "$(id -u):$(id -g)" \
+            --entrypoint age-keygen -v "$PWD/scratch:/scratch" \
+            atlas-backup-ci -y /scratch/identity.txt)"
+          test -n "$recipient"
+          printf 'AGE_RECIPIENT=%s\n' "$recipient" >> "$GITHUB_ENV"
+      - name: Refuse non-R2 destination without explicit isolated-CI flag
+        run: |
+          set -euo pipefail
+          if docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -e SOURCE_DATABASE_URL -e AGE_RECIPIENT \
+            -e BACKUP_REMOTE=/scratch/objects \
+            atlas-backup-ci; then
+            echo 'FAIL: producer allowed unsafe backend' >&2
+            exit 1
+          fi
+      - name: Encrypt real pg_dump and verify uploaded ciphertext
+        env:
+          ATLAS_BACKUP_CI_LOCAL: '1'
+          CI: 'true'
+          BACKUP_REMOTE: /scratch/objects
+        run: |
+          set -euo pipefail
+          docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" \
+            -e SOURCE_DATABASE_URL -e AGE_RECIPIENT -e BACKUP_REMOTE \
+            -e ATLAS_BACKUP_CI_LOCAL -e CI \
+            atlas-backup-ci | tee /tmp/atlas-backup-results.log
+          grep -qx 'backup.dump_verified' /tmp/atlas-backup-results.log
+          grep -qx 'backup.ciphertext_verified' /tmp/atlas-backup-results.log
+          grep -q '^backup.completed encrypted_bytes=' /tmp/atlas-backup-results.log
+      - name: Decrypt archive with separate recovery-only key and restore to isolated DB
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(find "$PWD/scratch/objects" -type f -name '*.pgcustom.age')
+          test "${#archives[@]}" -eq 1
+          test -f "${archives[0]}.manifest.json"
+          export ARCHIVE_FILE="/scratch/${archives[0]#"$PWD/scratch/"}"
+          docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" -e RESTORE_DATABASE_URL -e ARCHIVE_FILE \
+            --entrypoint /bin/bash atlas-backup-ci -c '
+              set -euo pipefail
+              age --decrypt --identity /scratch/identity.txt \
+                --output /scratch/recovered.pgcustom "$ARCHIVE_FILE"
+              pg_restore --list /scratch/recovered.pgcustom >/dev/null
+              pg_restore --dbname "$RESTORE_DATABASE_URL" \
+                --no-owner --no-acl --exit-on-error /scratch/recovered.pgcustom
+            '
+          result="$(docker run --rm --network host postgres:18-alpine \
+            psql "$RESTORE_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 \
+            -c "SELECT actor_identifier FROM gateway_keys")"
+          test "$result" = gateway
+          count="$(docker run --rm --network host postgres:18-alpine \
+            psql "$RESTORE_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 \
+            -c "SELECT count(*) FROM gateway_subscriptions")"
+          test "$count" = 1
+          echo 'PASS: decrypted offsite-format archive restores identity and subscriptions'
+      - name: Remove ephemeral encryption key and backup data
+        if: always()
+        run: rm -rf scratch
