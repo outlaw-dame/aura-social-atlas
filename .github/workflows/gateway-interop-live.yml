@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Independently verify one-shot signed federation acceptance
         env:
-          RELAY: https://interop-relay-fixture-staging.up.railway.app
+          RELAY: https://interop-negative-acceptance-staging.up.railway.app
         run: |
           python3 - <<'PY'
           import json
@@ -30,16 +30,18 @@ jobs:
           url = base + '/interop-status'
           context = ssl.create_default_context()
           expected = {
-              'gateway verified current Follow and persisted signed Accept',
-              'gateway verified reciprocal Follow and signed Accept',
-              'signed public Create ingested once',
-              'replayed Create did not duplicate item',
-              'private Create not ingested',
-              'Announce origin Note fetched and ingested',
-              'authenticated original-author Delete removed Note',
-              'new signed Undo for accepted Follow received',
-              'subscription disabled after Undo',
-              'disabled relay cannot deliver late content',
+              'observed initial signed Follow for rejection',
+              'signed Reject transitioned pending subscription to rejected',
+              'rejected relay Create not ingested',
+              'observed fresh Follow after Reject and retry',
+              'fresh signed Accept restored accepted subscription',
+              'positive signed Create ingested for accepted relay',
+              'unsigned Create not ingested',
+              'wrong-owner Create not ingested',
+              'tampered Create not ingested',
+              'signed cleanup Delete removed positive control',
+              'cleanup subscription disabled',
+              'cleanup Undo observed',
           }
           state = None
           checks = []
