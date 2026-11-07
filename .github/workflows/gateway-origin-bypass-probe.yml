@@ -42,24 +42,36 @@ jobs:
 
           # An origin may reject unknown Host routing at its edge, but must also
           # reject a forged custom Host; TLS SNI remains the direct origin name.
-          direct, direct_headers = probe('/healthz', 'qb9rmgmw.up.railway.app')
-          forged, forged_headers = probe('/healthz', public_host)
-          admin, admin_headers = probe('/admin/subscriptions', public_host)
-          print('Direct-origin /healthz status:', direct)
-          print('Forged Host direct-origin /healthz status:', forged)
-          print('Forged Host direct-origin /admin status:', admin)
-          print('Cloudflare proxy headers on direct probe:', bool(forged_headers.get('Cf-Ray')))
+          # The Railway public domain was removed after Cloudflare Tunnel
+          # cutover. A forged Host must now be rejected by Railway routing
+          # (404/421), or by gateway origin authentication (403) if routed.
+          # These are all explicit *denials*, never proof from a 429 or 5xx.
+          # Test each public attack surface against both raw and spoofed Host.
+          for path in (
+              '/healthz',
+              '/actor',
+              '/api/v1/items?limit=1',
+              '/actors/gateway/inbox',
+              '/admin/subscriptions',
+          ):
+              direct, direct_headers = probe(path, 'qb9rmgmw.up.railway.app')
+              forged, forged_headers = probe(path, public_host)
+              assert direct == 404, (
+                  f'Unmapped Railway origin served {path}: HTTP {direct}'
+              )
+              assert forged in (403, 404, 421), (
+                  f'Forged Host reached {path}: HTTP {forged}'
+              )
+              assert not direct_headers.get('Cf-Ray'), (
+                  f'Direct-origin probe unexpectedly passed through Cloudflare: {path}'
+              )
+              assert not forged_headers.get('Cf-Ray'), (
+                  f'Forged Host unexpectedly passed through Cloudflare: {path}'
+              )
+              print('PASS: routing/origin-auth denied', path,
+                    'direct', direct, 'forged', forged)
 
-          # Require positive ingress denial; app-generated 429/503 cannot
-          # prove origin isolation and must never make this release gate pass.
-          # 404 from the unmapped Railway host is a routing-level denial.
-          assert direct == 404, f'Direct Railway hostname was not rejected by routing: {direct}'
-          # Forging the public Host must fail the gateway's edge secret check
-          # before /healthz or /admin can reach application handlers.
-          assert forged == 403, f'Forged Host bypass did not receive edge-secret 403: {forged}'
-          assert admin == 403, f'Forged Host admin did not receive edge-secret 403: {admin}'
-          assert not forged_headers.get('Cf-Ray'), 'Probe unexpectedly passed through Cloudflare'
-          print('PASS: direct Railway origin and forged Host explicitly denied (404/403)')
+          print('PASS: five direct-origin routes reject raw and forged Host')
           # Positive-path assertion: origin authentication must not break
           # legitimate Cloudflare-forwarded traffic or public key discovery.
           cloudflare_url = 'https://' + public_host + '/healthz'
