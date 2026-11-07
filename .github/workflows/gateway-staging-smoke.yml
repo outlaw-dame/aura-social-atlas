@@ -115,4 +115,27 @@ jobs:
           else:
               raise AssertionError('Public admin access was not denied by Cloudflare')
           print('PASS: Cloudflare denies unauthenticated public admin ingress')
+
+          relay = 'https://interop-relay-fixture-staging.up.railway.app'
+          relay_health_request = urllib.request.Request(relay + '/healthz', headers={'Accept': 'application/json'})
+          with opener.open(relay_health_request, timeout=12) as resp:
+              assert resp.status == 200
+              assert json.loads(resp.read(10000)) == {'ok': True}
+          relay_actor_request = urllib.request.Request(
+              relay + '/actor',
+              headers={'Accept': 'application/activity+json'},
+          )
+          with opener.open(relay_actor_request, timeout=12) as resp:
+              assert resp.status == 200
+              fixture_actor = json.loads(resp.read(100_000))
+          assert fixture_actor.get('type') == 'Service'
+          assert fixture_actor.get('id') == relay + '/actor'
+          assert fixture_actor.get('inbox') == relay + '/inbox'
+          key = fixture_actor.get('publicKey')
+          assert isinstance(key, dict)
+          assert key.get('owner') == fixture_actor['id']
+          assert key.get('id') == fixture_actor['id'] + '#main-key'
+          assert key.get('publicKeyPem', '').startswith('-----BEGIN PUBLIC KEY-----')
+          print('PASS: isolated externally resolvable relay actor, public RSA key and inbox')
+
           PY
