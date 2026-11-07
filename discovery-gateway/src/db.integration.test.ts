@@ -12,7 +12,7 @@ import { createHandler } from './http.ts';
 import { loadConfig } from './config.ts';
 import { authorizeIngest } from './policy.ts';
 import {
-  acceptedSubscriptionActors, createSubscription, deleteItem, getSubscription,
+  acceptedSubscriptionActors, createSubscription, deleteItem, getSubscription, isAcceptedSubscriptionActor, isActiveLitePubSubscriber,
   initSchema, insertItem, listFacets, listSubscriptions, loadKeyPair, normalizeStoredHashtags, pruneItems, queryItems,
   saveKeyPair, setPendingFollowId, setSubscriptionState, settlePendingFollow, subscriptionByFollowId,
   type GatewayItem,
@@ -71,6 +71,47 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(await setPendingFollowId(sql, first.subscription.id, `${prefix}retry`)).toBe(true);
     expect(await subscriptionByFollowId(sql, input.followActivityId)).toBeNull();
     expect((await subscriptionByFollowId(sql, `${prefix}retry`))?.state).toBe('pending');
+  });
+
+  dbTest('indexed sender admission uses exact actor identity, kind and current state', async () => {
+    const host = 'relay-perf.example';
+    const id = crypto.randomUUID();
+    const liteUrl = `https://${host}/actors/lite-${id}`;
+    const siblingUrl = `https://${host}/actors/sibling-${id}`;
+    const tagUrl = `https://${host}/tag/${id}`;
+    const lite = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: liteUrl, actorHost: host,
+      selector: null, followActivityId: `${prefix}perf-lite-${id}`,
+    });
+    const sibling = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: siblingUrl, actorHost: host,
+      selector: null, followActivityId: `${prefix}perf-sibling-${id}`,
+    });
+    const tag = await createSubscription(sql, {
+      kind: 'fedibuzz-tag', actorUrl: tagUrl, actorHost: host,
+      selector: id, followActivityId: `${prefix}perf-tag-${id}`,
+    });
+    expect(await isAcceptedSubscriptionActor(sql, liteUrl)).toBe(false);
+    expect(await isActiveLitePubSubscriber(sql, liteUrl)).toBe(true);
+    expect(await isActiveLitePubSubscriber(sql, siblingUrl)).toBe(true);
+    expect(await isActiveLitePubSubscriber(sql, tagUrl)).toBe(false);
+    expect(await isActiveLitePubSubscriber(sql, `https://${host}/actors/unknown`)).toBe(false);
+
+    await setSubscriptionState(sql, lite.subscription.id, 'accepted');
+    await setSubscriptionState(sql, tag.subscription.id, 'accepted');
+    expect(await isAcceptedSubscriptionActor(sql, liteUrl)).toBe(true);
+    expect(await isAcceptedSubscriptionActor(sql, tagUrl)).toBe(true);
+    expect(await isAcceptedSubscriptionActor(sql, siblingUrl)).toBe(false);
+    expect(await isAcceptedSubscriptionActor(sql, `https://${host}/actors/unknown`)).toBe(false);
+    expect(await isActiveLitePubSubscriber(sql, liteUrl)).toBe(true);
+    expect(await isActiveLitePubSubscriber(sql, tagUrl)).toBe(false);
+
+    await setSubscriptionState(sql, lite.subscription.id, 'disabled');
+    await setSubscriptionState(sql, sibling.subscription.id, 'rejected');
+    expect(await isAcceptedSubscriptionActor(sql, liteUrl)).toBe(false);
+    expect(await isActiveLitePubSubscriber(sql, liteUrl)).toBe(false);
+    expect(await isActiveLitePubSubscriber(sql, siblingUrl)).toBe(false);
+    expect(await isAcceptedSubscriptionActor(sql, tagUrl)).toBe(true);
   });
 
   dbTest('IDOR: only the admin bearer may mutate even a known subscription UUID', async () => {
