@@ -12,10 +12,10 @@ describe('pinned Fedify retry behavior (no application-level duplicate retry)', 
     jitter: false,
   });
 
-  test('uses exponential delays, caps retries, and terminates', () => {
+  test('uses Fedify attempt-indexed exponential delays, caps retries, and terminates', () => {
     const delays = [1, 2, 3, 4].map(attempts =>
       noJitter({ attempts, elapsedTime })?.total('milliseconds') ?? null);
-    expect(delays).toEqual([100, 200, 400, 800]);
+    expect(delays).toEqual([200, 400, 800, 800]);
     expect(noJitter({ attempts: 5, elapsedTime })).toBeNull();
     expect(noJitter({ attempts: 6, elapsedTime })).toBeNull();
   });
