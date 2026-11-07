@@ -94,6 +94,9 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineF
       });
     })
     .mapActorAlias('/actor', ACTOR_IDENTIFIER)
+    // The public preferredUsername differs from the internal sentinel ID.
+    // Keep WebFinger acct: resolution consistent with the advertised actor.
+    .mapHandle((_ctx, username) => username === 'atlas-discovery-gateway' ? ACTOR_IDENTIFIER : null)
     .setKeyPairsDispatcher(async (_ctx, identifier) => {
       if (identifier !== ACTOR_IDENTIFIER || !stores.sql) return [];
       try {
