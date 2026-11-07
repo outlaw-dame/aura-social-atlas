@@ -55,7 +55,7 @@ jobs:
       - name: Seed source with synthetic keys and provenance without external accounts
         run: |
           set -euo pipefail
-          docker run --rm --network host \
+          docker run --rm --interactive --network host \
             -e PGCONNECT_TIMEOUT=5 \
             postgres:18-alpine psql "${SOURCE_DATABASE_URL}" -X -v ON_ERROR_STOP=1 <<'SQL'
           CREATE TABLE gateway_keys (
