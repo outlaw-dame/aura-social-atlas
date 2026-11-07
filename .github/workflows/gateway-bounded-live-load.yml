@@ -1,0 +1,76 @@
+name: Atlas bounded external Tunnel read-load acceptance
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-bounded-live-load.yml'
+permissions:
+  contents: read
+concurrency:
+  group: atlas-bounded-staging-load
+  cancel-in-progress: false
+jobs:
+  bounded-read-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Run a tightly bounded, read-only HTTPS concurrency smoke
+        env:
+          BASE: https://staging-gateway.damonoutlaw.xyz
+        run: |
+          python3 - <<'PY'
+          import concurrent.futures
+          import json
+          import math
+          import os
+          import ssl
+          import statistics
+          import time
+          import urllib.error
+          import urllib.request
+
+          base = os.environ['BASE']
+          context = ssl.create_default_context()
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  raise AssertionError(f'Unexpected redirect: {code}')
+
+          def probe(index):
+              # 24 discovery reads and 8 database-backed health reads,
+              # max four concurrent requests, no mutation, no retries.
+              path = '/healthz' if index % 4 == 0 else '/api/v1/items?limit=1'
+              opener = urllib.request.build_opener(
+                  urllib.request.HTTPSHandler(context=context), NoRedirect())
+              req = urllib.request.Request(
+                  base + path, headers={
+                      'Accept': 'application/json',
+                      'User-Agent': 'AtlasBoundedStagingReadLoad/1.0'})
+              start = time.monotonic()
+              with opener.open(req, timeout=12) as response:
+                  payload = response.read(150_000)
+                  latency = (time.monotonic() - start) * 1000
+                  assert response.status == 200, (path, response.status)
+                  assert response.headers.get('CF-Ray'), 'Expected Cloudflare edge'
+                  assert response.headers.get('Cache-Control') == 'no-store'
+              data = json.loads(payload)
+              if path == '/healthz':
+                  assert data == {'ok': True}
+              else:
+                  assert isinstance(data.get('items'), list)
+                  assert len(data['items']) <= 1
+              return latency
+
+          with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+              durations = list(pool.map(probe, range(32)))
+          ordered = sorted(durations)
+          p95 = ordered[math.ceil(len(ordered)*0.95)-1]
+          print('Verified independent HTTPS read responses:', len(durations))
+          print('Concurrency cap:', 4)
+          print('p50 milliseconds:', round(statistics.median(ordered), 1))
+          print('p95 milliseconds:', round(p95, 1))
+          print('max milliseconds:', round(max(ordered), 1))
+          # An availability guard, not a production throughput/SLA target.
+          assert p95 < 5000, 'Bounded staging read tail latency exceeded 5s'
+          print('PASS: all 32 Cloudflare Tunnel requests healthy, no mutation or retries')
+          PY
