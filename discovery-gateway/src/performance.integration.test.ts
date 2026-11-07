@@ -81,7 +81,7 @@ integration('PostgreSQL queue delay and restart: no early processing, no duplica
   try {
     // Postgres queue uses the Fedify retry policy rather than a second native
     // retry mechanism; asserting the public adapter capability prevents drift.
-    expect(q.nativeRetrial).not.toBe(true);
+    expect((q as PostgresMessageQueue & { nativeRetrial?: boolean }).nativeRetrial).not.toBe(true);
     await q.initialize();
     initialized = true;
     await sql`TRUNCATE gateway_ci_delay_messages`;
