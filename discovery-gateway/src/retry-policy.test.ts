@@ -13,7 +13,7 @@ describe('Fedify 2.4.5 retry policy and PostgreSQL queue contract', () => {
   test('PostgreSQL queue delegates failures to Fedify instead of double-retrying', () => {
     // A backend-native retry layered under the middleware retry would risk
     // exponential multiplication of attempts and duplicate delivery.
-    expect(new PostgresMessageQueue({} as never).nativeRetrial).not.toBe(true);
+    expect((new PostgresMessageQueue({} as never) as unknown as { nativeRetrial?: boolean }).nativeRetrial).not.toBe(true);
   });
 
   test('retry delay is exponentially increasing, capped, and finally exhausted', () => {
