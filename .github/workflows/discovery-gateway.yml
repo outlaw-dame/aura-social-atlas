@@ -132,6 +132,45 @@ jobs:
         run: bun build interop/railway-relay.ts --target=bun --outdir=/tmp/atlas-interop-relay-build
       - name: Gateway unit and PostgreSQL integration tests
         run: bun test src
+      - name: Verify pg_dump / pg_restore with real signing keys against disposable databases
+        env:
+          PGPASSWORD: gateway_ci_password
+        run: |
+          set -euo pipefail
+          archive=".ci-restore-$(date +%s)-$.dump"
+          cleanup() {
+            rm -f "$archive"
+            docker run --rm --network host -e PGPASSWORD postgres:16-alpine \
+              dropdb --if-exists --host=127.0.0.1 --username=gateway_ci \
+              gateway_restore_rehearsal >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          bun src/restore-fixture.ts seed | tee /tmp/atlas-restore-seed.log
+          docker run --rm --network host -e PGPASSWORD -v "$PWD:/backup" postgres:16-alpine \
+            pg_dump --host=127.0.0.1 --username=gateway_ci \
+            --dbname=gateway_integration --format=custom \
+            --no-owner --no-acl --file="/backup/$archive"
+          docker run --rm --network host -e PGPASSWORD postgres:16-alpine \
+            createdb --host=127.0.0.1 --username=gateway_ci gateway_restore_rehearsal
+          docker run --rm --network host -e PGPASSWORD -v "$PWD:/backup" postgres:16-alpine \
+            pg_restore --host=127.0.0.1 --username=gateway_ci \
+            --dbname=gateway_restore_rehearsal --no-owner --no-acl \
+            --exit-on-error "/backup/$archive"
+          GATEWAY_RESTORE_DATABASE_URL=postgres://gateway_ci:gateway_ci_password@127.0.0.1:5432/gateway_restore_rehearsal \
+            bun src/restore-fixture.ts verify | tee /tmp/atlas-restore-verified.log
+          python3 - <<'PY'
+          import json
+          def read(path):
+              return next(json.loads(s) for s in open(path) if s.startswith('{"event":"database.restore_fixture"'))
+          seed=read('/tmp/atlas-restore-seed.log')
+          restored=read('/tmp/atlas-restore-verified.log')
+          assert seed['mode']=='seed' and restored['mode']=='verify'
+          assert seed['publicKeyFingerprintSha256']==restored['publicKeyFingerprintSha256']
+          assert restored['verifiedSignature'] and restored['restoredItem']
+          assert restored['gatewayTables'] >= 4
+          print('PASS: pg_dump/pg_restore retained a usable private signing key, public key identity, and provenance')
+          PY
+
   atlas:
     runs-on: ubuntu-latest
     steps:
