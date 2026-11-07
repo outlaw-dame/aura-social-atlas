@@ -1,7 +1,8 @@
 # Architecture
 - Initialize account state through the subscribe-first session observer and associate loaded profiles with their user ID; delayed reads must not overwrite newer auth events or display another account's profile.
 - Share article creator attribution through CreatorTag across phone and desktop feeds; profile and follow actions use the existing discovery state so author interactions stay consistent.
-- Phone Profile is a separate Framework7 popup with local section selection, using shared account and discovery state; never seed fictional personal content for its empty sections.
+- App dock order is Feeds, Discover, Groups, Activity, then the person's avatar (Profile); the tab bar, side tab bar, rail and sidebar all render the same `dock` list. Settings is reached from Profile and the sidebar, Saved from Profile → Saved.
+- Profile is the dock's last tab (ProfileView) with local section selection, using shared account and discovery state; never seed fictional personal content for its empty sections (Groups follows the same rule).
 - Keep creator catalogue and filtering in browser-safe modules, separate from presentation, so sample discovery can later be replaced by a live source.
 - Share session-only follow/save state through a root provider across discovery routes; do not imply account persistence until connected.
 - Keep the existing AI assistant transport unchanged during presentation-only product pivots.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Popup, Page, Navbar, NavRight, Link, Button, Segmented, Icon, Sheet, Block, List, ListInput, f7 } from 'framework7-react';
+import { Link, Button, Segmented, Icon, Sheet, Block, List, ListInput, f7 } from 'framework7-react';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useSocial } from '@/components/social/SocialState';
 import { avatarPreset } from '@/lib/atlas-avatars';
@@ -66,7 +66,8 @@ export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose
   );
 }
 
-export function ProfilePopup({ opened, onClose, onEditProfile, onOpenCreator }: { opened: boolean; onClose: () => void; onEditProfile: () => void; onOpenCreator: (creator: Creator) => void }) {
+/** The signed-in person's profile — the dock's avatar tab. Signed out, it offers sign-in instead. */
+export function ProfileView({ onEditProfile, onOpenCreator }: { onEditProfile: () => void; onOpenCreator: (creator: Creator) => void }) {
   const { user, profile, signOut } = useAtlasAuth();
   const { followed, saved, toggleSave } = useSocial();
   const [section, setSection] = useState<Section>('Posts');
@@ -76,22 +77,17 @@ export function ProfilePopup({ opened, onClose, onEditProfile, onOpenCreator }: 
   const hasContent = (section === 'Saved' && savedPosts.length > 0) || (section === 'Feeds' && followedCreators.length > 0);
   const featured = profile?.featured_hashtags ?? [];
 
-  const openSettings = () => {
-    onClose();
-    f7.tab.show('#tab-settings');
-  };
+  if (!user) return (
+    <div className="atlas-profile-empty">
+      <div className="atlas-profile-empty-icon"><Icon ios="f7:person_crop_circle" md="material:account_circle" /></div>
+      <h2>Your profile</h2>
+      <p>Sign in to keep your follows, saved stories and featured hashtags across devices.</p>
+      <Button fill round external href="/auth" style={{ marginTop: 12 }}>Sign in</Button>
+    </div>
+  );
 
   return (
-    <Popup opened={opened} onPopupClosed={onClose} className="atlas-profile-popup">
-      <Page>
-        <Navbar title="Profile">
-          <NavRight>
-            <Link iconOnly aria-label="Profile settings" onClick={openSettings}>
-              <Icon ios="f7:gear_alt" md="material:settings" />
-            </Link>
-          </NavRight>
-        </Navbar>
-        {user && <>
+        <div className="atlas-profile-page">
           <header className="atlas-profile-header">
             <img className="atlas-profile-avatar" src={avatarPreset(profile?.avatar_key).src} alt="Your avatar" width={96} height={96} />
             <h1>{profile?.display_name || 'Your profile'}</h1>
@@ -151,10 +147,8 @@ export function ProfilePopup({ opened, onClose, onEditProfile, onOpenCreator }: 
             </Link>)}
           </section>
           <footer className="atlas-profile-footer">
-            <Button small onClick={async () => { await signOut(); onClose(); }}>Sign out</Button>
+            <Button small onClick={() => { void signOut(); }}>Sign out</Button>
           </footer>
-        </>}
-      </Page>
-    </Popup>
+        </div>
   );
 }

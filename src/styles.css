@@ -225,6 +225,19 @@
 
 /* Centered social profile; the six section names scroll rather than compress. */
 .atlas-profile-popup .page { background: var(--background); color: var(--foreground); }
+/* Dock: the person's avatar stands in for an icon; the active tab gets a ring in the theme colour. */
+.atlas-dock-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.atlas-tabbar .tab-link-active .atlas-dock-avatar { box-shadow: 0 0 0 2px var(--f7-tabbar-link-active-color, var(--f7-theme-color)); }
+/* Activity: avatar with a small badge for the kind of notification. */
+.atlas-activity-media { position: relative; display: block; width: 40px; height: 40px; }
+.atlas-activity-media img, .atlas-activity-initial { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+.atlas-activity-initial { display: grid; place-items: center; background: var(--secondary); font: 400 18px/1 'Instrument Serif', serif; }
+.atlas-activity-kind { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; background: var(--f7-theme-color); box-shadow: 0 0 0 2px var(--f7-list-strong-bg-color, #fff); }
+.atlas-activity-kind .icon { font-size: 12px; }
+.atlas-activity-favourite { background: #e0245e; }
+.atlas-activity-reblog { background: #17bf63; }
+.atlas-activity-follow, .atlas-activity-follow_request { background: #6364ff; }
+.atlas-activity .item-text { -webkit-line-clamp: 3; }
 .atlas-profile-header { text-align: center; padding: 32px 24px 24px; }
 .atlas-profile-avatar { display: block; margin: 0 auto 16px; border-radius: 50%; background: var(--secondary); object-fit: cover; }
 .atlas-profile-header h1 { margin: 0; font-family: var(--font-sans); font-size: 27px; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
