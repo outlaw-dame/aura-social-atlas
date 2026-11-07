@@ -1,0 +1,39 @@
+name: Isolated gateway PostgreSQL restore verifier checks
+
+on:
+  pull_request:
+    paths:
+      - 'discovery-gateway/backup-verify/**'
+      - '.github/workflows/backup-restore-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify portable shell syntax
+        run: sh -n discovery-gateway/backup-verify/verify-restore.sh
+      - name: Build pinned Postgres 18 restore verifier
+        run: docker build --pull --tag atlas-restore-check discovery-gateway/backup-verify
+      - name: Refuse unconfirmed restore without executing any database command
+        run: |
+          set -eu
+          if docker run --rm atlas-restore-check >out.log 2>&1; then
+            echo 'Expected explicit staging confirmation to be required'
+            exit 1
+          fi
+          grep -q 'explicit staging confirmation required' out.log
+          if docker run --rm \
+            -e RESTORE_CONFIRM=isolated-staging-only \
+            -e RAILWAY_ENVIRONMENT_NAME=production \
+            atlas-restore-check >out.log 2>&1; then
+            echo 'Expected production environment to be rejected'
+            exit 1
+          fi
+          grep -q 'staging environment required' out.log
+          echo 'PASS: fail-closed restore preflight'
