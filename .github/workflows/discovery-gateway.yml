@@ -97,6 +97,15 @@ jobs:
             exit 1
           fi
           docker inspect --format '{{.State.Running}}' gateway-ci-web | grep -qx true
+          # Public ingress must reject even a correct admin bearer. The
+          # private internal port must still enforce bearer authentication.
+          public_admin_status="$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${GATEWAY_ADMIN_TOKEN}" \
+            http://127.0.0.1:4100/admin/subscriptions)"
+          test "$public_admin_status" = 404
+          private_admin_status="$(curl -s -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:4101/admin/subscriptions)"
+          test "$private_admin_status" = 401
           # Worker has no HTTP listener. Wait for its own structured startup event.
           worker_ready=0
           for attempt in {1..30}; do

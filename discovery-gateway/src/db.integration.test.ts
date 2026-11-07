@@ -131,7 +131,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       sendUndoFollow: async () => { remoteCalls++; },
       fetch: async () => new Response('not found', { status: 404 }),
     } as unknown as Gateway;
-    const handle = createHandler({ cfg, gateway, sql });
+    const handle = createHandler({ cfg, gateway, sql, adminEnabled: true });
     const target = `https://gateway.example/admin/subscriptions/${sub.subscription.id}`;
     for (const method of ['DELETE', 'POST'] as const) {
       const url = method === 'POST' ? target + '/retry' : target;
@@ -358,7 +358,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       fetch: async () => new Response('Not found', { status: 404 }),
       lookupActor: async () => null,
     } as unknown as Gateway;
-    const handle = createHandler({ cfg, gateway, sql });
+    const handle = createHandler({ cfg, gateway, sql, adminEnabled: true });
     const anonymous = await handle(new Request('https://gateway.example/admin/subscriptions'));
     expect(anonymous.status).toBe(401);
     const headers = { Authorization: `Bearer ${cfg.adminToken}` };

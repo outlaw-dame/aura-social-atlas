@@ -16,6 +16,8 @@ export type GatewayConfig = {
   devMemoryStore: boolean;
   /** Port for Bun.serve. */
   port: number;
+  /** Dedicated private Railway-network admin listener, never publicly routed. */
+  adminPort: number;
   /** Max bytes accepted for an inbound federation POST body. */
   maxBodyBytes: number;
   /** Max redirects followed when fetching remote objects. */
@@ -81,13 +83,17 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       }
       return u.origin;
     });
+  const port = intInRange('PORT', env['PORT'], 4100, 1, 65535);
+  const adminPort = intInRange('GATEWAY_ADMIN_PORT', env['GATEWAY_ADMIN_PORT'], 4101, 1, 65535);
+  if (adminPort === port) throw new Error('GATEWAY_ADMIN_PORT must differ from public PORT.');
   return {
     origin: originUrl.origin,
     databaseUrl,
     adminToken,
     corsAllowlist,
     devMemoryStore,
-    port: intInRange('PORT', env['PORT'], 4100, 1, 65535),
+    port,
+    adminPort,
     maxBodyBytes: intInRange('GATEWAY_MAX_BODY_BYTES', env['GATEWAY_MAX_BODY_BYTES'], 1_048_576, 1024, 16 * 1024 * 1024),
     maxRedirects: intInRange('GATEWAY_MAX_REDIRECTS', env['GATEWAY_MAX_REDIRECTS'], 3, 0, 10),
     fetchTimeoutMs: intInRange('GATEWAY_FETCH_TIMEOUT_MS', env['GATEWAY_FETCH_TIMEOUT_MS'], 10_000, 1000, 60_000),
