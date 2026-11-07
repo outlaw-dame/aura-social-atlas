@@ -237,6 +237,7 @@
 .atlas-activity-favourite { background: #e0245e; }
 .atlas-activity-reblog { background: #17bf63; }
 .atlas-activity-follow, .atlas-activity-follow_request { background: #6364ff; }
+.atlas-activity-added_to_collection, .atlas-activity-collection_update { background: #b8860b; }
 .atlas-activity .item-text { -webkit-line-clamp: 3; }
 .atlas-profile-header { text-align: center; padding: 32px 24px 24px; }
 .atlas-profile-avatar { display: block; margin: 0 auto 16px; border-radius: 50%; background: var(--secondary); object-fit: cover; }
@@ -430,3 +431,33 @@ html[data-nav="deck"] .atlas-tabbar { top: var(--atlas-bottom-y, auto); bottom: 
 html[data-nav="deck"] .atlas-tabbar .toolbar-inner { padding-top: var(--atlas-crease); align-items: flex-start; }
 html[data-nav="deck"] .atlas-tabbar .tab-link { height: 72px; }
 html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--atlas-crease) + 84px) !important; bottom: auto !important; margin-bottom: 0 !important; }
+
+/* Collections (Mastodon 4.6-style curated sets of accounts). */
+.atlas-coll-mine { display: grid; gap: 10px; }
+.atlas-coll-card { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 14px 14px 12px; border: 0; border-radius: 18px; background: var(--f7-list-strong-bg-color, var(--card)); color: var(--foreground); text-align: left; font: inherit; cursor: pointer; }
+.atlas-coll-card > .icon { font-size: 16px; color: var(--muted-foreground); }
+.atlas-coll-card-body { flex: 1; min-width: 0; }
+.atlas-coll-card-body strong { display: block; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.atlas-coll-card-body small { display: block; margin-top: 3px; font-size: 13px; color: var(--muted-foreground); }
+.atlas-coll-avatars { display: inline-flex; flex: 0 0 auto; }
+.atlas-coll-avatars > * { display: grid; place-items: center; width: 32px; height: 32px; margin-left: -10px; border-radius: 50%; object-fit: cover; background: var(--secondary); border: 2px solid var(--f7-list-strong-bg-color, var(--card)); font-size: 14px; color: var(--muted-foreground); }
+.atlas-coll-avatars > *:first-child { margin-left: 0; }
+.atlas-coll-new { justify-self: center; width: auto; padding: 0 18px; margin-top: 6px; gap: 6px; }
+.atlas-coll-new .icon { font-size: 16px; }
+.atlas-coll-head { padding: 20px 20px 4px; text-align: center; }
+.atlas-coll-head .atlas-coll-avatars > * { width: 52px; height: 52px; margin-left: -14px; border-color: var(--f7-page-bg-color, var(--background)); }
+.atlas-coll-head .atlas-coll-avatars > *:first-child { margin-left: 0; }
+.atlas-coll-head h1 { margin: 14px 0 0; font-size: 26px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.atlas-coll-by { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 14px; color: var(--muted-foreground); }
+.atlas-coll-by img { width: 20px; height: 20px; border-radius: 50%; }
+.atlas-coll-meta { margin: 6px 0 0; font-size: 13px; color: var(--muted-foreground); }
+.atlas-coll-desc { margin: 12px auto 0; max-width: 34em; font-size: 15px; line-height: 1.45; }
+.atlas-coll-cw { margin: 14px auto 0; padding: 12px 14px; max-width: 30em; border-radius: 14px; background: var(--secondary); font-size: 14px; }
+.atlas-coll-cw p { margin: 0 0 8px; }
+.atlas-coll-cw .button, .atlas-coll-owner-actions .button { width: auto; padding: 0 16px; display: inline-flex; }
+.atlas-coll-owner-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+.atlas-coll-items .item-media img { border-radius: 50%; object-fit: cover; }
+.atlas-coll-items .button { width: auto; padding: 0 8px; }
+.atlas-coll-editor .sheet-modal-swipe-step { padding-bottom: calc(12px + var(--f7-safe-area-bottom, 0px)); }
+.atlas-coll-editor-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.atlas-coll-editor-actions .button { width: auto; padding: 0 20px; }
