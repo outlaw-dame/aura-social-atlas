@@ -27,9 +27,13 @@ describe('gateway process roles and queue supervision', () => {
   test('reports fatal worker rejection rather than silently losing ingestion', async () => {
     const fail = new Error('database queue consumer stopped');
     const notifications: unknown[] = [];
-    const worker = superviseQueue(async () => { throw fail; }, error => notifications.push(error));
-    // Allow both the async start and the attached completion handler to run.
-    await Bun.sleep(1);
+    let notified!: (reason: unknown) => void;
+    const notifiedPromise = new Promise<unknown>(resolve => { notified = resolve; });
+    const worker = superviseQueue(async () => { throw fail; }, error => {
+      notifications.push(error);
+      notified(error);
+    });
+    expect(await notifiedPromise).toBe(fail);
     expect(notifications).toEqual([fail]);
     await expect(worker.stop()).rejects.toBe(fail);
     expect(notifications).toEqual([fail]);
@@ -37,9 +41,13 @@ describe('gateway process roles and queue supervision', () => {
 
   test('reports a worker returning without a shutdown request', async () => {
     const notifications: unknown[] = [];
-    const worker = superviseQueue(async () => {}, error => notifications.push(error));
-    // Allow both the async start and the attached completion handler to run.
-    await Bun.sleep(1);
+    let notified!: (reason: unknown) => void;
+    const notifiedPromise = new Promise<unknown>(resolve => { notified = resolve; });
+    const worker = superviseQueue(async () => {}, error => {
+      notifications.push(error);
+      notified(error);
+    });
+    expect(await notifiedPromise).toBeInstanceOf(Error);
     expect(notifications).toHaveLength(1);
     expect(notifications[0]).toBeInstanceOf(Error);
     await worker.stop();
