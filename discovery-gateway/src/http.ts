@@ -104,6 +104,12 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
     const url = new URL(req.url);
     const path = url.pathname;
 
+    // Minimal unauthenticated Railway liveness probe. It exposes no DB,
+    // actor identity, or application data; /healthz remains edge-protected.
+    if (path === '/livez' && req.method === 'GET') {
+      return new Response('ok', { status: 200, headers: { 'cache-control': 'no-store' } });
+    }
+
     // Origin isolation is independent of DNS, forged Host, X-Forwarded-For,
     // or Cloudflare IP lists. A zone-level header rewrite *overwrites* client
     // values before requests are forwarded to Railway. The private admin

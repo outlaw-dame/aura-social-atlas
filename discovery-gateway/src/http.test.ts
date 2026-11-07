@@ -88,6 +88,10 @@ describe('admin authentication and request throttling', () => {
     const gateway = { fetch: async () => { calls++; return new Response('actor', { status: 200 }); } } as unknown as Gateway;
     const sql = {} as Sql;
     const publicHandle = createHandler({ cfg, gateway, sql });
+    const livez = await publicHandle(new Request('https://qb9rmgmw.up.railway.app/livez'));
+    expect(livez.status).toBe(200);
+    expect(livez.headers.get('cache-control')).toBe('no-store');
+    expect(await livez.text()).toBe('ok');
     for (const path of ['/healthz', '/actor', '/api/v1/items', '/admin/subscriptions']) {
       for (const host of ['gateway.example', 'qb9rmgmw.up.railway.app']) {
         for (const supplied of [undefined, 'invalid-secret']) {
