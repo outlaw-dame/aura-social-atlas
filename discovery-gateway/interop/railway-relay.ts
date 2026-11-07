@@ -57,12 +57,20 @@ const advertisedNote = {
   published: new Date().toISOString(),
 };
 const activityContext = 'https://www.w3.org/ns/activitystreams';
-const log = (event: string, details: Record<string, unknown> = {}) =>
-  console.log(JSON.stringify({ event: 'interop.' + event, ...details }));
+const runStatus: { state: 'disabled' | 'ready' | 'running' | 'passed' | 'failed'; checks: string[] } = {
+  state: runEnabled ? 'ready' : 'disabled', checks: [],
+};
+const log = (event: string, details: Record<string, unknown> = {}) => {
+  if (event === 'pass' && typeof details.check === 'string') runStatus.checks.push(details.check);
+  if (event === 'complete') runStatus.state = details.result === 'passed' ? 'passed' : 'failed';
+  // Railway's Function runtime routes stderr consistently to the deploy log.
+  console.error(JSON.stringify({ event: 'interop.' + event, ...details }));
+};
 
 let inboundFollow: { id: string; from: string } | null = null;
+const observedFollowIds = new Set<string>();
 let inboundAccept: { id: string; object: unknown } | null = null;
-let inboundUndo = false;
+const observedUndoIds = new Set<string>();
 let verifiedInbound = 0;
 
 async function readBounded(request: Request, maxBytes = 32_768): Promise<string> {
@@ -92,6 +100,9 @@ const server = Bun.serve({
     if (request.method === 'GET' && u.pathname === '/healthz') {
       return Response.json({ ok: true }, { headers: { 'cache-control': 'no-store' } });
     }
+    if (request.method === 'GET' && u.pathname === '/interop-status') {
+      return Response.json(runStatus, { headers: { 'cache-control': 'no-store' } });
+    }
     if (request.method === 'GET' && u.pathname === '/actor') {
       return Response.json(actor, { headers: documentHeaders });
     }
@@ -116,7 +127,15 @@ const server = Bun.serve({
       }
       // Cryptographic validity alone does not bind the signed request to its
       // ActivityPub actor. Verify key ownership independently of body.actor.
-      if (verified.key.ownerId()?.href !== gatewayActor) {
+      // Fedify's key owner is represented as a URL on newer verification
+      // results and as a method on vocabulary CryptographicKey instances.
+      // Handle both shapes without trusting an unrecognized/missing owner.
+      const field = (verified.key as unknown as {
+        ownerId?: URL | (() => URL | null);
+      }).ownerId;
+      const owner = field instanceof URL ? field.href
+        : typeof field === 'function' ? field.call(verified.key)?.href : null;
+      if (owner !== gatewayActor) {
         log('signature_rejected', { reason: 'wrong_key_owner' });
         return new Response('unauthorized', { status: 401 });
       }
@@ -127,14 +146,15 @@ const server = Bun.serve({
       if (body.type === 'Follow' &&
           typeof body.id === 'string' && body.object === actorId) {
         inboundFollow = { id: body.id, from: body.actor };
+        observedFollowIds.add(body.id);
       } else if (body.type === 'Accept') {
         inboundAccept = { id: typeof body.id === 'string' ? body.id : '', object: body.object };
       } else if (body.type === 'Undo') {
         const undone = body.object && typeof body.object === 'object' &&
           !Array.isArray(body.object)
           ? (body.object as Record<string, unknown>).id : body.object;
-        if (typeof undone === 'string' && undone === inboundFollow?.id)
-          inboundUndo = true;
+        if (typeof undone === 'string' && observedFollowIds.has(undone))
+          observedUndoIds.add(undone);
       }
       verifiedInbound++;
       log('signed_inbox_activity', { type: body.type });
@@ -202,25 +222,42 @@ async function items() {
 }
 
 async function runInterop() {
+  runStatus.state = 'running';
   let subscriptionId: string | null = null;
   try {
     // Internal private Railway service networking only. Public /admin stays blocked.
-    const created = await admin('/admin/subscriptions', 'POST', {
-      type: 'actor', kind: 'litepub', value: actorId,
-    });
-    const subscription = created.subscription as { id: string; state: string };
-    subscriptionId = subscription.id;
-    if (!subscriptionId) throw new Error('missing subscription id');
-    if (subscription.state === 'rejected' || subscription.state === 'disabled') {
-      throw new Error('pre-existing subscription is not active; requires manual cleanup');
+    const existing = (await admin('/admin/subscriptions')).subscriptions as
+      Array<{ id: string; state: string; actorUrl: string }>;
+    const current = existing.find(s => s.actorUrl === actorId);
+    if (current?.state === 'accepted') {
+      // Do not queue an earlier Undo that could be mistaken for the final
+      // unsubscribe. Operator must use a fresh fixture actor for another run.
+      throw new Error('historically accepted synthetic actor requires a fresh relay fixture');
     }
-    await awaitCondition('gateway signed Follow received and verified', () => inboundFollow !== null);
-    const followId = inboundFollow!.id;
-    await signedActivity({
-      id: origin + '/activities/accept-' + crypto.randomUUID(),
-      type: 'Accept', actor: actorId, object: followId, to: [gatewayActor],
-    });
-    await awaitCondition('gateway persisted Follow acceptance', async () => {
+    const record = current
+      ? await admin('/admin/subscriptions/' + encodeURIComponent(current.id) + '/retry', 'POST')
+      : await admin('/admin/subscriptions', 'POST', {
+          type: 'actor', kind: 'litepub', value: actorId,
+        });
+    // The public admin response intentionally withholds followActivityId.
+    // Use only actual *verified* Follow requests; stale prior IDs cannot
+    // transition the rotated pending subscription to accepted.
+    const subscription = record.subscription as { id: string; state: string };
+    subscriptionId = subscription.id;
+    if (!subscriptionId || subscription.state !== 'pending')
+      throw new Error('subscription did not enter pending Follow state');
+    const replied = new Set<string>();
+    await awaitCondition('gateway verified current Follow and persisted signed Accept', async () => {
+      // Retried Follow deliveries can arrive out of order; never allow a
+      // stale Follow to hide the new correlated ID in a last-value slot.
+      for (const id of observedFollowIds) {
+        if (replied.has(id)) continue;
+        replied.add(id);
+        await signedActivity({
+          id: origin + '/activities/accept-' + crypto.randomUUID(),
+          type: 'Accept', actor: actorId, object: id, to: [gatewayActor],
+        });
+      }
       const r = await admin('/admin/subscriptions');
       const subs = r.subscriptions as Array<{ id: string; state: string }>;
       return subs.some(s => s.id === subscriptionId && s.state === 'accepted');
@@ -279,10 +316,12 @@ async function runInterop() {
       !(await items()).some(x => x.id === createdNote),
     );
 
+    const undoIdsBeforeFinalDelete = new Set(observedUndoIds);
     await admin('/admin/subscriptions/' + encodeURIComponent(subscriptionId), 'DELETE');
-    // Persisted disabled state is insufficient evidence that the remote relay
-    // received an Undo; check its verified HTTP signature and Follow ID.
-    await awaitCondition('signed Undo for original Follow received', () => inboundUndo);
+    // Only count a newly received, signed Undo correlated with a verified
+    // Follow for which this run sent Accept. A prior cleanup Undo cannot pass.
+    await awaitCondition('new signed Undo for accepted Follow received', () =>
+      [...observedUndoIds].some(id => !undoIdsBeforeFinalDelete.has(id) && replied.has(id)));
     await awaitCondition('subscription disabled after Undo', async () => {
       const r = await admin('/admin/subscriptions');
       const subs = r.subscriptions as Array<{ id: string; state: string }>;
