@@ -1,9 +1,11 @@
 /** Entrypoint: config → stores → federation → HTTP. Fails closed on any misconfiguration. */
 import { loadConfig } from './config.ts';
+import { assertSafeGatewayRuntime } from './runtime.ts';
 import { storesFor } from './stores.ts';
 import { buildGateway, log } from './federation.ts';
 import { createHandler } from './http.ts';
 
+assertSafeGatewayRuntime(process.versions.bun);
 const cfg = loadConfig();
 const stores = await storesFor(cfg);
 const gateway = buildGateway(cfg, stores);

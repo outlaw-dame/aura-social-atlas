@@ -67,6 +67,9 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineF
     kv: stores.kv,
     queue: stores.queue,
     origin: cfg.origin,
+    // Defense-in-depth: outbound signed deliveries and Fedify-managed fetches
+    // must reject private network targets, not merely our custom loaders.
+    allowPrivateAddress: false,
     documentLoaderFactory: offlineFixtures?.documentLoaderFactory ?? ((o) => getDocumentLoader({ ...o, ...loaderOptions(cfg) })),
     authenticatedDocumentLoaderFactory: offlineFixtures?.authenticatedDocumentLoaderFactory ?? ((identity, o) => getAuthenticatedDocumentLoader(identity, { ...o, ...loaderOptions(cfg) })),
   });
