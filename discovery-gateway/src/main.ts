@@ -10,6 +10,7 @@ assertSafeGatewayRuntime(process.versions.bun);
 const role = gatewayRole(process.env.GATEWAY_ROLE);
 const cfg = loadConfig();
 const stores = await storesFor(cfg);
+const gateway = buildGateway(cfg, stores);
 let server: ReturnType<typeof Bun.serve> | undefined;
 let worker: ReturnType<typeof superviseQueue> | undefined;
 let shutdownPromise: Promise<void> | undefined;
