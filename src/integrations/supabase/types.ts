@@ -14,6 +14,92 @@ export type Database = {
   }
   public: {
     Tables: {
+      atlas_collection_items: {
+        Row: {
+          acct: string
+          actor_uri: string
+          avatar_url: string | null
+          collection_id: string
+          created_at: string
+          display_name: string | null
+          id: string
+          position: number
+          profile_url: string | null
+          state: string
+        }
+        Insert: {
+          acct: string
+          actor_uri: string
+          avatar_url?: string | null
+          collection_id: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          position?: number
+          profile_url?: string | null
+          state?: string
+        }
+        Update: {
+          acct?: string
+          actor_uri?: string
+          avatar_url?: string | null
+          collection_id?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          position?: number
+          profile_url?: string | null
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "atlas_collection_items_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "atlas_collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      atlas_collections: {
+        Row: {
+          created_at: string
+          description: string | null
+          discoverable: boolean
+          id: string
+          language: string | null
+          name: string
+          owner_id: string
+          sensitive: boolean
+          tag_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          discoverable?: boolean
+          id?: string
+          language?: string | null
+          name: string
+          owner_id: string
+          sensitive?: boolean
+          tag_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          discoverable?: boolean
+          id?: string
+          language?: string | null
+          name?: string
+          owner_id?: string
+          sensitive?: boolean
+          tag_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       fedizen_connections: {
         Row: {
           access_token: string

@@ -17,6 +17,8 @@ import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { ProfileView, EditProfileSheet } from './ProfileView';
+import { CollectionPopup } from './Collections';
+import type { Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileFedizenFeed, MobileActivity } from './FedizenMobile';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
@@ -104,6 +106,14 @@ export default function AtlasMobileApp() {
   const [query, setQuery] = useState('');
   const [composeOpen, setComposeOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [collectionOpen, setCollectionOpen] = useState<{ collection?: Collection; id?: string; link?: string } | null>(null);
+  // Shared links open the collection in the app: /app?collection=<Atlas id> or ?collection=<Mastodon collection URL>.
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('collection');
+    if (!v) return;
+    if (/^[0-9a-f-]{36}$/i.test(v)) setCollectionOpen({ id: v });
+    else if (/^https:\/\/[^/]+\/collections\/[A-Za-z0-9_-]+\/?$/.test(v)) setCollectionOpen({ link: v });
+  }, []);
   const [chatOpen, setChatOpen] = useState(false);
   const [creatorOpen, setCreatorOpen] = useState<Creator | null>(null);
   const [tagFeed, setTagFeed] = useState<{ creatorId: string; tag: string } | null>(null);
@@ -302,7 +312,7 @@ export default function AtlasMobileApp() {
             </Tab>
 
             <Tab id="tab-profile" className="page-content" onTabShow={() => setTitle('Profile')}>
-              <ProfileView onEditProfile={() => setEditProfileOpen(true)} onOpenCreator={setCreatorOpen} />
+              <ProfileView onEditProfile={() => setEditProfileOpen(true)} onOpenCreator={setCreatorOpen} onOpenCollection={c => setCollectionOpen({ collection: c })} />
             </Tab>
 
             <Tab id="tab-settings" className="page-content" onTabShow={() => setTitle('Settings')}>
@@ -352,6 +362,7 @@ export default function AtlasMobileApp() {
         )}
       </Popup>
       <EditProfileSheet opened={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
+      <CollectionPopup opened={!!collectionOpen} onClose={() => setCollectionOpen(null)} collection={collectionOpen?.collection} id={collectionOpen?.id} link={collectionOpen?.link} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>

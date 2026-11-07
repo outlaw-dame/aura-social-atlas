@@ -76,6 +76,8 @@ const noticeIcon: Record<string, { ios: string; md: string }> = {
   mention: { ios: 'f7:at', md: 'material:alternate_email' },
   status: { ios: 'f7:square_pencil', md: 'material:edit' },
   poll: { ios: 'f7:chart_bar_alt_fill', md: 'material:poll' },
+  added_to_collection: { ios: 'f7:square_stack_3d_up_fill', md: 'material:collections_bookmark' },
+  collection_update: { ios: 'f7:square_stack_3d_up', md: 'material:collections_bookmark' },
 };
 
 /** Activity tab: the person's real Fedizen notifications (read-only). */
