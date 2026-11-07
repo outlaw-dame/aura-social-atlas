@@ -76,6 +76,53 @@ describe('admin authentication and request throttling', () => {
     })).toThrow('GATEWAY_ADMIN_PORT must differ');
   });
 
+  test('edge-to-origin authentication rejects direct Railway origin and forged Host on every public route', async () => {
+    const edgeSecret = 'cloudflare-origin-only-example-secret-123456789';
+    const cfg = loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      GATEWAY_ADMIN_TOKEN: token,
+      DATABASE_URL: 'postgres://test:test@localhost/test',
+      GATEWAY_EDGE_SECRET: edgeSecret,
+    });
+    let calls = 0;
+    const gateway = { fetch: async () => { calls++; return new Response('actor', { status: 200 }); } } as unknown as Gateway;
+    const sql = {} as Sql;
+    const publicHandle = createHandler({ cfg, gateway, sql });
+    for (const path of ['/healthz', '/actor', '/api/v1/items', '/admin/subscriptions']) {
+      for (const host of ['gateway.example', 'qb9rmgmw.up.railway.app']) {
+        for (const supplied of [undefined, 'invalid-secret']) {
+          const headers: Record<string, string> = { host: 'gateway.example', 'cf-connecting-ip': '127.0.0.1' };
+          if (supplied) headers['x-atlas-edge-auth'] = supplied;
+          const response = await publicHandle(new Request('https://' + host + path, { headers }));
+          expect(response.status).toBe(403);
+          expect(response.headers.get('cache-control')).toBe('no-store');
+        }
+      }
+    }
+    expect(calls).toBe(0);
+    const allowed = await publicHandle(new Request('https://gateway.example/actor', {
+      headers: { 'x-atlas-edge-auth': edgeSecret },
+    }));
+    expect(allowed.status).toBe(200);
+    expect(calls).toBe(1);
+    const deniedAdmin = await publicHandle(new Request('https://gateway.example/admin/subscriptions', {
+      headers: { 'x-atlas-edge-auth': edgeSecret, authorization: 'Bearer ' + token },
+    }));
+    expect(deniedAdmin.status).toBe(404);
+    const privateAdmin = createHandler({ cfg, gateway, sql, adminEnabled: true });
+    const privateCheck = await privateAdmin(new Request('http://gateway-web.railway.internal:4101/admin/subscriptions'));
+    expect(privateCheck.status).toBe(401);
+  });
+
+  test('rejects underlength edge secrets at configuration time', () => {
+    expect(() => loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      DATABASE_URL: 'postgres://test:test@localhost/test',
+      GATEWAY_ADMIN_TOKEN: token,
+      GATEWAY_EDGE_SECRET: 'too-short',
+    })).toThrow('GATEWAY_EDGE_SECRET');
+  });
+
   test('rate limiter closes the bucket after the configured count', () => {
     const limiter = new RateLimiter(2);
     expect(limiter.allow('anonymous')).toBe(true);
