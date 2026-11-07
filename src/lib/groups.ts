@@ -60,6 +60,18 @@ export function mediaUrl(v: unknown): string | undefined {
   return /^https:\/\//i.test(s) ? s : undefined;
 }
 
+/**
+ * Bonfire answers `profile.icon` / `profile.image` with its own placeholder when a group has none
+ * (bonfire_common Media.avatar_fallback → /images/avatar.png, banner_fallback → /images/bonfires.png).
+ * Those aren't the group's picture, so Atlas draws its own instead of showing Bonfire's generic one.
+ */
+const BONFIRE_PLACEHOLDERS = /^\/images\/(avatar|bonfires)\.(png|jpe?g|webp|svg)$/i;
+export function groupImageUrl(v: unknown): string | undefined {
+  const url = mediaUrl(v);
+  if (!url) return undefined;
+  try { return BONFIRE_PLACEHOLDERS.test(new URL(url).pathname) ? undefined : url; } catch { return undefined; }
+}
+
 const hostOf = (u?: string) => { try { return u ? new URL(u).hostname.toLowerCase() : undefined; } catch { return undefined; } };
 
 export function joinModeOf(membership?: string): JoinMode {
@@ -101,7 +113,7 @@ export function groupFromBonfire(c: unknown): Group | null {
     id, name: name.slice(0, 120), type, username: safeUser, host,
     url: `${FEDIZEN}/${type === 'topic' ? '+' : 'group/'}${safeUser ?? id}`,
     summary: htmlToParagraphs(str(c.summary) ?? str(profile.summary) ?? '').slice(0, 6),
-    avatar: mediaUrl(profile.icon), banner: mediaUrl(profile.image),
+    avatar: groupImageUrl(profile.icon), banner: groupImageUrl(profile.image),
     members: typeof c.membersCount === 'number' && c.membersCount >= 0 ? c.membersCount : undefined,
     parentId: str(c.parentCategoryId),
     joinMode: joinModeOf(dims.get('membership')),
@@ -170,4 +182,11 @@ export function membershipLabel(g: Pick<Group, 'announcements' | 'joinMode'>, st
       if (g.joinMode === 'invite') return 'Invite only';
       return g.joinMode === 'request' ? 'Ask to join' : 'Join';
   }
+}
+
+/** "214 members", or for a group mirrored from another server "1 member here · lemmy.ca", as Bonfire's directory says it. */
+export function groupMembersLine(g: Pick<Group, 'members' | 'host'>): string {
+  const remote = g.host !== 'fedizen.net';
+  const n = g.members == null ? '' : `${g.members.toLocaleString()} ${g.members === 1 ? 'member' : 'members'}${remote ? ' here' : ''}`;
+  return [n, remote ? g.host : ''].filter(Boolean).join(' · ');
 }

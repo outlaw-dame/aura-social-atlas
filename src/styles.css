@@ -467,8 +467,9 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-group-initial { display: grid; place-items: center; font-family: 'Instrument Serif', serif; color: var(--foreground); background: color-mix(in oklab, var(--accent) 12%, var(--secondary)); }
 .list.media-list.atlas-group-list .item-subtitle { font-size: 13px; color: var(--muted-foreground); white-space: normal; overflow: visible; text-overflow: clip; }
 .atlas-group-list .item-text { -webkit-line-clamp: 2; }
-.atlas-group-banner { height: 120px; background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 26%, #fff), color-mix(in oklab, var(--accent) 6%, #fff)) center / cover no-repeat; }
-.atlas-group-head { display: flex; flex-direction: column; align-items: center; padding: 0 20px 4px; margin-top: -38px; text-align: center; }
+.atlas-group-banner { height: 140px; overflow: hidden; background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 26%, #fff), color-mix(in oklab, var(--accent) 6%, #fff)); }
+.atlas-group-banner img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.atlas-group-head { position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 20px 4px; margin-top: -38px; text-align: center; }
 .atlas-group-head .atlas-group-avatar { border: 3px solid var(--f7-page-bg-color, var(--background)); }
 .atlas-group-head h1 { margin: 12px 0 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 30px; line-height: 1.15; overflow-wrap: anywhere; }
 .atlas-group-address { margin: 6px 0 0; padding: 4px 8px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 14px; color: var(--muted-foreground); overflow-wrap: anywhere; cursor: copy; }

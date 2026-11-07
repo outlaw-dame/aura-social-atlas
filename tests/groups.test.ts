@@ -67,6 +67,15 @@ describe("groupFromBonfire", () => {
     expect(joinModeOf("something_new")).toBe("open");
   });
 
+  test("keeps a mirrored group's own icon and banner, drops Bonfire's placeholders", () => {
+    const g = groupFromBonfire(category(presets.open_network, { profile: { icon: "https://lemmy.ca/pictrs/image/canada.png", image: "/data/uploads/01ABC/banner.jpg" } }))!;
+    expect(g.avatar).toBe("https://lemmy.ca/pictrs/image/canada.png");
+    expect(g.banner).toBe("https://fedizen.net/data/uploads/01ABC/banner.jpg");
+    const none = groupFromBonfire(category(presets.open_network, { profile: { icon: "https://fedizen.net/images/avatar.png", image: "/images/bonfires.png" } }))!;
+    expect(none.avatar).toBeUndefined();
+    expect(none.banner).toBeUndefined();
+  });
+
   test("mediaUrl only allows https or Fedizen paths", () => {
     expect(mediaUrl("//evil.example/x.png")).toBeUndefined();
     expect(mediaUrl("/x.png")).toBe("https://fedizen.net/x.png");

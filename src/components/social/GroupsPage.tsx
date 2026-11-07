@@ -3,16 +3,25 @@ import { useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Check, Copy, Hash, Lock, Megaphone, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGroup, useGroupMembership, useGroups } from './useGroups';
-import { groupAccessLabel, groupHandle, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
+import { groupAccessLabel, groupHandle, groupMembersLine, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
-const members = (n?: number) => (n == null ? null : `${n.toLocaleString()} ${n === 1 ? 'member' : 'members'}`);
 
 /** Groups are rounded squares, people are circles. */
 function GroupAvatar({ g, className = 'size-12' }: { g: Group; className?: string }) {
-  return g.avatar
-    ? <img src={g.avatar} alt="" referrerPolicy="no-referrer" className={`${className} shrink-0 rounded-[26%] bg-secondary object-cover`} />
+  const [broken, setBroken] = useState(false);
+  return g.avatar && !broken
+    ? <img onError={() => setBroken(true)} loading="lazy" src={g.avatar} alt="" referrerPolicy="no-referrer" className={`${className} shrink-0 rounded-[26%] bg-secondary object-cover`} />
     : <span aria-hidden="true" className={`${className} social-avatar shrink-0 !rounded-[26%] font-serif text-xl`}>{g.name.charAt(0)}</span>;
+}
+
+const wash = 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 26%, var(--card)), color-mix(in oklab, var(--accent) 6%, var(--card)))';
+/** The group's banner, or a soft wash of the accent when it has none (or it fails to load). */
+function GroupBanner({ g, className }: { g: Group; className: string }) {
+  const [broken, setBroken] = useState(false);
+  return <div className={`${className} overflow-hidden`} aria-hidden="true" style={{ background: wash }}>
+    {g.banner && !broken && <img src={g.banner} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="size-full object-cover" />}
+  </div>;
 }
 
 function Access({ g }: { g: Group }) {
@@ -72,12 +81,15 @@ function Directory() {
   return <>
     <ul className="grid gap-3 sm:grid-cols-2">
       {groups.map(g => <li key={g.id}>
-        <Link to="/groups" search={{ group: g.id }} className="flex h-full gap-4 rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <GroupAvatar g={g} />
-          <span className="min-w-0">
-            <span className="block font-semibold [overflow-wrap:anywhere]">{g.name}</span>
-            <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">{members(g.members) && <span>{members(g.members)}</span>}<Access g={g} />{g.host !== 'fedizen.net' && <span>{g.host}</span>}</span>
-            {g.summary[0] && <span className="mt-2 line-clamp-2 block text-sm text-muted-foreground">{g.summary[0]}</span>}
+        <Link to="/groups" search={{ group: g.id }} className="group/card block h-full overflow-hidden rounded-2xl border border-border bg-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <GroupBanner g={g} className="h-20" />
+          <span className="flex gap-4 px-4 pb-4">
+            <GroupAvatar g={g} className="-mt-6 size-14 border-4 border-card" />
+            <span className="min-w-0 pt-2">
+              <span className="block font-semibold [overflow-wrap:anywhere]">{g.name}</span>
+              <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">{groupMembersLine(g) && <span>{groupMembersLine(g)}</span>}<Access g={g} /></span>
+              {g.summary[0] && <span className="mt-2 line-clamp-2 block text-sm text-muted-foreground">{g.summary[0]}</span>}
+            </span>
           </span>
         </Link>
       </li>)}
@@ -97,8 +109,7 @@ function Detail({ id }: { id: string }) {
   const handle = groupHandle(g);
   return <div className="animate-float-up">
     {back}
-    <div className="h-36 rounded-3xl bg-cover bg-center sm:h-44" aria-hidden="true"
-      style={g.banner ? { backgroundImage: `url("${encodeURI(g.banner)}")` } : { background: 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 26%, var(--card)), color-mix(in oklab, var(--accent) 6%, var(--card)))' }} />
+    <GroupBanner g={g} className="h-36 rounded-3xl sm:h-48" />
     <header className="px-2 sm:px-6">
       <div className="-mt-10 flex items-end justify-between gap-4">
         <GroupAvatar g={g} className="size-20 border-4 border-background" />
@@ -106,7 +117,7 @@ function Detail({ id }: { id: string }) {
       </div>
       <h1 className="mt-3 font-serif text-4xl leading-tight [overflow-wrap:anywhere]">{g.name}</h1>
       {handle && <button type="button" title="Copy the address" onClick={() => { void navigator.clipboard?.writeText(handle).catch(() => undefined); }} className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground [overflow-wrap:anywhere] hover:text-foreground">{handle}<Copy className="size-3" aria-hidden="true" /></button>}
-      <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">{members(g.members) && <span>{members(g.members)}</span>}<Access g={g} />{g.host !== 'fedizen.net' && <span>Hosted on {g.host}</span>}</p>
+      <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">{groupMembersLine(g) && <span>{groupMembersLine(g)}</span>}<Access g={g} /></p>
       {g.summary.length > 0 && <div className="mt-4 max-w-2xl space-y-2 text-sm leading-relaxed">{g.summary.map((t, i) => <p key={i}>{t}</p>)}</div>}
       {!!topics.length && <div className="mt-5 flex flex-wrap gap-2" aria-label="Topics">{topics.map(t => <Button key={t.id} asChild variant="outline" size="sm" className="rounded-full"><Link to="/groups" search={{ group: t.id }}><Hash className="size-3" />{t.name}</Link></Button>)}</div>}
     </header>

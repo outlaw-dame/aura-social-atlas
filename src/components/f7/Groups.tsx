@@ -1,16 +1,25 @@
 import { Block, BlockFooter, BlockTitle, Button, Card, CardContent, CardFooter, Icon, Link, List, ListItem, Navbar, NavLeft, NavRight, Page, Popup, f7 } from 'framework7-react';
+import { useState } from 'react';
 import { useGroup, useGroupMembership, useGroups } from '@/components/social/useGroups';
-import { groupAccessLabel, groupHandle, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
+import { groupAccessLabel, groupHandle, groupMembersLine, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
-const members = (n?: number) => (n == null ? '' : `${n.toLocaleString()} ${n === 1 ? 'member' : 'members'}`);
-const meta = (g: Group) => [members(g.members), groupAccessLabel(g)].filter(Boolean).join(' · ');
+const meta = (g: Group) => [groupMembersLine(g), groupAccessLabel(g)].filter(Boolean).join(' · ');
 
 /** Groups are rounded squares, people are circles: the shape tells them apart at a glance. */
 export function GroupAvatar({ g, size = 44 }: { g: Group; size?: number }) {
-  return g.avatar
-    ? <img className="atlas-group-avatar" src={g.avatar} alt="" width={size} height={size} referrerPolicy="no-referrer" style={{ width: size, height: size }} />
+  const [broken, setBroken] = useState(false);
+  return g.avatar && !broken
+    ? <img onError={() => setBroken(true)} loading="lazy" className="atlas-group-avatar" src={g.avatar} alt="" width={size} height={size} referrerPolicy="no-referrer" style={{ width: size, height: size }} />
     : <span className="atlas-group-avatar atlas-group-initial" aria-hidden="true" style={{ width: size, height: size, fontSize: size * 0.45 }}>{g.name.charAt(0)}</span>;
+}
+
+/** The group's banner, or a soft wash of the accent when it has none (or it fails to load). */
+function GroupBanner({ g }: { g: Group }) {
+  const [broken, setBroken] = useState(false);
+  return <div className="atlas-group-banner" aria-hidden="true">
+    {g.banner && !broken && <img src={g.banner} alt="" referrerPolicy="no-referrer" onError={() => setBroken(true)} />}
+  </div>;
 }
 
 function PostCard({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
@@ -42,7 +51,7 @@ export function MobileGroups({ onOpen }: { onOpen: (g: Group) => void }) {
     <BlockTitle>Groups on Fedizen</BlockTitle>
     <List strong inset dividers mediaList className="atlas-group-list">
       {groups.map(g => <ListItem key={g.id} link="#" title={g.name} subtitle={meta(g)} text={g.summary[0]} onClick={() => onOpen(g)}>
-        <span slot="media"><GroupAvatar g={g} /></span>
+        <span slot="media"><GroupAvatar g={g} size={52} /></span>
       </ListItem>)}
     </List>
     <BlockFooter>Groups federate across the fediverse, so you can also find communities from Lemmy, Mbin and Mobilizon here.</BlockFooter>
@@ -108,7 +117,7 @@ export function GroupPopup({ group, onClose, onOpen }: { group: Group | null; on
         <NavRight><Link iconOnly popupClose aria-label="Close"><Icon ios="f7:xmark" md="material:close" /></Link></NavRight>
       </Navbar>
       {g && <>
-        <div className="atlas-group-banner" aria-hidden="true" style={g.banner ? { backgroundImage: `url("${encodeURI(g.banner)}")` } : undefined} />
+        <GroupBanner g={g} />
         <header className="atlas-group-head">
           <GroupAvatar g={g} size={76} />
           <h1>{g.name}</h1>
