@@ -1,0 +1,117 @@
+name: Atlas staging availability monitor
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-staging-monitor.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: atlas-staging-hourly-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe independent HTTPS, federation identity and admin edge isolation
+        id: probe
+        continue-on-error: true
+        env:
+          BASE: https://staging-gateway.damonoutlaw.xyz
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import ssl
+          import time
+          import urllib.error
+          import urllib.request
+          import urllib.parse
+
+          base = os.environ['BASE']
+          ctx = ssl.create_default_context()
+          class RefuseRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  raise RuntimeError(f'unexpected redirect: {code}')
+          opener = urllib.request.build_opener(
+              urllib.request.HTTPSHandler(context=ctx), RefuseRedirect())
+
+          def fetch(path, accept='application/json'):
+              req = urllib.request.Request(
+                  base + path,
+                  headers={'Accept':accept,'User-Agent':'AtlasStagingMonitor/1.0'})
+              return opener.open(req, timeout=10)
+
+          def probe():
+              with fetch('/healthz') as response:
+                  assert response.status == 200
+                  assert response.headers.get('CF-Ray'), 'not proxied by Cloudflare'
+                  assert response.headers.get('Cache-Control') == 'no-store'
+                  assert json.loads(response.read(8192)) == {'ok': True}
+
+              with fetch('/actor', 'application/activity+json') as response:
+                  assert response.status == 200
+                  actor = json.loads(response.read(50000))
+                  assert actor.get('id') == base + '/actor'
+                  assert actor.get('publicKey') or actor.get('assertionMethod')
+
+              resource = 'acct:atlas-discovery-gateway@staging-gateway.damonoutlaw.xyz'
+              path = '/.well-known/webfinger?' + urllib.parse.urlencode({'resource':resource})
+              with fetch(path,'application/jrd+json') as response:
+                  assert response.status == 200
+                  finger = json.loads(response.read(50000))
+                  assert finger.get('subject') == resource
+                  assert any(x.get('rel')=='self' and x.get('href')==base+'/actor'
+                             for x in finger.get('links',[]))
+
+              try:
+                  with fetch('/admin/subscriptions') as response:
+                      raise AssertionError(f'admin exposed: HTTP {response.status}')
+              except urllib.error.HTTPError as exc:
+                  assert exc.code == 403, f'expected Cloudflare 403, got {exc.code}'
+                  assert exc.headers.get('CF-Ray'), 'admin block not confirmed at edge'
+
+          failures=[]
+          for attempt in range(3):
+              try:
+                  probe()
+                  print('PASS: TLS, Cloudflare, DB health, actor, WebFinger, admin firewall')
+                  break
+              except Exception as exc:
+                  failures.append(type(exc).__name__ + ': ' + str(exc)[:250])
+                  if attempt == 2:
+                      print('FAILED after 3 attempts:', json.dumps(failures))
+                      raise
+                  time.sleep(2 ** attempt)
+          PY
+
+      - name: Create or reuse staging incident issue on scheduled failure
+        if: github.event_name == 'schedule' && steps.probe.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Atlas staging uptime incident"
+          open=$(gh issue list --repo "$REPO" --state open \
+            --search "$title in:title" --limit 100 --json title,number)
+          if printf '%s' "$open" | jq -e --arg title "$title" \
+              'any(.[]; .title == $title)' >/dev/null; then
+            echo "Existing open staging incident found; not creating a duplicate."
+          else
+            gh issue create --repo "$REPO" --title "$title" \
+              --body "The scheduled staging HTTPS monitor failed 3 consecutive checks. Check the [failed GitHub Actions run]($RUN_URL), Railway web/worker/PostgreSQL health, Cloudflare TLS and WAF. Do not auto-close: an operator must verify recovery. No credentials were used."
+          fi
+
+      - name: Fail job if staging is unavailable
+        if: steps.probe.outcome == 'failure'
+        run: exit 1
