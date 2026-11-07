@@ -28,8 +28,8 @@ describe('gateway process roles and queue supervision', () => {
     const fail = new Error('database queue consumer stopped');
     const notifications: unknown[] = [];
     const worker = superviseQueue(async () => { throw fail; }, error => notifications.push(error));
-    await Promise.resolve();
-    await Promise.resolve();
+    // Allow both the async start and the attached completion handler to run.
+    await Bun.sleep(1);
     expect(notifications).toEqual([fail]);
     await expect(worker.stop()).rejects.toBe(fail);
     expect(notifications).toEqual([fail]);
@@ -38,8 +38,8 @@ describe('gateway process roles and queue supervision', () => {
   test('reports a worker returning without a shutdown request', async () => {
     const notifications: unknown[] = [];
     const worker = superviseQueue(async () => {}, error => notifications.push(error));
-    await Promise.resolve();
-    await Promise.resolve();
+    // Allow both the async start and the attached completion handler to run.
+    await Bun.sleep(1);
     expect(notifications).toHaveLength(1);
     expect(notifications[0]).toBeInstanceOf(Error);
     await worker.stop();
