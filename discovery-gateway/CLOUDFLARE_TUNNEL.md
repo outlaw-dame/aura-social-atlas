@@ -29,9 +29,9 @@ No HTTP Host header, `CF-Connecting-IP`, `X-Forwarded-For`, or other spoofable r
 
 ## Previously confirmed vulnerability
 
-An independent [staging origin-bypass probe](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42396080014) connected directly to the Railway edge hostname, supplied the Cloudflare gateway hostname in the HTTP `Host` header, and received HTTP **200** from `/healthz` **without any `CF-Ray`** header. This bypassed Cloudflare's WAF/rate limits on public HTTP endpoints, even though the public `/admin/subscriptions` route returned HTTP 404 thanks to the separate admin port. See [PR #47](https://github.com/outlaw-dame/aura-social-atlas/pull/47). Keep production blocked until its external security probe passes.
+An independent [staging origin-bypass probe](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42396080014) connected directly to the Railway edge hostname, supplied the Cloudflare gateway hostname in the HTTP `Host` header, and received HTTP **200** from `/healthz` **without any `CF-Ray`** header. This bypassed Cloudflare's WAF/rate limits on public HTTP endpoints, even though the public `/admin/subscriptions` route returned HTTP 404 thanks to the separate admin port. See [PR #47](https://github.com/outlaw-dame/aura-social-atlas/pull/47). The follow-up [external origin-bypass acceptance](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42397668736) subsequently passed on staging after the former generated Railway origin became unreachable. This confirms denial of the tested routes, but does not by itself prove Tunnel connector deployment, private-network cutover, or origin-secret configuration. Keep those independent deployment gates explicit.
 
-## Staging Tunnel details
+Railway's internal service liveness check must use `GET /livez`, which intentionally avoids the edge-secret gate and performs no database or actor access. External readiness and security probes must continue using the Cloudflare-fronted, database-backed `GET /healthz`; do not expose `/livez` as a substitute for protected readiness.\n\n## Staging Tunnel details
 
 - Cloudflare account: `96c9c5d8bdbf048cc9ccff02900d4e8b`
 - DNS zone: `damonoutlaw.xyz`

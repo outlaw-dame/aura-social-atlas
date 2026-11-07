@@ -1,0 +1,74 @@
+name: Gateway staging origin-bypass security probe
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 9 * * 1'
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-origin-bypass-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  public-origin-bypass:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify cloud edge restriction cannot be bypassed by direct Railway ingress
+        run: |
+          python3 - <<'PY'
+          import ssl
+          import urllib.error
+          import urllib.request
+
+          origin = 'https://qb9rmgmw.up.railway.app'
+          public_host = 'staging-gateway.damonoutlaw.xyz'
+          opener = urllib.request.build_opener(
+              urllib.request.HTTPSHandler(context=ssl.create_default_context()),
+          )
+
+          def probe(path, host):
+              request = urllib.request.Request(
+                  origin + path,
+                  headers={'Host': host, 'User-Agent': 'AtlasSecurityOriginProbe/1.0'},
+              )
+              try:
+                  with opener.open(request, timeout=12) as response:
+                      return response.status, dict(response.headers)
+              except urllib.error.HTTPError as response:
+                  return response.code, dict(response.headers)
+
+          # An origin may reject unknown Host routing at its edge, but must also
+          # reject a forged custom Host; TLS SNI remains the direct origin name.
+          direct, direct_headers = probe('/healthz', 'qb9rmgmw.up.railway.app')
+          forged, forged_headers = probe('/healthz', public_host)
+          admin, admin_headers = probe('/admin/subscriptions', public_host)
+          print('Direct-origin /healthz status:', direct)
+          print('Forged Host direct-origin /healthz status:', forged)
+          print('Forged Host direct-origin /admin status:', admin)
+          print('Cloudflare proxy headers on direct probe:', bool(forged_headers.get('Cf-Ray')))
+
+          # Require positive ingress denial; app-generated 429/503 cannot
+          # prove origin isolation and must never make this release gate pass.
+          # 404 from the unmapped Railway host is a routing-level denial.
+          assert direct == 404, f'Direct Railway hostname was not rejected by routing: {direct}'
+          # Forging the public Host must fail the gateway's edge secret check
+          # before /healthz or /admin can reach application handlers.
+          assert forged == 403, f'Forged Host bypass did not receive edge-secret 403: {forged}'
+          assert admin == 403, f'Forged Host admin did not receive edge-secret 403: {admin}'
+          assert not forged_headers.get('Cf-Ray'), 'Probe unexpectedly passed through Cloudflare'
+          print('PASS: direct Railway origin and forged Host explicitly denied (404/403)')
+          # Positive-path assertion: origin authentication must not break
+          # legitimate Cloudflare-forwarded traffic or public key discovery.
+          cloudflare_url = 'https://' + public_host + '/healthz'
+          with opener.open(urllib.request.Request(cloudflare_url,
+                      headers={'User-Agent': 'AtlasSecurityOriginProbe/1.0'}), timeout=12) as res:
+              assert res.status == 200, 'Cloudflare HTTPS health is not available'
+              assert res.headers.get('Cf-Ray'), 'Cloudflare proxy header missing'
+              assert res.headers.get('Cache-Control') == 'no-store'
+              assert res.read(4096).strip() == b'{"ok":true}', 'Gateway database-backed health failed'
+          print('PASS: legitimate Cloudflare HTTPS still reaches healthy gateway')
+
+          PY

@@ -10,6 +10,8 @@ export type GatewayConfig = {
   databaseUrl: string | null;
   /** Bearer token for the admin API. Required, min 32 chars. Never exposed to any frontend. */
   adminToken: string;
+  /** Optional Cloudflare-to-origin shared secret for public ingress (never a browser credential). */
+  edgeSecret: string | null;
   /** Origins allowed to call the public read API cross-origin (CORS). Empty = same-origin only. */
   corsAllowlist: string[];
   /** Reserved for compatibility; always false because PostgreSQL is required. */
@@ -70,6 +72,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new Error('DATABASE_URL must use a PostgreSQL connection URL.');
   }
   const adminToken = required(env, 'GATEWAY_ADMIN_TOKEN');
+  const edgeSecret = env['GATEWAY_EDGE_SECRET']?.trim() || null;
+  if (edgeSecret && edgeSecret.length < 32) throw new Error('GATEWAY_EDGE_SECRET must be at least 32 characters.');
   if (adminToken.length < 32) throw new Error('GATEWAY_ADMIN_TOKEN must be at least 32 characters.');
   const corsAllowlist = (env['GATEWAY_CORS_ORIGINS'] ?? '')
     .split(',').map(s => s.trim()).filter(Boolean)
@@ -90,6 +94,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     origin: originUrl.origin,
     databaseUrl,
     adminToken,
+    edgeSecret,
     corsAllowlist,
     devMemoryStore,
     port,
