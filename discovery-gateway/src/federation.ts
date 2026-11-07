@@ -20,7 +20,7 @@ import { generateCryptoKeyPair, exportJwk, importJwk } from '@fedify/fedify';
 import { Accept, Announce, Create, Delete, Follow, Reject, Service, Undo, PUBLIC_COLLECTION, type Activity, type Actor } from '@fedify/vocab';
 import type { Sql } from 'postgres';
 import type { GatewayConfig } from './config.ts';
-import { acceptedSubscriptionActors, deleteItem, insertItem, listSubscriptions, loadKeyPair, pruneItems, saveKeyPair, settlePendingFollow } from './db.ts';
+import { deleteItem, insertItem, isAcceptedSubscriptionActor, isActiveLitePubSubscriber, loadKeyPair, pruneItems, saveKeyPair, settlePendingFollow } from './db.ts';
 import { authorizeIngest, isControlPlane } from './policy.ts';
 import { cleanText, hashtagNames, htmlToText } from './sanitize.ts';
 import { hostOf, checkRemoteUrl } from './urlguard.ts';
@@ -140,14 +140,14 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineF
     body['cc'] = activity.ccIds.map(url => url.href);
     const activityId = activity.id?.href;
     if (!activityId) { log('ingest.dropped', { reason: 'activity has no id' }); return; }
-    const subscribedActors = await acceptedSubscriptionActors(stores.sql);
-    // Authorization BEFORE remote network I/O: an unsolicited signer must
-    // never control the URLs fetched on behalf of a gateway instance.
+    // Authorization BEFORE remote network I/O. The unique actor_url index
+    // lets us check a signed sender without materializing every subscription.
     const sender = activity.actorId?.href;
-    if (!sender || !subscribedActors.has(sender)) {
+    if (!sender || !(await isAcceptedSubscriptionActor(stores.sql, sender))) {
       log('ingest.dropped', { reason: 'actor is not an accepted subscription' });
       return;
     }
+    const subscribedActors = new Set([sender]);
     // For Announce, the relay can authenticate its own announcement, NOT the
     // embedded third-party object. Re-fetch the canonical object from its
     // origin through Fedify's guarded document loader and check its metadata.
@@ -234,8 +234,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineF
       // we explicitly subscribed to; everyone else gets a Reject.
       if (!stores.sql) return;
       const followerHost = hostOf(follow.actorId);
-      const subs = await listSubscriptions(stores.sql);
-      const known = subs.find(s => s.kind === 'litepub' && s.actorUrl === follow.actorId?.href && (s.state === 'pending' || s.state === 'accepted'));
+      const known = follow.actorId && await isActiveLitePubSubscriber(stores.sql, follow.actorId.href);
       const followId = follow.id?.href;
       const forServiceActor = follow.objectId?.href === ctx.getActorUri(ACTOR_IDENTIFIER).href;
       // An unapproved signed Follow must not make us resolve attacker-selected
