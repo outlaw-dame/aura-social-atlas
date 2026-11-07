@@ -72,4 +72,6 @@ done
 echo "drill.passed"
 # Keep the successful short-lived job available for log inspection until
 # the disposable scratch DB and job are explicitly deleted by the operator.
-sleep infinity
+if [ "${DRILL_KEEP_ALIVE:-1}" = "1" ]; then
+  sleep infinity
+fi
