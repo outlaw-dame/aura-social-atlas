@@ -53,6 +53,20 @@ Fedify **2.4.5** pins Node/Bun outbound connections to DNS addresses that passed
 
 **Operator deployment requirements:** isolate the gateway on a dedicated network identity; apply host/VPC/container egress rules denying private, loopback, link-local, multicast and cloud metadata ranges on outbound application traffic while permitting required PostgreSQL and DNS infrastructure through separate narrowly scoped rules; default-deny unwanted ports; restrict administrator endpoints to a private network; do not provide unrestricted outbound proxies. Validate IPv4 **and** IPv6. Firewall enforcement, DNS-pinning behavior under real network conditions, and an audited gateway deployment are environment-specific and not proven by these unit tests.
 
+## Controlled external actor preflight (explicit operator action)
+
+After installing dependencies with **Bun 1.4.3+**, run one read-only actor discovery check:
+
+```sh
+bun run interop:probe tag knitting
+bun run interop:probe instance fluffy.family
+bun run interop:probe litepub https://your-controlled-relay.example/actor
+```
+
+This uses actual remote HTTPS lookups through the Fedify 2.4.5 protected loader, without creating a database, starting an inbox, signing, sending Follow or modifying any relay. It checks the resolved actor's canonical ID and same-origin inbox. Exit status 0 means *actor preflight passed*, **not** that federation delivery interoperates. The output deliberately contains no fetched document or authentication material.
+
+**The full active interoperability gate remains:** deploy a disposable HTTPS gateway origin with its own database and keys, connect it only to a controlled staging relay, check Follow → Accept/Reject and LitePub reciprocal Follow → Accept, send signed public Create/Announce/Delete fixtures from that relay, verify audience, attribution, deduplication, unsubscribe/Undo and retries, then tear both systems down. Do not point this at Fedizen production. A non-public gateway cannot receive external asynchronous delivery, so the standalone probe cannot establish the full gate.
+
 ## Security and production blockers
 
 The service uses Fedify's verified inbox processing and HTTPS document loaders that reject private network addresses. For Announce activities the original object must be independently fetched from origin, and matching an accepted **actor ID**, not merely its hostname, is required. Stored content is text-only with original-author provenance.
