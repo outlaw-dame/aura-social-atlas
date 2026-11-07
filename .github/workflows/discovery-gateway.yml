@@ -64,6 +64,41 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Build gateway staging image with frozen production dependencies
         run: docker build --pull -t atlas-gateway-ci .
+      - name: Smoke-test isolated gateway web and worker containers
+        env:
+          GATEWAY_ORIGIN: https://gateway.example
+          GATEWAY_ADMIN_TOKEN: abcdefghijklmnopqrstuvwxyz123456
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker stop -t 10 gateway-ci-web gateway-ci-worker >/dev/null 2>&1 || true
+            docker rm -f gateway-ci-web gateway-ci-worker >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for role in web worker; do
+            docker run --detach --name "gateway-ci-${role}" --network host \
+              --env "GATEWAY_ROLE=${role}" \
+              --env "GATEWAY_ORIGIN=${GATEWAY_ORIGIN}" \
+              --env "GATEWAY_ADMIN_TOKEN=${GATEWAY_ADMIN_TOKEN}" \
+              --env "DATABASE_URL=${GATEWAY_TEST_DATABASE_URL}" \
+              --env PORT=4100 \
+              atlas-gateway-ci >/dev/null
+          done
+          healthy=0
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:4100/healthz >/dev/null 2>&1; then
+              healthy=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$healthy" -ne 1 ]; then
+            docker logs gateway-ci-web
+            exit 1
+          fi
+          docker inspect --format '{{.State.Running}}' gateway-ci-web | grep -qx true
+          docker inspect --format '{{.State.Running}}' gateway-ci-worker | grep -qx true
+          docker logs gateway-ci-worker | grep -q gateway.worker_started
       - name: Validate staging process isolation and syntax
         run: |
           python3 - <<'PY'
