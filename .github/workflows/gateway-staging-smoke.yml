@@ -79,6 +79,25 @@ jobs:
           assert canonical.get('id') == actor['id'], 'Alternate actor path changed identity'
           assert canonical.get('publicKey') == actor.get('publicKey'), 'Actor keys changed between requests'
           print('PASS: canonical Fedify ActivityPub actor alias and stable public signing keys')
+          import hashlib
+          import urllib.parse
+          pubkey = actor.get('publicKey') or actor.get('assertionMethod')
+          key_digest = hashlib.sha256(json.dumps(pubkey, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+          print('Public actor key fingerprint (SHA256):', key_digest)
+
+          resource = 'acct:atlas-discovery-gateway@staging-gateway.damonoutlaw.xyz'
+          webfinger_path = '/.well-known/webfinger?' + urllib.parse.urlencode({'resource': resource})
+          status, headers, payload = get(webfinger_path, 'application/jrd+json')
+          assert status == 200, f'WebFinger handle lookup: {status}'
+          assert_edge(headers)
+          finger = json.loads(payload)
+          assert finger.get('subject') == resource, f"WebFinger subject mismatch: {finger.get('subject')!r}"
+          assert any(
+              x.get('rel') == 'self' and x.get('href') == base + '/actor'
+              for x in finger.get('links', [])
+          ), 'WebFinger does not resolve to the canonical actor URI'
+          print('PASS: advertised handle resolves over public WebFinger to /actor')
+
 
           status, headers, payload = get('/api/v1/items?limit=1')
           assert status == 200
