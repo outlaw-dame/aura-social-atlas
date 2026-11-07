@@ -61,9 +61,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.4.3'
-      - run: bun install
-      - name: Temporary gateway dependency lock export (remove before merge)
-        run: echo "__GATEWAY_LOCK_B64__$(base64 -w0 bun.lock)__END__"
+      - run: bun install --frozen-lockfile
+      - name: Build gateway staging image with frozen production dependencies
+        run: docker build --pull -t atlas-gateway-ci .
       - name: Type-check
         run: bun run typecheck
       - name: Gateway unit and PostgreSQL integration tests
