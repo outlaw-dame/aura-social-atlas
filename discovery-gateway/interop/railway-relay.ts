@@ -116,7 +116,15 @@ const server = Bun.serve({
       }
       // Cryptographic validity alone does not bind the signed request to its
       // ActivityPub actor. Verify key ownership independently of body.actor.
-      if (verified.key.ownerId()?.href !== gatewayActor) {
+      // Fedify's key owner is represented as a URL on newer verification
+      // results and as a method on vocabulary CryptographicKey instances.
+      // Handle both shapes without trusting an unrecognized/missing owner.
+      const field = (verified.key as unknown as {
+        ownerId?: URL | (() => URL | null);
+      }).ownerId;
+      const owner = field instanceof URL ? field.href
+        : typeof field === 'function' ? field.call(verified.key)?.href : null;
+      if (owner !== gatewayActor) {
         log('signature_rejected', { reason: 'wrong_key_owner' });
         return new Response('unauthorized', { status: 401 });
       }
@@ -205,17 +213,28 @@ async function runInterop() {
   let subscriptionId: string | null = null;
   try {
     // Internal private Railway service networking only. Public /admin stays blocked.
-    const created = await admin('/admin/subscriptions', 'POST', {
-      type: 'actor', kind: 'litepub', value: actorId,
-    });
-    const subscription = created.subscription as { id: string; state: string };
-    subscriptionId = subscription.id;
-    if (!subscriptionId) throw new Error('missing subscription id');
-    if (subscription.state === 'rejected' || subscription.state === 'disabled') {
-      throw new Error('pre-existing subscription is not active; requires manual cleanup');
+    const existing = (await admin('/admin/subscriptions')).subscriptions as
+      Array<{ id: string; state: string; actorUrl: string }>;
+    const current = existing.find(s => s.actorUrl === actorId);
+    if (current?.state === 'accepted') {
+      // A prior partial attempt must not make the next run skip the Follow.
+      await admin('/admin/subscriptions/' + encodeURIComponent(current.id), 'DELETE');
     }
-    await awaitCondition('gateway signed Follow received and verified', () => inboundFollow !== null);
-    const followId = inboundFollow!.id;
+    const record = current
+      ? await admin('/admin/subscriptions/' + encodeURIComponent(current.id) + '/retry', 'POST')
+      : await admin('/admin/subscriptions', 'POST', {
+          type: 'actor', kind: 'litepub', value: actorId,
+        });
+    const subscription = record.subscription as {
+      id: string; state: string; followActivityId: string | null;
+    };
+    subscriptionId = subscription.id;
+    const expectedFollowId = subscription.followActivityId;
+    if (!subscriptionId || !expectedFollowId || subscription.state !== 'pending')
+      throw new Error('subscription did not enter pending Follow state');
+    await awaitCondition('gateway signed Follow received and verified', () =>
+      inboundFollow?.id === expectedFollowId);
+    const followId = expectedFollowId;
     await signedActivity({
       id: origin + '/activities/accept-' + crypto.randomUUID(),
       type: 'Accept', actor: actorId, object: followId, to: [gatewayActor],
