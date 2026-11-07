@@ -18,6 +18,8 @@ import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { ProfileView, EditProfileSheet } from './ProfileView';
 import { CollectionPopup } from './Collections';
+import { GroupPopup, MobileGroups } from './Groups';
+import type { Group } from '@/lib/groups';
 import type { Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileFedizenFeed, MobileActivity } from './FedizenMobile';
@@ -107,6 +109,7 @@ export default function AtlasMobileApp() {
   const [composeOpen, setComposeOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [collectionOpen, setCollectionOpen] = useState<{ collection?: Collection; id?: string; link?: string } | null>(null);
+  const [groupOpen, setGroupOpen] = useState<Group | null>(null);
   // Shared links open the collection in the app: /app?collection=<Atlas id> or ?collection=<Mastodon collection URL>.
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('collection');
@@ -300,11 +303,7 @@ export default function AtlasMobileApp() {
             </Tab>
 
             <Tab id="tab-groups" className="page-content" onTabShow={() => setTitle('Groups')}>
-              <div className="atlas-profile-empty">
-                <div className="atlas-profile-empty-icon"><Icon ios="f7:person_3" md="material:groups" /></div>
-                <h2>No groups yet</h2>
-                <p>Groups you join on Fedizen and other open networks will appear here.</p>
-              </div>
+              <MobileGroups onOpen={setGroupOpen} />
             </Tab>
 
             <Tab id="tab-activity" className="page-content" onTabShow={() => setTitle('Activity')}>
@@ -362,6 +361,7 @@ export default function AtlasMobileApp() {
         )}
       </Popup>
       <EditProfileSheet opened={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
+      <GroupPopup group={groupOpen} onClose={() => setGroupOpen(null)} onOpen={setGroupOpen} />
       <CollectionPopup opened={!!collectionOpen} onClose={() => setCollectionOpen(null)} collection={collectionOpen?.collection} id={collectionOpen?.id} link={collectionOpen?.link} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}

@@ -19,6 +19,7 @@ import { VoicesToKnow } from './VoicesToKnow';
 import { ProfilePage } from './ProfilePage';
 import type { ProfileSection } from './profile-sections';
 import { ActivityPage } from './ActivityPage';
+import { GroupsPage } from './GroupsPage';
 import { useAtlasAuth } from './AuthState';
 import { defaultAvatarKey } from '@/lib/atlas-avatars';
 
@@ -26,7 +27,7 @@ export type DiscoveryView = 'feeds' | 'discover' | 'groups' | 'activity' | 'prof
 
 /** The desktop page. Its navigation matches the phone app's dock: Feeds, Discover, Groups, Activity, your
  *  profile (Saved is a tab there; follows open from its Following count), then Settings. */
-export function Discovery({ view = 'discover', profileSection }: { view?: DiscoveryView; profileSection?: ProfileSection }) {
+export function Discovery({ view = 'discover', profileSection, groupId }: { view?: DiscoveryView; profileSection?: ProfileSection; groupId?: string }) {
   const state = useSocial();
   const auth = useAtlasAuth();
   const [query, setQuery] = useState('');
@@ -54,7 +55,7 @@ export function Discovery({ view = 'discover', profileSection }: { view?: Discov
   ];
   const me = auth.user ? avatarPreset(auth.profile?.avatar_key ?? defaultAvatarKey(auth.user.id)) : null;
   const pageView = view === 'groups' || view === 'activity' || view === 'profile';
-  const pageTitles = { groups: ['Your communities', 'Groups'], activity: ['What’s new for you', 'Activity'], profile: ['', ''] } as const;
+  const pageTitles = { groups: ['Communities on Fedizen and beyond', 'Groups'], activity: ['What’s new for you', 'Activity'], profile: ['', ''] } as const;
   const settingsView = view === 'settings' || view === 'intelligence' || view === 'appearance';
   const toggleTopic = (value: string) => { setTopic(value); setMobileOpen(false); };
   return <div className={state.dark ? 'dark' : ''}><div className="social-app min-h-screen bg-background text-foreground">
@@ -87,9 +88,9 @@ export function Discovery({ view = 'discover', profileSection }: { view?: Discov
         <AccountButton />
       </header>
       <main className="mx-auto max-w-[1400px] px-5 pb-28 pt-7 sm:px-9">
-        {settingsView ? <Preferences page={view === 'intelligence' ? 'intelligence' : view === 'appearance' ? 'appearance' : 'settings'} /> : view === 'profile' ? <div className="mx-auto max-w-4xl"><ProfilePage initialSection={profileSection} onOpenCreator={setCreatorDialog} /></div> : pageView ? <div className="mx-auto max-w-3xl">
-          <div className="mb-8 animate-float-up"><p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><span className="social-status-dot" />{pageTitles[view][0]}</p><h1 className="font-serif text-4xl leading-tight sm:text-5xl">{pageTitles[view][1]}</h1></div>
-          {view === 'activity' ? <ActivityPage /> : <div className="py-16 text-center"><Users className="mx-auto mb-4 size-8 text-muted-foreground" strokeWidth={1.5} /><h2 className="font-serif text-2xl">No groups yet.</h2><p className="mx-auto mt-3 max-w-xs text-sm text-muted-foreground">Groups you join on Fedizen and other open networks will appear here.</p><Button asChild variant="outline" className="mt-5"><Link to="/">Explore Discover<ArrowUpRight /></Link></Button></div>}
+        {settingsView ? <Preferences page={view === 'intelligence' ? 'intelligence' : view === 'appearance' ? 'appearance' : 'settings'} /> : view === 'profile' ? <div className="mx-auto max-w-4xl"><ProfilePage initialSection={profileSection} onOpenCreator={setCreatorDialog} /></div> : pageView ? <div className={`mx-auto ${view === 'groups' ? 'max-w-4xl' : 'max-w-3xl'}`}>
+          {!(view === 'groups' && groupId) && <div className="mb-8 animate-float-up"><p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><span className="social-status-dot" />{pageTitles[view][0]}</p><h1 className="font-serif text-4xl leading-tight sm:text-5xl">{pageTitles[view][1]}</h1></div>}
+          {view === 'activity' ? <ActivityPage /> : <GroupsPage groupId={groupId} />}
         </div> : <>
         <div className="mb-8 animate-float-up"><p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><span className="social-status-dot" />{view === 'discover' ? 'Discover the open social web' : 'A feed of your own'}</p><h1 className="font-serif text-4xl leading-tight sm:text-5xl">{title}</h1><p className="mt-3 text-sm text-muted-foreground">{view === 'discover' ? 'Find creators, fresh perspectives, and conversations beyond your usual circle.' : 'The latest from the voices you choose.'}</p></div>
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">

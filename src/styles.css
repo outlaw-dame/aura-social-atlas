@@ -461,3 +461,27 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-coll-editor .sheet-modal-swipe-step { padding-bottom: calc(12px + var(--f7-safe-area-bottom, 0px)); }
 .atlas-coll-editor-actions { display: flex; gap: 10px; justify-content: flex-end; }
 .atlas-coll-editor-actions .button { width: auto; padding: 0 20px; }
+
+/* Groups (Bonfire v1.1.0-rc.1 groups on Fedizen). Groups are rounded squares, people circles. */
+.atlas-group-avatar { display: block; border-radius: 26%; object-fit: cover; background: var(--secondary); flex: none; }
+.atlas-group-initial { display: grid; place-items: center; font-family: 'Instrument Serif', serif; color: var(--foreground); background: color-mix(in oklab, var(--accent) 12%, var(--secondary)); }
+.list.media-list.atlas-group-list .item-subtitle { font-size: 13px; color: var(--muted-foreground); white-space: normal; overflow: visible; text-overflow: clip; }
+.atlas-group-list .item-text { -webkit-line-clamp: 2; }
+.atlas-group-banner { height: 120px; background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 26%, #fff), color-mix(in oklab, var(--accent) 6%, #fff)) center / cover no-repeat; }
+.atlas-group-head { display: flex; flex-direction: column; align-items: center; padding: 0 20px 4px; margin-top: -38px; text-align: center; }
+.atlas-group-head .atlas-group-avatar { border: 3px solid var(--f7-page-bg-color, var(--background)); }
+.atlas-group-head h1 { margin: 12px 0 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 30px; line-height: 1.15; overflow-wrap: anywhere; }
+.atlas-group-address { margin: 6px 0 0; padding: 4px 8px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 14px; color: var(--muted-foreground); overflow-wrap: anywhere; cursor: copy; }
+.atlas-group-address:hover { background: var(--secondary); }
+.atlas-group-meta { margin: 4px 0 0; font-size: 13px; color: var(--muted-foreground); }
+.atlas-group-actions { display: flex; gap: 8px; margin-top: 16px; }
+.atlas-group-actions .button { width: auto; padding: 0 20px; }
+.atlas-group-note { margin: 8px 0 0; font-size: 12px; color: var(--muted-foreground); }
+.atlas-group-about p { margin: 0 0 8px; line-height: 1.45; }
+.atlas-group-about p:last-child { margin-bottom: 0; }
+.atlas-group-post-head { display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.atlas-group-post-head img, .atlas-group-post-head .atlas-activity-initial { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex: none; }
+.atlas-group-post-head small { display: block; font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.atlas-group-in { color: var(--muted-foreground); font-weight: 400; }
+.atlas-group-post p { line-height: 1.5; overflow-wrap: anywhere; }
+.atlas-group-post-image { width: 100%; border-radius: 12px; }
