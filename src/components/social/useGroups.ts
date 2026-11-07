@@ -1,17 +1,33 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { getGroup, getGroups, getMemberships, setGroupMembership } from '@/lib/groups.functions';
+import { getGroup, getGroups, getLatestInGroups, getMemberships, setGroupMembership } from '@/lib/groups.functions';
 import { getFedizenStatus, startFedizenConnect } from '@/lib/fedizen.functions';
 import { actionFor, MEMBERSHIP_PROBLEM, type Group, type Membership, type MembershipProblem } from '@/lib/groups';
 import { isEmbeddedPreview } from '@/lib/bonfire-auth';
 import { RETURN_KEY } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from './AuthState';
 
-/** Fedizen's groups directory and the latest posts across groups (public). */
-export function useGroups() {
+/** Fedizen's groups directory (public), 100 categories a page, newest first; topics are left out. */
+export function useGroupsDirectory() {
   const list = useServerFn(getGroups);
-  return useQuery({ queryKey: ['fedizen-groups'], queryFn: () => list(), staleTime: 2 * 60_000 });
+  const q = useInfiniteQuery({
+    queryKey: ['fedizen-groups'],
+    queryFn: ({ pageParam }) => list({ data: pageParam ? { after: pageParam } : {} }),
+    initialPageParam: null as string | null,
+    getNextPageParam: last => (last.error ? undefined : last.next ?? undefined),
+    staleTime: 5 * 60_000,
+  });
+  const pages = q.data?.pages ?? [];
+  const groups = pages.flatMap(p => p.groups).filter(g => g.type === 'group');
+  const failed = q.isError || (pages.length > 0 && !!pages[pages.length - 1].error);
+  return { ...q, groups, failed, firstFailed: q.isError || (pages.length === 1 && !!pages[0].error) };
+}
+
+/** The latest posts across every group Fedizen knows (public). */
+export function useLatestInGroups(enabled = true) {
+  const latest = useServerFn(getLatestInGroups);
+  return useQuery({ queryKey: ['fedizen-groups-latest'], queryFn: () => latest(), enabled, staleTime: 60_000 });
 }
 
 /** One group with its topics and latest posts. */

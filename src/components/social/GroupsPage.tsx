@@ -1,9 +1,9 @@
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Check, Copy, Hash, Lock, Megaphone, Users } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Check, Copy, Hash, Lock, Megaphone, Search, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useGroup, useGroupMembership, useGroups } from './useGroups';
-import { groupAccessLabel, groupHandle, groupMembersLine, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
+import { useGroup, useGroupMembership, useGroupsDirectory, useLatestInGroups } from './useGroups';
+import { groupAccessLabel, groupHandle, groupMembersLine, matchesGroup, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 
@@ -72,31 +72,50 @@ function MembershipButton({ g }: { g: Group }) {
 
 const note = (children: React.ReactNode) => <div className="rounded-2xl border border-border p-6 text-sm text-muted-foreground">{children}</div>;
 
+/** After Bonfire's own /groups: Directory (search, then every group Fedizen knows, a page at a time) or Latest updates. */
 function Directory() {
-  const q = useGroups();
-  if (q.isLoading) return note('Loading groups from Fedizen…');
-  if (q.isError || q.data?.error) return note(<>Fedizen couldn’t be reached right now. <Button variant="link" size="sm" className="px-1" onClick={() => q.refetch()}>Try again</Button></>);
-  const groups = (q.data?.groups ?? []).filter(g => g.type === 'group');
-  if (!groups.length) return <div className="py-16 text-center"><Users className="mx-auto mb-4 size-8 text-muted-foreground" strokeWidth={1.5} /><h2 className="font-serif text-2xl">No groups yet.</h2><p className="mx-auto mt-3 max-w-xs text-sm text-muted-foreground">Groups on Fedizen, and those it follows on Lemmy, Mbin and other servers, will appear here.</p></div>;
+  const [view, setView] = useState<'directory' | 'latest'>('directory');
+  const [query, setQuery] = useState('');
+  const dir = useGroupsDirectory();
+  const latest = useLatestInGroups(view === 'latest');
+  const shown = dir.groups.filter(g => matchesGroup(g, query));
+  const tab = (v: typeof view, label: string) => <button type="button" role="tab" aria-selected={view === v} onClick={() => setView(v)}
+    className={`h-8 rounded-full px-4 text-sm transition-colors ${view === v ? 'social-selected font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{label}</button>;
   return <>
-    <ul className="grid gap-3 sm:grid-cols-2">
-      {groups.map(g => <li key={g.id}>
-        <Link to="/groups" search={{ group: g.id }} className="group/card block h-full overflow-hidden rounded-2xl border border-border bg-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <GroupBanner g={g} className="h-20" />
-          <span className="flex gap-4 px-4 pb-4">
-            <GroupAvatar g={g} className="-mt-6 size-14 border-4 border-card" />
-            <span className="min-w-0 pt-2">
-              <span className="block font-semibold [overflow-wrap:anywhere]">{g.name}</span>
-              <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">{groupMembersLine(g) && <span>{groupMembersLine(g)}</span>}<Access g={g} /></span>
-              {g.summary[0] && <span className="mt-2 line-clamp-2 block text-sm text-muted-foreground">{g.summary[0]}</span>}
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-5">
+      <div role="tablist" aria-label="Groups view" className="inline-flex gap-1 rounded-full bg-secondary/60 p-1">{tab('directory', 'Directory')}{tab('latest', 'Latest updates')}</div>
+      {view === 'directory' && <label className="flex h-9 w-full max-w-xs items-center gap-2 rounded-full border border-border bg-card px-3 sm:w-72">
+        <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" /><span className="sr-only">Search groups</span>
+        <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search groups" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+      </label>}
+    </div>
+    {view === 'latest' ? (latest.isLoading ? note('Loading the latest posts…')
+      : latest.isError || latest.data?.error ? note(<>Recent posts couldn’t be loaded. <Button variant="link" size="sm" className="px-1" onClick={() => latest.refetch()}>Try again</Button></>)
+      : latest.data?.latest.length ? <div>{latest.data.latest.map(p => <Post key={p.id} p={p} showGroup />)}</div>
+      : note('No posts in groups yet.'))
+    : dir.isLoading ? note('Loading groups from Fedizen…')
+    : dir.firstFailed ? note(<>Fedizen couldn’t be reached right now. <Button variant="link" size="sm" className="px-1" onClick={() => dir.refetch()}>Try again</Button></>)
+    : !dir.groups.length ? <div className="py-16 text-center"><Users className="mx-auto mb-4 size-8 text-muted-foreground" strokeWidth={1.5} /><h2 className="font-serif text-2xl">No groups yet.</h2><p className="mx-auto mt-3 max-w-xs text-sm text-muted-foreground">Groups on Fedizen, and those it follows on Lemmy, Mbin and other servers, will appear here.</p></div>
+    : <>
+      {shown.length ? <ul className="grid gap-3 sm:grid-cols-2">
+        {shown.map(g => <li key={g.id}>
+          <Link to="/groups" search={{ group: g.id }} className="group/card block h-full overflow-hidden rounded-2xl border border-border bg-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <GroupBanner g={g} className="h-20" />
+            <span className="flex gap-4 px-4 pb-4">
+              <GroupAvatar g={g} className="-mt-6 size-14 border-4 border-card" />
+              <span className="min-w-0 pt-2">
+                <span className="block font-semibold [overflow-wrap:anywhere]">{g.name}</span>
+                <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">{groupMembersLine(g) && <span>{groupMembersLine(g)}</span>}<Access g={g} /></span>
+                {g.summary[0] && <span className="mt-2 line-clamp-2 block text-sm text-muted-foreground">{g.summary[0]}</span>}
+              </span>
             </span>
-          </span>
-        </Link>
-      </li>)}
-    </ul>
-    <p className="mt-3 text-xs text-muted-foreground">Groups federate across the fediverse, so communities from Lemmy, Mbin and Mobilizon that Fedizen follows show up here too.</p>
-    {q.data?.latestError && <section className="mt-12"><h2 className="mb-2 font-serif text-2xl italic">Latest in groups</h2><p className="text-sm text-muted-foreground">Recent posts couldn’t be loaded. <Button variant="link" size="sm" className="px-1" onClick={() => q.refetch()}>Try again</Button></p></section>}
-    {!!q.data?.latest.length && <section className="mt-12"><h2 className="mb-2 font-serif text-2xl italic">Latest in groups</h2>{q.data.latest.slice(0, 15).map(p => <Post key={p.id} p={p} showGroup />)}</section>}
+          </Link>
+        </li>)}
+      </ul> : note(<>No loaded groups match “{query.trim()}”.{dir.hasNextPage ? ' Load more to keep looking.' : ''}</>)}
+      {dir.hasNextPage && <div className="mt-6 flex justify-center"><Button variant="outline" className="rounded-full" onClick={() => dir.fetchNextPage()} disabled={dir.isFetchingNextPage}>{dir.isFetchingNextPage ? 'Loading…' : 'Show more groups'}</Button></div>}
+      {dir.failed && !dir.firstFailed && <p className="mt-3 text-center text-sm text-muted-foreground">More groups couldn’t be loaded. <Button variant="link" size="sm" className="px-1" onClick={() => dir.fetchNextPage()}>Try again</Button></p>}
+      <p className="mt-4 text-xs text-muted-foreground">Groups federate across the fediverse, so communities from Lemmy, Mbin and Mobilizon that Fedizen follows show up here too.</p>
+    </>}
   </>;
 }
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { actionFor, groupAccessLabel, groupFromBonfire, groupHandle, groupsFromBonfire, joinModeOf, mediaUrl, membershipFrom, membershipLabel } from "../src/lib/groups";
-import { getGroup, latestInGroups, memberships, membershipNet, net, setMembership } from "../src/lib/groups.server";
+import { actionFor, matchesGroup, groupAccessLabel, groupFromBonfire, groupHandle, groupsFromBonfire, joinModeOf, mediaUrl, membershipFrom, membershipLabel } from "../src/lib/groups";
+import { getGroup, latestInGroups, listGroups, memberships, membershipNet, net, setMembership } from "../src/lib/groups.server";
 
 /* Boundary dimensions of Bonfire v1.1.0-rc.1's group presets (bonfire_classify RuntimeConfig.group_presets). */
 const presets = {
@@ -83,7 +83,7 @@ describe("groupFromBonfire", () => {
 });
 
 describe("groupsFromBonfire", () => {
-  test("drops archived groups, lists groups before topics, biggest first", () => {
+  test("keeps Bonfire's order (newest first) and drops archived and unusable entries", () => {
     const list = groupsFromBonfire([
       category({}, { id: "small", membersCount: 3 }),
       category({}, { id: "topic1", type: "topic" }),
@@ -91,7 +91,16 @@ describe("groupsFromBonfire", () => {
       category({}, { id: "gone", isDisabled: true }),
       "nonsense",
     ]);
-    expect(list.map(g => g.id)).toEqual(["big", "small", "topic1"]);
+    expect(list.map(g => g.id)).toEqual(["small", "topic1", "big"]);
+  });
+
+  test("search matches name, address, server and description", () => {
+    const g = groupFromBonfire(category(presets.open_network, { name: "Fediverse", character: { username: "fediverse@lemmy.world" }, summary: "<p>Talk about ActivityPub</p>" }))!;
+    expect(matchesGroup(g, "fedi")).toBe(true);
+    expect(matchesGroup(g, "LEMMY.WORLD")).toBe(true);
+    expect(matchesGroup(g, "activitypub")).toBe(true);
+    expect(matchesGroup(g, "gardening")).toBe(false);
+    expect(matchesGroup(g, "  ")).toBe(true);
   });
 });
 
@@ -141,6 +150,29 @@ describe("groups.server", () => {
     if (!r || r === "not-found") throw new Error("expected a group");
     expect(r.posts).toEqual([]);
     expect(r.postsError).toBe("unavailable");
+  });
+
+  test("pages the directory by cursor, 100 at a time (Bonfire's cap), as fedizen.net does", async () => {
+    const seen: unknown[] = [];
+    net.fetch = (async (_url: string, init?: RequestInit) => {
+      const b = JSON.parse(String(init?.body)); seen.push(b.variables.after);
+      expect(b.query).toContain("limit:100");
+      return reply({ categories: { pageInfo: { endCursor: b.variables.after ? null : "01M6EM32483XXP66CN0H0TRV45", hasNextPage: !b.variables.after }, edges: [category(presets.open_network)] } });
+    }) as typeof fetch;
+    const first = await listGroups();
+    expect(first?.next).toBe("01M6EM32483XXP66CN0H0TRV45");
+    const second = await listGroups(first!.next!);
+    expect(second?.next).toBeNull();
+    expect(seen).toEqual([null, ["01M6EM32483XXP66CN0H0TRV45"]]);
+  });
+
+  test("Bonfire's \" Not Found.\" error for an unknown id reads as not-found, not as an outage", async () => {
+    net.fetch = (async (_url: string, init?: RequestInit) => {
+      const q = JSON.parse(String(init?.body)).query as string;
+      if (q.includes("category(categoryId")) return new Response(JSON.stringify({ data: { category: null }, errors: [{ message: " Not Found.", path: ["category"] }] }));
+      return reply(q.includes("feedActivities") ? { feedActivities: { edges: [] } } : { categories: { edges: [] } });
+    }) as typeof fetch;
+    expect(await getGroup("01ZZZZZZZZZZZZZZZZZZZZZZZZ")).toBe("not-found");
   });
 
   test("a group Fedizen doesn't return is not-found", async () => {

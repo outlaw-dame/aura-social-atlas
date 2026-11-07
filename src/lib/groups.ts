@@ -124,12 +124,18 @@ export function groupFromBonfire(c: unknown): Group | null {
   };
 }
 
-/** Groups first (biggest first), then anything else; archived and unusable entries dropped. */
+/** Bonfire's order (newest first), with archived and unusable entries dropped. */
 export function groupsFromBonfire(edges: unknown): Group[] {
   return (Array.isArray(edges) ? edges : [])
     .map(groupFromBonfire)
-    .filter((g): g is Group => !!g && !g.archived)
-    .sort((a, b) => (a.type === b.type ? (b.members ?? 0) - (a.members ?? 0) : a.type === 'group' ? -1 : 1));
+    .filter((g): g is Group => !!g && !g.archived);
+}
+
+/** Search the loaded directory by name, address, server or description. */
+export function matchesGroup(g: Group, q: string): boolean {
+  const t = q.trim().toLowerCase();
+  if (!t) return true;
+  return [g.name, g.username ?? '', g.host, ...g.summary].some(s => s.toLowerCase().includes(t));
 }
 
 /** The group's full federated address, as Bonfire shows it: `&name@instance` (`+name@instance` for a topic). */

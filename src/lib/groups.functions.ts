@@ -5,15 +5,22 @@ import type { Group, GroupPost, Membership, MembershipProblem } from './groups';
 
 const server = () => import('./groups.server');
 
-export type GroupsResult = { groups: Group[]; latest: GroupPost[]; latestError?: 'unavailable'; error?: 'unavailable' };
+export type GroupsPage = { groups: Group[]; next: string | null; error?: 'unavailable' };
+export type LatestResult = { latest: GroupPost[]; error?: 'unavailable' };
 export type GroupResult = { group: Group; topics: Group[]; posts: GroupPost[]; postsError?: 'unavailable' } | { group: null; error: 'not-found' | 'unavailable' };
 
-/** Fedizen's groups directory and the latest posts across groups. Public: no sign-in needed. */
-export const getGroups = createServerFn({ method: 'GET' }).handler(async (): Promise<GroupsResult> => {
-  const s = await server();
-  const [groups, latest] = await Promise.all([s.listGroups(), s.latestInGroups()]);
-  if (!groups) return { groups: [], latest: [], error: 'unavailable' };
-  return latest ? { groups, latest } : { groups, latest: [], latestError: 'unavailable' };
+/** One page of Fedizen's groups directory (100 categories; groups and topics), newest first. Public. */
+export const getGroups = createServerFn({ method: 'GET' })
+  .inputValidator(d => z.object({ after: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional() }).parse(d ?? {}))
+  .handler(async ({ data }): Promise<GroupsPage> => {
+    const r = await (await server()).listGroups(data.after);
+    return r ?? { groups: [], next: null, error: 'unavailable' };
+  });
+
+/** The latest posts across every group Fedizen knows. Public. */
+export const getLatestInGroups = createServerFn({ method: 'GET' }).handler(async (): Promise<LatestResult> => {
+  const latest = await (await server()).latestInGroups();
+  return latest ? { latest } : { latest: [], error: 'unavailable' };
 });
 
 export const getGroup = createServerFn({ method: 'GET' })

@@ -1,7 +1,7 @@
-import { Block, BlockFooter, BlockTitle, Button, Card, CardContent, CardFooter, Icon, Link, List, ListItem, Navbar, NavLeft, NavRight, Page, Popup, f7 } from 'framework7-react';
+import { Block, BlockFooter, BlockTitle, Button, Card, CardContent, CardFooter, Icon, Link, List, ListInput, ListItem, Navbar, NavLeft, NavRight, Page, Popup, Segmented, f7 } from 'framework7-react';
 import { useState } from 'react';
-import { useGroup, useGroupMembership, useGroups } from '@/components/social/useGroups';
-import { groupAccessLabel, groupHandle, groupMembersLine, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
+import { useGroup, useGroupMembership, useGroupsDirectory, useLatestInGroups } from '@/components/social/useGroups';
+import { groupAccessLabel, groupHandle, groupMembersLine, matchesGroup, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 const meta = (g: Group) => [groupMembersLine(g), groupAccessLabel(g)].filter(Boolean).join(' · ');
@@ -36,32 +36,49 @@ function PostCard({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
   </Card>;
 }
 
-/** The Groups tab: Fedizen's group directory, then the latest posts across groups. */
+/** The Groups tab, after Bonfire's own /groups: a segmented control between the Directory (search, then
+ *  every group Fedizen knows, a page at a time) and Latest updates (posts across groups). */
 export function MobileGroups({ onOpen }: { onOpen: (g: Group) => void }) {
-  const q = useGroups();
-  if (q.isLoading) return <Block strong inset>Loading groups from Fedizen…</Block>;
-  if (q.isError || q.data?.error) return <Block strong inset>Fedizen couldn’t be reached right now. <Link onClick={() => q.refetch()}>Try again</Link></Block>;
-  const groups = (q.data?.groups ?? []).filter(g => g.type === 'group');
-  if (!groups.length) return <div className="atlas-profile-empty">
-    <div className="atlas-profile-empty-icon"><Icon ios="f7:person_3" md="material:groups" /></div>
-    <h2>No groups yet</h2>
-    <p>Groups on Fedizen, and those it follows on Lemmy, Mbin and other servers, will appear here.</p>
-  </div>;
+  const [view, setView] = useState<'directory' | 'latest'>('directory');
+  const [query, setQuery] = useState('');
+  const dir = useGroupsDirectory();
+  const latest = useLatestInGroups(view === 'latest');
+  const shown = dir.groups.filter(g => matchesGroup(g, query));
   return <>
-    <BlockTitle>Groups on Fedizen</BlockTitle>
-    <List strong inset dividers mediaList className="atlas-group-list">
-      {groups.map(g => <ListItem key={g.id} link="#" title={g.name} subtitle={meta(g)} text={g.summary[0]} onClick={() => onOpen(g)}>
-        <span slot="media"><GroupAvatar g={g} size={52} /></span>
-      </ListItem>)}
-    </List>
-    <BlockFooter>Groups federate across the fediverse, so you can also find communities from Lemmy, Mbin and Mobilizon here.</BlockFooter>
-    {q.data?.latestError ? <>
-      <BlockTitle>Latest in groups</BlockTitle>
-      <Block strong inset>Recent posts couldn’t be loaded. <Link onClick={() => q.refetch()}>Try again</Link></Block>
-    </> : !!q.data?.latest.length && <>
-      <BlockTitle>Latest in groups</BlockTitle>
-      {q.data.latest.slice(0, 12).map(p => <PostCard key={p.id} p={p} showGroup />)}
-    </>}
+    <Block className="atlas-group-segment">
+      <Segmented strong round>
+        <Button active={view === 'directory'} onClick={() => setView('directory')}>Directory</Button>
+        <Button active={view === 'latest'} onClick={() => setView('latest')}>Latest updates</Button>
+      </Segmented>
+    </Block>
+    {view === 'directory' ? <>
+      <List strong inset className="atlas-group-search">
+        <ListInput type="search" placeholder="Search groups" clearButton value={query} onInput={(e: { target: { value: string } }) => setQuery(e.target.value)} onInputClear={() => setQuery('')}
+          inputStyle={{ fontSize: 16 }} aria-label="Search groups" />
+      </List>
+      {dir.isLoading ? <Block strong inset>Loading groups from Fedizen…</Block>
+        : dir.firstFailed ? <Block strong inset>Fedizen couldn’t be reached right now. <Link onClick={() => dir.refetch()}>Try again</Link></Block>
+        : !dir.groups.length ? <div className="atlas-profile-empty">
+          <div className="atlas-profile-empty-icon"><Icon ios="f7:person_3" md="material:groups" /></div>
+          <h2>No groups yet</h2>
+          <p>Groups on Fedizen, and those it follows on Lemmy, Mbin and other servers, will appear here.</p>
+        </div>
+        : <>
+          {shown.length ? <List strong inset dividers mediaList className="atlas-group-list">
+            {shown.map(g => <ListItem key={g.id} link="#" title={g.name} subtitle={meta(g)} text={g.summary[0]} onClick={() => onOpen(g)}>
+              <span slot="media"><GroupAvatar g={g} size={52} /></span>
+            </ListItem>)}
+          </List> : <Block strong inset>No loaded groups match “{query.trim()}”.{dir.hasNextPage ? ' Load more to keep looking.' : ''}</Block>}
+          {dir.hasNextPage && <Block className="atlas-group-more">
+            <Button tonal round onClick={() => dir.fetchNextPage()} disabled={dir.isFetchingNextPage}>{dir.isFetchingNextPage ? 'Loading…' : 'Show more groups'}</Button>
+          </Block>}
+          {dir.failed && !dir.firstFailed && <Block strong inset>More groups couldn’t be loaded. <Link onClick={() => dir.fetchNextPage()}>Try again</Link></Block>}
+          <BlockFooter>Groups federate across the fediverse, so communities from Lemmy, Mbin and Mobilizon that Fedizen follows show up here too.</BlockFooter>
+        </>}
+    </> : latest.isLoading ? <Block strong inset>Loading the latest posts…</Block>
+      : latest.isError || latest.data?.error ? <Block strong inset>Recent posts couldn’t be loaded. <Link onClick={() => latest.refetch()}>Try again</Link></Block>
+      : latest.data?.latest.length ? latest.data.latest.map(p => <PostCard key={p.id} p={p} showGroup />)
+      : <Block strong inset>No posts in groups yet.</Block>}
   </>;
 }
 

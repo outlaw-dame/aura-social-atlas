@@ -490,3 +490,7 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-group-actions .button { gap: 4px; min-height: 44px; }
 .atlas-group-actions .button .icon { font-size: 18px; }
 .atlas-group-error { margin: 8px 0 0; font-size: 13px; color: var(--destructive); }
+.atlas-group-segment { margin-bottom: 8px; }
+.atlas-group-search { margin-top: 0; }
+.atlas-group-more { display: flex; justify-content: center; }
+.atlas-group-more .button { width: auto; padding: 0 22px; min-height: 44px; }
