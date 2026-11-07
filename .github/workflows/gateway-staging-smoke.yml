@@ -1,0 +1,93 @@
+name: Gateway staging HTTPS smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/gateway-staging-smoke.yml
+
+permissions:
+  contents: read
+
+jobs:
+  gateway-staging-https:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify live staging HTTPS, public actor, and Cloudflare admin deny
+        env:
+          BASE: https://staging-gateway.damonoutlaw.xyz
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import ssl
+          import time
+          import urllib.error
+          import urllib.request
+
+          base = os.environ['BASE']
+          tls = ssl.create_default_context()
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  raise RuntimeError(f'Unexpected HTTP redirect on {req.full_url}: {code}')
+
+          opener = urllib.request.build_opener(
+              urllib.request.HTTPSHandler(context=tls),
+              NoRedirect(),
+          )
+
+          def get(path, accept='application/json', retries=6):
+              assert path.startswith('/')
+              for attempt in range(retries):
+                  request = urllib.request.Request(
+                      base + path,
+                      headers={'Accept': accept, 'User-Agent': 'AtlasStagingSmoke/1.0'},
+                  )
+                  try:
+                      with opener.open(request, timeout=12) as response:
+                          return response.status, response.headers, response.read(500_000)
+                  except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as exc:
+                      if isinstance(exc, urllib.error.HTTPError) and exc.code < 500 and exc.code != 429:
+                          raise
+                      if attempt == retries - 1:
+                          raise
+                      time.sleep(min(2 ** attempt, 10))
+
+          def assert_edge(headers):
+              assert headers.get('CF-Ray'), 'Expected Cloudflare proxy response header'
+
+          status, headers, payload = get('/healthz')
+          assert status == 200, f'Health endpoint: {status}'
+          assert_edge(headers)
+          assert headers.get('Cache-Control') == 'no-store', 'Health cache policy changed'
+          assert json.loads(payload) == {'ok': True}, 'Health/database check failed'
+          print('PASS: HTTPS/TLS, Cloudflare edge and PostgreSQL-backed health')
+
+          status, headers, payload = get('/actors/gateway', 'application/activity+json')
+          assert status == 200, f'Actor endpoint: {status}'
+          assert_edge(headers)
+          actor = json.loads(payload)
+          assert actor.get('id') == base + '/actors/gateway', 'Incorrect canonical actor identity'
+          assert actor.get('inbox', '').startswith(base + '/'), 'Incorrect actor inbox origin'
+          assert actor.get('publicKey') or actor.get('assertionMethod'), 'Actor signing key missing'
+          print('PASS: canonical Fedify ActivityPub actor and public signing keys')
+
+          status, headers, payload = get('/api/v1/items?limit=1')
+          assert status == 200
+          assert_edge(headers)
+          data = json.loads(payload)
+          assert isinstance(data.get('items'), list), 'Unexpected discovery read response'
+          assert data['items'] == [], 'Isolated staging database unexpectedly contains content'
+          print('PASS: isolated public discovery API, no items')
+
+          try:
+              get('/admin/subscriptions', retries=1)
+          except urllib.error.HTTPError as exc:
+              assert exc.code == 403, f'Expected edge WAF deny (403), got {exc.code}'
+              assert_edge(exc.headers)
+          else:
+              raise AssertionError('Public admin access was not denied by Cloudflare')
+          print('PASS: Cloudflare denies unauthenticated public admin ingress')
+          PY
