@@ -128,6 +128,8 @@ jobs:
           PY
       - name: Type-check
         run: bun run typecheck
+      - name: Validate disposable signed relay fixture bundles against pinned Fedify
+        run: bun build interop/railway-relay.ts --target=bun --outdir=/tmp/atlas-interop-relay-build
       - name: Gateway unit and PostgreSQL integration tests
         run: bun test src
   atlas:
