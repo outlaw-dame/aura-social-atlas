@@ -69,10 +69,16 @@ jobs:
           assert status == 200, f'Actor endpoint: {status}'
           assert_edge(headers)
           actor = json.loads(payload)
-          assert actor.get('id') == base + '/actors/gateway', f"Incorrect canonical actor identity: {actor.get('id')!r}"
+          # mapActorAlias('/actor', 'gateway') changes the canonical actor ID.
+          assert actor.get('id') == base + '/actor', f"Incorrect canonical actor identity: {actor.get('id')!r}"
           assert actor.get('inbox', '').startswith(base + '/'), 'Incorrect actor inbox origin'
           assert actor.get('publicKey') or actor.get('assertionMethod'), 'Actor signing key missing'
-          print('PASS: canonical Fedify ActivityPub actor and public signing keys')
+          alias_status, _, alias_payload = get('/actor', 'application/activity+json')
+          assert alias_status == 200
+          canonical = json.loads(alias_payload)
+          assert canonical.get('id') == actor['id'], 'Alternate actor path changed identity'
+          assert canonical.get('publicKey') == actor.get('publicKey'), 'Actor keys changed between requests'
+          print('PASS: canonical Fedify ActivityPub actor alias and stable public signing keys')
 
           status, headers, payload = get('/api/v1/items?limit=1')
           assert status == 200
