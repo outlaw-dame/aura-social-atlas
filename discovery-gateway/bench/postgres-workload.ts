@@ -31,11 +31,18 @@ function report(label: string, rows: Record<string, unknown>[]) {
   }));
 }
 
+let ownsDataset = false;
 try {
   await initSchema(sql);
   // Test DB is disposable and the prior integration suite has already ended.
-  const existing = await sql`SELECT count(*)::int AS count FROM gateway_items`;
-  if (existing[0]?.count !== 0) throw new Error('benchmark requires an empty gateway_items table');
+  const existing = await sql`
+    SELECT (SELECT count(*) FROM gateway_items)::int AS item_count,
+           (SELECT count(*) FROM gateway_subscriptions)::int AS subscription_count
+  `;
+  if (existing[0]?.item_count !== 0 || existing[0]?.subscription_count !== 0) {
+    throw new Error('benchmark requires empty gateway item and subscription tables');
+  }
+  ownsDataset = true; // Only our explicitly empty disposable tables may be cleaned.
   await sql`
     INSERT INTO gateway_items (
       id, activity_id, relay_actor, author_id, author_name,
@@ -54,7 +61,20 @@ try {
            '["benchmark"]'::jsonb, now()
     FROM generate_series(1, ${count}) AS g
   `;
+  await sql`
+    INSERT INTO gateway_subscriptions (
+      kind, actor_url, actor_host, selector, state, follow_activity_id
+    )
+    SELECT 'litepub',
+           CASE WHEN g = 1 THEN 'https://benchmark-actor.example/actor'
+                ELSE 'https://bench.example/actors/' || g END,
+           CASE WHEN g = 1 THEN 'benchmark-actor.example' ELSE 'bench.example' END,
+           NULL, 'accepted',
+           'https://bench.example/follow/' || g
+    FROM generate_series(1, 5000) AS g
+  `;
   await sql`ANALYZE gateway_items`;
+  await sql`ANALYZE gateway_subscriptions`;
   const fullSearch = await sql.unsafe(
     `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
      SELECT id FROM gateway_items WHERE text ILIKE '%targetword%'
@@ -94,6 +114,6 @@ try {
   }
 } finally {
   // Dedicated, disposable CI instance only. No production connectivity.
-  await sql`TRUNCATE gateway_items`;
+  if (ownsDataset) await sql`TRUNCATE gateway_items, gateway_subscriptions`;
   await sql.end({ timeout: 5 });
 }
