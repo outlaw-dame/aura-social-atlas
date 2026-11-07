@@ -23,7 +23,7 @@ import { listAll, retrySubscription, subscribe, unsubscribe, type SubscribeInput
 import { readLimited } from './limits.ts';
 import { log } from './federation.ts';
 
-type HandlerDeps = { cfg: GatewayConfig; gateway: Gateway; sql: Sql };
+type HandlerDeps = { cfg: GatewayConfig; gateway: Gateway; sql: Sql; adminEnabled?: boolean };
 
 /** Timing-safe bearer check without leaking length through early exit. */
 export function tokenMatches(provided: string | null, expected: string): boolean {
@@ -93,7 +93,7 @@ function publicSubscription(s: { id: string; kind: string; actorUrl: string; act
 }
 
 export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Response> {
-  const { cfg, gateway, sql } = deps;
+  const { cfg, gateway, sql, adminEnabled = false } = deps;
   const readLimiter = new RateLimiter(cfg.readRateLimitPerMinute);
   const adminLimiter = new RateLimiter(cfg.adminRateLimitPerMinute);
   // One bounded, conservative bucket because the application does not have
@@ -145,7 +145,10 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
       return json({ error: 'not found' }, { status: 404 }, cors);
     }
 
-    if (path.startsWith('/admin/')) {
+    if (path === '/admin' || path.startsWith('/admin/')) {
+      // The public listener must fail closed even when the Cloudflare WAF
+      // is bypassed through Railway's direct origin or an alternate domain.
+      if (!adminEnabled) return new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
       // Admin API: no CORS — it must never be callable from a browser page on
       // another origin, and the token must never ship in any frontend bundle.
       if (!adminLimiter.allow(clientKey(req))) return json({ error: 'rate limited' }, { status: 429 });
