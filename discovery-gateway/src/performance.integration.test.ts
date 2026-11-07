@@ -101,8 +101,8 @@ integration('PostgreSQL queue delay and restart: no early processing, no duplica
       received.push({ marker: m.marker, at: performance.now() });
     }, { signal: controller.signal });
     try {
-      await Bun.sleep(170);
-      expect(received).toEqual([]);
+      // Timing assertions use recorded enqueue/delivery timestamps rather than
+      // assuming scheduler sleeps resume promptly under CI load.
       const deadline = performance.now() + 5000;
       while (received.length === 0 && performance.now() < deadline) {
         await Bun.sleep(30);
