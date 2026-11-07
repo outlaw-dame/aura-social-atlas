@@ -238,7 +238,7 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineF
         return;
       }
       const remote = await ctx.lookupObject(follow.actorId.href);
-      if (!(remote instanceof Service) && (!remote || !('inboxId' in remote))) {
+      if (!remote || !('inboxId' in remote) || !remote.inboxId) {
         log('follow.rejected', { reason: 'missing verified recipient inbox' });
         return;
       }
