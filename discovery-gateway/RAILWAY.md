@@ -1,8 +1,6 @@
 # Atlas Discovery Gateway — Railway staging
 
-> **Live staging update (November 2026):** This original provisioning runbook predates the deployed Railway gateway. The gateway is online, signed federation interop passed, and public admin is now bound to a separate private port. **Do not attach/retain a public Railway domain in the final architecture**: an external test demonstrated a forged-Host bypass of Cloudflare WAF on the direct Railway origin. Follow [CLOUDFLARE_TUNNEL.md](./CLOUDFLARE_TUNNEL.md) for the staged tunnel migration, exact security gates, and rollback procedure. The Tunnel connector and DNS cutover are NOT complete as of this update.
-
-Use this runbook only for a **new, isolated staging project/environment**. No step should reuse Fedizen's database, keys, secrets, actor URL, or production subscribers. This repository does not auto-provision Railway resources. Review cost and access before creating services.
+> **Live staging update (November 2026):** The gateway is online and isolated staging interop passed. Public admin is on a separate private port. The former Railway-generated origin is unreachable in the [external acceptance probe](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42397668736); this is not proof that Cloudflare Tunnel has been activated. Do not retain a public Railway domain as the long-term ingress. Follow [CLOUDFLARE_TUNNEL.md](./CLOUDFLARE_TUNNEL.md) for the outstanding private Tunnel cutover and rollback gates.\n\nUse this runbook only for a **new, isolated staging project/environment**. No step should reuse Fedizen's database, keys, secrets, actor URL, or production subscribers. This repository does not auto-provision Railway resources. Review cost and access before creating services.
 
 Railway supports independent persistent services for web APIs and background workers, internal service networking, and PostgreSQL. The gateway needs **both** roles continuously running; a cron or request-driven function cannot replace its durable queue worker.
 
@@ -28,10 +26,10 @@ Internet / controlled staging relay
 
 1. Create a staging Railway project, add a dedicated PostgreSQL service, and enable the backup policy appropriate for the experiment.
 2. Create two **persistent** services with GitHub source `outlaw-dame/aura-social-atlas`, branch `main`, **root directory `discovery-gateway`**, and its `Dockerfile`. Confirm both use the same tested source revision/image. For staging, begin with one replica per role.
-3. Set `GATEWAY_ROLE=web` on `atlas-discovery-web`; set `GATEWAY_ROLE=worker` on the worker service. **For temporary commissioning only**, a Railway-generated web domain may be used with clear expiry and isolated staging. The final exposed hostname must use Cloudflare Tunnel over the Railway private network, with Railway public web domains removed. The worker must never have a public domain.
+3. Set `GATEWAY_ROLE=web` on `atlas-discovery-web` and `GATEWAY_ROLE=worker` on the worker service. A generated Railway HTTPS domain is acceptable **only for temporary isolated commissioning**, and must be removed after secured ingress cutover; never attach a public domain to the worker.
 4. Define `DATABASE_URL` on **both** services as a Railway *reference variable* to the staging Postgres service's `DATABASE_URL`; use Railway's variable picker so the referenced service name matches exactly. This is a private internal connection, not `DATABASE_PUBLIC_URL`.
 5. Set `GATEWAY_ORIGIN` on **both** services to the exact web service public HTTPS origin (no trailing slash). Set a unique high-entropy `GATEWAY_ADMIN_TOKEN` in the server-side secret store. Never commit or display it. Restrict `GATEWAY_CORS_ORIGINS` to the exact staging web frontend origin, or leave it empty while testing the gateway alone.
-6. Set `NODE_ENV=production`, `PORT=4100`, and `GATEWAY_ADMIN_PORT=4101` (private-network-only, never publicly routed) on the web service. Configure Railway's internal web healthcheck as `/livez` (not `/healthz`, which requires the Cloudflare origin-auth header), a one-minute initialization grace period, and a restart policy appropriate for persistent work. Use the same restart policy on the worker, whose readiness must be inferred from its structured startup log and ongoing queue processing rather than an HTTP healthcheck.
+6. Set `NODE_ENV=production`, `PORT=4100`, and `GATEWAY_ADMIN_PORT=4101` (private-network-only, never publicly routed) on the web service. Configure the internal Railway web healthcheck as `/livez` (not the Cloudflare-protected `/healthz`), a one-minute initialization grace period, and a restart policy appropriate for persistent work. Use the same restart policy on the worker, whose readiness must be inferred from its structured startup log and ongoing queue processing rather than an HTTP healthcheck.
 7. For the trial, disable auto-sleep/serverless behavior for **both** services. Sleeping a queue worker delays signed federation, and sleeping web intake may cause delivery timeouts.
 8. Enable GitHub auto-deploy only for the staging branch/environment after the first controlled deployment has been reviewed. Promotion to production must require explicit approval of an immutable, CI-tested revision.
 
@@ -39,9 +37,38 @@ Railway's GitHub and Dockerfile documentation: https://docs.railway.com/services
 
 ## Secret and ingress controls
 
-The gateway's bearer token is **not** by itself an adequate production network isolation boundary. `GATEWAY_EDGE_SECRET` must be set only after an authenticated Cloudflare header rewrite is configured and independently tested. Railway's own liveness probe uses `/livez`; this route exposes no database or actor state. Never relax protected `/healthz` to make a Railway healthcheck pass. Require edge/WAF ingress policy restricting `/admin/*` to trusted operator access or a private management path. Test that unauthenticated requests are rejected at the application level and that the internet-facing edge refuses all public attempts to reach `/admin/*`.
+The gateway's bearer token is **not** by itself an adequate production network isolation boundary. Require edge/WAF ingress policy restricting `/admin/*` to trusted operator access or a private management path. Test that unauthenticated requests are rejected at the application level and that the internet-facing edge refuses all public attempts to reach `/admin/*`.
 
 Set a service-specific egress firewall or network policy that blocks access to private/reserved IPv4 and IPv6 destinations (except narrowly permitted private PostgreSQL and DNS infrastructure). Validate that protections cover redirect chains, cloud metadata endpoints, and DNS-rebinding attempts. **Fedify's address pinning is defense in depth, not proof of the host's egress firewall.** Railway platform networking controls must be evaluated on the actual deployment before production promotion.
+
+## Cloudflare to Railway origin-authentication gate
+
+Cloudflare WAF alone cannot prevent callers from reaching a discoverable Railway
+origin with a forged public `Host` header. For the staging domain, configure
+a Cloudflare **Request Header Transform Rule** in phase
+`http_request_late_transform` matching only the exact staging hostname,
+with action `rewrite`, operation `set`, header `x-atlas-edge-auth` and
+a unique random 32+-byte secret. `set` must **overwrite** any caller-supplied
+value. Store the same secret server-side on `gateway-web` as
+`GATEWAY_EDGE_SECRET`; never expose it in frontend code or log it.
+
+Deploy reviewed code *before* enabling the secret. Confirm the Cloudflare
+rewrite works before requiring the header at the application. Once enforced,
+**all** public paths, including `/healthz`, require the injected header.
+Railway's platform liveness probe must use GET `/livez`, which performs no
+database, identity, or protected-data lookup and is intentionally exempt from
+origin authentication. Keep the public, database-backed `/healthz` behind the
+Cloudflare-injected secret, and monitor it externally through Cloudflare.
+Do not use `/livez` to replace the external readiness or origin-bypass gates. The private admin port
+4101 authenticates independently using the server-side bearer token.
+
+Verify with an independent external runner: the Cloudflare hostname serves
+`/healthz`, actor and WebFinger; the Railway direct origin with a forged
+public `Host` receives 403 for `/healthz`, `/actor`, and public discovery
+regardless of user-supplied spoofed forwarding headers. The Cloudflare
+WAF continues returning 403 on public `/admin/*`. Never disable the
+origin secret without a documented rollback because doing so reopens the
+origin-bypass path. Avoid caching signed federation, health, and admin traffic.
 
 ## Staging acceptance procedure
 
