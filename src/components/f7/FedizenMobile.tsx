@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Block, BlockTitle, Button, Card, CardContent, CardFooter, Link, Navbar, NavRight, Page, Popup } from 'framework7-react';
+import { Block, BlockTitle, Button, Card, CardContent, CardFooter, Link, List, ListItem, Navbar, NavRight, Page, Popup } from 'framework7-react';
 import { getRecentArticles, getFedizenPublic } from '@/lib/bonfire.functions';
 import type { BonfireArticle } from '@/lib/spotlight';
 import { useFedizen } from '@/components/social/useFedizen';
@@ -68,12 +68,39 @@ export function MobileFedizenFeed() {
   </>;
 }
 
-/** Bell text for the phone navbar: real Fedizen notifications when connected. */
-export function useActivitySummary() {
+const noticeIcon: Record<string, { ios: string; md: string }> = {
+  favourite: { ios: 'f7:heart_fill', md: 'material:favorite' },
+  reblog: { ios: 'f7:arrow_2_squarepath', md: 'material:repeat' },
+  follow: { ios: 'f7:person_badge_plus_fill', md: 'material:person_add' },
+  follow_request: { ios: 'f7:person_badge_plus', md: 'material:person_add_alt' },
+  mention: { ios: 'f7:at', md: 'material:alternate_email' },
+  status: { ios: 'f7:square_pencil', md: 'material:edit' },
+  poll: { ios: 'f7:chart_bar_alt_fill', md: 'material:poll' },
+};
+
+/** Activity tab: the person's real Fedizen notifications (read-only). */
+export function MobileActivity() {
   const f = useFedizen();
-  const n = f.data?.notices ?? [];
-  if (!f.data?.connected) return 'Connect Fedizen in Following to see activity';
-  return n.length ? n.slice(0, 3).map(x => `${x.author} ${x.text}`).join('\n') : 'No new activity';
+  if (!f.signedIn) return <Block strong inset>Sign in to Atlas to see who followed, mentioned or boosted you. <Link href="/auth" external>Sign in</Link></Block>;
+  if (f.loading) return <Block strong inset>Loading your activity…</Block>;
+  if (!f.data?.connected || f.data.error === 'expired') return <Block strong inset>
+    <p style={{ marginTop: 0 }}>{f.data?.error === 'expired' ? 'Fedizen ended Atlas’s access. Connect again to see your activity.' : 'Connect Fedizen to see your notifications here. Atlas can only read — it can’t post, follow or change anything.'}</p>
+    {f.embedded ? <Button fill round external target="_blank" href={`${window.location.origin}/app`}>Open Atlas in a new tab to connect</Button> : <Button fill round onClick={f.connect}>Connect Fedizen</Button>}
+    {f.error && <p role="alert" style={{ color: 'var(--f7-theme-color)' }}>{f.error}</p>}
+  </Block>;
+  const n = f.data.notices;
+  if (!n.length) return <Block strong inset>No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.</Block>;
+  return <List strong inset dividers mediaList className="atlas-activity">
+    {n.map(x => {
+      const i = noticeIcon[x.type] ?? { ios: 'f7:bell_fill', md: 'material:notifications' };
+      return <ListItem key={x.id} title={x.author} after={when(x.date)} text={x.text}>
+        <span slot="media" className="atlas-activity-media">
+          {x.avatar ? <img src={x.avatar} alt="" width={40} height={40} referrerPolicy="no-referrer" /> : <span className="atlas-activity-initial" aria-hidden="true">{x.author.charAt(0)}</span>}
+          <span className={`atlas-activity-kind atlas-activity-${x.type}`}><Icon ios={i.ios} md={i.md} /></span>
+        </span>
+      </ListItem>;
+    })}
+  </List>;
 }
 
 /** Phone: live public Fedizen posts, no sign-in needed. */

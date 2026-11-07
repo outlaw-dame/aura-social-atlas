@@ -15,7 +15,7 @@ export function FedizenFeed() {
   if (f.queryError) return <section className="mb-12">{head}<p className="text-sm text-muted-foreground">Atlas couldn’t check your Fedizen connection. <Button variant="link" size="sm" className="px-1" onClick={f.retry}>Try again</Button></p></section>;
   if (!f.data?.connected || f.data.error === 'expired') return <><section className="mb-12 rounded-2xl border border-border p-6">{head}
     <p className="text-sm text-muted-foreground">{f.data?.error === 'expired' ? 'Fedizen ended Atlas’s access. Connect again to keep reading.' : 'Let Atlas read your Fedizen timeline and notifications. Atlas can only read — it can’t post, follow or change anything.'}</p>
-    {f.embedded ? <Button asChild className="mt-4"><a href={`${window.location.origin}/following`} target="_blank" rel="noopener noreferrer">Open Atlas in a new tab to connect<ArrowUpRight /></a></Button>
+    {f.embedded ? <Button asChild className="mt-4"><a href={`${window.location.origin}/feeds`} target="_blank" rel="noopener noreferrer">Open Atlas in a new tab to connect<ArrowUpRight /></a></Button>
       : <Button className="mt-4" onClick={f.connect}><Link2 />Connect Fedizen</Button>}
     {f.error && <p role="alert" className="mt-3 text-sm text-destructive">{f.error}</p>}
   </section><PublicFedizenFeed /></>;

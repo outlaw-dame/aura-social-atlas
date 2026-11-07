@@ -23,7 +23,7 @@ function Callback() {
     if (!user) { setMsg('Please sign in to Atlas first, then connect Fedizen again.'); return; }
     if (!code || !state) { setMsg(p.get('error') ? 'Fedizen access wasn’t allowed.' : 'This connection link is incomplete.'); return; }
     ran.current = true;
-    finish({ data: { code, state } }).then(r => r.ok ? navigate({ to: '/following' }) : setMsg(r.error)).catch(() => setMsg('Something went wrong. Please try again.'));
+    finish({ data: { code, state } }).then(r => r.ok ? navigate({ to: '/feeds' }) : setMsg(r.error)).catch(() => setMsg('Something went wrong. Please try again.'));
   }, [loading, user, finish, navigate]);
-  return <main className="grid min-h-screen place-items-center bg-background p-6 text-center text-foreground"><div><h1 className="font-serif text-3xl">Fedizen</h1><p className="mt-3 text-sm text-muted-foreground">{msg}</p><a href="/following" className="mt-5 inline-block text-sm text-accent underline">Back to Following</a></div></main>;
+  return <main className="grid min-h-screen place-items-center bg-background p-6 text-center text-foreground"><div><h1 className="font-serif text-3xl">Fedizen</h1><p className="mt-3 text-sm text-muted-foreground">{msg}</p><a href="/feeds" className="mt-5 inline-block text-sm text-accent underline">Back to Feeds</a></div></main>;
 }

@@ -1,4 +1,5 @@
 import { Popup, Page, Navbar, NavRight, Link, Icon, Button, Card, CardContent, CardFooter } from 'framework7-react';
+import { promptSignInToSave } from './save-prompt';
 import { posts, fullHandle, podcastFeatureLabels, type Creator } from '@/lib/social-catalogue';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { linkifyHashtags, linkifyHashtagsWith, hashtagUrl } from '@/lib/hashtags';
@@ -8,7 +9,7 @@ import { CreatorTag } from '@/components/social/CreatorTag';
 
 /** Mastodon-style creator profile: full fediverse handle, verified fields, featured tags, pinned story. */
 export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator | null; onClose: () => void; onOpenTag?: (creator: Creator, tag: string) => void }) {
-  const { followed, toggleFollow, saved, toggleSave } = useSocial();
+  const { followed, toggleFollow, saved, canSave, toggleSave } = useSocial();
   const theirPosts = creator ? posts.filter(p => p.creatorId === creator.id) : [];
   const pinned = theirPosts.filter(p => p.pinned);
   const rest = theirPosts.filter(p => !p.pinned);
@@ -104,7 +105,7 @@ export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator
               </CardContent>
               <CardFooter>
                 <Link external target="_blank" href={p.url}>Open</Link>
-                <Link onClick={() => toggleSave(p.id)}>{saved.includes(p.id) ? 'Saved' : 'Save'}</Link>
+                <Link onClick={() => (canSave ? toggleSave(p.id) : promptSignInToSave())}>{saved.includes(p.id) ? 'Saved' : 'Save'}</Link>
               </CardFooter>
             </Card>
           ))}

@@ -108,9 +108,12 @@ export const posts = [
 ];
 
 /** Full fediverse address, e.g. @notesfromorbit@mastodon.social. */
+/** The handle as each network writes it: fediverse `@user@server`, Bluesky a domain (`@user.bsky.social`), RSS the feed. */
 export function fullHandle(creator: Creator): string {
+  if (creator.domain === 'rss') return creator.handle;
   const name = creator.handle.startsWith('@') ? creator.handle : `@${creator.handle}`;
-  return creator.domain === 'rss' ? creator.handle : `${name}@${creator.domain}`;
+  if (name.indexOf('@', 1) > 0) return name;
+  return creator.network === 'Bluesky' ? `${name}.${creator.domain}` : `${name}@${creator.domain}`;
 }
 
 /** Posts by one creator tagged with a given hashtag (normalized, no #). */
