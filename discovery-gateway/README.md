@@ -43,6 +43,10 @@ The browser frontend needs **only** `VITE_DISCOVERY_GATEWAY_URL=https://your-gat
 - `GET /api/v1/facets` returns observed tags and domains.
 - `GET /admin/subscriptions`, `POST /admin/subscriptions`, `DELETE /admin/subscriptions/:id`, `POST /admin/subscriptions/:id/retry`: all require `Authorization: Bearer <admin token>`. The admin API has no cross-origin browser access and should be restricted to a private network or operator-only gateway.
 
+## Inbound federation admission control
+
+Federation POST requests have a separate **per-process** admission bucket (`GATEWAY_FEDERATION_RATE_LIMIT`, default `600` requests/minute), enforced before buffering the body or invoking Fedify signature verification. Requests over the limit receive HTTP 429 and `Retry-After: 60`. The bucket is deliberately shared rather than trusting user-controlled forwarding headers; bursts from one sender can affect other senders. This is a resource-exhaustion safeguard only, **not** a distributed rate limit, fair per-sender quota, or a replacement for edge/WAF controls. Configure and load-test for your deployment before exposure.
+
 ## Security and production blockers
 
 The service uses Fedify's verified inbox processing and HTTPS document loaders that reject private network addresses. For Announce activities the original object must be independently fetched from origin, and matching an accepted **actor ID**, not merely its hostname, is required. Stored content is text-only with original-author provenance.

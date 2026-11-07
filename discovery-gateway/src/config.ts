@@ -30,6 +30,8 @@ export type GatewayConfig = {
   readRateLimitPerMinute: number;
   /** Admin API: max requests per IP per minute (per process). */
   adminRateLimitPerMinute: number;
+  /** Inbound federation POST admission cap per minute, per process, before body parsing/signature verification. */
+  federationRateLimitPerMinute: number;
 };
 
 function required(env: Record<string, string | undefined>, name: string): string {
@@ -93,5 +95,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     maxTextLength: intInRange('GATEWAY_MAX_TEXT_LENGTH', env['GATEWAY_MAX_TEXT_LENGTH'], 4_000, 100, 50_000),
     readRateLimitPerMinute: intInRange('GATEWAY_READ_RATE_LIMIT', env['GATEWAY_READ_RATE_LIMIT'], 120, 1, 100_000),
     adminRateLimitPerMinute: intInRange('GATEWAY_ADMIN_RATE_LIMIT', env['GATEWAY_ADMIN_RATE_LIMIT'], 30, 1, 10_000),
+    federationRateLimitPerMinute: intInRange('GATEWAY_FEDERATION_RATE_LIMIT', env['GATEWAY_FEDERATION_RATE_LIMIT'], 600, 1, 100_000),
   };
 }
