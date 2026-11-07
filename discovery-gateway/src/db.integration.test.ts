@@ -710,6 +710,16 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(blockedOriginLookups).toBe(0);
     const afterDisable = (await queryItems(sql, { limit: 50 })).items;
     expect(afterDisable.some(x => x.id === disabledCreateId || x.id === blockedOriginId)).toBe(false);
+    // Even a signature-verified reciprocal Follow is unsolicited after the
+    // local source is disabled, and must not reactivate the subscription.
+    const lateFollow = await postSigned({
+      id: actorId + '/activities/late-follow-' + crypto.randomUUID(),
+      type: 'Follow', actor: actorId,
+      object: 'https://gateway.example/actors/gateway',
+    });
+    expect(lateFollow.status).toBeLessThan(300);
+    await Bun.sleep(100);
+    expect((await getSubscription(sql, subscription.subscription.id))?.state).toBe('disabled');
     } finally {
       workerStop.abort();
       await worker;

@@ -48,7 +48,7 @@ export function resolveSubscriptionTarget(input: SubscribeInput): { ok: true; ac
  * authoritative for Accept/Reject correlation. Never trust a redirected ID,
  * inbox, scheme or port outside the administrator-approved origin.
  */
-function validateRelayActor(
+export function validateRelayActor(
   actor: Actor | null,
   requestedUrl: string,
   kind: SubscriptionKind,
