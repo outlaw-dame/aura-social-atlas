@@ -132,6 +132,8 @@ jobs:
         run: bun build interop/railway-relay.ts --target=bun --outdir=/tmp/atlas-interop-relay-build
       - name: Gateway unit and PostgreSQL integration tests
         run: bun test src
+      - name: Verify isolated PostgreSQL backup restoration
+        run: bash scripts/restore-drill.sh
   atlas:
     runs-on: ubuntu-latest
     steps:
