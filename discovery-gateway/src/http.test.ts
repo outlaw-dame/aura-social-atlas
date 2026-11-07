@@ -29,7 +29,7 @@ describe('admin authentication and request throttling', () => {
     expect(first.status).toBe(202);
     const refused = await handle(new Request(url, {
       method: 'POST',
-      body: new ReadableStream({ pull() { throw new Error('rate-limited body must not be read'); } }),
+      body: new ReadableStream({ pull() { throw new Error('rate-limited body must not be read'); } }, { highWaterMark: 0 }),
       duplex: 'half',
     } as RequestInit));
     expect(refused.status).toBe(429);
