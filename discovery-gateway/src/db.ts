@@ -190,6 +190,26 @@ export async function settlePendingFollow(
   return rows.length === 1;
 }
 
+/** Constant-size actor authorization using the unique actor_url index.
+ * Avoid loading every subscribed actor for each signed inbox delivery. */
+export async function isAcceptedSubscriptionActor(sql: Sql, actorUrl: string): Promise<boolean> {
+  const rows = await sql`
+    SELECT 1 FROM gateway_subscriptions
+    WHERE actor_url = ${actorUrl} AND state = 'accepted'
+    LIMIT 1`;
+  return rows.length > 0;
+}
+
+/** Only active LitePub subscribers may reciprocally follow the gateway. */
+export async function isActiveLitePubSubscriber(sql: Sql, actorUrl: string): Promise<boolean> {
+  const rows = await sql`
+    SELECT 1 FROM gateway_subscriptions
+    WHERE actor_url = ${actorUrl}
+      AND kind = 'litepub' AND state IN ('pending', 'accepted')
+    LIMIT 1`;
+  return rows.length > 0;
+}
+
 /** Exact accepted actor ids. Host matching is insufficient: many actors share a host. */
 export async function acceptedSubscriptionActors(sql: Sql): Promise<Set<string>> {
   const rows = await sql<{ actor_url: string }[]>`SELECT actor_url FROM gateway_subscriptions WHERE state = 'accepted'`;
