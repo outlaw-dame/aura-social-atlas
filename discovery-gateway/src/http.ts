@@ -96,6 +96,9 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
   const { cfg, gateway, sql } = deps;
   const readLimiter = new RateLimiter(cfg.readRateLimitPerMinute);
   const adminLimiter = new RateLimiter(cfg.adminRateLimitPerMinute);
+  // One bounded, conservative bucket because the application does not have
+  // a trusted proxy-derived source address. Never key this by X-Forwarded-For.
+  const federationLimiter = new RateLimiter(cfg.federationRateLimitPerMinute);
 
   return async function handle(req: Request): Promise<Response> {
     const url = new URL(req.url);
@@ -188,6 +191,12 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
 
     // Federation paths (actor, inbox, webfinger, nodeinfo): body-limited, then Fedify.
     if (req.method === 'POST') {
+      if (!federationLimiter.allow(clientKey(req))) {
+        return new Response('Too many federation requests', {
+          status: 429,
+          headers: { 'retry-after': '60', 'cache-control': 'no-store' },
+        });
+      }
       const bytes = await readLimited(req, cfg.maxBodyBytes);
       if (!bytes) return new Response('Payload too large', { status: 413 });
       return gateway.fetch(new Request(req.url, { method: 'POST', headers: req.headers, body: bytes as Uint8Array<ArrayBuffer> }));
