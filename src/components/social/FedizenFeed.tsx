@@ -6,15 +6,15 @@ import { PublicFedizenFeed } from './PublicFedizenFeed';
 
 const when = (d?: string) => d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
-/** Desktop: your real Fedizen home timeline and notifications, once you connect read-only access. */
+/** Desktop: your real Fedizen home timeline and notifications, once you connect your Fedizen account. */
 export function FedizenFeed() {
   const f = useFedizen();
-  const head = <div className="mb-5 flex items-baseline justify-between"><h2 className="font-serif text-2xl italic">Your Fedizen feed</h2><span className="text-[10px] uppercase text-muted-foreground">Live · read-only</span></div>;
+  const head = <div className="mb-5 flex items-baseline justify-between"><h2 className="font-serif text-2xl italic">Your Fedizen feed</h2><span className="text-[10px] uppercase text-muted-foreground">Live</span></div>;
   if (!f.signedIn) return <><section className="mb-12">{head}<p className="text-sm text-muted-foreground">Sign in to Atlas to see your Fedizen feed. <Link to="/auth" className="text-accent underline">Sign in</Link></p></section><PublicFedizenFeed /></>;
   if (f.loading) return <section className="mb-12">{head}<p className="text-sm text-muted-foreground">Loading your Fedizen feed…</p></section>;
   if (f.queryError) return <section className="mb-12">{head}<p className="text-sm text-muted-foreground">Atlas couldn’t check your Fedizen connection. <Button variant="link" size="sm" className="px-1" onClick={f.retry}>Try again</Button></p></section>;
   if (!f.data?.connected || f.data.error === 'expired') return <><section className="mb-12 rounded-2xl border border-border p-6">{head}
-    <p className="text-sm text-muted-foreground">{f.data?.error === 'expired' ? 'Fedizen ended Atlas’s access. Connect again to keep reading.' : 'Let Atlas read your Fedizen timeline and notifications. Atlas can only read — it can’t post, follow or change anything.'}</p>
+    <p className="text-sm text-muted-foreground">{f.data?.error === 'expired' ? 'Fedizen ended Atlas’s access. Connect again to keep reading.' : 'Connect your Fedizen account to see your timeline and notifications here, and to join groups and follow people from Atlas.'}</p>
     {f.embedded ? <Button asChild className="mt-4"><a href={`${window.location.origin}/feeds`} target="_blank" rel="noopener noreferrer">Open Atlas in a new tab to connect<ArrowUpRight /></a></Button>
       : <Button className="mt-4" onClick={f.connect}><Link2 />Connect Fedizen</Button>}
     {f.error && <p role="alert" className="mt-3 text-sm text-destructive">{f.error}</p>}

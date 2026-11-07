@@ -5,7 +5,7 @@ import { useAtlasAuth } from './AuthState';
 import { disconnectFedizen, getFedizenHome, startFedizenConnect } from '@/lib/fedizen.functions';
 import { isEmbeddedPreview } from '@/lib/bonfire-auth';
 
-/** Personal Fedizen feed + notifications for the signed-in Atlas account (read-only permission). */
+/** Personal Fedizen feed + notifications for the signed-in Atlas account. */
 export function useFedizen() {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();

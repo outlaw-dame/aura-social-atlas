@@ -2,8 +2,21 @@
 import { htmlToParagraphs } from './spotlight';
 
 export const FEDIZEN = 'https://fedizen.net';
-/** Read-only: Atlas never posts, follows or changes anything on Fedizen with this permission. */
-export const FEDIZEN_API_SCOPE = 'read';
+/** What Atlas asks Fedizen for: read your timeline and notifications, and act for you — join and leave
+ *  groups, follow, post. Mastodon scope names, which Bonfire's OAuth provider (bonfire_open_id) supports. */
+export const FEDIZEN_API_SCOPE = 'read write follow';
+
+/** Where to return after connecting Fedizen: a same-site path only (never `//host` or a URL), else Feeds. */
+export const RETURN_KEY = 'atlas-fedizen-return';
+export function safeReturnPath(p: string | null | undefined): string {
+  return p && /^\/(?![\/\\])[\w\-./?=&%]*$/.test(p) && !p.startsWith('/fedizen/') ? p : '/feeds';
+}
+
+/** Does a granted scope string cover `needed`? A parent scope covers its children ("write" covers "write:follows"). */
+export function hasScope(granted: string | null | undefined, needed: string): boolean {
+  const have = new Set(String(granted ?? '').split(/\s+/).filter(Boolean));
+  return have.has(needed) || (needed.includes(':') && have.has(needed.split(':')[0]));
+}
 
 export type FedizenPost = { id: string; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; boostedBy?: string };
 export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string };
