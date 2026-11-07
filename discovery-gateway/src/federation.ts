@@ -66,6 +66,8 @@ export function buildGateway(cfg: GatewayConfig, stores: GatewayStores, offlineF
   const federation = createFederation<unknown>({
     kv: stores.kv,
     queue: stores.queue,
+    // Process role controls worker startup; web nodes must only enqueue.
+    manuallyStartQueue: true,
     origin: cfg.origin,
     // Defense-in-depth: outbound signed deliveries and Fedify-managed fetches
     // must reject private network targets, not merely our custom loaders.
