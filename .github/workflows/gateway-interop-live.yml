@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Independently verify one-shot signed federation acceptance
         env:
-          RELAY: https://interop-relay-fixture-staging.up.railway.app
+          RELAY: https://interop-relay-tunnel-acceptance-staging.up.railway.app
         run: |
           python3 - <<'PY'
           import json
