@@ -5,6 +5,7 @@
  */
 import { expect, test } from 'bun:test';
 import postgres from 'postgres';
+import { Temporal } from 'temporal-polyfill';
 import { PostgresMessageQueue } from '@fedify/postgres';
 
 const url = process.env.GATEWAY_TEST_DATABASE_URL;
@@ -87,7 +88,7 @@ integration('PostgreSQL queue delay and restart: no early processing, no duplica
     await sql`TRUNCATE gateway_ci_delay_messages`;
     const marker = crypto.randomUUID();
     const started = performance.now();
-    await q.enqueue({ marker }, { delay: { milliseconds: 400 } });
+    await q.enqueue({ marker }, { delay: Temporal.Duration.from({ milliseconds: 400 }) });
     const consumer = new PostgresMessageQueue(sql, {
       tableName: 'gateway_ci_delay_messages',
       channelName: 'gateway_ci_delay_channel',
