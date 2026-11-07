@@ -8,7 +8,7 @@ import postgres from 'postgres';
 
 const url = process.env.GATEWAY_TEST_DATABASE_URL;
 if (!url) throw new Error('A disposable GATEWAY_TEST_DATABASE_URL is mandatory');
-const sql = postgres(url, { max: 4, connect_timeout: 5 });
+const sql = postgres(url, { max: 1, connect_timeout: 5 });
 const count = 10_000;
 const table = 'gateway_ci_perf_items';
 const measure = async (name: string, query: Promise<Record<string, unknown>[]>) => {
