@@ -1,0 +1,59 @@
+name: Gateway staging origin-bypass security probe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-origin-bypass-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  public-origin-bypass:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify cloud edge restriction cannot be bypassed by direct Railway ingress
+        run: |
+          python3 - <<'PY'
+          import ssl
+          import urllib.error
+          import urllib.request
+
+          origin = 'https://qb9rmgmw.up.railway.app'
+          public_host = 'staging-gateway.damonoutlaw.xyz'
+          opener = urllib.request.build_opener(
+              urllib.request.HTTPSHandler(context=ssl.create_default_context()),
+          )
+
+          def probe(path, host):
+              request = urllib.request.Request(
+                  origin + path,
+                  headers={'Host': host, 'User-Agent': 'AtlasSecurityOriginProbe/1.0'},
+              )
+              try:
+                  with opener.open(request, timeout=12) as response:
+                      return response.status, dict(response.headers)
+              except urllib.error.HTTPError as response:
+                  return response.code, dict(response.headers)
+
+          # An origin may reject unknown Host routing at its edge, but must also
+          # reject a forged custom Host; TLS SNI remains the direct origin name.
+          direct, direct_headers = probe('/healthz', 'qb9rmgmw.up.railway.app')
+          forged, forged_headers = probe('/healthz', public_host)
+          admin, admin_headers = probe('/admin/subscriptions', public_host)
+          print('Direct-origin /healthz status:', direct)
+          print('Forged Host direct-origin /healthz status:', forged)
+          print('Forged Host direct-origin /admin status:', admin)
+          print('Cloudflare proxy headers on direct probe:', bool(forged_headers.get('Cf-Ray')))
+
+          # Status 401 on /admin means the origin bypasses the Cloudflare 403.
+          # Treat it as an ingress flaw even though bearer authentication remains.
+          assert direct not in (200, 202), 'Direct Railway service hostname still reaches public API'
+          assert forged not in (200, 202), 'Forged Host bypasses Cloudflare and reaches live gateway'
+          assert admin not in (200, 202, 401), (
+              'Direct public admin endpoint bypasses Cloudflare host-scoped WAF'
+          )
+          print('PASS: public Railway origin cannot bypass Cloudflare WAF')
+          PY
