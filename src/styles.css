@@ -276,6 +276,28 @@
 .atlas-profile-footer .button { color: var(--muted-foreground); width: max-content; margin: 0 auto; }
 .atlas-profile-bio { margin: 14px auto 0; max-width: 320px; font-size: 14px; line-height: 1.6; color: var(--foreground); overflow-wrap: anywhere; white-space: pre-line; }
 .atlas-profile-bio-empty { color: var(--muted-foreground); }
+/* Own profile, Bluesky-style: banner, avatar overlapping it on the left, Edit profile on the right, then
+   name, handle, counts, bio, and an underlined, scrollable tab strip. */
+.atlas-bsky-banner { height: 132px; background: linear-gradient(135deg, color-mix(in oklab, var(--f7-theme-color) 30%, #fff), color-mix(in oklab, var(--f7-theme-color) 8%, #fff)); }
+.atlas-bsky-head { padding: 0 16px 8px; }
+.atlas-bsky-row { display: flex; align-items: flex-end; justify-content: space-between; margin-top: -44px; }
+.atlas-bsky-avatar { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; background: var(--secondary); border: 3px solid var(--f7-page-bg-color, var(--background)); }
+.atlas-bsky-edit { width: auto; padding: 0 16px; margin-bottom: 4px; }
+.atlas-bsky-name { margin: 10px 0 0; font-size: 28px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+.atlas-bsky-handle { margin: 4px 0 0; font-size: 15px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.atlas-bsky-counts { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 0; font-size: 15px; color: var(--muted-foreground); }
+.atlas-bsky-counts strong { color: var(--foreground); font-weight: 600; margin-right: 3px; }
+.atlas-bsky-count-link { color: inherit !important; }
+.atlas-bsky-bio { margin: 12px 0 0; font-size: 15px; line-height: 1.45; }
+.atlas-bsky .atlas-profile-tags { justify-content: flex-start; margin-top: 12px; }
+.atlas-bsky-joined { margin: 10px 0 0; font-size: 13px; color: var(--muted-foreground); }
+.atlas-bsky-joined .icon { font-size: 14px; vertical-align: -2px; margin-right: 3px; }
+.atlas-bsky-tabs { position: sticky; top: 0; z-index: 2; display: flex; overflow-x: auto; scrollbar-width: none; margin-top: 12px; border-bottom: .5px solid var(--border); background: var(--f7-page-bg-color, var(--background)); }
+.atlas-bsky-tabs::-webkit-scrollbar { display: none; }
+.atlas-bsky-tabs button { flex: 1 0 auto; width: auto; margin: 0; display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 44px; padding: 0 14px; border: 0; background: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--muted-foreground); cursor: pointer; position: relative; }
+.atlas-bsky-tabs button .icon { font-size: 12px; }
+.atlas-bsky-tabs button.is-active { color: var(--foreground); }
+.atlas-bsky-tabs button.is-active::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: 0; height: 3px; border-radius: 3px; background: var(--f7-theme-color); }
 .atlas-profile-section-title { margin: 8px 16px 12px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-foreground); }
 .atlas-hashtag { color: var(--accent); text-decoration: none; font-weight: 500; }
 .atlas-hashtag-btn { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; width: auto; text-align: start; }

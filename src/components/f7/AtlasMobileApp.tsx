@@ -8,6 +8,7 @@ import 'framework7/css/bundle';
 import 'framework7-icons/css/framework7-icons.css';
 import 'material-icons/iconfont/material-icons.css';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
+import { promptSignInToSave } from './save-prompt';
 import { Fab, NavRight, NavLeft, Panel, Popup, f7, f7ready } from 'framework7-react';
 import { creators, posts, networks, matchesCreator, fullHandle, postsByTag, type Creator } from '@/lib/social-catalogue';
 import { NetworkBadge } from '@/lib/networks';
@@ -98,7 +99,7 @@ export default function AtlasMobileApp() {
   const panelHeldAtStart = useMemo(() => profile.nav === 'rail' || profile.nav === 'sidebar', []); // eslint-disable-line react-hooks/exhaustive-deps
   useAdaptiveLayout(profile);
   useEffect(registerAppServiceWorker, []);
-  const { followed, saved, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled, setAssistantEnabled } = useSocial();
+  const { followed, saved, canSave, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled, setAssistantEnabled } = useSocial();
   const auth = useAtlasAuth() as { user?: { email?: string } | null; profile?: { display_name: string | null; avatar_key: string | null } | null; signOut?: () => Promise<void> };
   const [query, setQuery] = useState('');
   const [composeOpen, setComposeOpen] = useState(false);
@@ -188,7 +189,7 @@ export default function AtlasMobileApp() {
         </CardContent>
         <CardFooter>
           <Link external target="_blank" href={p.url}>Open</Link>
-          <Link onClick={() => toggleSave(p.id)}>{saved.includes(p.id) ? 'Saved' : 'Save'}</Link>
+          <Link onClick={() => (canSave ? toggleSave(p.id) : promptSignInToSave())}>{saved.includes(p.id) ? 'Saved' : 'Save'}</Link>
         </CardFooter>
       </Card>
     );
