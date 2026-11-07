@@ -16,6 +16,10 @@ dst_id=$(psql "${DEST_DATABASE_URL}" -X -A -t -q -v ON_ERROR_STOP=1 -c "SELECT s
 [ -n "${src_id}" ] && [ -n "${dst_id}" ] && [ "${src_id}" != "${dst_id}" ] || {
   echo "FAIL: source/destination database clusters are not provably independent" >&2; exit 2;
 }
+dest_tables=$(psql "${DEST_DATABASE_URL}" -X -A -t -q -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'")
+[ "${dest_tables}" = "0" ] || {
+  echo "FAIL: destination already contains public tables; refusing overwrite" >&2; exit 2;
+}
 
 # The source cluster remains strictly read-only throughout.
 # The temporary file exists only inside this non-public, ephemeral container.
