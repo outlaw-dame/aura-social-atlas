@@ -70,7 +70,7 @@ const log = (event: string, details: Record<string, unknown> = {}) => {
 let inboundFollow: { id: string; from: string } | null = null;
 const observedFollowIds = new Set<string>();
 let inboundAccept: { id: string; object: unknown } | null = null;
-let inboundUndo = false;
+const observedUndoIds = new Set<string>();
 let verifiedInbound = 0;
 
 async function readBounded(request: Request, maxBytes = 32_768): Promise<string> {
@@ -154,7 +154,7 @@ const server = Bun.serve({
           !Array.isArray(body.object)
           ? (body.object as Record<string, unknown>).id : body.object;
         if (typeof undone === 'string' && observedFollowIds.has(undone))
-          inboundUndo = true;
+          observedUndoIds.add(undone);
       }
       verifiedInbound++;
       log('signed_inbox_activity', { type: body.type });
@@ -230,8 +230,9 @@ async function runInterop() {
       Array<{ id: string; state: string; actorUrl: string }>;
     const current = existing.find(s => s.actorUrl === actorId);
     if (current?.state === 'accepted') {
-      // A prior partial attempt must not make the next run skip the Follow.
-      await admin('/admin/subscriptions/' + encodeURIComponent(current.id), 'DELETE');
+      // Do not queue an earlier Undo that could be mistaken for the final
+      // unsubscribe. Operator must use a fresh fixture actor for another run.
+      throw new Error('historically accepted synthetic actor requires a fresh relay fixture');
     }
     const record = current
       ? await admin('/admin/subscriptions/' + encodeURIComponent(current.id) + '/retry', 'POST')
@@ -315,10 +316,12 @@ async function runInterop() {
       !(await items()).some(x => x.id === createdNote),
     );
 
+    const undoIdsBeforeFinalDelete = new Set(observedUndoIds);
     await admin('/admin/subscriptions/' + encodeURIComponent(subscriptionId), 'DELETE');
-    // Persisted disabled state is insufficient evidence that the remote relay
-    // received an Undo; check its verified HTTP signature and Follow ID.
-    await awaitCondition('signed Undo for original Follow received', () => inboundUndo);
+    // Only count a newly received, signed Undo correlated with a verified
+    // Follow for which this run sent Accept. A prior cleanup Undo cannot pass.
+    await awaitCondition('new signed Undo for accepted Follow received', () =>
+      [...observedUndoIds].some(id => !undoIdsBeforeFinalDelete.has(id) && replied.has(id)));
     await awaitCondition('subscription disabled after Undo', async () => {
       const r = await admin('/admin/subscriptions');
       const subs = r.subscriptions as Array<{ id: string; state: string }>;
