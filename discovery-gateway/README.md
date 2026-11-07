@@ -36,6 +36,12 @@ The suite now exercises signed synthetic Accept, Create, and Announce through a 
 
 The browser frontend needs **only** `VITE_DISCOVERY_GATEWAY_URL=https://your-gateway-host`. Configure `GATEWAY_CORS_ORIGINS` on the gateway for the exact Atlas deployment origin. Keep the admin token on the gateway's server only, never in `VITE_*` variables.
 
+## Process roles and durable workers
+
+The gateway now starts Fedify's PostgreSQL queue consumer explicitly and supervises its lifetime. Set `GATEWAY_ROLE` to `web`, `worker`, or `combined` (default). Invalid values fail at startup. The HTTP node accepts and enqueues signed activities, while the worker consumes inbound/outbound jobs. **Only the `web` service should be publicly routed; do not expose `worker` via a load balancer.** Both services must use the same `GATEWAY_ORIGIN` and dedicated durable PostgreSQL database, but neither should reuse Fedizen credentials.
+
+For staging, `combined` is suitable for validating behavior on a single instance. For production, run separate `web` and `worker` processes under a restart-capable supervisor. The worker has no HTTP listener. Queue rejection or unexpected termination results in nonzero process exit for supervisor recovery. SIGTERM/SIGINT abort queue consumption and close PostgreSQL on graceful shutdown. Configure termination grace periods to cover in-flight work. **Do not run `web` without an independently healthy `worker`: the HTTP acknowledgement alone does not guarantee a message has been consumed.**
+
 ## API
 
 - `GET /healthz` returns database health.
