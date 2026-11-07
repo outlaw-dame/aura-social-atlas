@@ -11,6 +11,7 @@ import { signRequest, verifyRequestDetailed } from '@fedify/fedify';
 const origin = (Bun.env.INTEROP_RELAY_ORIGIN ?? '').replace(/\/$/, '');
 const gatewayOrigin = (Bun.env.GATEWAY_ORIGIN ?? '').replace(/\/$/, '');
 const internalGateway = 'http://gateway-web.railway.internal:4100';
+const internalAdminGateway = 'http://gateway-web.railway.internal:4101';
 const adminToken = Bun.env.GATEWAY_ADMIN_TOKEN ?? '';
 const runEnabled = Bun.env.INTEROP_RUN_ON_BOOT === '1';
 const asPublic = 'https://www.w3.org/ns/activitystreams#Public';
@@ -184,7 +185,7 @@ async function jsonFetch(url: string, init?: RequestInit) {
   return { status: response.status, body };
 }
 async function admin(path: string, method = 'GET', body?: unknown) {
-  const response = await jsonFetch(internalGateway + path, {
+  const response = await jsonFetch(internalAdminGateway + path, {
     method,
     headers: {
       Authorization: 'Bearer ' + adminToken,
