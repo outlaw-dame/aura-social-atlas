@@ -19,5 +19,9 @@ describe('gateway startup config', () => {
     expect(loadConfig({ ...base, GATEWAY_CORS_ORIGINS: 'https://app.example.org' }).corsAllowlist).toEqual(['https://app.example.org']);
     expect(() => loadConfig({ ...base, GATEWAY_CORS_ORIGINS: 'http://evil.example' })).toThrow();
     expect(() => loadConfig({ ...base, GATEWAY_MAX_ITEMS: '-10' })).toThrow();
+    expect(loadConfig(base).federationRateLimitPerMinute).toBe(600);
+    expect(loadConfig({ ...base, GATEWAY_FEDERATION_RATE_LIMIT: '25' }).federationRateLimitPerMinute).toBe(25);
+    expect(() => loadConfig({ ...base, GATEWAY_FEDERATION_RATE_LIMIT: '0' })).toThrow();
+    expect(() => loadConfig({ ...base, GATEWAY_FEDERATION_RATE_LIMIT: '100001' })).toThrow();
   });
 });
