@@ -1,4 +1,5 @@
 {
+  "id": "/app",
   "name": "Atlas — Open Social Web",
   "short_name": "Atlas",
   "description": "Discover independent creators across Bluesky, Mastodon, and RSS.",

@@ -312,3 +312,85 @@
 .atlas-author-tag .atlas-author-follow { flex: 0 0 36px; width: 36px; height: 36px; color: var(--accent); }
 .atlas-author-chevron { flex: 0 0 14px; color: var(--muted-foreground); }
 .atlas-story-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; font-size: 12px; }
+
+/* ── /app adaptive layout (src/lib/device-profile.ts) ─────────────────────────────
+   The device profile sets data-layout / data-nav / data-panes on <html> while /app is mounted.
+   Layout follows window size and the fold only (Apple HIG for iPhone Duo; WebKit: feature detection). */
+:root {
+  --atlas-crease: 24px;     /* clear zone for controls either side of a fold (no pixel figure is published) */
+  --atlas-side-tab: 76px;
+  /* Each edge's real inset straight from env(): Framework7 zeroes --f7-safe-area-* at the root and only
+     re-applies env() on .safe-areas, panels, sheets and popups. Insets can be asymmetric — every edge on its own. */
+  --atlas-sa-top: env(safe-area-inset-top, 0px);
+  --atlas-sa-right: env(safe-area-inset-right, 0px);
+  --atlas-sa-bottom: env(safe-area-inset-bottom, 0px);
+  --atlas-sa-left: env(safe-area-inset-left, 0px);
+}
+
+/* Rail (regular width) and sidebar (expanded): the same Framework7 panel, held open. */
+/* visibility (not display) so the trailing navbar buttons keep their place. */
+html[data-nav="rail"] .atlas-nav-menu, html[data-nav="sidebar"] .atlas-nav-menu { visibility: hidden; pointer-events: none; }
+html.atlas-rail .atlas-panel .atlas-hide-in-rail, html.atlas-rail .atlas-panel .item-after { display: none; }
+html.atlas-rail .atlas-panel .atlas-brand { font-size: 0 !important; padding: 0; margin: 0; }
+html.atlas-rail .atlas-panel .list { margin-left: 6px; margin-right: 6px; }
+html.atlas-rail .atlas-panel .item-content { flex-direction: column; justify-content: center; padding: 8px 0 !important; min-height: 60px; }
+html.atlas-rail .atlas-panel .item-media { padding: 0 !important; margin: 0 !important; min-width: 0 !important; }
+html.atlas-rail .atlas-panel .item-inner { padding: 0 !important; margin: 0 !important; min-height: 0 !important; justify-content: center; }
+html.atlas-rail .atlas-panel .item-inner::after, html.atlas-rail .atlas-panel .item-inner::before, html.atlas-rail .atlas-panel .item-link .item-inner::before { display: none; }
+html.atlas-rail .atlas-panel .item-title { font-size: 10px; font-weight: 600; }
+
+/* Side tab bar: wide-but-short compact windows (iPhone Duo cover display in landscape, phones in landscape),
+   mirroring iOS placing tab bars on the trailing edge on iPhone Duo. */
+html[data-nav="tabbar-side"] .view-main { margin-right: calc(var(--atlas-side-tab) + var(--atlas-sa-right)); --f7-safe-area-right: 0px; }
+html[data-nav="tabbar-side"] .atlas-tabbar { position: fixed; top: 0; bottom: 0; right: 0; left: auto; width: calc(var(--atlas-side-tab) + var(--atlas-sa-right)); height: auto; padding: var(--atlas-sa-top) var(--atlas-sa-right) var(--atlas-sa-bottom) 0; }
+html[data-nav="tabbar-side"] .atlas-tabbar::before { display: none; }
+html[data-nav="tabbar-side"] .atlas-tabbar .toolbar-inner { position: static; flex-direction: column; justify-content: center; gap: 6px; height: 100%; padding: 0; }
+html[data-nav="tabbar-side"] .atlas-tabbar .tab-link { flex: 0 0 auto; width: 100%; min-width: 0; padding: 0 4px; height: 58px; }
+html[data-nav="tabbar-side"] .view-main .page-content { padding-bottom: calc(16px + var(--atlas-sa-bottom)); }
+html[data-nav="tabbar-side"] .atlas-fab, html[data-nav="rail"] .atlas-fab, html[data-nav="sidebar"] .atlas-fab { margin-bottom: var(--atlas-sa-bottom) !important; }
+
+/* Wide windows mirror the desktop Discover page: hero, then the feed with a "Voices to know" column
+   (flat), or the feed on one screen and the voices on the other (folded, with any physical hinge
+   reserved as the column gap). Scrolling content may cross the crease; controls keep clear of it. */
+html[data-panes="flat"] .atlas-discover.tab-active, html[data-panes="fold"] .atlas-discover.tab-active {
+  display: grid; align-content: start; align-items: start; column-gap: 32px;
+  padding-left: calc(8px + var(--atlas-sa-left)); padding-right: calc(8px + var(--atlas-sa-right));
+}
+html[data-panes="flat"] .atlas-discover.tab-active {
+  grid-template-columns: minmax(0, 1fr) var(--atlas-rail-w, 280px);
+  grid-template-areas: "hero hero" "main rail";
+}
+html[data-panes="fold"] .atlas-discover.tab-active {
+  grid-template-columns: var(--atlas-main-w, 50%) minmax(0, 1fr);
+  grid-template-areas: "hero rail" "main rail";
+  column-gap: var(--atlas-hinge, 0px); padding-left: 0; padding-right: 0;
+}
+.atlas-discover .atlas-hero { grid-area: hero; padding: 12px 16px 4px; }
+.atlas-discover .atlas-d-main { grid-area: main; min-width: 0; }
+.atlas-discover .atlas-d-rail { grid-area: rail; min-width: 0; }
+html[data-panes="fold"] .atlas-discover .atlas-hero,
+html[data-panes="fold"] .atlas-discover .atlas-d-main { padding-right: var(--atlas-crease); }
+html[data-panes="fold"] .atlas-discover .atlas-d-rail { padding-left: var(--atlas-crease); }
+.atlas-hero-eyebrow { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; opacity: .65; }
+.atlas-hero h1 { margin: 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: clamp(34px, 4.4vw, 52px); line-height: 1.08; text-wrap: balance; }
+.atlas-hero h1 + p { margin: 10px 0 0; font-size: 14px; opacity: .7; }
+.atlas-discover .atlas-rail-title { font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: 24px; font-weight: 400; text-transform: none; }
+/* Desktop components reused inside Framework7 (Spotlight, Voices to know). Tailwind v4 keeps its utilities in
+   cascade layers, and Framework7's unlayered globals (.block margins/padding, red links, full-width buttons)
+   always beat layered rules. Inside this wrapper those clashing selectors roll back to the layered (Tailwind)
+   values, exactly as on the desktop page, which doesn't load Framework7. */
+/* Atlas's own classes (e.g. .atlas-hashtag) are left alone; only Framework7's globals roll back. */
+.atlas-desktop-embed :is(a, button, .block, .button, .link, .chip, .card, .list, .icon, .badge):not([class*="atlas-"]) { all: revert-layer; }
+
+/* Story cards: one column on phones, a grid like the desktop feed when there's room. */
+html[data-panes="flat"] .atlas-story-grid, html[data-panes="fold"] .atlas-story-grid {
+  /* Two columns at most, like the desktop feed; one when the column is narrow. */
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(max(260px, calc(50% - 8px)), 1fr)); gap: 8px 0; align-items: start;
+}
+
+/* Tabletop / Flex mode: content above the fold; tab bar and buttons on the stable bottom half. */
+html[data-layout="tabletop"] .view-main .tabs .page-content { height: var(--atlas-top-h, 100%); }
+html[data-nav="deck"] .atlas-tabbar { top: var(--atlas-bottom-y, auto); bottom: 0; height: auto; }
+html[data-nav="deck"] .atlas-tabbar .toolbar-inner { padding-top: var(--atlas-crease); align-items: flex-start; }
+html[data-nav="deck"] .atlas-tabbar .tab-link { height: 72px; }
+html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--atlas-crease) + 84px) !important; bottom: auto !important; margin-bottom: 0 !important; }

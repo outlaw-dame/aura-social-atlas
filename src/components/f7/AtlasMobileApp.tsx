@@ -8,7 +8,7 @@ import 'framework7/css/bundle';
 import 'framework7-icons/css/framework7-icons.css';
 import 'material-icons/iconfont/material-icons.css';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
-import { Fab, NavRight, NavLeft, Panel, Popup, f7 } from 'framework7-react';
+import { Fab, NavRight, NavLeft, Panel, Popup, f7, f7ready } from 'framework7-react';
 import { creators, posts, networks, matchesCreator, fullHandle, postsByTag, type Creator } from '@/lib/social-catalogue';
 import { NetworkBadge } from '@/lib/networks';
 import { linkifyHashtagsWith } from '@/lib/hashtags';
@@ -20,26 +20,84 @@ import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileFedizenFeed, useActivitySummary } from './FedizenMobile';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
+import { Spotlight } from '@/components/social/Spotlight';
+import { VoicesToKnow } from '@/components/social/VoicesToKnow';
+import { describeProfile, type DeviceProfile } from '@/lib/device-profile';
+import { useDeviceProfile } from '@/lib/use-device-profile';
+import { registerAppServiceWorker } from '@/lib/register-sw';
 
 Framework7.use(Framework7React);
 
 type Theme = 'ios' | 'md';
 
-/** Picks the Framework7 theme from the visitor's device; ?theme=ios|md overrides for testing. */
-function detectTheme(): Theme {
+/** Framework7 theme: Material on Android, iOS elsewhere; ?theme=ios|md overrides for testing.
+ *  Framework7 picks its theme at start-up, so this is read once. */
+function pickTheme(profile: DeviceProfile): Theme {
   const forced = new URLSearchParams(window.location.search).get('theme');
   if (forced === 'ios' || forced === 'md') return forced;
-  return /android/i.test(navigator.userAgent) ? 'md' : 'ios';
+  return profile.theme;
 }
 
-function isDesktop() {
-  const ua = navigator.userAgent;
-  const mobile = /android|iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
-  return !mobile && window.innerWidth >= 1024;
+const NAV_WIDTH = { rail: 88, sidebar: 280 } as const;
+const LAYOUT_KEYS = ['layout', 'nav', 'panes', 'span', 'form'] as const;
+const LAYOUT_VARS = ['--atlas-main-w', '--atlas-rail-w', '--atlas-hinge', '--atlas-top-h', '--atlas-bottom-y', '--f7-panel-width'];
+
+/** Applies the device profile to Framework7: navigation (tab bar, side tab bar, rail, sidebar, tabletop deck),
+ *  panes (single column, or the desktop-style feed + voices column, split at the fold when folded). Layout comes from window size and the fold only. */
+function useAdaptiveLayout(profile: DeviceProfile) {
+  useEffect(() => {
+    const html = document.documentElement;
+    for (const k of LAYOUT_KEYS) html.dataset[k] = String(profile[k]);
+    const navW = profile.nav === 'rail' || profile.nav === 'sidebar' ? NAV_WIDTH[profile.nav] : 0;
+    const [a, b] = profile.segs ?? [];
+    if (profile.panes === 'fold' && a && b) {
+      // Folded: the feed fills the first screen, the voices column the second.
+      const foldX = a.x + a.width;
+      html.style.setProperty('--atlas-main-w', `${Math.max(240, foldX - navW)}px`);
+      html.style.setProperty('--atlas-hinge', `${Math.max(0, b.x - foldX)}px`);
+    } else if (profile.panes === 'flat') {
+      // Flat: like the desktop page, a wide feed and a ~260–320px "Voices to know" column.
+      html.style.setProperty('--atlas-rail-w', `${Math.round(Math.min(320, Math.max(260, (profile.width - navW) * 0.3)))}px`);
+      html.style.setProperty('--atlas-hinge', '0px');
+    }
+    if (profile.layout === 'tabletop' && a && b) {
+      html.style.setProperty('--atlas-top-h', `${a.y + a.height}px`);
+      html.style.setProperty('--atlas-bottom-y', `${b.y}px`);
+    }
+    html.style.setProperty('--f7-panel-width', profile.nav === 'rail' ? '88px' : '280px');
+    html.classList.toggle('atlas-rail', profile.nav === 'rail');
+    f7ready(() => {
+      const panel = f7.panel.get('.atlas-panel');
+      if (panel) {
+        panel.disableVisibleBreakpoint();
+        if (panel.opened) panel.close(false);
+        if (navW) {
+          // The panel starts without a breakpoint on compact devices (no sidebar flash on load);
+          // setting one here lets Framework7 hold it open as the rail or sidebar.
+          panel.params.visibleBreakpoint = 1;
+          panel.enableVisibleBreakpoint();
+        }
+      }
+      const tabbar = profile.nav === 'tabbar' || profile.nav === 'tabbar-side' || profile.nav === 'deck';
+      if (tabbar) f7.toolbar.show('.atlas-tabbar', false); else f7.toolbar.hide('.atlas-tabbar', false);
+    });
+  }, [profile]);
+  // The <html> element is shared with the classic site: clear everything when /app unmounts.
+  useEffect(() => () => {
+    const html = document.documentElement;
+    for (const k of LAYOUT_KEYS) delete html.dataset[k];
+    for (const v of LAYOUT_VARS) html.style.removeProperty(v);
+    html.classList.remove('atlas-rail');
+  }, []);
 }
 
 export default function AtlasMobileApp() {
-  const theme = useMemo(detectTheme, []);
+  const profile = useDeviceProfile();
+  const theme = useMemo(() => pickTheme(profile), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Hold the panel open from the first frame only when the first layout wants a rail or sidebar.
+  const panelHeldAtStart = useMemo(() => profile.nav === 'rail' || profile.nav === 'sidebar', []); // eslint-disable-line react-hooks/exhaustive-deps
+  useAdaptiveLayout(profile);
+  useEffect(registerAppServiceWorker, []);
   const { followed, saved, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled, setAssistantEnabled } = useSocial();
   const auth = useAtlasAuth() as { user?: { email?: string } | null; profile?: { display_name: string | null; avatar_key: string | null } | null; signOut?: () => Promise<void> };
   const [query, setQuery] = useState('');
@@ -54,7 +112,6 @@ export default function AtlasMobileApp() {
   const [title, setTitle] = useState('Discover');
   const [network, setNetwork] = useState<string>('All networks');
 
-  useEffect(() => { if (isDesktop()) window.location.replace('/'); }, []);
   useEffect(() => { setMode(dark ? 'dark' : 'light'); }, []);
   const [systemDark, setSystemDark] = useState(false);
   useEffect(() => {
@@ -85,6 +142,31 @@ export default function AtlasMobileApp() {
   const activityText = useActivitySummary();
   const savedPosts = posts.filter(p => saved.includes(p.id));
 
+  // Wide windows (and folded spans) mirror the desktop Discover page.
+  const wide = profile.panes !== 'single';
+  const creatorList = (
+    <>
+      <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:person_2_square_stack" md="material:groups" /> Creators</span></BlockTitle>
+      <List strong inset dividers mediaList className="atlas-creator-list">
+        {results.map(c => (
+          <ListItem key={c.id} title={c.name}
+            onClick={() => setCreatorOpen(c)} style={{ cursor: 'pointer' }}>
+            <span slot="text">{linkifyHashtagsWith(c.bio, tag => setTagFeed({ creatorId: c.id, tag }))}</span>
+            <span slot="subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {c.handle} · <NetworkBadge network={c.network} />
+            </span>
+            <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={44} height={44} style={{ borderRadius: 22 }} />
+            <Button slot="after" small round fill={!followed.includes(c.id)} tonal={followed.includes(c.id)}
+              onClick={(e: any) => { e.stopPropagation(); toggleFollow(c.id); }}>
+              {followed.includes(c.id) ? 'Following' : 'Follow'}
+            </Button>
+          </ListItem>
+        ))}
+        {results.length === 0 && <ListItem title="No creators match your search" />}
+      </List>
+    </>
+  );
+
   const postCard = (p: (typeof posts)[number]) => {
     const c = creatorOf(p.creatorId);
     if (!c) return null;
@@ -107,9 +189,9 @@ export default function AtlasMobileApp() {
 
   return (
     <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: '#FA243C' }}>
-      <Panel left cover swipe resizable={false}>
+      <Panel left cover swipe resizable={false} visibleBreakpoint={panelHeldAtStart ? 1 : undefined} className="atlas-panel">
         <Page>
-          <Block style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', fontSize: 32, marginTop: 24 }}>Atlas</Block>
+          <Block className="atlas-brand" style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', fontSize: 32, marginTop: 24 }}>Atlas</Block>
           <List strong inset dividers>
             <ListItem link="#" panelClose title="Discover" selected={title === 'Discover'} onClick={() => f7.tab.show('#tab-discover')}>
               <Icon slot="media" ios="f7:compass" md="material:explore" />
@@ -124,13 +206,13 @@ export default function AtlasMobileApp() {
               <Icon slot="media" ios="f7:gear_alt" md="material:settings" />
             </ListItem>
           </List>
-          <Block style={{ fontSize: 12, opacity: 0.6 }}>Sample profiles, not live accounts.</Block>
+          <Block className="atlas-hide-in-rail" style={{ fontSize: 12, opacity: 0.6 }}>Sample profiles, not live accounts.</Block>
         </Page>
       </Panel>
       <View main>
         <Page pageContent={false}>
           <Navbar title={title}>
-            <NavLeft>
+            <NavLeft className="atlas-nav-menu">
               <Link iconOnly panelOpen="left" aria-label="Open menu"><Icon ios="f7:sidebar_left" md="material:menu" /></Link>
             </NavLeft>
             <NavRight>
@@ -148,52 +230,54 @@ export default function AtlasMobileApp() {
               )}
             </NavRight>
           </Navbar>
-          <Fab position="right-bottom" slot="fixed" aria-label="Compose" onClick={() => setComposeOpen(true)}
+          <Fab position="right-bottom" slot="fixed" className="atlas-fab" aria-label="Compose" onClick={() => setComposeOpen(true)}
             style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
             <Icon ios="f7:square_pencil" md="material:edit" />
           </Fab>
           {assistantEnabled && (
-            <Fab position="left-bottom" slot="fixed" color="white" aria-label="Open assistant" onClick={() => setChatOpen(true)}
+            <Fab position="left-bottom" slot="fixed" color="white" className="atlas-fab" aria-label="Open assistant" onClick={() => setChatOpen(true)}
               style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
               <Icon ios="f7:sparkles" md="material:auto_awesome" />
             </Fab>
           )}
-          <Toolbar tabbar icons bottom>
+          <Toolbar tabbar icons bottom className="atlas-tabbar">
             <Link tabLink="#tab-discover" tabLinkActive><Icon ios="f7:compass" md="material:explore" /><span className="tabbar-label">Discover</span></Link>
             <Link tabLink="#tab-following"><Icon ios="f7:person_2" md="material:group" /><span className="tabbar-label">Following</span></Link>
             <Link tabLink="#tab-saved"><Icon ios="f7:bookmark" md="material:bookmark" /><span className="tabbar-label">Saved</span></Link>
             <Link tabLink="#tab-settings"><Icon ios="f7:gear_alt" md="material:settings" /><span className="tabbar-label">Settings</span></Link>
           </Toolbar>
           <Tabs>
-            <Tab id="tab-discover" className="page-content" onTabShow={() => setTitle('Discover')} tabActive>
-              <Searchbar placeholder="Search creators" disableButton={false} onInput={(e: any) => setQuery(e.target.value)} onClickClear={() => setQuery('')} />
-              <Block>
-                <Segmented strong round>
-                  {networks.map(n => <Button key={n} small active={network === n} onClick={() => setNetwork(n)}>{n.replace(' networks', '')}</Button>)}
-                </Segmented>
-              </Block>
-              <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:person_2_square_stack" md="material:groups" /> Creators</span></BlockTitle>
-              <List strong inset dividers mediaList className="atlas-creator-list">
-                {results.map(c => (
-                  <ListItem key={c.id} title={c.name}
-                    onClick={() => setCreatorOpen(c)} style={{ cursor: 'pointer' }}>
-                    <span slot="text">{linkifyHashtagsWith(c.bio, tag => setTagFeed({ creatorId: c.id, tag }))}</span>
-                    <span slot="subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      {c.handle} · <NetworkBadge network={c.network} />
-                    </span>
-                    <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={44} height={44} style={{ borderRadius: 22 }} />
-                    <Button slot="after" small round fill={!followed.includes(c.id)} tonal={followed.includes(c.id)}
-                      onClick={(e: any) => { e.stopPropagation(); toggleFollow(c.id); }}>
-                      {followed.includes(c.id) ? 'Following' : 'Follow'}
-                    </Button>
-                  </ListItem>
-                ))}
-                {results.length === 0 && <ListItem title="No creators match your search" />}
-              </List>
-              <Block className="px-3"><GatewayDiscovery /></Block>
-              <MobileRecentArticles />
-              <BlockTitle>Stories</BlockTitle>
-              {posts.map(postCard)}
+            <Tab id="tab-discover" className="page-content atlas-discover" onTabShow={() => setTitle('Discover')} tabActive>
+              {/* Phones: one column. Wide windows mirror the desktop Discover page (main feed + "Voices to know"
+                  column); when folded, the feed sits on one screen and the voices on the other. */}
+              {wide && (
+                <div className="atlas-hero">
+                  <p className="atlas-hero-eyebrow"><span className="social-status-dot" />Discover the open social web</p>
+                  <h1>A world of independent voices.</h1>
+                  <p>Find creators, fresh perspectives, and conversations beyond your usual circle.</p>
+                </div>
+              )}
+              <div className="atlas-d-main">
+                <Searchbar placeholder="Search creators" disableButton={false} onInput={(e: any) => setQuery(e.target.value)} onClickClear={() => setQuery('')} />
+                <Block>
+                  <Segmented strong round>
+                    {networks.map(n => <Button key={n} small active={network === n} onClick={() => setNetwork(n)}>{n.replace(' networks', '')}</Button>)}
+                  </Segmented>
+                </Block>
+                {!wide && creatorList}
+                <Block className="px-3"><GatewayDiscovery /></Block>
+                {wide && <Block className="atlas-d-spotlight"><div className="atlas-desktop-embed"><Spotlight /></div></Block>}
+                <MobileRecentArticles />
+                <BlockTitle>Stories</BlockTitle>
+                <div className="atlas-story-grid">{posts.map(postCard)}</div>
+              </div>
+              {wide && (
+                <aside className="atlas-d-rail" aria-label="Creator discovery">
+                  <BlockTitle className="atlas-rail-title">Voices to know</BlockTitle>
+                  <Block><div className="atlas-desktop-embed"><VoicesToKnow /></div></Block>
+                  {creatorList}
+                </aside>
+              )}
             </Tab>
 
             <Tab id="tab-following" className="page-content" onTabShow={() => setTitle('Following')}>
@@ -223,6 +307,10 @@ export default function AtlasMobileApp() {
               </List>
               <Block>
                 <Chip text={theme === 'ios' ? 'iOS design' : 'Material 3 design'} />
+                <p style={{ opacity: 0.6, fontSize: 13 }}>
+                  This device: {describeProfile(profile)} · {profile.layout} layout · {profile.width}×{profile.height}
+                  {profile.span !== 'none' ? ` · screen spanned (${profile.span})` : ''}
+                </p>
                 <p style={{ opacity: 0.6, fontSize: 13 }}>Tip: use Share → Add to Home Screen to install Atlas.</p>
                 <Link external href="/">Open the classic Atlas site</Link>
               </Block>
