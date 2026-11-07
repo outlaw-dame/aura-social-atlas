@@ -16,9 +16,22 @@ export async function storesFor(cfg: GatewayConfig): Promise<Stores> {
   const sql: Sql = postgres(cfg.databaseUrl!, { max: 10, idle_timeout: 30, connect_timeout: 10, onnotice: () => {} });
   const kv = new PostgresKvStore(sql);
   const queue = new PostgresMessageQueue(sql);
-  await kv.initialize();
-  await queue.initialize();
-  await initSchema(sql);
+  try {
+    // PostgreSQL's IF NOT EXISTS is not concurrency-safe for simultaneous DDL:
+    // web and worker can both try to create a table's implicit composite type.
+    // Serialize *all* Fedify and gateway schema initialization across processes.
+    // The transaction owns the advisory lock while initialization uses the pool;
+    // no schema DDL is executed inside this lock-holding transaction.
+    await sql.begin(async tx => {
+      await tx`SELECT pg_advisory_xact_lock(4271801, 1)`;
+      await kv.initialize();
+      await queue.initialize();
+      await initSchema(sql);
+    });
+  } catch (error) {
+    await sql.end({ timeout: 5 }).catch(() => {});
+    throw error;
+  }
   return {
     kv, queue, sql,
     ping: async () => { try { await sql`select 1`; return true; } catch { return false; } },
