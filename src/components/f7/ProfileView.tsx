@@ -76,13 +76,32 @@ export function ProfileView({ onEditProfile, onOpenCreator }: { onEditProfile: (
   const empty = emptySections[section];
   const hasContent = (section === 'Saved' && savedPosts.length > 0) || (section === 'Feeds' && followedCreators.length > 0);
   const featured = profile?.featured_hashtags ?? [];
+  const savedList = <>
+    {savedPosts.map(post => <article key={post.id} className="atlas-profile-story">
+        <Link external target="_blank" {...{ rel: 'noopener noreferrer' }} href={post.url} className="atlas-profile-story-image"><img src={post.image} alt={post.alt} loading="lazy" /></Link>
+        <div className="atlas-profile-story-body">
+          <span className="atlas-profile-story-meta">{creators.find(creator => creator.id === post.creatorId)?.name} · {post.kind}</span>
+          <h2><Link external target="_blank" {...{ rel: 'noopener noreferrer' }} href={post.url}>{post.title}</Link></h2>
+          <p>{post.excerpt}</p>
+          {(() => { const creator = creators.find(c => c.id === post.creatorId); return creator ? <CreatorTag creator={creator} onOpen={() => onOpenCreator(creator)} /> : null; })()}
+          <Button small tonal onClick={() => toggleSave(post.id)}><Icon ios="f7:bookmark_fill" md="material:bookmark" /> Remove from saved</Button>
+        </div>
+      </article>)}
+  </>;
 
+  // Signed out: an invitation to sign in, and the stories saved in this session (saves don't need an account).
   if (!user) return (
-    <div className="atlas-profile-empty">
-      <div className="atlas-profile-empty-icon"><Icon ios="f7:person_crop_circle" md="material:account_circle" /></div>
-      <h2>Your profile</h2>
-      <p>Sign in to keep your follows, saved stories and featured hashtags across devices.</p>
-      <Button fill round external href="/auth" style={{ marginTop: 12 }}>Sign in</Button>
+    <div className="atlas-profile-page">
+      <div className="atlas-profile-empty">
+        <div className="atlas-profile-empty-icon"><Icon ios="f7:person_crop_circle" md="material:account_circle" /></div>
+        <h2>Your profile</h2>
+        <p>Sign in to set up your profile, bio and featured hashtags. Follows and saved stories last for this session.</p>
+        <Button fill round external href="/auth" style={{ marginTop: 12 }}>Sign in</Button>
+      </div>
+      <section className="atlas-profile-content" aria-label="Saved this session">
+        <h2 className="atlas-profile-section-title">Saved</h2>
+        {savedPosts.length ? savedList : <p className="atlas-profile-bio-empty" style={{ textAlign: 'center' }}>{emptySections.Saved.detail}</p>}
+      </section>
     </div>
   );
 
@@ -130,16 +149,7 @@ export function ProfileView({ onEditProfile, onOpenCreator }: { onEditProfile: (
               <h2>{empty.title}</h2>
               <p>{empty.detail}</p>
             </div>}
-            {section === 'Saved' && savedPosts.map(post => <article key={post.id} className="atlas-profile-story">
-              <Link external target="_blank" {...{ rel: 'noopener noreferrer' }} href={post.url} className="atlas-profile-story-image"><img src={post.image} alt={post.alt} loading="lazy" /></Link>
-              <div className="atlas-profile-story-body">
-                <span className="atlas-profile-story-meta">{creators.find(creator => creator.id === post.creatorId)?.name} · {post.kind}</span>
-                <h2><Link external target="_blank" {...{ rel: 'noopener noreferrer' }} href={post.url}>{post.title}</Link></h2>
-                <p>{post.excerpt}</p>
-                {(() => { const creator = creators.find(c => c.id === post.creatorId); return creator ? <CreatorTag creator={creator} onOpen={() => onOpenCreator(creator)} /> : null; })()}
-                <Button small tonal onClick={() => toggleSave(post.id)}><Icon ios="f7:bookmark_fill" md="material:bookmark" /> Remove from saved</Button>
-              </div>
-            </article>)}
+            {section === 'Saved' && savedList}
             {section === 'Feeds' && followedCreators.map(creator => <Link key={creator.id} className="atlas-profile-feed" onClick={() => onOpenCreator(creator)}>
               <img className="atlas-profile-feed-avatar" src={avatarPreset(creator.avatar_key).src} alt="" width={44} height={44} />
               <span><strong>{creator.name}</strong><small>{creator.network} · {creator.handle}</small></span>
