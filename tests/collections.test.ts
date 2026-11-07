@@ -92,6 +92,18 @@ describe("consent (feature_approval)", () => {
     expect(await checkFeatureable("@shy@social.example.net")).toMatchObject({ ok: false, reason: "denied" });
   });
 
+  test("a server can't vouch for someone else's account", async () => {
+    const approval = { feature_approval: { automatic: ["public"], manual: [] } };
+    fakeNet({
+      // A server we were pointed at returns another server's identity with an "opt-in".
+      "https://evil.example.org/api/v1/accounts/lookup?acct=victim": account("9", "victim", approval),
+      // Or a cached remote account.
+      "https://evil.example.org/api/v1/accounts/lookup?acct=cached": account("8", "cached@social.example.net", { ...approval, url: "https://evil.example.org/@cached@social.example.net", uri: "https://evil.example.org/users/x" }),
+    });
+    expect(await checkFeatureable("@victim@evil.example.org")).toMatchObject({ ok: false, reason: "not-found" });
+    expect(await checkFeatureable("@cached@evil.example.org")).toMatchObject({ ok: false, reason: "not-found" });
+  });
+
   test("Bluesky handles and unknown accounts are refused without a network call to them", async () => {
     const seen = fakeNet({});
     expect(await checkFeatureable("@ann.bsky.social")).toMatchObject({ ok: false });

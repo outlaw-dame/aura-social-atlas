@@ -29,13 +29,23 @@ export type FeatureCheck =
   | { ok: true; account: CollectionAccount }
   | { ok: false; reason: 'denied' | 'missing' | 'not-found' | 'unsupported-network'; account?: CollectionAccount };
 
+const hostOf = (u: unknown) => { try { return typeof u === 'string' ? new URL(u).hostname.toLowerCase() : null; } catch { return null; } };
+/** The lookup result is the host's own account `user`: local acct, and its uri and url on that host. */
+function isAuthoritative(a: unknown, user: string, host: string): boolean {
+  const x = a as { acct?: unknown; username?: unknown; uri?: unknown; url?: unknown };
+  return typeof x.acct === 'string' && !x.acct.includes('@') && x.acct.toLowerCase() === user.toLowerCase()
+    && hostOf(x.uri) === host && hostOf(x.url) === host;
+}
+
 /** Looks the account up on its own server and reads its feature_approval (Mastodon 4.6+). */
 export async function checkFeatureable(handle: string): Promise<FeatureCheck> {
   const h = parseFediHandle(handle);
   if (!h) return { ok: false, reason: /bsky|\.rss|feed/i.test(handle) ? 'unsupported-network' : 'not-found' };
   const a = await getJson(`https://${h.host}/api/v1/accounts/lookup?acct=${encodeURIComponent(h.user)}`);
   const account = accountFromMastodon(a, h.host);
-  if (!account) return { ok: false, reason: 'not-found' };
+  // Only the account's own server can speak for it: the result must be a local account of the host we asked
+  // (not a cached remote account, nor one claiming another server's identity).
+  if (!account || !isAuthoritative(a, h.user, h.host)) return { ok: false, reason: 'not-found' };
   const approval = (a as { feature_approval?: unknown }).feature_approval;
   if (approval == null) return { ok: false, reason: 'missing', account };
   return featureDecision(approval as never) === 'automatic' ? { ok: true, account } : { ok: false, reason: 'denied', account };

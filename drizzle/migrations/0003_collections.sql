@@ -36,6 +36,8 @@ CREATE INDEX atlas_collection_items_collection_idx ON public.atlas_collection_it
 -- Limits enforced in the database as well as in the server functions.
 CREATE OR REPLACE FUNCTION public.atlas_collections_limit() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+  -- Serialize inserts per owner so two at once can't both see 9 and make 11.
+  PERFORM pg_advisory_xact_lock(hashtextextended('atlas_collections:' || NEW.owner_id::text, 0));
   IF (SELECT count(*) FROM public.atlas_collections WHERE owner_id = NEW.owner_id) >= 10 THEN
     RAISE EXCEPTION 'collection_limit' USING ERRCODE = 'check_violation';
   END IF;
@@ -46,6 +48,8 @@ CREATE TRIGGER atlas_collections_limit BEFORE INSERT ON public.atlas_collections
 
 CREATE OR REPLACE FUNCTION public.atlas_collection_items_limit() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+  -- Lock the parent collection row so concurrent inserts into one collection are counted one at a time.
+  PERFORM 1 FROM public.atlas_collections WHERE id = NEW.collection_id FOR UPDATE;
   IF (SELECT count(*) FROM public.atlas_collection_items WHERE collection_id = NEW.collection_id) >= 25 THEN
     RAISE EXCEPTION 'collection_full' USING ERRCODE = 'check_violation';
   END IF;

@@ -118,13 +118,14 @@ export function CollectionPopup({ opened, onClose, collection, id, link }: { ope
     queryKey: ['collection', wanted ?? link], enabled: opened && !collection && !!(id || link),
     queryFn: () => get({ data: id ? { id } : { link: link! } }),
   });
-  const own = collection?.source === 'atlas' ? mine.data?.collections.find(c => c.id === collection.id) : undefined;
+  // The owner's live copy (refreshed after every change), whether opened from the profile or a shared link.
+  const own = wanted && collection?.source !== 'mastodon' ? mine.data?.collections.find(c => c.id === wanted) : undefined;
   const c = own ?? collection ?? remote.data ?? null;
   const isOwner = !!user && c?.source === 'atlas' && !!mine.data?.collections.some(x => x.id === c.id);
   const [revealed, setRevealed] = useState(false), [handle, setHandle] = useState(''), [adding, setAdding] = useState(false), [note, setNote] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   useEffect(() => { if (opened) { setRevealed(false); setHandle(''); setNote(null); } }, [opened, wanted]);
-  const refresh = () => qc.invalidateQueries({ queryKey: ['my-collections'] });
+  const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ['my-collections'] }), qc.invalidateQueries({ queryKey: ['collection'] })]);
 
   const share = async () => {
     if (!c?.url) return;
