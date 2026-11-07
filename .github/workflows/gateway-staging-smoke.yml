@@ -2,12 +2,18 @@ name: Gateway staging HTTPS smoke
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '17 */2 * * *'
   pull_request:
     paths:
       - .github/workflows/gateway-staging-smoke.yml
 
 permissions:
   contents: read
+
+concurrency:
+  group: staging-gateway-public-monitor
+  cancel-in-progress: false
 
 jobs:
   gateway-staging-https:
@@ -84,6 +90,7 @@ jobs:
           pubkey = actor.get('publicKey') or actor.get('assertionMethod')
           key_digest = hashlib.sha256(json.dumps(pubkey, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
           print('Public actor key fingerprint (SHA256):', key_digest)
+          assert key_digest == 'de148f71b5ec52dad89c4e1e3c308e5ca8fa0ab47bdb972a3d7b7559a767cd19', 'Unexpected actor signing-key change'
 
           resource = 'acct:atlas-discovery-gateway@staging-gateway.damonoutlaw.xyz'
           webfinger_path = '/.well-known/webfinger?' + urllib.parse.urlencode({'resource': resource})
@@ -104,8 +111,13 @@ jobs:
           assert_edge(headers)
           data = json.loads(payload)
           assert isinstance(data.get('items'), list), 'Unexpected discovery read response'
-          assert data['items'] == [], 'Isolated staging database unexpectedly contains content'
-          print('PASS: isolated public discovery API, no items')
+          assert len(data['items']) <= 1
+          for item in data['items']:
+              assert isinstance(item.get('id'), str) and item['id'].startswith('https://')
+              assert isinstance(item.get('text'), str)
+              assert 'synthetic private content' not in item['text']
+              assert 'must never be ingested' not in item['text']
+          print('PASS: publicly accessible discovery API and private fixture exclusions')
 
           try:
               get('/admin/subscriptions', retries=1)
@@ -116,26 +128,6 @@ jobs:
               raise AssertionError('Public admin access was not denied by Cloudflare')
           print('PASS: Cloudflare denies unauthenticated public admin ingress')
 
-          relay = 'https://interop-relay-fixture-staging.up.railway.app'
-          relay_health_request = urllib.request.Request(relay + '/healthz', headers={'Accept': 'application/json'})
-          with opener.open(relay_health_request, timeout=12) as resp:
-              assert resp.status == 200
-              assert json.loads(resp.read(10000)) == {'ok': True}
-          relay_actor_request = urllib.request.Request(
-              relay + '/actor',
-              headers={'Accept': 'application/activity+json'},
-          )
-          with opener.open(relay_actor_request, timeout=12) as resp:
-              assert resp.status == 200
-              fixture_actor = json.loads(resp.read(100_000))
-          assert fixture_actor.get('type') == 'Service'
-          assert fixture_actor.get('id') == relay + '/actor'
-          assert fixture_actor.get('inbox') == relay + '/inbox'
-          key = fixture_actor.get('publicKey')
-          assert isinstance(key, dict)
-          assert key.get('owner') == fixture_actor['id']
-          assert key.get('id') == fixture_actor['id'] + '#main-key'
-          assert key.get('publicKeyPem', '').startswith('-----BEGIN PUBLIC KEY-----')
-          print('PASS: isolated externally resolvable relay actor, public RSA key and inbox')
-
+          # The one-shot interoperability fixture is intentionally excluded from
+          # continuous monitoring; it can be retired without affecting the gateway.
           PY
