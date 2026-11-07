@@ -1,0 +1,44 @@
+name: Gateway bounded PostgreSQL query-plan benchmark
+
+on:
+  pull_request:
+    paths:
+      - 'discovery-gateway/bench/**'
+      - '.github/workflows/gateway-db-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  query-plans:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gateway_ci
+          POSTGRES_PASSWORD: gateway_ci_password
+          POSTGRES_DB: gateway_bench
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gateway_ci -d gateway_bench"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      GATEWAY_TEST_DATABASE_URL: postgres://gateway_ci:gateway_ci_password@127.0.0.1:5432/gateway_bench
+      BENCH_DISPOSABLE: '1'
+    defaults:
+      run:
+        working-directory: discovery-gateway
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - run: bun install --frozen-lockfile
+      - name: Measure bounded 12k-row query and pruning plans
+        run: bun bench/postgres-workload.ts
