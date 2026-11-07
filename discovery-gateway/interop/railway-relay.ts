@@ -57,8 +57,15 @@ const advertisedNote = {
   published: new Date().toISOString(),
 };
 const activityContext = 'https://www.w3.org/ns/activitystreams';
-const log = (event: string, details: Record<string, unknown> = {}) =>
-  console.log(JSON.stringify({ event: 'interop.' + event, ...details }));
+const runStatus: { state: 'disabled' | 'ready' | 'running' | 'passed' | 'failed'; checks: string[] } = {
+  state: runEnabled ? 'ready' : 'disabled', checks: [],
+};
+const log = (event: string, details: Record<string, unknown> = {}) => {
+  if (event === 'pass' && typeof details.check === 'string') runStatus.checks.push(details.check);
+  if (event === 'complete') runStatus.state = details.result === 'passed' ? 'passed' : 'failed';
+  // Railway's Function runtime routes stderr consistently to the deploy log.
+  console.error(JSON.stringify({ event: 'interop.' + event, ...details }));
+};
 
 let inboundFollow: { id: string; from: string } | null = null;
 let inboundAccept: { id: string; object: unknown } | null = null;
@@ -91,6 +98,9 @@ const server = Bun.serve({
     const u = new URL(request.url);
     if (request.method === 'GET' && u.pathname === '/healthz') {
       return Response.json({ ok: true }, { headers: { 'cache-control': 'no-store' } });
+    }
+    if (request.method === 'GET' && u.pathname === '/interop-status') {
+      return Response.json(runStatus, { headers: { 'cache-control': 'no-store' } });
     }
     if (request.method === 'GET' && u.pathname === '/actor') {
       return Response.json(actor, { headers: documentHeaders });
@@ -210,6 +220,7 @@ async function items() {
 }
 
 async function runInterop() {
+  runStatus.state = 'running';
   let subscriptionId: string | null = null;
   try {
     // Internal private Railway service networking only. Public /admin stays blocked.
