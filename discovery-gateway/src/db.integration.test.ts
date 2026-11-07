@@ -575,10 +575,13 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       content: '<p>Original author public post</p>',
       tag: [{ type: 'Hashtag', href: 'https://origin.integration.example/tags/integration', name: '#integration' }],
     };
-    const fixtures = new Map<string, unknown>([[actorId, actorDoc], [keyId.href, actorDoc], [originId, originalNote]]);
+    const blockedOriginId = `https://origin.integration.example/notes/${crypto.randomUUID()}`;
+    const fixtures = new Map<string, unknown>([[actorId, actorDoc], [keyId.href, actorDoc], [originId, originalNote], [blockedOriginId, { ...originalNote, id: blockedOriginId }]]);
+    let blockedOriginLookups = 0;
     const documentLoaderFactory: DocumentLoaderFactory = options => {
       const defaultLoader = getDocumentLoader({ ...options, allowPrivateAddress: false });
       return async url => {
+        if (url === blockedOriginId) blockedOriginLookups++;
         const fixture = fixtures.get(url);
         if (fixture) return { contextUrl: null, documentUrl: url, document: fixture };
         return defaultLoader(url);
@@ -669,6 +672,44 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(stored?.authorId).toBe(authorId);
     expect(stored?.relayActor).toBe(actorId);
     expect(stored?.hashtags).toEqual(['integration']);
+
+    // A correctly signed message is not authorized once the subscription is disabled.
+    // This also proves that disabled Announce cannot trigger even a fixture origin lookup.
+    await setSubscriptionState(sql, subscription.subscription.id, 'disabled');
+    const repeatedAccept = await postSigned({
+      id: actorId + '/activities/late-accept-' + crypto.randomUUID(),
+      type: 'Accept', actor: actorId, object: followId,
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+    });
+    expect(repeatedAccept.status).toBeLessThan(300);
+
+    const disabledCreateId = `https://relay.integration.example/notes/${crypto.randomUUID()}`;
+    const disabledCreate = await postSigned({
+      id: actorId + '/activities/disabled-create-' + crypto.randomUUID(),
+      type: 'Create', actor: actorId,
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+      object: {
+        id: disabledCreateId, type: 'Note', attributedTo: actorId,
+        to: ['https://www.w3.org/ns/activitystreams#Public'],
+        content: '<p>Should not be ingested after unsubscribe</p>',
+      },
+    });
+    expect(disabledCreate.status).toBeLessThan(300);
+
+    const disabledAnnounce = await postSigned({
+      id: actorId + '/activities/disabled-announce-' + crypto.randomUUID(),
+      type: 'Announce', actor: actorId,
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+      object: blockedOriginId,
+    });
+    expect(disabledAnnounce.status).toBeLessThan(300);
+    // In-process queue delivery is asynchronous. Allow a bounded interval
+    // before checking that signed late deliveries caused no persisted changes.
+    await Bun.sleep(250);
+    expect((await getSubscription(sql, subscription.subscription.id))?.state).toBe('disabled');
+    expect(blockedOriginLookups).toBe(0);
+    const afterDisable = (await queryItems(sql, { limit: 50 })).items;
+    expect(afterDisable.some(x => x.id === disabledCreateId || x.id === blockedOriginId)).toBe(false);
     } finally {
       workerStop.abort();
       await worker;
