@@ -104,6 +104,13 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
     const url = new URL(req.url);
     const path = url.pathname;
 
+    // Railway's internal container probe cannot inject a Cloudflare-signed
+    // header. It checks process liveness only and must not access the DB,
+    // identity or any administrative route. /healthz remains edge-protected.
+    if (path === '/livez' && req.method === 'GET') {
+      return new Response('ok', { status: 200, headers: { 'cache-control': 'no-store' } });
+    }
+
     // Origin isolation is independent of DNS, forged Host, X-Forwarded-For,
     // or Cloudflare IP lists. A zone-level header rewrite *overwrites* client
     // values before requests are forwarded to Railway. The private admin
