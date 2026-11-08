@@ -253,6 +253,20 @@ jobs:
           set -e
           test "$result" -eq 2
           grep -q 'restore.refused_nonempty_database' /tmp/function-denied.log
+          docker run --rm --network host postgres:18-alpine \
+            psql "$RESTORE_DATABASE_URL" -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE atlas_pgdata_only'
+          target='postgres://restore_ci:synthetic_only@127.0.0.1:5433/atlas_pgdata_only'
+          docker run --rm --network host postgres:18-alpine \
+            psql "$target" -X -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA pgdata; CREATE TABLE pgdata.test_only (id integer)'
+          set +e
+          docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" -e RESTORE_DATABASE_URL="$target" -e ATLAS_BACKUP_CI_LOCAL -e CI \
+            -e RECOVERY_CONFIRM -e AGE_IDENTITY_PATH -e RECOVERY_ARCHIVE -e RECOVERY_MANIFEST \
+            --entrypoint /usr/local/bin/atlas-recover atlas-backup-ci > /tmp/pgdata-denied.log 2>&1
+          result=$?
+          set -e
+          test "$result" -eq 2
+          grep -q 'restore.refused_nonempty_database' /tmp/pgdata-denied.log
       - name: Verify archive integrity, decrypt and restore into empty database
         env:
           ATLAS_BACKUP_CI_LOCAL: '1'
