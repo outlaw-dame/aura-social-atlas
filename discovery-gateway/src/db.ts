@@ -83,6 +83,15 @@ export async function initSchema(sql: Sql): Promise<void> {
       published_at TIMESTAMPTZ,
       ingested_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`;
+  // Persistent administrative suppression prevents a removed object from
+  // reappearing on duplicate or later signed relay delivery.
+  // Record only canonical object ID and bounded reason code, never content.
+  await sql`
+    CREATE TABLE IF NOT EXISTS gateway_suppressed (
+      object_id TEXT PRIMARY KEY,
+      reason TEXT NOT NULL CHECK (reason IN ('abuse','privacy','legal','spam','other')),
+      suppressed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`;
   await sql`CREATE INDEX IF NOT EXISTS gateway_items_ingested ON gateway_items (ingested_at DESC, id)`;
   await sql`CREATE INDEX IF NOT EXISTS gateway_items_origin ON gateway_items (object_origin)`;
   await sql`CREATE INDEX IF NOT EXISTS gateway_items_hashtags ON gateway_items USING gin (hashtags)`;
@@ -258,13 +267,38 @@ function toItem(r: ItemRow): GatewayItem {
   return { id: r.id, activityId: r.activity_id, relayActor: r.relay_actor, authorId: r.author_id, authorName: r.author_name, authorHandle: r.author_handle, authorUrl: r.author_url, objectOrigin: r.object_origin, url: r.url, summary: r.summary, text: r.text, hashtags: normalizeStoredHashtags(r.hashtags), publishedAt: r.published_at?.toISOString() ?? null, ingestedAt: r.ingested_at.toISOString() };
 }
 
+/**
+ * Every ingest and administrative suppression obtains the same transaction-
+ * scoped advisory lock keyed by canonical object ID. This avoids the race
+ * where a concurrent delivery could reinsert an item immediately after
+ * moderation committed. Hash collisions only serialize unrelated IDs.
+ */
 export async function insertItem(sql: Sql, item: Omit<GatewayItem, 'ingestedAt'>): Promise<boolean> {
-  const rows = await sql`
-    INSERT INTO gateway_items (id, activity_id, relay_actor, author_id, author_name, author_handle, author_url, object_origin, url, summary, text, hashtags, published_at)
-    VALUES (${item.id}, ${item.activityId}, ${item.relayActor}, ${item.authorId}, ${item.authorName}, ${item.authorHandle}, ${item.authorUrl}, ${item.objectOrigin}, ${item.url}, ${item.summary}, ${item.text}, ${sql.json(item.hashtags)}, ${item.publishedAt})
-    ON CONFLICT DO NOTHING
-    RETURNING id`;
-  return rows.length === 1;
+  return sql.begin(async tx => {
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${item.id}, 4242))`;
+    const rows = await tx`
+      INSERT INTO gateway_items (id, activity_id, relay_actor, author_id, author_name, author_handle, author_url, object_origin, url, summary, text, hashtags, published_at)
+      SELECT ${item.id}, ${item.activityId}, ${item.relayActor}, ${item.authorId}, ${item.authorName}, ${item.authorHandle}, ${item.authorUrl}, ${item.objectOrigin}, ${item.url}, ${item.summary}, ${item.text}, ${tx.json(item.hashtags)}, ${item.publishedAt}
+      WHERE NOT EXISTS (SELECT 1 FROM gateway_suppressed WHERE object_id = ${item.id})
+      ON CONFLICT DO NOTHING
+      RETURNING id`;
+    return rows.length === 1;
+  });
+}
+
+/** Admin-only, persistent suppression with atomic cache removal. */
+export async function suppressItem(
+  sql: Sql, objectId: string, reason: 'abuse' | 'privacy' | 'legal' | 'spam' | 'other',
+): Promise<{ suppressed: boolean; removed: boolean }> {
+  return sql.begin(async tx => {
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${objectId}, 4242))`;
+    const added = await tx`
+      INSERT INTO gateway_suppressed (object_id, reason)
+      VALUES (${objectId}, ${reason})
+      ON CONFLICT (object_id) DO NOTHING RETURNING object_id`;
+    const removed = await tx`DELETE FROM gateway_items WHERE id = ${objectId} RETURNING id`;
+    return { suppressed: added.length === 1, removed: removed.length === 1 };
+  });
 }
 
 export type ItemQuery = { tag?: string | null; domain?: string | null; search?: string | null; cursor?: string | null; limit: number };

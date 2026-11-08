@@ -57,7 +57,8 @@ Railway Hobby does not expose a native outbound CIDR-deny policy in the connecte
 
 **What still requires an implemented policy, not only documentation:**
 - Age-based expiry of cached posts, source-driven tombstones and removal requests; the row-count limit is **not a retention duration**.
-- A removal/takedown workflow with original URL, origin, actor, authenticated deletion evidence, appeal and audit events. Avoid storing illegal or private payloads in moderator logs.
+- **Prepared, not yet deployed**: private `POST /admin/moderation/suppress` requires the admin bearer and a canonical HTTPS object ID plus one reason (`abuse`, `privacy`, `legal`, `spam`, `other`). A transactional persistent suppression marker removes any cached row and prevents future signed Create/Announce reingestion of that exact canonical object ID, including concurrent delivery. The API intentionally has **no unsuppress route**; reversals require a separately reviewed recovery workflow. Database markers contain only ID, reason and timestamp; never store harmful payloads in the audit row. CI must demonstrate authorization/IDOR and race behavior before deploying this revision.
+- Still required: a reviewed human removal/takedown procedure with source evidence, appeal rights, operator accountability, access reviews and audit retention. The suppression API is not a complete moderation service.
 - Incident and support ownership, incident severity/escalation, reviewed content retention periods, subscriber blocking/quarantine, anti-abuse controls, and legal/privacy notice.
 - Multi-instance fair/distributed rate limits if adding replicas; existing bucket keys are intentionally conservative and **per process**, not per remote actor and not distributed.
 

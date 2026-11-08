@@ -14,6 +14,7 @@ import { authorizeIngest } from './policy.ts';
 import {
   acceptedSubscriptionActors, createSubscription, deleteItem, getSubscription, isAcceptedSubscriptionActor, isActiveLitePubSubscriber,
   initSchema, insertItem, listFacets, listSubscriptions, loadKeyPair, normalizeStoredHashtags, pruneItems, queryItems,
+  suppressItem,
   saveKeyPair, setPendingFollowId, setSubscriptionState, settlePendingFollow, subscriptionByFollowId,
   type GatewayItem,
 } from './db.ts';
@@ -39,7 +40,7 @@ beforeAll(async () => {
   if (!databaseUrl) return;
   sql = postgres(databaseUrl, { max: 8, connect_timeout: 5 });
   await initSchema(sql);
-  await sql`TRUNCATE gateway_items, gateway_seen, gateway_subscriptions, gateway_keys`;
+  await sql`TRUNCATE gateway_items, gateway_seen, gateway_subscriptions, gateway_keys, gateway_suppressed`;
 });
 afterAll(async () => {
   if (sql) await sql.end({ timeout: 5 });
@@ -269,6 +270,52 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(await deleteItem(sql, base + 0, 'https://attacker.example/actor')).toBe(false);
     expect(await deleteItem(sql, base + 0, author)).toBe(true);
     expect(await deleteItem(sql, base + 0, author)).toBe(false);
+  });
+
+  dbTest('admin takedown persists suppression against later and concurrent signed ingestion', async () => {
+    const id = prefix + 'moderated-' + crypto.randomUUID();
+    expect(await insertItem(sql, item(id))).toBe(true);
+    const cfg = loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
+      DATABASE_URL: databaseUrl!,
+    });
+    const gateway = { fetch: async () => new Response('not found', { status: 404 }) } as unknown as Gateway;
+    const url = 'https://gateway.example/admin/moderation/suppress';
+    const payload = JSON.stringify({ id, reason: 'abuse' });
+    const privateHandler = createHandler({ cfg, gateway, sql, adminEnabled: true });
+    const publicHandler = createHandler({ cfg, gateway, sql });
+    const request = (auth?: string, body = payload) => new Request(url, {
+      method: 'POST', headers: auth ? { Authorization: auth } : undefined, body,
+    });
+    expect((await privateHandler(request())).status).toBe(401);
+    expect((await privateHandler(request('Bearer invalid'))).status).toBe(401);
+    expect((await publicHandler(request('Bearer ' + cfg.adminToken))).status).toBe(404);
+    for (const malformed of [
+      '{}', JSON.stringify({ id, reason: 'unsupported' }),
+      JSON.stringify({ id: 'http://localhost/private', reason: 'abuse' }),
+      JSON.stringify({ id: 'https://127.0.0.1/hidden', reason: 'abuse' }),
+    ]) {
+      expect((await privateHandler(request('Bearer ' + cfg.adminToken, malformed))).status).toBe(400);
+    }
+    const approved = await privateHandler(request('Bearer ' + cfg.adminToken));
+    expect(approved.status).toBe(200);
+    expect(await approved.json()).toEqual({ suppressed: true, removed: true, newlySuppressed: true });
+    expect((await sql`SELECT id FROM gateway_items WHERE id = ${id}`).length).toBe(0);
+    const stable = await privateHandler(request('Bearer ' + cfg.adminToken));
+    expect(await stable.json()).toEqual({ suppressed: true, removed: false, newlySuppressed: false });
+    expect((await sql`SELECT object_id, reason FROM gateway_suppressed WHERE object_id = ${id}`).length).toBe(1);
+    expect(await insertItem(sql, item(id, id + '/new-delivery'))).toBe(false);
+    const rival = prefix + 'moderated-race-' + crypto.randomUUID();
+    const outcomes = await Promise.all([
+      ...Array.from({ length: 12 }, (_, i) => insertItem(sql, item(rival, rival + '/delivery-' + i))),
+      suppressItem(sql, rival, 'privacy'),
+    ]);
+    expect(outcomes.at(-1)).toEqual({ suppressed: true, removed: expect.any(Boolean) });
+    expect((await sql`SELECT id FROM gateway_items WHERE id = ${rival}`).length).toBe(0);
+    expect(await insertItem(sql, item(rival, rival + '/later-delivery'))).toBe(false);
+    const otherId = prefix + 'nonmoderated-' + crypto.randomUUID();
+    expect(await insertItem(sql, item(otherId))).toBe(true);
   });
 
   dbTest('retention bounds oldest rows, not current records', async () => {
