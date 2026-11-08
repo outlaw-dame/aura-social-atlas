@@ -53,3 +53,7 @@
 - [ ] Validate newly deployed gateway revision's key continuity, real signed traffic, durable work after termination and rollback *without modifying Fedizen's live data*. Keep network egress enforcement and alerting as independent gateway production blockers.
 
 **Decision rule for future changes:** Every proposed feature must name the responsible layer (Atlas client, Bonfire/Fedizen, optional Fedify discovery, or optional integration adapter), a supported API and validation path, and its user-facing benefit. Refuse unnecessary layers, duplicate implementations, speculative authentication schemes, new persistence/infra or Bonfire patches when supported client APIs suffice. The gateway's production-readiness work must not prevent parallel client development, nor make gateway staging deployment equivalent to Atlas production readiness.
+
+## Canonical active implementation roadmap
+
+The authoritative **current execution order and definition of done** is [`docs/ATLAS_IMPLEMENTATION_PLAN.md`](docs/ATLAS_IMPLEMENTATION_PLAN.md), with a separate [versioned Bonfire GraphQL capability matrix](docs/BONFIRE_GRAPHQL_CAPABILITY_MATRIX.md). This historical roadmap retains completed past efforts; it does not imply those earlier implementation checkboxes establish successful live Fedizen account/client acceptance. Prioritize Phases A–D (contract/auth/typed GraphQL/native reads and writes) before optional relay extensions or new infrastructure.
