@@ -35,6 +35,33 @@ must be configured and verified before backup scheduling is enabled.
    public recipient using `age-keygen -y <secure-offline-path>`.
    Losing the private identity makes encrypted archives unrecoverable.
 
+## Prepared Railway service
+
+Created in **staging only**: `atlas-gateway-r2-backup-staging`
+(service ID `cb2be3c4-0ac9-4f74-8a05-03b50c782203`).
+Its source root is `/discovery-gateway/offsite-backup`, it uses a Dockerfile,
+no public domain, no volume, `restartPolicyType=NEVER` and outbound IPv6
+disabled. The service has references to `Postgres.DATABASE_URL`, the dedicated
+R2 bucket name and the account-specific S3 endpoint; **no GitHub source is yet
+connected and no scheduled deployment or actual database backup occurred**.
+
+Missing secure inputs, to enter **directly in the Railway service Variables UI**,
+never in chat or in this repository:
+
+- `RCLONE_CONFIG_R2_ACCESS_KEY_ID` — dedicated bucket-scoped R2 object
+  read/write S3 access key ID.
+- `RCLONE_CONFIG_R2_SECRET_ACCESS_KEY` — the matching secret.
+- `AGE_RECIPIENT` — the `age1...` **public** recipient. Create and retain
+  the corresponding `age` identity **offline** with a separate secure copy
+  before enabling any schedule.
+
+Once those exist, the source can be connected to the validated main commit,
+an initial one-shot backup can run, and a second read-only recovery credential
+can verify an actual R2 download and isolated restore. Only after that should
+the Railway daily cron be enabled. The connector's OAuth view only exposes
+variable **names**, not secret values. Verify by names and actual job output
+without trying to read back or log access keys.
+
 ## Railway job configuration (do not activate until prerequisites exist)
 
 Create one isolated service from the reviewed GitHub source, with root directory
