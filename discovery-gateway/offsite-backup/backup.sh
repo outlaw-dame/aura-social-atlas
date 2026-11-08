@@ -12,6 +12,19 @@ if ! [[ "$AGE_RECIPIENT" =~ ^age1[0-9a-z]{50,65}$ ]]; then
   exit 2
 fi
 
+# Parse the DSN authority without exposing its credentials. The private host
+# must be checked as a hostname, not as the suffix of a URL (which ends in
+# :port/database). Reject query strings, URLs without host, and alternate ports.
+private_db_host() {
+  local address="${SOURCE_DATABASE_URL#*://}"
+  [[ "$address" == *"@"* ]] || return 1
+  address="${address#*@}"
+  address="${address%%/*}"
+  address="${address%%\?*}"
+  local host="${address%%:*}"
+  [[ "$host" == *.railway.internal && "$address" == *:5432 ]]
+}
+
 if [[ "${ATLAS_BACKUP_CI_LOCAL:-}" == "1" ]]; then
   # An intentionally isolated GitHub runner test. Cannot select a remote or
   # production DB even when someone copies this environment accidentally.
@@ -21,7 +34,7 @@ if [[ "${ATLAS_BACKUP_CI_LOCAL:-}" == "1" ]]; then
   }
 else
   [[ "${RAILWAY_ENVIRONMENT_NAME:-}" == "staging" &&
-     "$SOURCE_DATABASE_URL" == *".railway.internal"* &&
+     private_db_host &&
      "$BACKUP_REMOTE" == r2:* &&
      -n "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" &&
      -n "${RCLONE_CONFIG_R2_SECRET_ACCESS_KEY:-}" &&
