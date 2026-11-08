@@ -102,6 +102,8 @@ jobs:
               'PATH=/scratch/stub:$PATH /usr/local/bin/atlas-backup' > /tmp/guard.log 2>&1
             status=$?
             set -e
+            echo "backup private-host guard status=$status target_class=$([[ \"$target\" == \"$bad\" ]] && echo rejected || echo accepted)"
+            cat /tmp/guard.log
             if [[ "$target" == "$bad" ]]; then
               test "$status" -eq 2
               grep -q 'backup.refused_missing_private_staging_or_r2_configuration' /tmp/guard.log
@@ -121,6 +123,8 @@ jobs:
               --entrypoint /usr/local/bin/atlas-recover atlas-backup-ci > /tmp/guard-restore.log 2>&1
             status=$?
             set -e
+            echo "restore private-host guard status=$status target_class=$([[ \"$target\" == \"$bad\" ]] && echo rejected || echo accepted)"
+            cat /tmp/guard-restore.log
             test "$status" -eq 2
             if [[ "$target" == "$bad" ]]; then
               grep -q 'restore.refused_nonprivate_or_nonstaging' /tmp/guard-restore.log
