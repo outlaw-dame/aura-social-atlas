@@ -19,12 +19,12 @@ fi
 # Never print the DSN (it includes a database password).
 private_db_host() {
   local dsn="$SOURCE_DATABASE_URL"
-  [[ "$dsn" =~ ^postgres(ql)?://[^/@?#[:space:]]+@([a-zA-Z0-9-]+\\.)+railway\\.internal:5432/[^?#[:space:]]+$ ]] &&
+  [[ "$dsn" =~ ^postgres(ql)?://[^/@?#[:space:]]+@([a-zA-Z0-9-]+\.)+railway\.internal:5432/[^?#[:space:]]+$ ]] &&
     [[ -z "${PGHOSTADDR:-}" && -z "${PGSERVICE:-}" ]]
 }
 ci_local_db_host() {
   local dsn="$SOURCE_DATABASE_URL"
-  [[ "$dsn" =~ ^postgres(ql)?://[^/@?#[:space:]]+@127\\.0\\.0\\.1:5432/[^?#[:space:]]+$ ]] &&
+  [[ "$dsn" =~ ^postgres(ql)?://[^/@?#[:space:]]+@127\.0\.0\.1:5432/[^?#[:space:]]+$ ]] &&
     [[ -z "${PGHOSTADDR:-}" && -z "${PGSERVICE:-}" ]]
 }
 
