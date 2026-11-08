@@ -12,18 +12,62 @@ esac
 [ "$GATEWAY_RETENTION_DAYS" -ge 1 ] && [ "$GATEWAY_RETENTION_DAYS" -le 365 ] || {
   echo 'retention.invalid_days' >&2; exit 2;
 }
+# Validate the effective libpq URI authority, not arbitrary DSN substrings.
+# Query strings (including host/hostaddr/service overrides) and fragments are
+# forbidden. Keep any credential values out of diagnostics.
+private_retention_dsn() {
+  dsn=$SOURCE_DATABASE_URL
+  case "$dsn" in
+    postgres://*|postgresql://*) ;;
+    *) return 1 ;;
+  esac
+  case "$dsn" in
+    *'?'*|*'#'*|*' '*|*'\t'*) return 1 ;;
+  esac
+  authority=${dsn#*://}
+  case "$authority" in
+    *@*/*) ;;
+    *) return 1 ;;
+  esac
+  authority=${authority%%/*}
+  case "$authority" in
+    *@*@*) return 1 ;;
+  esac
+  hostport=${authority#*@}
+  host=${hostport%:5432}
+  [ "$hostport" != "$host" ] || return 1
+  case "$host" in
+    ?*.railway.internal) ;;
+    *) return 1 ;;
+  esac
+  case "$host" in
+    *[!a-zA-Z0-9.-]*|*..*|.*|-*|*-) return 1 ;;
+  esac
+  [ -z "${PGHOSTADDR:-}" ] && [ -z "${PGSERVICE:-}" ]
+}
+ci_local_retention_dsn() {
+  dsn=$SOURCE_DATABASE_URL
+  case "$dsn" in
+    postgres://*|postgresql://*) ;;
+    *) return 1 ;;
+  esac
+  case "$dsn" in
+    *'?'*|*'#'*|*' '*|*'\t'*) return 1 ;;
+  esac
+  case "$dsn" in
+    *@127.0.0.1:5432/*) ;;
+    *) return 1 ;;
+  esac
+  [ -z "${PGHOSTADDR:-}" ] && [ -z "${PGSERVICE:-}" ]
+}
 if [ "${ATLAS_RETENTION_CI_LOCAL:-0}" = 1 ]; then
-  [ "${CI:-}" = true ] && [ "${SOURCE_DATABASE_URL#*\@127.0.0.1:}" != "$SOURCE_DATABASE_URL" ] || {
+  [ "${CI:-}" = true ] && ci_local_retention_dsn || {
     echo 'retention.unsafe_ci_target' >&2; exit 2;
   }
 else
-  [ "${RAILWAY_ENVIRONMENT_NAME:-}" = staging ] || {
-    echo 'retention.not_staging' >&2; exit 2;
+  [ "${RAILWAY_ENVIRONMENT_NAME:-}" = staging ] && private_retention_dsn || {
+    echo 'retention.non_private_database_or_environment' >&2; exit 2;
   }
-  case "$SOURCE_DATABASE_URL" in
-    *".railway.internal"*) ;;
-    *) echo 'retention.non_private_database' >&2; exit 2 ;;
-  esac
 fi
 
 # Each invocation is finite (max 100 batches, 500 rows each) and uses

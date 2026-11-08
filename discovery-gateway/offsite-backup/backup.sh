@@ -12,24 +12,26 @@ if ! [[ "$AGE_RECIPIENT" =~ ^age1[0-9a-z]{50,65}$ ]]; then
   exit 2
 fi
 
-# Parse the DSN authority without exposing its credentials. The private host
-# must be checked as a hostname, not as the suffix of a URL (which ends in
-# :port/database). Reject query strings, URLs without host, and alternate ports.
+# Fail closed on libpq URI parameters: query-string host/hostaddr/service
+# overrides can silently redirect pg_dump away from the URI authority.
+# This intentionally admits only a simple URI with an explicit host/port,
+# with no query or fragment. Percent-encode special characters in credentials.
+# Never print the DSN (it includes a database password).
 private_db_host() {
-  local address="${SOURCE_DATABASE_URL#*://}"
-  [[ "$address" == *"@"* ]] || return 1
-  address="${address#*@}"
-  address="${address%%/*}"
-  address="${address%%\?*}"
-  local host="${address%%:*}"
-  [[ "$host" == *.railway.internal && "$address" == *:5432 ]]
+  local dsn="$SOURCE_DATABASE_URL"
+  [[ "$dsn" =~ ^postgres(ql)?://[^/@?#[:space:]]+@([a-zA-Z0-9-]+\.)+railway\.internal:5432/[^?#[:space:]]+$ ]] &&
+    [[ -z "${PGHOSTADDR:-}" && -z "${PGSERVICE:-}" ]]
+}
+ci_local_db_host() {
+  local dsn="$SOURCE_DATABASE_URL"
+  [[ "$dsn" =~ ^postgres(ql)?://[^/@?#[:space:]]+@127\.0\.0\.1:5432/[^?#[:space:]]+$ ]] &&
+    [[ -z "${PGHOSTADDR:-}" && -z "${PGSERVICE:-}" ]]
 }
 
 if [[ "${ATLAS_BACKUP_CI_LOCAL:-}" == "1" ]]; then
   # An intentionally isolated GitHub runner test. Cannot select a remote or
   # production DB even when someone copies this environment accidentally.
-  [[ "${CI:-}" == "true" && "$SOURCE_DATABASE_URL" == *"@127.0.0.1:"* &&
-     "$BACKUP_REMOTE" == /scratch/objects ]] || {
+  [[ "${CI:-}" == "true" && "$BACKUP_REMOTE" == /scratch/objects ]] && ci_local_db_host || {
     echo "backup.refused_unsafe_local_ci_configuration" >&2; exit 2;
   }
 else

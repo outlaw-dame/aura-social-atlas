@@ -65,6 +65,23 @@ jobs:
             atlas-retention-ci; then
             echo 'retention accepted non-private unapproved target' >&2; exit 1
           fi
+      - name: Refuse unsafe retention URI host overrides before network access
+        run: |
+          set -euo pipefail
+          for dsn in \
+            'postgres://u:p@db.railway.internal:5432/gateway?host=public.example' \
+            'postgres://u:p@db.railway.internal:5432/gateway?hostaddr=169.254.169.254' \
+            'postgres://u:p@public.example:5432/gateway?application_name=db.railway.internal' \
+            'postgres://u:p@public.example:5432/gateway'; do
+            set +e
+            docker run --rm --network none -e SOURCE_DATABASE_URL="$dsn" \
+              -e RAILWAY_ENVIRONMENT_NAME=staging -e GATEWAY_RETENTION_DAYS=30 \
+              atlas-retention-ci > /tmp/retention-denied.log 2>&1
+            result=$?
+            set -e
+            test "$result" -eq 2
+            grep -q 'retention.non_private_database_or_environment' /tmp/retention-denied.log
+          done
       - name: Run actual expiry and assert only expired cached item removed
         run: |
           set -euo pipefail
