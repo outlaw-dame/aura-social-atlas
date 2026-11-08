@@ -153,6 +153,209 @@ jobs:
             fi
           done
           echo 'PASS: private Railway production guards checked without network access'
+      - name: Deny URI host and hostaddr override before any database connection
+        run: |
+          set -euo pipefail
+          for dsn in \
+            'postgres://ci:synthetic@db.railway.internal:5432/railway?host=public.example' \
+            'postgres://ci:synthetic@db.railway.internal:5432/railway?hostaddr=169.254.169.254' \
+            'postgres://ci:synthetic@db.railway.internal:5432/railway?service=external' \
+            'postgres://ci:synthetic@public.example:5432/railway?application_name=db.railway.internal'; do
+            set +e
+            docker run --rm --network none \
+              -e SOURCE_DATABASE_URL="$dsn" -e AGE_RECIPIENT \
+              -e RAILWAY_ENVIRONMENT_NAME=staging \
+              -e BACKUP_REMOTE=r2:atlas-discovery-staging-backups \
+              -e RCLONE_CONFIG_R2_ACCESS_KEY_ID=synthetic \
+              -e RCLONE_CONFIG_R2_SECRET_ACCESS_KEY=synthetic \
+              -e RCLONE_CONFIG_R2_ENDPOINT=https://synthetic.r2.cloudflarestorage.com \
+              atlas-backup-ci > /tmp/denied-uri.log 2>&1
+            status=$?
+            set -e
+            test "$status" -eq 2
+            grep -q '^backup.refused_missing_private_staging_or_r2_configuration        env:
+          ATLAS_BACKUP_CI_LOCAL: '1'
+          CI: 'true'
+          BACKUP_REMOTE: /scratch/objects
+        run: |
+          set -euo pipefail
+          docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" \
+            -e SOURCE_DATABASE_URL -e AGE_RECIPIENT -e BACKUP_REMOTE \
+            -e ATLAS_BACKUP_CI_LOCAL -e CI \
+            atlas-backup-ci | tee /tmp/atlas-backup-results.log
+          grep -qx 'backup.dump_verified' /tmp/atlas-backup-results.log
+          grep -qx 'backup.ciphertext_verified' /tmp/atlas-backup-results.log
+          grep -q '^backup.completed encrypted_bytes=' /tmp/atlas-backup-results.log
+      - name: Reject corrupted archive and malicious/mismatched manifest before restore
+        env:
+          ATLAS_BACKUP_CI_LOCAL: '1'
+          CI: 'true'
+          RECOVERY_CONFIRM: isolated-empty-target
+          AGE_IDENTITY_PATH: /scratch/identity.txt
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(find "$PWD/scratch/objects" -type f -name '*.pgcustom.age')
+          test "${#archives[@]}" -eq 1
+          export RECOVERY_ARCHIVE="/scratch/${archives[0]#"$PWD/scratch/"}"
+          export RECOVERY_MANIFEST="${RECOVERY_ARCHIVE}.manifest.json"
+          cp "${archives[0]}" "$PWD/scratch/corrupted.age"
+          printf x >> "$PWD/scratch/corrupted.age"
+          if docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" -e RESTORE_DATABASE_URL -e ATLAS_BACKUP_CI_LOCAL \
+            -e CI -e RECOVERY_CONFIRM -e AGE_IDENTITY_PATH \
+            -e RECOVERY_ARCHIVE=/scratch/corrupted.age -e RECOVERY_MANIFEST \
+            --entrypoint /usr/local/bin/atlas-recover atlas-backup-ci; then
+            echo 'FAIL: corrupted ciphertext accepted' >&2; exit 1
+          fi
+          cp "${archives[0]}.manifest.json" "$PWD/scratch/mismatched.json"
+          sed -i 's/"ciphertextSha256":"[0-9a-f]*"/"ciphertextSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"/' "$PWD/scratch/mismatched.json"
+          if docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" -e RESTORE_DATABASE_URL -e ATLAS_BACKUP_CI_LOCAL \
+            -e CI -e RECOVERY_CONFIRM -e AGE_IDENTITY_PATH -e RECOVERY_ARCHIVE \
+            -e RECOVERY_MANIFEST=/scratch/mismatched.json \
+            --entrypoint /usr/local/bin/atlas-recover atlas-backup-ci; then
+            echo 'FAIL: mismatched manifest accepted' >&2; exit 1
+          fi
+          echo 'PASS: corrupted ciphertext and incorrect manifest refused'
+      - name: Verify archive integrity, decrypt and restore into empty database
+        env:
+          ATLAS_BACKUP_CI_LOCAL: '1'
+          CI: 'true'
+          RECOVERY_CONFIRM: isolated-empty-target
+          AGE_IDENTITY_PATH: /scratch/identity.txt
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(find "$PWD/scratch/objects" -type f -name '*.pgcustom.age')
+          test "${#archives[@]}" -eq 1
+          export RECOVERY_ARCHIVE="/scratch/${archives[0]#"$PWD/scratch/"}"
+          export RECOVERY_MANIFEST="${RECOVERY_ARCHIVE}.manifest.json"
+          docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" -e RESTORE_DATABASE_URL -e ATLAS_BACKUP_CI_LOCAL \
+            -e CI -e RECOVERY_CONFIRM -e AGE_IDENTITY_PATH -e RECOVERY_ARCHIVE \
+            -e RECOVERY_MANIFEST --entrypoint /usr/local/bin/atlas-recover \
+            atlas-backup-ci | tee /tmp/atlas-recovery.log
+          grep -qx 'restore.ciphertext_integrity_verified' /tmp/atlas-recovery.log
+          grep -qx 'restore.decrypted_archive_verified' /tmp/atlas-recovery.log
+          grep -qx 'restore.completed' /tmp/atlas-recovery.log
+          result="$(docker run --rm --network host postgres:18-alpine \
+            psql "$RESTORE_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 \
+            -c "SELECT actor_identifier FROM gateway_keys")"
+          test "$result" = gateway
+          count="$(docker run --rm --network host postgres:18-alpine \
+            psql "$RESTORE_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 \
+            -c "SELECT count(*) FROM gateway_subscriptions")"
+          test "$count" = 1
+          if docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" -e RESTORE_DATABASE_URL -e ATLAS_BACKUP_CI_LOCAL \
+            -e CI -e RECOVERY_CONFIRM -e AGE_IDENTITY_PATH -e RECOVERY_ARCHIVE \
+            -e RECOVERY_MANIFEST --entrypoint /usr/local/bin/atlas-recover \
+            atlas-backup-ci; then
+            echo 'FAIL: populated restore database accepted' >&2; exit 1
+          fi
+          echo 'PASS: verified encrypted archive restored once; nonempty target refused'
+      - name: Remove ephemeral encryption key and backup data
+        if: always()
+        run: rm -rf scratch
+ /tmp/denied-uri.log
+            set +e
+            docker run --rm --network none \
+              -e RESTORE_DATABASE_URL="$dsn" -e RAILWAY_ENVIRONMENT_NAME=staging \
+              -e RECOVERY_CONFIRM=isolated-empty-target \
+              -e RECOVERY_ARCHIVE=/scratch/absent.age \
+              -e RECOVERY_MANIFEST=/scratch/absent.json \
+              -e AGE_IDENTITY_PATH=/scratch/offline.key \
+              --entrypoint /usr/local/bin/atlas-recover atlas-backup-ci > /tmp/denied-restore.log 2>&1
+            status=$?
+            set -e
+            test "$status" -eq 2
+            grep -q '^restore.refused_nonprivate_or_nonstaging        env:
+          ATLAS_BACKUP_CI_LOCAL: '1'
+          CI: 'true'
+          BACKUP_REMOTE: /scratch/objects
+        run: |
+          set -euo pipefail
+          docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" \
+            -e SOURCE_DATABASE_URL -e AGE_RECIPIENT -e BACKUP_REMOTE \
+            -e ATLAS_BACKUP_CI_LOCAL -e CI \
+            atlas-backup-ci | tee /tmp/atlas-backup-results.log
+          grep -qx 'backup.dump_verified' /tmp/atlas-backup-results.log
+          grep -qx 'backup.ciphertext_verified' /tmp/atlas-backup-results.log
+          grep -q '^backup.completed encrypted_bytes=' /tmp/atlas-backup-results.log
+      - name: Reject corrupted archive and malicious/mismatched manifest before restore
+        env:
+          ATLAS_BACKUP_CI_LOCAL: '1'
+          CI: 'true'
+          RECOVERY_CONFIRM: isolated-empty-target
+          AGE_IDENTITY_PATH: /scratch/identity.txt
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(find "$PWD/scratch/objects" -type f -name '*.pgcustom.age')
+          test "${#archives[@]}" -eq 1
+          export RECOVERY_ARCHIVE="/scratch/${archives[0]#"$PWD/scratch/"}"
+          export RECOVERY_MANIFEST="${RECOVERY_ARCHIVE}.manifest.json"
+          cp "${archives[0]}" "$PWD/scratch/corrupted.age"
+          printf x >> "$PWD/scratch/corrupted.age"
+          if docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" -e RESTORE_DATABASE_URL -e ATLAS_BACKUP_CI_LOCAL \
+            -e CI -e RECOVERY_CONFIRM -e AGE_IDENTITY_PATH \
+            -e RECOVERY_ARCHIVE=/scratch/corrupted.age -e RECOVERY_MANIFEST \
+            --entrypoint /usr/local/bin/atlas-recover atlas-backup-ci; then
+            echo 'FAIL: corrupted ciphertext accepted' >&2; exit 1
+          fi
+          cp "${archives[0]}.manifest.json" "$PWD/scratch/mismatched.json"
+          sed -i 's/"ciphertextSha256":"[0-9a-f]*"/"ciphertextSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"/' "$PWD/scratch/mismatched.json"
+          if docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" -e RESTORE_DATABASE_URL -e ATLAS_BACKUP_CI_LOCAL \
+            -e CI -e RECOVERY_CONFIRM -e AGE_IDENTITY_PATH -e RECOVERY_ARCHIVE \
+            -e RECOVERY_MANIFEST=/scratch/mismatched.json \
+            --entrypoint /usr/local/bin/atlas-recover atlas-backup-ci; then
+            echo 'FAIL: mismatched manifest accepted' >&2; exit 1
+          fi
+          echo 'PASS: corrupted ciphertext and incorrect manifest refused'
+      - name: Verify archive integrity, decrypt and restore into empty database
+        env:
+          ATLAS_BACKUP_CI_LOCAL: '1'
+          CI: 'true'
+          RECOVERY_CONFIRM: isolated-empty-target
+          AGE_IDENTITY_PATH: /scratch/identity.txt
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(find "$PWD/scratch/objects" -type f -name '*.pgcustom.age')
+          test "${#archives[@]}" -eq 1
+          export RECOVERY_ARCHIVE="/scratch/${archives[0]#"$PWD/scratch/"}"
+          export RECOVERY_MANIFEST="${RECOVERY_ARCHIVE}.manifest.json"
+          docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" -e RESTORE_DATABASE_URL -e ATLAS_BACKUP_CI_LOCAL \
+            -e CI -e RECOVERY_CONFIRM -e AGE_IDENTITY_PATH -e RECOVERY_ARCHIVE \
+            -e RECOVERY_MANIFEST --entrypoint /usr/local/bin/atlas-recover \
+            atlas-backup-ci | tee /tmp/atlas-recovery.log
+          grep -qx 'restore.ciphertext_integrity_verified' /tmp/atlas-recovery.log
+          grep -qx 'restore.decrypted_archive_verified' /tmp/atlas-recovery.log
+          grep -qx 'restore.completed' /tmp/atlas-recovery.log
+          result="$(docker run --rm --network host postgres:18-alpine \
+            psql "$RESTORE_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 \
+            -c "SELECT actor_identifier FROM gateway_keys")"
+          test "$result" = gateway
+          count="$(docker run --rm --network host postgres:18-alpine \
+            psql "$RESTORE_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 \
+            -c "SELECT count(*) FROM gateway_subscriptions")"
+          test "$count" = 1
+          if docker run --rm --user "$(id -u):$(id -g)" --network host \
+            -v "$PWD/scratch:/scratch" -e RESTORE_DATABASE_URL -e ATLAS_BACKUP_CI_LOCAL \
+            -e CI -e RECOVERY_CONFIRM -e AGE_IDENTITY_PATH -e RECOVERY_ARCHIVE \
+            -e RECOVERY_MANIFEST --entrypoint /usr/local/bin/atlas-recover \
+            atlas-backup-ci; then
+            echo 'FAIL: populated restore database accepted' >&2; exit 1
+          fi
+          echo 'PASS: verified encrypted archive restored once; nonempty target refused'
+      - name: Remove ephemeral encryption key and backup data
+        if: always()
+        run: rm -rf scratch
+ /tmp/denied-restore.log
+          done
+          echo 'PASS: unsafe libpq URI overrides refused before any network access'
       - name: Encrypt real pg_dump and verify uploaded ciphertext
         env:
           ATLAS_BACKUP_CI_LOCAL: '1'
