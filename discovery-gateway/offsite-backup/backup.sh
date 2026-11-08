@@ -34,11 +34,10 @@ if [[ "${ATLAS_BACKUP_CI_LOCAL:-}" == "1" ]]; then
   }
 else
   [[ "${RAILWAY_ENVIRONMENT_NAME:-}" == "staging" &&
-     private_db_host &&
      "$BACKUP_REMOTE" == r2:* &&
      -n "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" &&
      -n "${RCLONE_CONFIG_R2_SECRET_ACCESS_KEY:-}" &&
-     -n "${RCLONE_CONFIG_R2_ENDPOINT:-}" ]] || {
+     -n "${RCLONE_CONFIG_R2_ENDPOINT:-}" ]] && private_db_host || {
     echo "backup.refused_missing_private_staging_or_r2_configuration" >&2; exit 2;
   }
 fi
