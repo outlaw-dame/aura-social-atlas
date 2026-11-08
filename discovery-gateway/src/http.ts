@@ -11,6 +11,7 @@
  *    POST   /admin/subscriptions        { type: 'tag'|'instance'|'actor', value, kind? }
  *    DELETE /admin/subscriptions/:id
  *    POST   /admin/subscriptions/:id/retry
+ *    POST   /admin/moderation/suppress { id, reason }
  *
  *  Everything else (actor, inbox, webfinger) is delegated to Fedify.
  */
@@ -18,9 +19,10 @@
 import type { Sql } from 'postgres';
 import type { GatewayConfig } from './config.ts';
 import type { Gateway } from './federation.ts';
-import { listFacets, queryItems, type GatewayItem } from './db.ts';
+import { listFacets, queryItems, suppressItem, type GatewayItem } from './db.ts';
 import { listAll, retrySubscription, subscribe, unsubscribe, type SubscribeInput } from './subscribe.ts';
 import { readLimited } from './limits.ts';
+import { checkRemoteUrl } from './urlguard.ts';
 import { log } from './federation.ts';
 
 type HandlerDeps = { cfg: GatewayConfig; gateway: Gateway; sql: Sql; adminEnabled?: boolean };
@@ -173,6 +175,32 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
       const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
       if (!tokenMatches(token, cfg.adminToken)) return json({ error: 'unauthorized' }, { status: 401 });
 
+      if (path === '/admin/moderation/suppress' && req.method === 'POST') {
+        const bytes = await readLimited(req, 4096);
+        if (!bytes) return json({ error: 'payload too large' }, { status: 413 });
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+        } catch {
+          return json({ error: 'invalid JSON' }, { status: 400 });
+        }
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          return json({ error: 'expected a JSON object' }, { status: 400 });
+        }
+        const body = parsed as Record<string, unknown>;
+        if (typeof body.id !== 'string' || body.id.length < 10 || body.id.length > 2048 ||
+            !checkRemoteUrl(body.id).ok) {
+          return json({ error: 'invalid canonical object ID' }, { status: 400 });
+        }
+        if (body.reason !== 'abuse' && body.reason !== 'privacy' && body.reason !== 'legal' &&
+            body.reason !== 'spam' && body.reason !== 'other') {
+          return json({ error: 'invalid moderation reason' }, { status: 400 });
+        }
+        const result = await suppressItem(sql, body.id, body.reason);
+        // Never log a removed post body, full URL, admin bearer or private actor identity.
+        log('moderation.suppressed', { reason: body.reason, newlySuppressed: result.suppressed, removed: result.removed });
+        return json({ suppressed: true, removed: result.removed, newlySuppressed: result.suppressed });
+      }
       if (path === '/admin/subscriptions' && req.method === 'GET') {
         return json({ subscriptions: (await listAll(sql)).map(publicSubscription) });
       }
