@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v6
       - name: Verify live staging HTTPS, public actor, and Cloudflare admin deny
         env:
           BASE: https://staging-gateway.damonoutlaw.xyz
@@ -90,7 +91,10 @@ jobs:
           pubkey = actor.get('publicKey') or actor.get('assertionMethod')
           key_digest = hashlib.sha256(json.dumps(pubkey, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
           print('Public actor key fingerprint (SHA256):', key_digest)
-          assert key_digest == 'de148f71b5ec52dad89c4e1e3c308e5ca8fa0ab47bdb972a3d7b7559a767cd19', 'Unexpected actor signing-key change'
+          from pathlib import Path
+          approved_key = Path('.github/gateway-staging-key-sha256.txt').read_text(encoding='utf-8').strip()
+          assert len(approved_key) == 64 and all(ch in '0123456789abcdef' for ch in approved_key)
+          assert key_digest == approved_key, 'Unexpected actor signing-key change'
 
           resource = 'acct:atlas-discovery-gateway@staging-gateway.damonoutlaw.xyz'
           webfinger_path = '/.well-known/webfinger?' + urllib.parse.urlencode({'resource': resource})
