@@ -1,0 +1,144 @@
+name: Gateway immutable-container rollback acceptance
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-container-rollback.yml'
+      - 'discovery-gateway/Dockerfile'
+      - 'discovery-gateway/src/**'
+      - 'discovery-gateway/package.json'
+      - 'discovery-gateway/bun.lock'
+permissions:
+  contents: read
+jobs:
+  image-rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: image_rollback_ci
+          POSTGRES_PASSWORD: synthetic_ci_only
+          POSTGRES_DB: image_rollback_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U image_rollback_ci -d image_rollback_ci"
+          --health-interval 2s --health-timeout 2s --health-retries 15
+    env:
+      DATABASE_URL: postgres://image_rollback_ci:synthetic_ci_only@127.0.0.1:5432/image_rollback_ci
+      GATEWAY_ADMIN_TOKEN: synthetic_ci_only_32_characters_not_a_live_secret
+      GATEWAY_ORIGIN: https://staging-gateway.damonoutlaw.xyz
+      GATEWAY_ROLE: web
+      PORT: '4198'
+      GATEWAY_ADMIN_PORT: '4199'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: current
+      - uses: actions/checkout@v6
+        with:
+          ref: ad18ba39f0dfce569cbc1e4f78585d819e8a519c
+          path: prior
+      - name: Build both reviewed runtime images, pin by immutable local digest
+        run: |
+          set -euo pipefail
+          docker build -t atlas-gateway-prior ./prior/discovery-gateway
+          docker build -t atlas-gateway-current ./current/discovery-gateway
+          echo "PRIOR_IMAGE=$(docker image inspect atlas-gateway-prior --format '{{.Id}}')" >> "$GITHUB_ENV"
+          echo "CURRENT_IMAGE=$(docker image inspect atlas-gateway-current --format '{{.Id}}')" >> "$GITHUB_ENV"
+          test "$(docker image inspect atlas-gateway-prior --format '{{.Id}}')" != ""
+          test "$(docker image inspect atlas-gateway-current --format '{{.Id}}')" != ""
+      - name: Start previous immutable image and record its actor identity
+        run: |
+          set -euo pipefail
+          docker run -d --name gateway-under-test --network host \
+            -e DATABASE_URL -e GATEWAY_ADMIN_TOKEN -e GATEWAY_ORIGIN \
+            -e GATEWAY_ROLE -e PORT -e GATEWAY_ADMIN_PORT "$PRIOR_IMAGE" >/dev/null
+          python3 - <<'PY'
+          import json, time, urllib.request
+          for attempt in range(40):
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:4198/healthz', timeout=2) as r:
+                      assert json.loads(r.read()) == {'ok': True}
+                  with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:4198/actor', headers={'Accept':'application/activity+json'}),timeout=2) as r:
+                      obj=json.loads(r.read())
+                  assert obj['id']=='https://staging-gateway.damonoutlaw.xyz/actor'
+                  assert obj.get('publicKey') or obj.get('assertionMethod')
+                  with open('/tmp/actor-before.json','w') as f: json.dump(obj.get('publicKey') or obj.get('assertionMethod'),f,sort_keys=True)
+                  print('PASS: previous immutable gateway image started with durable actor identity')
+                  break
+              except Exception:
+                  if attempt==39: raise
+                  time.sleep(.5)
+          PY
+      - name: Seed non-secret state and stop previous image
+        run: |
+          set -euo pipefail
+          docker run --rm --network host postgres:18-alpine psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -c "
+            INSERT INTO gateway_subscriptions(kind,actor_url,actor_host,state,follow_activity_id)
+            VALUES ('litepub','https://synthetic.invalid/actor','synthetic.invalid','accepted','https://synthetic.invalid/follow');
+            INSERT INTO gateway_items(id,activity_id,relay_actor,author_id,object_origin,text)
+            VALUES ('https://synthetic.invalid/post','https://synthetic.invalid/create',
+            'https://synthetic.invalid/actor','https://synthetic.invalid/actor',
+            'https://synthetic.invalid','rollback-preserve');
+            INSERT INTO gateway_seen(activity_id) VALUES('https://synthetic.invalid/activity');"
+          docker stop -t 10 gateway-under-test >/dev/null
+          docker rm gateway-under-test >/dev/null
+      - name: Start newer immutable image against same persisted database
+        run: |
+          set -euo pipefail
+          docker run -d --name gateway-under-test --network host \
+            -e DATABASE_URL -e GATEWAY_ADMIN_TOKEN -e GATEWAY_ORIGIN \
+            -e GATEWAY_ROLE -e PORT -e GATEWAY_ADMIN_PORT "$CURRENT_IMAGE" >/dev/null
+          python3 - <<'PY'
+          import json, time, urllib.request
+          for attempt in range(40):
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:4198/healthz', timeout=2) as r:
+                      assert json.loads(r.read()) == {'ok': True}
+                  with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:4198/actor', headers={'Accept':'application/activity+json'}),timeout=2) as r:
+                      key=json.loads(r.read()).get('publicKey')
+                  assert key
+                  with open('/tmp/actor-before.json') as f: expected=json.load(f)
+                  assert key==expected, 'Actor signing key changed during forward image migration'
+                  break
+              except Exception:
+                  if attempt==39: raise
+                  time.sleep(.5)
+          print('PASS: newer runtime image shares exact actor public signing key')
+          PY
+          docker stop -t 10 gateway-under-test >/dev/null
+          docker rm gateway-under-test >/dev/null
+      - name: Roll back to previous immutable image and verify durable state
+        run: |
+          set -euo pipefail
+          docker run -d --name gateway-under-test --network host \
+            -e DATABASE_URL -e GATEWAY_ADMIN_TOKEN -e GATEWAY_ORIGIN \
+            -e GATEWAY_ROLE -e PORT -e GATEWAY_ADMIN_PORT "$PRIOR_IMAGE" >/dev/null
+          python3 - <<'PY'
+          import json,time,urllib.request
+          for attempt in range(40):
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:4198/healthz', timeout=2) as r:
+                      assert json.loads(r.read())=={'ok':True}
+                  with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:4198/actor',headers={'Accept':'application/activity+json'}),timeout=2) as r:
+                      key=json.loads(r.read()).get('publicKey')
+                  with open('/tmp/actor-before.json') as f: expected=json.load(f)
+                  assert key==expected, 'Actor key changed on rollback'
+                  with urllib.request.urlopen('http://127.0.0.1:4198/api/v1/items?limit=20',timeout=2) as r:
+                      items=json.loads(r.read())['items']
+                  assert sum(x['id']=='https://synthetic.invalid/post' for x in items)==1
+                  break
+              except Exception:
+                  if attempt==39: raise
+                  time.sleep(.5)
+          print('PASS: previous immutable image restored service and identity across forward/rollback')
+          PY
+          actual="$(docker run --rm --network host postgres:18-alpine \
+            psql "$DATABASE_URL" -XAt -c "SELECT (SELECT count(*) FROM gateway_subscriptions) || ',' || (SELECT count(*) FROM gateway_seen)")"
+          test "$actual" = '1,1'
+          docker stop -t 10 gateway-under-test >/dev/null
+          docker rm gateway-under-test >/dev/null
+          echo 'PASS: synthetic subscription and seen-activity persisted after full container rollback'
