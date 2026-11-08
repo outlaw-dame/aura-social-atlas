@@ -1,4 +1,7 @@
 # Atlas social discovery
+
+> **Active client implementation and release checklist:** [Atlas Bonfire Client Implementation Plan](docs/ATLAS_IMPLEMENTATION_PLAN.md) · [Fedizen GraphQL Capability Matrix](docs/BONFIRE_GRAPHQL_CAPABILITY_MATRIX.md). The historical tasks below are not authoritative proof of user-facing Bonfire API support. Atlas is a Bonfire client; Fedify relay discovery is optional and independently deployed.
+
 - [x] Document provider-confirmed absence of staging, RC.1 published-artifact versus live-image distinction, isolated synthetic local/CI acceptance gates and approved maintenance-window installation with feature off. Documentation only; full patched Community build/security blockers remain unresolved, no live actions or test rerun.
 - [x] Audit official Bonfire recipe image-variable revisions, environment/entrypoint/backup constraints; document historical APP_DOCKER_IMAGE versus published CONTAINER_REGISTRY composition and host-revision-dependent digest override, preserve DOMAIN/identity/volumes/staging. No live actions; host revision and operational backup/override validation remain provider gates.
 - [x] Retarget Co-op Cloud integration to reported RC.1; preserve beta archival provenance, resolve canonical annotated tag/source and Community registry metadata, apply three patches to RC-lockfile pins with zero fuzz and parse Elixir; 86 tests pass twice including local PostgreSQL. No live changes; host digest/recipe provenance and full RC Community build remain integration gates.
