@@ -16,7 +16,7 @@ if [[ "${ATLAS_BACKUP_CI_LOCAL:-}" == "1" ]]; then
   }
 else
   [[ "${RAILWAY_ENVIRONMENT_NAME:-}" == "staging" &&
-     "$RESTORE_DATABASE_URL" == *".railway.internal"* ]] || {
+     "$RESTORE_DATABASE_URL" == *"@*.railway.internal:5432/"* ]] || {
     echo "restore.refused_nonprivate_or_nonstaging" >&2; exit 2;
   }
 fi
