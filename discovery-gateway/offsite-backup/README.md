@@ -15,6 +15,7 @@ must be configured and verified before backup scheduling is enabled.
 - Ephemeral plaintext temp file with restrictive `umask 077`; `age` encryption with an offline public recipient.
 - Upload **only ciphertext** via `rclone` to private Cloudflare R2, then re-download/read-back the
   ciphertext to verify SHA-256 and upload a manifest. The producer has no decryption key.
+- Production-mode uploader refuses any R2 destination other than exactly `r2:atlas-discovery-staging-backups`, preventing misconfigured cross-bucket copies. The backup path is fixed to `gateway-staging/` inside that bucket.
 - Unique timestamp+random object name; fail nonzero on failed dump, encryption, upload,
   read-back or manifest. Rclone uses bounded internal retries.
 - Retention and immutable backup lock/lifecycle are **bucket responsibilities**, not
