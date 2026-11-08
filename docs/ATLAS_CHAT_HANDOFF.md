@@ -142,3 +142,17 @@ At handoff, Railway reports **all five services SUCCESS, no staged changes**. A 
 ---
 
 **Maintenance:** This is a **handoff**, not the sole evolving roadmap. The next chat should update this file's date, repo SHA and new evidence only if they materially change. Keep the authoritative checklist in the implementation plan and capability matrix; do not create competing plans.
+
+## 10. Post-handoff Codex review audit (2026-11-08; after original snapshot)
+
+The operator noticed historical Codex review findings after this handoff was prepared. An audit covered PRs #47–#76 and distinguished resolved reviews from genuine outstanding issues. **[PR #76](https://github.com/outlaw-dame/aura-social-atlas/pull/76)** was merged to `main` at `05441239fb503e10f44c15aefa57a1afcb9d6c1c` and fixes the following:
+
+- **#65**: unsafe retention DSN substring validation → explicit private Railway authority and reject libpq host/hostaddr/service overrides.
+- **#66**: fingerprint-only updates skipped the staging workflows → both PR paths now include the pinned fingerprint file.
+- **#67**: recovery could accept an effective public host or nonempty targets with only functions/types/etc. → strict URI validation and PostgreSQL catalog-based empty-target checks.
+- **#71**: original P1 Bash function-expression error was fixed in its original PR; #76 further closes remaining DSN query-override exposure.
+- **#76**: Codex caught an additional schema-name bug in the initial fix (`LIKE 'pg_%'` excluded `pgdata`); fixed by excluding only known PostgreSQL system namespaces, with an actual PG18 regression test for a `pgdata` user schema and a function-only database. Codex review thread acknowledged and resolved.
+
+On #76's final test commit `23186532efc69ea0f138e8b48ee30c6533d5b642`, GitHub Actions runs **42535956417** (encrypted backup and independent restore), **42535956444** (retention), **42535956443** (gateway/Atlas checks), **42535956401** (availability monitor) and **42535956461** (public HTTPS smoke) all passed. The four older review threads in #65–#67 and the #76 thread were replied to and marked resolved. Previous #47, #51, #54 and #55 review threads were already resolved; #55's affected `src/lib/groups.server.ts` is no longer present on main.
+
+**Operational constraint:** #76 is code and CI only; the running Railway backup, web and worker remain intentionally pinned to `988b4673e134e936a1aa9f4312360fb69755a9f5` at verification. **Do not silently redeploy** the gateway or backup job to the new main; the stricter DB URI grammar rejects query/fragment parameters, so first confirm the configured Railway DSNs are compatible using a safe preflight without displaying secrets and ensure the next cron/archive integrity proof still passes. The current task to resume remains **Atlas client Phase A (Fedizen GraphQL/auth)**, not more gateway changes.
