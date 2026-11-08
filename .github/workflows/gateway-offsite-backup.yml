@@ -79,6 +79,26 @@ jobs:
             echo 'FAIL: producer allowed unsafe backend' >&2
             exit 1
           fi
+      - name: Reject R2 bucket escape before database dump
+        run: |
+          set -euo pipefail
+          for remote in r2:damonoutlaw r2:atlas-discovery-staging-backups/elsewhere r2:atlas-discovery-staging-backups-extra; do
+            set +e
+            docker run --rm --user "$(id -u):$(id -g)" \
+              -e SOURCE_DATABASE_URL=postgres://ci:synthetic@postgres.railway.internal:5432/railway \
+              -e AGE_RECIPIENT \
+              -e RAILWAY_ENVIRONMENT_NAME=staging \
+              -e BACKUP_REMOTE="$remote" \
+              -e RCLONE_CONFIG_R2_ACCESS_KEY_ID=synthetic \
+              -e RCLONE_CONFIG_R2_SECRET_ACCESS_KEY=synthetic \
+              -e RCLONE_CONFIG_R2_ENDPOINT=https://synthetic.r2.cloudflarestorage.com \
+              atlas-backup-ci > /tmp/rejected-bucket.log 2>&1
+            status=$?
+            set -e
+            test "$status" -eq 2
+            grep -q 'backup.refused_missing_private_staging_or_r2_configuration' /tmp/rejected-bucket.log
+          done
+          echo 'PASS: staging backup refuses wrong buckets and remote prefixes'
       - name: Verify private staging DSN guards without any remote DB access
         run: |
           set -euo pipefail
