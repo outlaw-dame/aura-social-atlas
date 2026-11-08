@@ -34,7 +34,7 @@ if [[ "${ATLAS_BACKUP_CI_LOCAL:-}" == "1" ]]; then
   }
 else
   [[ "${RAILWAY_ENVIRONMENT_NAME:-}" == "staging" &&
-     "$BACKUP_REMOTE" == r2:* &&
+     "$BACKUP_REMOTE" == "r2:atlas-discovery-staging-backups" &&
      -n "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" &&
      -n "${RCLONE_CONFIG_R2_SECRET_ACCESS_KEY:-}" &&
      -n "${RCLONE_CONFIG_R2_ENDPOINT:-}" ]] && private_db_host || {
