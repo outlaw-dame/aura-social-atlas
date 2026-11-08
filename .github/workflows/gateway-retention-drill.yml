@@ -1,0 +1,90 @@
+name: Gateway isolated age-based retention acceptance
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-retention-drill.yml'
+      - 'discovery-gateway/retention-job/**'
+permissions:
+  contents: read
+jobs:
+  retention:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    services:
+      pg:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: retention_ci
+          POSTGRES_PASSWORD: synthetic_only
+          POSTGRES_DB: retention_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U retention_ci -d retention_ci"
+          --health-interval 2s --health-timeout 2s --health-retries 15
+    env:
+      SOURCE_DATABASE_URL: postgres://retention_ci:synthetic_only@127.0.0.1:5432/retention_ci
+      CI: 'true'
+      ATLAS_RETENTION_CI_LOCAL: '1'
+      GATEWAY_RETENTION_DAYS: '30'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build isolated non-root maintenance image
+        run: docker build -t atlas-retention-ci discovery-gateway/retention-job
+      - name: Seed synthetic fresh/expired posts, actor keys, queue and seen
+        run: |
+          set -euo pipefail
+          docker run --rm -i --network host postgres:18-alpine \
+            psql "$SOURCE_DATABASE_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE gateway_items (id text PRIMARY KEY, ingested_at timestamptz NOT NULL, text text NOT NULL);
+          CREATE INDEX gateway_items_ingested ON gateway_items (ingested_at DESC, id);
+          INSERT INTO gateway_items VALUES
+            ('expired', now() - interval '31 days', 'expire synthetic'),
+            ('fresh', now() - interval '29 days', 'preserve synthetic'),
+            ('boundary', now() - interval '1 day', 'preserve synthetic');
+          CREATE TABLE gateway_keys(actor_identifier text PRIMARY KEY,private_key jsonb NOT NULL,public_key jsonb NOT NULL);
+          INSERT INTO gateway_keys VALUES ('gateway','{"synthetic":"secret"}','{"synthetic":"public"}');
+          CREATE TABLE gateway_subscriptions(actor_url text PRIMARY KEY);
+          INSERT INTO gateway_subscriptions VALUES ('https://synthetic.invalid/relay');
+          CREATE TABLE gateway_seen(activity_id text PRIMARY KEY);
+          INSERT INTO gateway_seen VALUES ('https://synthetic.invalid/seen');
+          CREATE TABLE fedify_messages(id text PRIMARY KEY);
+          INSERT INTO fedify_messages VALUES ('pending-durable-synthetic');
+          SQL
+      - name: Unsafe target and invalid retention settings must refuse
+        run: |
+          set -euo pipefail
+          if docker run --rm --network host \
+            -e SOURCE_DATABASE_URL -e CI -e ATLAS_RETENTION_CI_LOCAL \
+            -e GATEWAY_RETENTION_DAYS=0 atlas-retention-ci; then
+            echo 'retention accepted zero-day setting' >&2; exit 1
+          fi
+          if docker run --rm --network host \
+            -e SOURCE_DATABASE_URL -e GATEWAY_RETENTION_DAYS \
+            atlas-retention-ci; then
+            echo 'retention accepted non-private unapproved target' >&2; exit 1
+          fi
+      - name: Run actual expiry and assert only expired cached item removed
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            -e SOURCE_DATABASE_URL -e CI -e ATLAS_RETENTION_CI_LOCAL \
+            -e GATEWAY_RETENTION_DAYS atlas-retention-ci | tee /tmp/retention-result.txt
+          grep -qx 'retention.completed deleted=1 batches=1' /tmp/retention-result.txt
+          actual="$(docker run --rm --network host postgres:18-alpine \
+            psql "$SOURCE_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 -c \
+            "SELECT string_agg(id, ',' ORDER BY id) FROM gateway_items")"
+          test "$actual" = 'boundary,fresh'
+          counts="$(docker run --rm --network host postgres:18-alpine \
+            psql "$SOURCE_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 -c \
+            "SELECT (SELECT count(*) FROM gateway_keys) || ',' || (SELECT count(*) FROM gateway_subscriptions) || ',' || (SELECT count(*) FROM gateway_seen) || ',' || (SELECT count(*) FROM fedify_messages)")"
+          test "$counts" = '1,1,1,1'
+      - name: Idempotency — no further deletions
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            -e SOURCE_DATABASE_URL -e CI -e ATLAS_RETENTION_CI_LOCAL \
+            -e GATEWAY_RETENTION_DAYS atlas-retention-ci | tee /tmp/retention-second.txt
+          grep -qx 'retention.completed deleted=0 batches=1' /tmp/retention-second.txt
+          echo 'PASS: expired cached content removed; keys, subscriptions, seen and queue preserved'
