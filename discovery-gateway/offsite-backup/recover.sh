@@ -52,8 +52,9 @@ echo "restore.ciphertext_integrity_verified"
 count="$(psql "$RESTORE_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 -c "
  SELECT
    (SELECT count(*) FROM pg_namespace
-    WHERE nspname NOT IN ('public', 'information_schema')
-      AND nspname NOT LIKE 'pg_%')
+    WHERE nspname NOT IN ('public', 'information_schema', 'pg_catalog', 'pg_toast')
+      AND left(nspname, 8) <> 'pg_temp_'
+      AND left(nspname, 14) <> 'pg_toast_temp_')
    + (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE n.nspname='public')
    + (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
