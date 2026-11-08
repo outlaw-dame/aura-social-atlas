@@ -65,6 +65,47 @@ jobs:
             atlas-retention-ci; then
             echo 'retention accepted non-private unapproved target' >&2; exit 1
           fi
+      - name: Deny DSN host overrides and misleading private-host substrings offline
+        run: |
+          set -euo pipefail
+          for dsn in \
+            'postgres://u:p@db.railway.internal:5432/gateway?host=public.example' \
+            'postgres://u:p@db.railway.internal:5432/gateway?hostaddr=169.254.169.254' \
+            'postgres://u:p@public.example:5432/gateway?application_name=db.railway.internal' \
+            'postgres://u:p@public.example:5432/gateway'; do
+            set +e
+            docker run --rm --network none \
+              -e SOURCE_DATABASE_URL="$dsn" \
+              -e RAILWAY_ENVIRONMENT_NAME=staging -e GATEWAY_RETENTION_DAYS=30 \
+              atlas-retention-ci > /tmp/retention-refused.log 2>&1
+            status=$?
+            set -e
+            test "$status" -eq 2
+            grep -q '^retention.non_private_database_or_environment        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            -e SOURCE_DATABASE_URL -e CI -e ATLAS_RETENTION_CI_LOCAL \
+            -e GATEWAY_RETENTION_DAYS atlas-retention-ci | tee /tmp/retention-result.txt
+          grep -qx 'retention.completed deleted=1 batches=1' /tmp/retention-result.txt
+          actual="$(docker run --rm --network host postgres:18-alpine \
+            psql "$SOURCE_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 -c \
+            "SELECT string_agg(id, ',' ORDER BY id) FROM gateway_items")"
+          test "$actual" = 'boundary,fresh'
+          counts="$(docker run --rm --network host postgres:18-alpine \
+            psql "$SOURCE_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 -c \
+            "SELECT (SELECT count(*) FROM gateway_keys) || ',' || (SELECT count(*) FROM gateway_subscriptions) || ',' || (SELECT count(*) FROM gateway_seen) || ',' || (SELECT count(*) FROM fedify_messages)")"
+          test "$counts" = '1,1,1,1'
+      - name: Idempotency — no further deletions
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            -e SOURCE_DATABASE_URL -e CI -e ATLAS_RETENTION_CI_LOCAL \
+            -e GATEWAY_RETENTION_DAYS atlas-retention-ci | tee /tmp/retention-second.txt
+          grep -qx 'retention.completed deleted=0 batches=1' /tmp/retention-second.txt
+          echo 'PASS: expired cached content removed; keys, subscriptions, seen and queue preserved'
+ /tmp/retention-refused.log
+          done
+          echo 'PASS: retention refuses effective nonprivate database targets'
       - name: Run actual expiry and assert only expired cached item removed
         run: |
           set -euo pipefail
