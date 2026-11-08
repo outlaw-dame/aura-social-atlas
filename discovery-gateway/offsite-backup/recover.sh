@@ -15,8 +15,18 @@ if [[ "${ATLAS_BACKUP_CI_LOCAL:-}" == "1" ]]; then
     echo "restore.refused_unsafe_local_target" >&2; exit 2;
   }
 else
-  [[ "${RAILWAY_ENVIRONMENT_NAME:-}" == "staging" &&
-     "$RESTORE_DATABASE_URL" == *"@*.railway.internal:5432/"* ]] || {
+  # This check is independent of the source-DB DSN and must match the
+  # hostname portion of the URL, never a glob containing a quoted asterisk.
+  private_restore_host() {
+    local address="${RESTORE_DATABASE_URL#*://}"
+    [[ "$address" == *"@"* ]] || return 1
+    address="${address#*@}"
+    address="${address%%/*}"
+    address="${address%%\\?*}"
+    local host="${address%%:*}"
+    [[ "$host" == *.railway.internal && "$address" == *:5432 ]]
+  }
+  [[ "${RAILWAY_ENVIRONMENT_NAME:-}" == "staging" ]] && private_restore_host || {
     echo "restore.refused_nonprivate_or_nonstaging" >&2; exit 2;
   }
 fi
