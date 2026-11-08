@@ -33,3 +33,23 @@
 - [x] Optional Bonfire relay client extension (bonfire_relay_client/): Mastodon + LitePub subscriptions, public-only, origin re-fetch, atomic dedup; off by default, needs 5 upstream Bonfire hooks before install (adapter fails closed until then); persist-before-send subscribe, retryable claims, LitePub Announce out.
 - [x] Relay admin (Bonfire instance settings → Relays): Mastodon/LitePub/FediBuzz tag + instance connections, hashtag and instance rules with honest coverage, server-side admin checks, 5 upstream hook patches (apply cleanly, not built in Bonfire).
 - [ ] Phase 1: discovery-gateway/ Bun+Fedify subscriber service (Service actor, FediBuzz tag/instance + Mastodon/LitePub follows, public-only ingest, Postgres provenance, admin CRUD, read-only JSON API), Atlas Discovery gateway feed, Phase 2 bridge contract doc. No deploys, no writes to fedizen.net.
+
+
+## Architecture correction and client-first acceptance (2026-11-08)
+
+**Primary product:** Atlas is a Bonfire client; Fedizen (Bonfire Community/Co-op Cloud) is its current test provider and planned custom flavor. **Optional addon:** Fedify-based ActivityPub relay discovery. These are not interchangeable backends.
+
+### Audited status (do not turn earlier checkbox descriptions into proof)
+
+- [x] Audited current source topology and restored the root README's Bonfire-client identity, rather than its stale “Aura Browser” boilerplate. Gateway staging has an independent actor, DB and read API, preserving Bonfire isolation.
+- [x] Confirmed that the app *has code paths* for Fedizen OIDC, public Bonfire GraphQL, read-only connected account feed, and optional public gateway discovery. These code paths do **not** alone verify an actual logged-in Fedizen user session or live real-user frontend deployment.
+- [x] Confirmed demo catalogue and client-local follows/saves/draft composer remain in primary frontend; they are not native Bonfire actions and must remain clearly identified as mock/local.
+- [x] Confirmed `relay/` (standalone relay), `discovery-gateway/` (current subscriber/discovery staging), and `bonfire_relay_client/` (disabled extension) are distinct. Avoid building a duplicate service or routing Atlas native actions into the gateway.
+- [ ] **Next first-class acceptance:** exercise Fedizen OIDC end-to-end with a real authorized account, then inspect session/user mapping; verify authenticated personal Bonfire Home, profile and notifications from supported read API, including expiry/reconnect and failure behavior. A public `/healthz` check or synthetic signed relay interaction cannot close these gates.
+- [ ] Establish an explicit Bonfire capability matrix for supported read/write APIs in the *deployed* Fedizen Community revision (REST/GraphQL; permissions; canonical identities; error semantics). Separate Bonfire-native capabilities from Atlas enhancements and planned Fedizen-flavor changes.
+- [ ] Replace prototype/local-only client actions incrementally with real authenticated Bonfire operations and state reconciliation: compose/post, reply, react, follow/unfollow, edit/delete, bookmark/save **where supported**. Include end-to-end tests against an authorized disposable user, idempotency/retry behavior, error UX and no accidental duplicate posting.
+- [ ] Connect public relay discovery to Atlas only as optional, read-only provenance-aware content. Never show it as native Fedizen Home or imply the relay's service actor is the original author.
+- [ ] Gate any eventual Bonfire native relay ingestion behind `PHASE2_BONFIRE_BRIDGE.md`, explicit scope approval and provider/Bonfire version-compatible tests; keep the extension off by default.
+- [ ] Validate newly deployed gateway revision's key continuity, real signed traffic, durable work after termination and rollback *without modifying Fedizen's live data*. Keep network egress enforcement and alerting as independent gateway production blockers.
+
+**Decision rule for future changes:** Every proposed feature must name the responsible layer (Atlas client, Bonfire/Fedizen, optional Fedify discovery, or optional integration adapter), a supported API and validation path, and its user-facing benefit. Refuse unnecessary layers, duplicate implementations, speculative authentication schemes, new persistence/infra or Bonfire patches when supported client APIs suffice. The gateway's production-readiness work must not prevent parallel client development, nor make gateway staging deployment equivalent to Atlas production readiness.
