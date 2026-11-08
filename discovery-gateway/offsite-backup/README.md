@@ -1,9 +1,11 @@
 # Private, encrypted offsite logical backups
 
-This is a **prepared implementation**, NOT a deployed/scheduled backup. The staging account's
-Cloudflare API returned `10042` ("Please enable R2 through the Cloudflare Dashboard").
-Until the R2 subscription is activated and an encrypted archive is uploaded and
-restored from that real account, Atlas has **no independently retained offsite backup**.
+**Verified 2026-11-08:** Cloudflare R2 is enabled. A dedicated Standard storage bucket
+`atlas-discovery-staging-backups` was created in Eastern North America. Cloudflare
+accepted 30-day minimum object lock and a 45-day lifecycle expiry for
+`gateway-staging/`. **No live encrypted archive has been uploaded/restored.**
+R2 S3 access credentials and an externally recoverable age public recipient
+must be configured and verified before backup scheduling is enabled.
 
 ## Design
 
@@ -20,11 +22,9 @@ restored from that real account, Atlas has **no independently retained offsite b
 
 ## Prerequisite user actions
 
-1. Cloudflare → **Storage & databases → R2 → Overview** → activate R2 billing/subscription
-   (R2 has free monthly usage, but usage-based billing/checkout is required).
-2. Create one **private** R2 bucket scoped solely to Atlas staging. Do not enable
-   public `r2.dev` access or a public custom domain. Configure bucket lifecycle
-   retention and account access auditing.
+1. **Completed:** Enable R2 and create private dedicated staging bucket with
+   a 30-day minimum lock and 45-day lifecycle for `gateway-staging/`.
+2. **Remaining:** Verify public `r2.dev` access is disabled and audit access.
 3. Create a **bucket-specific** R2 API token allowing object read+write for the
    backup producer (read is needed for SHA-256 read-back); keep delete permissions
    excluded where the provider supports it. Recovery should use a separate
@@ -47,7 +47,7 @@ Use `restartPolicyType=NEVER`, no public domain, no volume. Set variables
 | `SOURCE_DATABASE_URL` | Railway reference `${{Postgres.DATABASE_URL}}` (private) |
 | `RAILWAY_ENVIRONMENT_NAME` | Railway-provided `staging` |
 | `AGE_RECIPIENT` | Offline age **public** recipient (`age1...`) |
-| `BACKUP_REMOTE` | `r2:<private-bucket-name>` |
+| `BACKUP_REMOTE` | `r2:atlas-discovery-staging-backups` |
 | `RCLONE_CONFIG_R2_TYPE` | `s3` |
 | `RCLONE_CONFIG_R2_PROVIDER` | `Cloudflare` |
 | `RCLONE_CONFIG_R2_ACCESS_KEY_ID` | R2 bucket-scoped token access key |
