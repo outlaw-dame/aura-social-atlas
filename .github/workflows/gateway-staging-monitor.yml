@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v6
       - name: Probe independent HTTPS, federation identity and admin edge isolation
         id: probe
         continue-on-error: true
@@ -28,6 +29,8 @@ jobs:
           BASE: https://staging-gateway.damonoutlaw.xyz
         run: |
           python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
           import json
           import os
           import ssl
@@ -62,6 +65,11 @@ jobs:
                   actor = json.loads(response.read(50000))
                   assert actor.get('id') == base + '/actor'
                   assert actor.get('publicKey') or actor.get('assertionMethod')
+                  key = actor.get('publicKey') or actor.get('assertionMethod')
+                  actual = hashlib.sha256(json.dumps(key, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+                  expected = Path('.github/gateway-staging-key-sha256.txt').read_text(encoding='utf-8').strip()
+                  assert len(expected) == 64 and all(x in '0123456789abcdef' for x in expected)
+                  assert actual == expected, 'staging actor public signing key unexpectedly changed'
 
               resource = 'acct:atlas-discovery-gateway@staging-gateway.damonoutlaw.xyz'
               path = '/.well-known/webfinger?' + urllib.parse.urlencode({'resource':resource})
@@ -83,7 +91,7 @@ jobs:
           for attempt in range(3):
               try:
                   probe()
-                  print('PASS: TLS, Cloudflare, DB health, actor, WebFinger, admin firewall')
+                  print('PASS: TLS, Cloudflare, DB health, pinned actor key, WebFinger, admin firewall')
                   break
               except Exception as exc:
                   failures.append(type(exc).__name__ + ': ' + str(exc)[:250])
