@@ -4,6 +4,7 @@
 `atlas-discovery-staging-backups` was created in Eastern North America. Cloudflare
 accepted 30-day minimum object lock and a 45-day lifecycle expiry for
 `gateway-staging/`. **No live encrypted archive has been uploaded/restored.**
+The bucket's public `r2.dev` endpoint was independently checked and is **disabled**.
 R2 S3 access credentials and an externally recoverable age public recipient
 must be configured and verified before backup scheduling is enabled.
 
@@ -24,7 +25,8 @@ must be configured and verified before backup scheduling is enabled.
 
 1. **Completed:** Enable R2 and create private dedicated staging bucket with
    a 30-day minimum lock and 45-day lifecycle for `gateway-staging/`.
-2. **Remaining:** Verify public `r2.dev` access is disabled and audit access.
+2. **Verified:** Public `r2.dev` access is disabled. Review access logs and
+   audit policies before production promotion.
 3. Create a **bucket-specific** R2 API token allowing object read+write for the
    backup producer (read is needed for SHA-256 read-back); keep delete permissions
    excluded where the provider supports it. Recovery should use a separate
