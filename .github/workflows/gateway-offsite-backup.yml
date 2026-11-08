@@ -79,6 +79,60 @@ jobs:
             echo 'FAIL: producer allowed unsafe backend' >&2
             exit 1
           fi
+      - name: Verify private staging DSN guards without any remote DB access
+        run: |
+          set -euo pipefail
+          mkdir -p scratch/stub
+          printf '#!/bin/sh\necho ci_reached_pg_dump >&2\nexit 79\n' > scratch/stub/pg_dump
+          chmod 0555 scratch/stub/pg_dump
+          good='postgres://synthetic:only@postgres.railway.internal:5432/railway'
+          bad='postgres://synthetic:only@metadata.example:5432/railway'
+          for target in "$bad" "$good"; do
+            set +e
+            docker run --rm --user "$(id -u):$(id -g)" \
+              -v "$PWD/scratch:/scratch" \
+              -e SOURCE_DATABASE_URL="$target" \
+              -e AGE_RECIPIENT \
+              -e RAILWAY_ENVIRONMENT_NAME=staging \
+              -e BACKUP_REMOTE=r2:atlas-discovery-staging-backups \
+              -e RCLONE_CONFIG_R2_ACCESS_KEY_ID=synthetic \
+              -e RCLONE_CONFIG_R2_SECRET_ACCESS_KEY=synthetic \
+              -e RCLONE_CONFIG_R2_ENDPOINT=https://synthetic.r2.cloudflarestorage.com \
+              --entrypoint /bin/bash atlas-backup-ci -c \
+              'PATH=/scratch/stub:$PATH /usr/local/bin/atlas-backup' > /tmp/guard.log 2>&1
+            status=$?
+            set -e
+            echo "backup private-host guard status=$status target_class=$([[ \"$target\" == \"$bad\" ]] && echo rejected || echo accepted)"
+            cat /tmp/guard.log
+            if [[ "$target" == "$bad" ]]; then
+              test "$status" -eq 2
+              grep -q 'backup.refused_missing_private_staging_or_r2_configuration' /tmp/guard.log
+            else
+              test "$status" -eq 79
+              grep -q 'ci_reached_pg_dump' /tmp/guard.log
+            fi
+          done
+          for target in "$bad" "$good"; do
+            set +e
+            docker run --rm --user "$(id -u):$(id -g)" \
+              -e RESTORE_DATABASE_URL="$target" -e RAILWAY_ENVIRONMENT_NAME=staging \
+              -e RECOVERY_CONFIRM=isolated-empty-target \
+              -e RECOVERY_ARCHIVE=/scratch/absent.age \
+              -e RECOVERY_MANIFEST=/scratch/absent.json \
+              -e AGE_IDENTITY_PATH=/scratch/offline.key \
+              --entrypoint /usr/local/bin/atlas-recover atlas-backup-ci > /tmp/guard-restore.log 2>&1
+            status=$?
+            set -e
+            echo "restore private-host guard status=$status target_class=$([[ \"$target\" == \"$bad\" ]] && echo rejected || echo accepted)"
+            cat /tmp/guard-restore.log
+            test "$status" -eq 2
+            if [[ "$target" == "$bad" ]]; then
+              grep -q 'restore.refused_nonprivate_or_nonstaging' /tmp/guard-restore.log
+            else
+              grep -q 'restore.missing_files' /tmp/guard-restore.log
+            fi
+          done
+          echo 'PASS: private Railway production guards checked without network access'
       - name: Encrypt real pg_dump and verify uploaded ciphertext
         env:
           ATLAS_BACKUP_CI_LOCAL: '1'
