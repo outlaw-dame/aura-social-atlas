@@ -71,6 +71,25 @@ that unsafe destinations are rejected, runs the encryption/upload/read-back
 against an isolated local rclone destination and decrypts/restores using a
 **separate recovery step**. CI never accesses Railway's live database or R2.
 
+## Safe recovery helper
+
+The image now also provides `/usr/local/bin/atlas-recover`. Supply a downloaded
+`*.pgcustom.age`, its associated `*.manifest.json`, an **offline recovery**
+`age` private-key file, and a separate empty PostgreSQL destination.
+Set `RECOVERY_CONFIRM=isolated-empty-target`; production-mode runs must have
+`RAILWAY_ENVIRONMENT_NAME=staging` and a private Railway destination.
+Before decryption, the helper checks manifest syntax/version, SHA-256 and exact
+ciphertext length. It refuses a nonempty database, then decrypts only to a
+short-lived private temporary directory, checks the custom PG archive and
+performs an error-checked restore. The identity is never logged or included
+in the backup producer container.
+
+A manifest stored **with** a ciphertext is an integrity check against accidental
+corruption, not an authenticated provenance guarantee against an adversary who
+can replace both. Stronger storage immutability or an offline-signed manifest
+remains necessary to resist malicious replacement. Never interpret a
+successful restore as sufficient by itself to satisfy live RPO/RTO.
+
 The test validates implementation mechanics. It does **not** prove actual R2
 authorization, backup object lock, cross-provider availability, scheduler firing,
 WAL recovery, live staging encryption retention, or an operational RTO. Those
