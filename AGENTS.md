@@ -1,3 +1,11 @@
+# Product scope and responsibility boundaries (highest priority)
+- Atlas is a **Bonfire client**. Fedizen is the active Bonfire Community integration/test instance and future Fedizen flavor. Treat supported Bonfire APIs, Bonfire social identity, permissions and moderation as authoritative. Do not create a parallel social backend or assume the separate gateway replaces Bonfire.
+- Use Fedify solely for optional, separately owned public ActivityPub relay discovery; `discovery-gateway/` is the active staging subscriber. Its actor, queue, indexes and Postgres are gateway-only. Never inject discovery into Bonfire Home, reuse Fedizen signing credentials, modify Fedizen DB, bypass Bonfire moderation or claim gateway results are the user's follow timeline.
+- `relay/` is an optional relay-server experiment and `bonfire_relay_client/` is an inactive host-dependent adapter; don't duplicate these into the gateway or install the adapter on Fedizen without explicit operator and host-version approval.
+- Treat sample creators/stories, local follow/save choices and composer drafts as prototypes until backed by real Bonfire account APIs. Never represent local selections as synced follows, bookmarks or published posts. Prioritize real OIDC/account session and authorized Bonfire feed/actions before new relay or infrastructure features.
+- Before introducing a service, persistence layer, authentication mechanism, protocol adapter or Bonfire patch, justify which layer owns the behavior, the actual supported API, security boundary, user benefit, and integration test. Prefer the minimum client-side integration and keep gateway failures independent of Bonfire login, feed and posting.
+- Distinguish code/test existence from live verification. A passing synthetic relay or gateway deployment does not establish Fedizen client sign-in, API compatibility or native Bonfire write capability.
+
 # Architecture
 - Initialize account state through the subscribe-first session observer and associate loaded profiles with their user ID; delayed reads must not overwrite newer auth events or display another account's profile.
 - Share article creator attribution through CreatorTag across phone and desktop feeds; profile and follow actions use the existing discovery state so author interactions stay consistent.
