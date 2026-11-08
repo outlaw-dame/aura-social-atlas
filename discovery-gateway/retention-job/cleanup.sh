@@ -34,10 +34,10 @@ batch=0
 while [ "$batch" -lt 100 ]; do
   removed="$(PGOPTIONS='-c lock_timeout=2000 -c statement_timeout=15000' \
     psql "$SOURCE_DATABASE_URL" -X -q -A -t -v ON_ERROR_STOP=1 \
-      -v days="$GATEWAY_RETENTION_DAYS" -c "
+      -c "
       WITH candidates AS (
         SELECT id FROM gateway_items
-        WHERE ingested_at < now() - (:'days'::int * interval '1 day')
+        WHERE ingested_at < now() - ($GATEWAY_RETENTION_DAYS::int * interval '1 day')
         ORDER BY ingested_at, id LIMIT 500
         FOR UPDATE SKIP LOCKED
       ), removed AS (
