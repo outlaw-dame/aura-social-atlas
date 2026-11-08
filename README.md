@@ -12,6 +12,11 @@ The [Fedify-based discovery gateway](discovery-gateway/) is a separately deploye
 - **Other relay experiments:** `relay/` is an independent optional relay-server experiment; `bonfire_relay_client/` is an inactive Bonfire Community Elixir adapter requiring host-specific upstream integration. Neither is required for Atlas's client MVP, deployed to Fedizen, or authorized to write native content.
 - **Fedizen hosting:** Fedizen runs Bonfire Community under Co-op Cloud. No direct Bonfire database changes, forced instance relay subscription or live host patches are authorized by this repo.
 
+## Living implementation checklist
+
+- [Phased Atlas implementation plan](docs/ATLAS_IMPLEMENTATION_PLAN.md) — priorities, dependency graph, acceptance gates, ten initial PRs, client vs gateway ownership.
+- [Bonfire GraphQL capability matrix](docs/BONFIRE_GRAPHQL_CAPABILITY_MATRIX.md) — candidate fields, live Fedizen verification status, permission contracts and version coverage.
+
 ## Implementation priority
 
 1. **Verify actual user sign-in with Fedizen** (OIDC and session stability), then authenticated account profile, personal Home/notifications and token lifecycle. Keep auth tokens server-only; follow Bonfire's supported interfaces.
