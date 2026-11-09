@@ -8,14 +8,15 @@ describe('Fedizen delegated OAuth grant acceptance', () => {
     expect(parseFedizenReadGrant({ access_token: 'opaque-secret' }))
       .toEqual({ access_token: 'opaque-secret', scope: 'read' });
   });
-  test.each([
-    null, [], {}, { access_token: '' }, { access_token: 42 },
-    { access_token: 'secret\r\nheader' }, { access_token: 'x'.repeat(8193) },
-    { access_token: 'opaque', scope: 'write' },
-    { access_token: 'opaque', scope: 'read:accounts write' },
-    { access_token: 'opaque', scope: 42 },
-  ])('rejects malformed or insufficient token grants %#', value => {
-    expect(parseFedizenReadGrant(value)).toBeNull();
+  test('rejects malformed or insufficient token grants', () => {
+    const cases: unknown[] = [
+      null, [], {}, { access_token: '' }, { access_token: 42 },
+      { access_token: 'secret\\r\\nheader' }, { access_token: 'x'.repeat(8193) },
+      { access_token: 'opaque', scope: 'write' },
+      { access_token: 'opaque', scope: 'read:accounts write' },
+      { access_token: 'opaque', scope: 42 },
+    ];
+    for (const value of cases) expect(parseFedizenReadGrant(value)).toBeNull();
   });
   test('requires a nonempty verified account identity', () => {
     expect(parseFedizenAccount({ id: '123', acct: 'alice@fedizen.net' })).toBe('alice@fedizen.net');
