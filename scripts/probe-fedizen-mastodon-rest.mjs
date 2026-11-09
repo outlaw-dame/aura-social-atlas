@@ -38,7 +38,7 @@ export function recognizeShape(kind, payload) {
     return object(payload) && [payload.domain, payload.uri, payload.title].some(v => typeof v === 'string' && v.length > 0)
       ? 'observed' : 'mismatch';
   }
-  if (!Array.isArray(payload) || payload.length > 1) return 'mismatch';
+  if (!Array.isArray(payload) || payload.length > (kind === 'emoji-list' ? 2000 : 1)) return 'mismatch';
   if (payload.length === 0) return 'empty-unconfirmed';
   const first = payload[0];
   if (kind === 'emoji-list') {
@@ -164,6 +164,7 @@ async function selfTest() {
   assert.equal(recognizeShape('status-list', []), 'empty-unconfirmed');
   assert.equal(recognizeShape('status-list', [{ id: 'a' }]), 'observed');
   assert.equal(recognizeShape('status-list', [{ content: 'private-data' }]), 'mismatch');
+  assert.equal(recognizeShape('emoji-list', [{ shortcode: 'one' }, { shortcode: 'two' }]), 'observed');
   let count = 0;
   const fake = async (url, init) => {
     count++;
