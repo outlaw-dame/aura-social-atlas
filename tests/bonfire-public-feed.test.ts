@@ -60,17 +60,17 @@ describe('Bonfire anonymous public GraphQL reads', () => {
     expect(await fetchRecentArticles()).toEqual({ articles: [], error: 'unavailable' });
   });
 
-  test('HTTP failure returns unavailable with no automatic replay', async () => {
+  test('transient HTTP 503 returns unavailable after bounded safe retries', async () => {
     const calls = stub({ errors: [] }, 503);
     expect(await fetchPublicFeed()).toEqual({ posts: [], error: 'unavailable' });
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(3);
   });
 
-  test('network exception returns unavailable with no automatic replay', async () => {
+  test('network exceptions return unavailable after bounded safe retries', async () => {
     let calls = 0;
     console.error = () => {};
     globalThis.fetch = mock(async () => { calls++; throw new Error('connection failed with secret'); }) as typeof fetch;
     expect(await fetchPublicFeed()).toEqual({ posts: [], error: 'unavailable' });
-    expect(calls).toBe(1);
+    expect(calls).toBe(3);
   });
 });

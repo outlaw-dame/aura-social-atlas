@@ -41,6 +41,17 @@ For each row, add **exact** deployed root field, args/return, type fragments, OA
 | Polls, lists, tags, labels, settings (F) | **Version-specific operations pending inventory** | Feature references only; no confirmed GraphQL mapping | blocked | P1/P2: per installed extension and value |
 | Optional relay discovery (H) | **Not Bonfire GraphQL:** independent `GET /api/v1/items` / `facets` | `discovery-gateway` + client code | existing-client-code | P2: never represent as Bonfire native feed |
 
+### Atlas implementation evidence (not Fedizen compatibility evidence)
+
+| Checkpoint | Repository evidence | What it establishes | What remains unverified |
+| --- | --- | --- | --- |
+| Public contract probe | PR #78, `scripts/probe-fedizen-graphql.mjs` | CI-tested sanitized anonymous probe; **not yet run live against Fedizen** | Actual GraphQL HTTP/data/errors response and enabled schema |
+| Public feed consolidation | PR #79, `src/lib/bonfire.server.ts` | Tested shared local/articles path and explicit malformed/partial error states | Fedizen runtime query acceptance and pagination |
+| Authorized REST read isolation | PR #80, `src/lib/fedizen.server.ts`, `fedizen.functions.ts` | Tested fixed-path bearer handling, malformed payload detection and independent Home/notification errors | Consented login, real API scopes, authorization and user mapping |
+| Typed GraphQL boundary | PR #81, `src/lib/bonfire-graphql.server.ts` | Fixed-origin bounded transport, query-only retries, no mutation replay, cancellation and validation | Deployed schema matching, authorized GraphQL operations, native Home and mutations |
+
+**Important:** CI mocks verify Atlas-side behavior, not production API availability, permission enforcement, or Bonfire-native social persistence. No row above upgrades a capability to `observed-fedizen` or `verified-live`. Record real operator-approved acceptance separately.
+
 ### Versioned schema capture record
 
 | Field | Current value | Evidence / next action |
