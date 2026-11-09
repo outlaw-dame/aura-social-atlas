@@ -13,13 +13,12 @@
  */
 import { strict as assert } from 'node:assert';
 import { verifyFedizenReadGrant } from '../src/lib/fedizen.server';
-import { BonfireGraphQLError } from '../src/lib/bonfire-graphql.server';
 import {
   matchesLinkedFedizenHandle,
   readNativeBonfireMe,
   readNativeBonfirePage,
   normalizeNativeBonfireHome,
-  normalizeNativeBonfireNotifications,
+  normalizeNativeBonfireNotifications, isConclusiveAnonymousMeDenial,
 } from '../src/lib/bonfire-private.server';
 
 function summarizeResult(name: string, accepted: boolean, details: Record<string, boolean | number> = {}) {
@@ -73,13 +72,9 @@ async function live() {
   let anonymousDenied = false;
   try {
     const anonymousMe = await readNativeBonfireMe('');
-    anonymousDenied = anonymousMe === null || anonymousMe.user === null;
+    anonymousDenied = isConclusiveAnonymousMeDenial(anonymousMe);
   } catch (error) {
-    // A request failure does not prove permission denial. The transport
-    // deliberately removes GraphQL error text, so only an explicit HTTP
-    // unauthorized/forbidden status is conclusive here.
-    anonymousDenied = error instanceof BonfireGraphQLError &&
-      error.kind === 'http' && (error.status === 401 || error.status === 403);
+    anonymousDenied = isConclusiveAnonymousMeDenial(undefined, error);
   }
   summarizeResult('graphql-anonymous-owner-denied', anonymousDenied);
   if (!anonymousDenied) throw Error('Anonymous GraphQL unexpectedly exposed a signed-in identity.');
