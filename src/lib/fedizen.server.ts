@@ -42,9 +42,9 @@ export function parseFedizenOAuthApp(payload: unknown): { client_id: string; cli
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const { client_id, client_secret } = payload as Record<string, unknown>;
   if (typeof client_id !== 'string' || !client_id || client_id.length > 4096 ||
-    /[\\r\\n]/.test(client_id)) return null;
+    /[\r\n]/.test(client_id)) return null;
   if (typeof client_secret !== 'string' || !client_secret || client_secret.length > 8192 ||
-    /[\\r\\n]/.test(client_secret)) return null;
+    /[\r\n]/.test(client_secret)) return null;
   return { client_id, client_secret };
 }
 
