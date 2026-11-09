@@ -1,0 +1,88 @@
+import { createServerFn } from '@tanstack/react-start';
+import { z } from 'zod';
+import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
+import { assertFedizenSessionIntent } from './fedizen-feed';
+import type { NativeBonfireIdentity, NativeBonfireNotice } from './bonfire-private.server';
+import type { BonfirePost } from './spotlight';
+
+export function nativeBonfireReadEnabled(value: string | undefined): boolean {
+  return value === 'verified';
+}
+
+export type NativeBonfireSnapshot = {
+  status: 'disabled' | 'disconnected' | 'authorization-required' | 'unavailable' | 'available';
+  identity: NativeBonfireIdentity;
+  /** Native IDs and account fields are not assumed to equal REST or OIDC IDs. */
+  restAccountHandle: string | null;
+  posts: BonfirePost[];
+  notices: NativeBonfireNotice[];
+  homeEndCursor: string | null;
+  homeHasNextPage: boolean;
+  notificationEndCursor: string | null;
+  notificationHasNextPage: boolean;
+};
+
+/**
+ * Operator gated until a real, consented OAuth test proves that Fedizen's
+ * delegated API bearer is accepted by GraphQL and resolves the correct user.
+ * This must not silently replace the currently working REST Home experience.
+ */
+export const getNativeBonfireSnapshot = createServerFn({ method: 'GET' })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(input => z.object({
+    expectedAtlasUserId: z.string().uuid(),
+    homeAfter: z.string().max(2048).nullable().optional(),
+    notificationsAfter: z.string().max(2048).nullable().optional(),
+  }).parse(input))
+  .handler(async ({ data, context }): Promise<NativeBonfireSnapshot> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const base = {
+      identity: null,
+      restAccountHandle: null,
+      posts: [],
+      notices: [],
+      homeEndCursor: null,
+      homeHasNextPage: false,
+      notificationEndCursor: null,
+      notificationHasNextPage: false,
+    } satisfies Omit<NativeBonfireSnapshot, 'status'>;
+
+    if (!nativeBonfireReadEnabled(process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'])) {
+      return { ...base, status: 'disabled' };
+    }
+
+    const [{ tokenFor }, native] = await Promise.all([
+      import('./fedizen.server'),
+      import('./bonfire-private.server'),
+    ]);
+    const connection = await tokenFor(context.userId);
+    if (!connection) return { ...base, status: 'disconnected' };
+
+    try {
+      const identity = await native.readNativeBonfireMe(connection.access_token);
+      if (!identity?.user) {
+        return { ...base, status: 'authorization-required' };
+      }
+      const [home, notifications] = await Promise.all([
+        native.readNativeBonfirePage(connection.access_token, 'myFeed', data.homeAfter ?? null),
+        native.readNativeBonfirePage(connection.access_token, 'notifications', data.notificationsAfter ?? null),
+      ]);
+      if (!home || !notifications) return { ...base, status: 'authorization-required' };
+      const normalizedHome = native.normalizeNativeBonfireHome(home);
+      const normalizedNotifications = native.normalizeNativeBonfireNotifications(notifications);
+      return {
+        status: 'available',
+        identity,
+        restAccountHandle: connection.account_handle,
+        posts: normalizedHome.posts,
+        notices: normalizedNotifications.notices,
+        homeEndCursor: normalizedHome.pageInfo.endCursor ?? null,
+        homeHasNextPage: normalizedHome.pageInfo.hasNextPage,
+        notificationEndCursor: normalizedNotifications.pageInfo.endCursor ?? null,
+        notificationHasNextPage: normalizedNotifications.pageInfo.hasNextPage,
+      };
+    } catch {
+      // No raw GraphQL, token, or private account data in errors/logs.
+      return { ...base, status: 'unavailable' };
+    }
+  });
