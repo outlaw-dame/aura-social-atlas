@@ -39,3 +39,13 @@ export function selectBonfireHome(
     endCursor: null,
   };
 }
+
+/** No native network call unless the server has explicitly enabled the
+ * rollout gate for a connected, authenticated session. */
+export function shouldRequestNativeBonfireHome(
+  signedIn: boolean,
+  rest: FedizenHome | undefined,
+): boolean {
+  return signedIn && rest?.connected === true && rest.nativeReadEnabled === true &&
+    rest.error !== 'expired';
+}

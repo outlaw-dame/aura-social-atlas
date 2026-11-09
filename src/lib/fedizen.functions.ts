@@ -49,6 +49,8 @@ export type FedizenHome = {
   connected: boolean;
   /** Verified Fedizen account identifier from the user's own delegated grant. */
   accountHandle: string | null;
+  /** Server-authoritative rollout gate; prevents unnecessary native requests while disabled. */
+  nativeReadEnabled?: boolean;
   posts: FedizenPost[];
   notices: FedizenNotice[];
   error?: 'expired' | 'unavailable';
@@ -59,12 +61,13 @@ export const getFedizenHome = createServerFn({ method: 'GET' }).middleware([requ
   assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
   const { tokenFor, fedizenGet } = await import('./fedizen.server');
   const t = await tokenFor(context.userId);
-  if (!t) return { connected: false, accountHandle: null, posts: [], notices: [] };
+  if (!t) return { connected: false, accountHandle: null, nativeReadEnabled: false, posts: [], notices: [] };
   const [home, notes] = await Promise.all([fedizenGet(t.access_token, '/api/v1/timelines/home?limit=20'), fedizenGet(t.access_token, '/api/v1/notifications?limit=20')]);
   const error = fedizenReadError(home.status, notes.status);
   return {
     connected: true,
     accountHandle: t.account_handle,
+    nativeReadEnabled: process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'] === 'verified',
     posts: fromStatuses(home.data as never),
     notices: fromNotifications(notes.data as never),
     error,
