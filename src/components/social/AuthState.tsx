@@ -1,5 +1,6 @@
 // Session state for Atlas accounts. One subscription, shared through context.
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { readOAuthError } from '@/lib/bonfire-auth';
 import { observeSession } from '@/lib/auth-session';
@@ -25,6 +26,8 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AtlasAuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
+  const previousUser = useRef<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profileRecord, setProfileRecord] = useState<{ userId: string; profile: AtlasProfile } | null>(null);
   const profile = profileRecord?.userId === session?.user.id ? profileRecord?.profile ?? null : null;
@@ -52,6 +55,19 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const userId = session?.user?.id;
+
+  useEffect(() => {
+    const priorId = previousUser.current;
+    previousUser.current = userId ?? null;
+    if (priorId && priorId !== userId) {
+      const oldKey = ['fedizen-home', priorId];
+      // This cache is private. A signed-out or switched account must never
+      // leave its Home or notifications available to a later browser session.
+      void queryClient.cancelQueries({ queryKey: oldKey, exact: true }).then(() => {
+        queryClient.removeQueries({ queryKey: oldKey, exact: true });
+      });
+    }
+  }, [userId, queryClient]);
 
   useEffect(() => {
     let cancelled = false;
