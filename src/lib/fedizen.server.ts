@@ -163,19 +163,66 @@ export async function verifyFedizenReadGrant(
   }
 }
 
+/**
+ * Single-attempt authorization-code redemption. A timeout is ambiguous, so
+ * never automatically replay a code or send its verifier/secret to redirects.
+ */
+export async function redeemFedizenReadCode(
+  code: string,
+  redirectUri: string,
+  codeVerifier: string,
+  app: { client_id: string; client_secret: string },
+  fetcher: typeof fetch = fetch,
+): Promise<
+  | { kind: 'ok'; grant: { access_token: string; scope: string } }
+  | { kind: 'rejected' | 'invalid' | 'unavailable' }
+> {
+  let response: Response;
+  try {
+    response = await fetcher(`${FEDIZEN}/oauth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code', code, redirect_uri: redirectUri,
+        client_id: app.client_id, client_secret: app.client_secret,
+        code_verifier: codeVerifier,
+      }),
+      signal: AbortSignal.timeout(10000),
+      redirect: 'error',
+      cache: 'no-store',
+    });
+  } catch {
+    return { kind: 'unavailable' };
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    return { kind: 'rejected' };
+  }
+  try {
+    const payload = await readBoundedFedizenJson(response, 32768);
+    const grant = parseFedizenReadGrant(payload);
+    return grant ? { kind: 'ok', grant } : { kind: 'invalid' };
+  } catch {
+    return { kind: 'invalid' };
+  }
+}
+
 export async function finishConnect(userId: string, code: string, state: string) {
   const db = await admin();
   const st = await consumeOAuthState(db, userId, state);
   const age = st ? Date.now() - new Date(st.created_at).getTime() : NaN;
   if (!st || !Number.isFinite(age) || age < 0 || age > 15 * 60_000) return { ok: false as const, error: 'This connection link expired. Please try again.' };
   const app = await appFor(st.redirect_uri);
-  const res = await fetch(`${FEDIZEN}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: st.redirect_uri, client_id: app.client_id, client_secret: app.client_secret, code_verifier: st.code_verifier }), signal: AbortSignal.timeout(10000) });
-  if (!res.ok) { console.error(`Fedizen token exchange failed [${res.status}]`); return { ok: false as const, error: 'Fedizen didn’t accept the connection. Please try again.' }; }
-  let payload: unknown;
-  try { payload = await res.json(); }
-  catch { return { ok: false as const, error: 'Fedizen returned an invalid authorization response. Connect again.' }; }
-  const grant = parseFedizenReadGrant(payload);
-  if (!grant) return { ok: false as const, error: 'Fedizen did not grant the expected read access. Connect again.' };
+  const exchange = await redeemFedizenReadCode(code, st.redirect_uri, st.code_verifier, app);
+  if (exchange.kind !== 'ok') {
+    return {
+      ok: false as const,
+      error: exchange.kind === 'rejected' ? 'Fedizen didn’t accept the connection. Please try again.' :
+        exchange.kind === 'invalid' ? 'Fedizen returned an invalid authorization response. Connect again.' :
+        'Fedizen could not complete the connection. Please try again.',
+    };
+  }
+  const { grant } = exchange;
   const handle = await verifyFedizenReadGrant(grant.access_token);
   if (!handle) return { ok: false as const, error: 'Fedizen could not verify the connected account. Connect again.' };
   const { error: saveError } = await db.from('fedizen_connections').upsert({ user_id: userId, access_token: grant.access_token, scope: grant.scope, account_handle: handle });
