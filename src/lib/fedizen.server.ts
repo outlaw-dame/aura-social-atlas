@@ -6,12 +6,14 @@ const admin = async () => (await import('@/integrations/supabase/client.server')
 
 async function appFor(redirectUri: string) {
   const db = await admin();
-  const { data } = await db.from('fedizen_oauth_apps').select('client_id, client_secret').eq('redirect_uri', redirectUri).maybeSingle();
+  const { data, error: lookupError } = await db.from('fedizen_oauth_apps').select('client_id, client_secret').eq('redirect_uri', redirectUri).maybeSingle();
+  if (lookupError) throw new Error('Could not read Fedizen OAuth app registration.');
   if (data) return data;
   const res = await fetch(`${FEDIZEN}/api/v1/apps`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_name: 'Atlas', redirect_uris: redirectUri, scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin }), signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`Fedizen app registration failed [${res.status}]`);
   const j = await res.json() as { client_id: string; client_secret: string };
-  await db.from('fedizen_oauth_apps').insert({ redirect_uri: redirectUri, client_id: j.client_id, client_secret: j.client_secret });
+  const { error: registrationError } = await db.from('fedizen_oauth_apps').insert({ redirect_uri: redirectUri, client_id: j.client_id, client_secret: j.client_secret });
+  if (registrationError) throw new Error('Could not persist Fedizen OAuth app registration.');
   return j;
 }
 
@@ -38,6 +40,64 @@ export async function consumeOAuthState(db: Awaited<ReturnType<typeof admin>>, u
   return data;
 }
 
+
+/**
+ * Validate a delegated read grant before it is stored against an Atlas account.
+ * The token endpoint may omit `scope`; if present it must include the requested
+ * broad read grant. A successful verify_credentials read confirms the token
+ * corresponds to a real Fedizen account, not that every API scope is available.
+ */
+export function parseFedizenReadGrant(payload: unknown): { access_token: string; scope: string } | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const token = (payload as Record<string, unknown>).access_token;
+  const scope = (payload as Record<string, unknown>).scope;
+  if (typeof token !== 'string' || !token.trim() || token.length > 8192 || /[\\r\\n]/.test(token)) return null;
+  if (scope !== undefined && (typeof scope !== 'string' ||
+    !scope.split(/\\s+/).includes(FEDIZEN_API_SCOPE))) return null;
+  return { access_token: token, scope: typeof scope === 'string' ? scope : FEDIZEN_API_SCOPE };
+}
+
+export function parseFedizenAccount(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const account = payload as Record<string, unknown>;
+  // Account identity MUST be present before a grant can be associated with a
+  // local Atlas account. Do not persist an unverified anonymous bearer.
+  return typeof account.id === 'string' && account.id.length > 0 &&
+    typeof account.acct === 'string' && account.acct.length > 0 &&
+    account.acct.length <= 320 && !/[\\s\\r\\n]/.test(account.acct)
+    ? account.acct : null;
+}
+
+export async function verifyFedizenReadGrant(
+  token: string,
+  fetcher: typeof fetch = fetch,
+): Promise<string | null> {
+  try {
+    const response = await fetcher(`${FEDIZEN}/api/v1/accounts/verify_credentials`, {
+      method: 'GET',
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(10000),
+      redirect: 'error',
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      return null;
+    }
+    const size = response.headers.get('content-length');
+    if (size !== null && Number(size) > 16384) {
+      await response.body?.cancel().catch(() => {});
+      return null;
+    }
+    // This account response is normally small. The bounded streaming transport
+    // used for public GraphQL will be generalized later for all auth reads.
+    const data: unknown = await response.json();
+    return parseFedizenAccount(data);
+  } catch {
+    return null;
+  }
+}
+
 export async function finishConnect(userId: string, code: string, state: string) {
   const db = await admin();
   const st = await consumeOAuthState(db, userId, state);
@@ -46,19 +106,30 @@ export async function finishConnect(userId: string, code: string, state: string)
   const app = await appFor(st.redirect_uri);
   const res = await fetch(`${FEDIZEN}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: st.redirect_uri, client_id: app.client_id, client_secret: app.client_secret, code_verifier: st.code_verifier }), signal: AbortSignal.timeout(10000) });
   if (!res.ok) { console.error(`Fedizen token exchange failed [${res.status}]`); return { ok: false as const, error: 'Fedizen didn’t accept the connection. Please try again.' }; }
-  const tok = await res.json() as { access_token: string; scope?: string };
-  let handle: string | null = null;
-  const me = await fetch(`${FEDIZEN}/api/v1/accounts/verify_credentials`, { headers: { authorization: `Bearer ${tok.access_token}` }, signal: AbortSignal.timeout(10000) });
-  if (me.ok) handle = ((await me.json()) as { acct?: string }).acct ?? null;
-  const { error: saveError } = await db.from('fedizen_connections').upsert({ user_id: userId, access_token: tok.access_token, scope: tok.scope ?? FEDIZEN_API_SCOPE, account_handle: handle });
+  let payload: unknown;
+  try { payload = await res.json(); }
+  catch { return { ok: false as const, error: 'Fedizen returned an invalid authorization response. Connect again.' }; }
+  const grant = parseFedizenReadGrant(payload);
+  if (!grant) return { ok: false as const, error: 'Fedizen did not grant the expected read access. Connect again.' };
+  const handle = await verifyFedizenReadGrant(grant.access_token);
+  if (!handle) return { ok: false as const, error: 'Fedizen could not verify the connected account. Connect again.' };
+  const { error: saveError } = await db.from('fedizen_connections').upsert({ user_id: userId, access_token: grant.access_token, scope: grant.scope, account_handle: handle });
   if (saveError) throw new Error('Could not save Fedizen connection.');
   return { ok: true as const };
 }
 
-export async function tokenFor(userId: string) {
-  const db = await admin();
-  const { data } = await db.from('fedizen_connections').select('access_token, account_handle').eq('user_id', userId).maybeSingle();
+export async function connectionFor(
+  db: Awaited<ReturnType<typeof admin>>,
+  userId: string,
+) {
+  const { data, error } = await db.from('fedizen_connections')
+    .select('access_token, account_handle').eq('user_id', userId).maybeSingle();
+  if (error) throw new Error('Could not read Fedizen connection.');
   return data;
+}
+
+export async function tokenFor(userId: string) {
+  return connectionFor(await admin(), userId);
 }
 
 export async function disconnect(userId: string): Promise<void> {
