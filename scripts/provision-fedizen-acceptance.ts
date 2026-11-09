@@ -155,7 +155,7 @@ async function oauthForExpectedHandle(expectedHandle: string): Promise<string> {
     console.log(authorization.toString()); // PKCE challenge and random state, no credential
     const code = await Promise.race([
       callback,
-      delay(DEADLINE_MS).then(() => fail('OAuth callback timed out.')),
+      delay(DEADLINE_MS, undefined, { ref: false }).then(() => fail('OAuth callback timed out.')),
     ]);
     const grant = await fedizenFetch(`${FEDIZEN}/oauth/token`, {
       method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
