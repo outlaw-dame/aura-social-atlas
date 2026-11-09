@@ -99,67 +99,84 @@ async function oauthForExpectedHandle(expectedHandle: string): Promise<string> {
   const verifier = b64url(randomBytes(48));
   const challenge = b64url(createHash('sha256').update(verifier).digest());
   const state = b64url(randomBytes(32));
-  let stop: (() => void) | undefined;
-  const result = new Promise<string>((resolve, reject) => {
-    const server = createServer((req, res) => {
-      const requestUrl = new URL(req.url ?? '/', `http://${HOST}`);
-      if (req.method !== 'GET' || requestUrl.pathname !== '/callback') {
-        res.writeHead(404).end();
-        return;
-      }
-      const providedState = requestUrl.searchParams.get('state');
-      const code = requestUrl.searchParams.get('code');
-      if (providedState !== state || !code || code.length > 8192 || requestUrl.searchParams.has('error')) {
-        res.writeHead(400, { 'content-type': 'text/plain', 'cache-control': 'no-store' }).end('Authorization rejected.');
-        reject(new Error('Authorization callback rejected.'));
-      } else {
-        res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' }).end('Authorization received. Return to your terminal.');
-        resolve(code);
-      }
-    });
-    stop = () => server.close();
-    server.listen(0, HOST, async () => {
-      try {
-        const address = server.address();
-        if (!address || typeof address === 'string') fail('Local callback listener unavailable.');
-        const redirectUri = `http://${HOST}:${address.port}/callback`;
-        const app = await fedizenFetch(`${FEDIZEN}/api/v1/apps`, {
-          method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify({ client_name: 'Atlas local acceptance (disposable)', redirect_uris: redirectUri, scopes: 'read', website: FEDIZEN }),
-        });
-        if (typeof app.client_id !== 'string' || typeof app.client_secret !== 'string' ||
-            !app.client_id || !app.client_secret) fail('Fedizen OAuth registration invalid.');
-        const authorization = new URL(`${FEDIZEN}/oauth/authorize`);
-        authorization.search = new URLSearchParams({
-          response_type: 'code', client_id: app.client_id, redirect_uri: redirectUri,
-          scope: 'read', code_challenge: challenge, code_challenge_method: 'S256', state,
-        }).toString();
-        console.log('Open the Fedizen authorization URL and approve only the disposable account:');
-        console.log(authorization.toString()); // PKCE challenge and random state, no credential
-        const code = await Promise.race([result, delay(DEADLINE_MS).then(() => fail('OAuth callback timed out.'))]);
-        const grant = await fedizenFetch(`${FEDIZEN}/oauth/token`, {
-          method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
-          body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri,
-            client_id: app.client_id, client_secret: app.client_secret, code_verifier: verifier }),
-        });
-        if (typeof grant.access_token !== 'string' || !grant.access_token ||
-            grant.access_token.length > 8192 || /[\r\n]/.test(grant.access_token) ||
-            (grant.scope !== undefined && (typeof grant.scope !== 'string' || !grant.scope.split(/\s+/).includes('read')))) {
-          fail('Fedizen delegated read grant invalid.');
-        }
-        const identity = await fedizenFetch(`${FEDIZEN}/api/v1/accounts/verify_credentials`, {
-          method: 'GET', headers: { accept: 'application/json', authorization: `Bearer ${grant.access_token}` },
-        });
-        if (typeof identity.acct !== 'string' || !sameFedizenHandle(expectedHandle, identity.acct)) {
-          fail('Consented OAuth bearer identity does not match the expected disposable account.');
-        }
-        resolve(grant.access_token);
-      } catch { reject(new Error('OAuth registration, exchange or owner verification failed.')); }
-    });
-    server.on('error', () => reject(new Error('Local callback listener unavailable.')));
+  let acceptCode!: (code: string) => void;
+  let denyCode!: (error: Error) => void;
+  let callbackConsumed = false;
+  const callback = new Promise<string>((resolve, reject) => {
+    acceptCode = resolve;
+    denyCode = reject;
   });
-  try { return await result; }
-  finally { stop?.(); }
+  const server = createServer((req, res) => {
+    const requestUrl = new URL(req.url ?? '/', `http://${HOST}`);
+    if (req.method !== 'GET' || requestUrl.pathname !== '/callback') {
+      res.writeHead(404).end();
+      return;
+    }
+    if (callbackConsumed) { res.writeHead(409).end(); return; }
+    const providedState = requestUrl.searchParams.get('state');
+    // Unrecognized callbacks must not abort the legitimate OAuth authorization.
+    if (providedState !== state) { res.writeHead(400).end(); return; }
+    callbackConsumed = true;
+    const code = requestUrl.searchParams.get('code');
+    if (!code || code.length > 8192 || requestUrl.searchParams.has('error')) {
+      res.writeHead(400, { 'cache-control': 'no-store' }).end('Authorization rejected.');
+      denyCode(new Error('Authorization callback rejected.'));
+      return;
+    }
+    res.writeHead(200, {
+      'content-type': 'text/plain', 'cache-control': 'no-store',
+      'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff',
+    }).end('Authorization received. Return to your terminal.');
+    acceptCode(code);
+  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, HOST, () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
+    const address = server.address();
+    if (!address || typeof address === 'string') fail('Local callback listener unavailable.');
+    const redirectUri = `http://${HOST}:${address.port}/callback`;
+    const app = await fedizenFetch(`${FEDIZEN}/api/v1/apps`, {
+      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ client_name: 'Atlas local acceptance (disposable)', redirect_uris: redirectUri, scopes: 'read', website: FEDIZEN }),
+    });
+    if (typeof app.client_id !== 'string' || typeof app.client_secret !== 'string' ||
+        !app.client_id || !app.client_secret) fail('Fedizen OAuth registration invalid.');
+    const authorization = new URL(`${FEDIZEN}/oauth/authorize`);
+    authorization.search = new URLSearchParams({
+      response_type: 'code', client_id: app.client_id, redirect_uri: redirectUri,
+      scope: 'read', code_challenge: challenge, code_challenge_method: 'S256', state,
+    }).toString();
+    console.log('Open the Fedizen authorization URL and approve only the disposable account:');
+    console.log(authorization.toString()); // PKCE challenge and random state, no credential
+    const code = await Promise.race([
+      callback,
+      delay(DEADLINE_MS).then(() => fail('OAuth callback timed out.')),
+    ]);
+    const grant = await fedizenFetch(`${FEDIZEN}/oauth/token`, {
+      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri,
+        client_id: app.client_id, client_secret: app.client_secret, code_verifier: verifier }),
+    });
+    if (typeof grant.access_token !== 'string' || !grant.access_token ||
+        grant.access_token.length > 8192 || /[\r\n]/.test(grant.access_token) ||
+        (grant.scope !== undefined && (typeof grant.scope !== 'string' || !grant.scope.split(/\s+/).includes('read')))) {
+      fail('Fedizen delegated read grant invalid.');
+    }
+    const identity = await fedizenFetch(`${FEDIZEN}/api/v1/accounts/verify_credentials`, {
+      method: 'GET', headers: { accept: 'application/json', authorization: `Bearer ${grant.access_token}` },
+    });
+    if (typeof identity.acct !== 'string' || !sameFedizenHandle(expectedHandle, identity.acct)) {
+      fail('Consented OAuth bearer identity does not match the expected disposable account.');
+    }
+    return grant.access_token;
+  } finally {
+    server.close();
+  }
 }
 
 async function main() {
