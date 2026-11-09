@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mergeNativeBonfirePages, nextNativeHomeCursor, selectBonfireHome, shouldRequestNativeBonfireHome } from '../src/lib/bonfire-native-presentation';
+import { mergeNativeBonfirePages, nextNativeHomeCursor, reconcileNativeContinuationStatus, selectBonfireHome, shouldRequestNativeBonfireHome } from '../src/lib/bonfire-native-presentation';
 import type { FedizenHome } from '../src/lib/fedizen.functions';
 import type { NativeBonfireSnapshot } from '../src/lib/bonfire-private.functions';
 
@@ -138,5 +138,35 @@ describe('Native Home cursor and account-scoped pagination', () => {
     expect(mergeNativeBonfirePages(rest, [{ ...native, status: 'disabled' }])?.status).toBe('disabled');
     expect(selectBonfireHome(rest,
       mergeNativeBonfirePages(rest, [{ ...native, status: 'disabled' }])).source).toBe('rest');
+  });
+});
+
+describe('Revoked server-side native visibility invalidates cached presentation', () => {
+  test('operator disables native during continuation: old cached native posts disappear', () => {
+    const revoked = reconcileNativeContinuationStatus(rest, 'disabled')!;
+    expect(revoked.nativeReadEnabled).toBe(false);
+    expect(selectBonfireHome(revoked, native).source).toBe('rest');
+    expect(mergeNativeBonfirePages(revoked, [native])).toBeUndefined();
+    expect(shouldRequestNativeBonfireHome(true, revoked)).toBe(false);
+  });
+
+  test('identity denial and explicit disconnection cannot preserve private native pages', () => {
+    for (const status of ['authorization-required', 'identity-unverified'] as const) {
+      const denied = reconcileNativeContinuationStatus(rest, status)!;
+      expect(selectBonfireHome(denied, native).source).toBe('rest');
+      expect(shouldRequestNativeBonfireHome(true, denied)).toBe(false);
+    }
+    const disconnected = reconcileNativeContinuationStatus(rest, 'disconnected')!;
+    expect(disconnected.connected).toBe(false);
+    expect(disconnected.accountHandle).toBeNull();
+    expect(disconnected.posts).toEqual([]);
+    expect(disconnected.notices).toEqual([]);
+    expect(selectBonfireHome(disconnected, native).source).toBe('rest');
+  });
+
+  test('transient upstream failure cannot silently disconnect a real REST account', () => {
+    expect(reconcileNativeContinuationStatus(rest, 'unavailable')).toBe(rest);
+    expect(reconcileNativeContinuationStatus(rest, 'available')).toBe(rest);
+    expect(reconcileNativeContinuationStatus(undefined, 'disabled')).toBeUndefined();
   });
 });

@@ -108,3 +108,32 @@ export function nextNativeHomeCursor(
     usedCursors.includes(last.homeEndCursor)) return undefined;
   return last.homeEndCursor;
 }
+
+/**
+ * A server-verified denial during pagination supersedes previously cached
+ * rollout readiness. Transient transport/GraphQL failures do not revoke the
+ * existing REST connection or erase earlier valid pages.
+ *
+ * The caller must write the returned status to the same account-scoped REST
+ * query that owns nativeReadEnabled, before presenting any cached native page.
+ */
+export function reconcileNativeContinuationStatus(
+  rest: FedizenHome | undefined,
+  status: NativeBonfireSnapshot['status'],
+): FedizenHome | undefined {
+  if (!rest) return rest;
+  if (status === 'disconnected') {
+    return {
+      connected: false,
+      accountHandle: null,
+      nativeReadEnabled: false,
+      posts: [],
+      notices: [],
+    };
+  }
+  if (status === 'disabled' || status === 'authorization-required' ||
+    status === 'identity-unverified') {
+    return { ...rest, nativeReadEnabled: false };
+  }
+  return rest;
+}
