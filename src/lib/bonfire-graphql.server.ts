@@ -81,6 +81,11 @@ async function readBoundedJson(response: Response): Promise<unknown> {
       if (total > MAX_RESPONSE_BYTES) throw new BonfireGraphQLError('too-large');
       chunks.push(value);
     }
+  } catch (error) {
+    if (error instanceof BonfireGraphQLError) throw error;
+    // A streaming failure can carry raw upstream text; normalize it before
+    // crossing the service boundary.
+    throw new BonfireGraphQLError('network');
   } finally {
     await reader.cancel().catch(() => {});
     reader.releaseLock();
