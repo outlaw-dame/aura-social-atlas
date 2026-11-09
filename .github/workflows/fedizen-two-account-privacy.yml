@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'scripts/verify-fedizen-two-account-privacy.ts'
+      - 'scripts/provision-fedizen-acceptance.ts'
       - '.github/workflows/fedizen-two-account-privacy.yml'
 
 permissions:
@@ -24,7 +25,9 @@ jobs:
       - name: Install pinned dependencies without lifecycle scripts
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Verify offline two-account denial and failure classification
-        run: bun scripts/verify-fedizen-two-account-privacy.ts --self-test
+        run: |
+          bun scripts/verify-fedizen-two-account-privacy.ts --self-test
+          bun scripts/provision-fedizen-acceptance.ts --self-test
 
   # Manual from main only; never run on PRs, forks or ordinary pushes.
   # The named environment must require an operator's explicit approval.
