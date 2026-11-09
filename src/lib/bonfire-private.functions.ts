@@ -57,7 +57,7 @@ export const getNativeBonfireSnapshot = createServerFn({ method: 'GET' })
         import('./bonfire-verified-connection.server'),
         import('./bonfire-private.server'),
       ]);
-      const connection = await verifiedNativeBonfireConnection(context.userId);
+      const connection = await verifiedNativeBonfireConnection(data.expectedAtlasUserId, context.userId);
       if (connection.status !== 'available') return { ...base, status: connection.status };
       const [home, notifications] = await Promise.all([
         native.readNativeBonfirePage(connection.accessToken, 'myFeed', data.homeAfter ?? null),
@@ -114,7 +114,7 @@ export const getNativeBonfireHomeContinuation = createServerFn({ method: 'GET' }
         import('./bonfire-verified-connection.server'),
         import('./bonfire-private.server'),
       ]);
-      const connection = await verifiedNativeBonfireConnection(context.userId);
+      const connection = await verifiedNativeBonfireConnection(data.expectedAtlasUserId, context.userId);
       if (connection.status !== 'available') return { ...base, status: connection.status };
 
       const home = await native.readNativeBonfirePage(connection.accessToken, 'myFeed', data.after);
