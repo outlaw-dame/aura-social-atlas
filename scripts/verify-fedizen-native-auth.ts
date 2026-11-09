@@ -35,6 +35,9 @@ export function acceptedPrivateRestRead(result: { status: number; data: unknown[
   return result.status === 200 && Array.isArray(result.data) && result.data.length <= 20;
 }
 
+// Fixed diagnostic labels only: no tokens, identifiers or upstream errors.
+let activeCheck = 'configuration';
+
 async function live() {
   const token = process.env['FEDIZEN_TEST_READ_TOKEN'];
   const expected = process.env['FEDIZEN_TEST_EXPECTED_HANDLE'];
@@ -42,11 +45,13 @@ async function live() {
     throw Error('Required consented test configuration is not available.');
   }
 
+  activeCheck = 'delegated-rest-owner';
   const restHandle = await verifyFedizenReadGrant(token);
   const restIdentityOK = !!restHandle && matchesLinkedFedizenHandle(expected, restHandle);
   summarizeResult('delegated-rest-owner', restIdentityOK);
   if (!restIdentityOK) throw Error('Test bearer does not match the explicitly expected account.');
 
+  activeCheck = 'mastodon-rest-private-reads';
   const [restHome, restNotifications] = await Promise.all([
     fedizenGet(token, '/api/v1/timelines/home?limit=20'),
     fedizenGet(token, '/api/v1/notifications?limit=20'),
@@ -59,6 +64,7 @@ async function live() {
     throw Error('Delegated read grant could not access validated REST Home and notifications.');
   }
 
+  activeCheck = 'graphql-me-owner';
   const me = await readNativeBonfireMe(token);
   const nativeIdentityOK = !!me?.user?.character?.username &&
     matchesLinkedFedizenHandle(restHandle, me.user.character.username) &&
@@ -68,12 +74,14 @@ async function live() {
 
   // Consent-bound own profile acceptance. The IDs are read in memory from
   // native Me, and never printed or sent to any destination except Fedizen.
+  activeCheck = 'graphql-profile-by-id-owner';
   const byId = await readNativeBonfireProfile(token, { by: 'id', value: me.user.id });
   const ownProfileByIdOK = !!byId && byId.id === me.user.id &&
     matchesLinkedFedizenHandle(restHandle, byId.character?.username);
   summarizeResult('graphql-profile-by-id-owner', ownProfileByIdOK);
   if (!ownProfileByIdOK) throw Error('GraphQL own profile by ID did not match the verified account.');
 
+  activeCheck = 'graphql-profile-by-username-owner';
   const byUsername = await readNativeBonfireProfile(token, {
     by: 'username', value: me.user.character.username,
   });
@@ -87,6 +95,7 @@ async function live() {
   // from a third party's activity, and never mark an absent test as passed.
   const disposablePostId = process.env['FEDIZEN_TEST_POST_ID'];
   if (disposablePostId) {
+    activeCheck = 'graphql-consented-post-detail';
     const detail = await readNativeBonfirePost(token, disposablePostId);
     const postOK = !!detail && detail.id === disposablePostId;
     summarizeResult('graphql-consented-post-detail', postOK);
@@ -95,6 +104,7 @@ async function live() {
     console.log(JSON.stringify({ check: 'graphql-consented-post-detail', accepted: false, status: 'not-configured' }));
   }
 
+  activeCheck = 'graphql-my-feed';
   const home = await readNativeBonfirePage(token, 'myFeed');
   if (!home) throw Error('GraphQL Me.myFeed did not identify an authorized account.');
   const posts = normalizeNativeBonfireHome(home).posts;
@@ -103,6 +113,7 @@ async function live() {
   summarizeResult('graphql-my-feed', homePageConsistent);
   if (!homePageConsistent) throw Error('Home pagination metadata is inconsistent.');
 
+  activeCheck = 'graphql-notifications';
   const notices = await readNativeBonfirePage(token, 'notifications');
   if (!notices) throw Error('GraphQL Me.notifications did not identify an authorized account.');
   const normalizedNotices = normalizeNativeBonfireNotifications(notices).notices;
@@ -112,6 +123,7 @@ async function live() {
   if (!notificationPageConsistent) throw Error('Notification pagination metadata is inconsistent.');
 
   if (home.pageInfo.hasNextPage && home.pageInfo.endCursor) {
+    activeCheck = 'graphql-home-cursor';
     const second = await readNativeBonfirePage(token, 'myFeed', home.pageInfo.endCursor);
     const secondPageOK = !!second && Array.isArray(second.nodes);
     summarizeResult('graphql-home-cursor', secondPageOK);
@@ -120,6 +132,7 @@ async function live() {
 
   // Anonymous read MUST NOT resolve the authenticated test identity. A GraphQL
   // permission error is an acceptable denial, as is me:null.
+  activeCheck = 'graphql-anonymous-owner-denied';
   let anonymousDenied = false;
   try {
     const anonymousMe = await readNativeBonfireMe('');
@@ -153,7 +166,7 @@ if (process.argv.includes('--self-test')) {
   catch {
     // Deliberately suppress private upstream error messages, actor identities,
     // token values, URLs with authorization info and content.
-    console.error('FAIL: consented Fedizen native read acceptance');
+    console.error(`FAIL: consented Fedizen native read acceptance at ${activeCheck}`);
     process.exitCode = 1;
   }
 }
