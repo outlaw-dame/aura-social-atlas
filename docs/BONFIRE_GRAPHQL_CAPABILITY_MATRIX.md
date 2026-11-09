@@ -84,6 +84,14 @@ The [public issuer metadata acceptance run](https://github.com/outlaw-dame/aura-
 
 **Status remains:** repository implementation and mocked regression tests. Private GraphQL `me`, owner-only Home, notifications, scopes, revocation, cache isolation across authenticated native Bonfire API operations, effective schema and mutation contracts are **not verified live**. OIDC discovery and public local/articles acceptance remain the only live-verified API paths.
 
+### Live deployed GraphQL ROOT metadata — 2026-11-09
+
+A bounded anonymous introspection request successfully returned Fedizen's running `RootQueryType` (39 root query fields) and `RootMutationType` (54 root mutation fields) from [GitHub Actions run #42608303102](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42608303102). Its stable normalized root-metadata SHA-256 fingerprint was `91042fff84b53f094f100296e850feda7cf779fc73e061758e40d717362cb57e`. This fingerprint covers the queried root field names and input argument names plus limited types; it **is not** a deployment image digest or a complete effective SDL fingerprint.
+
+**Observed root operations:** `me`, `user`, `users`, `feedActivities`, `post`, `posts`, `activity`, `categories` (queries); `createPost`, `bookmark`, `boost`, `follow`, `unfollow`, `like`, `unlike` (mutations). The live `feedActivities` arguments include `first:Int`, `last:Int`, `after:String`, `before:String`, `filter:FeedFilters`. The live `createPost` arguments include `postContent:PostContentInput!`, `boundary:String`, `contextId:ID`, `permissions:[BoundaryPermissionInput]`, `quoteId:ID`, `replyTo:ID`, `toCircles:[ID]`, and `uploadedMedia:[ID]`.
+
+**Evidence boundary:** Existence and root arguments alone do **not** establish authorization, per-user identity mapping, object return selections, field nullability, pagination accuracy, boundary enforcement, successful mutations, schema extension inventory, or implementation of the UI. These operations are **observed-schema**, not **verified-live authenticated**. Do not invoke any write operation against member data until explicit disposable-account consent and permission testing.
+
 ### Versioned schema capture record
 
 | Field | Current value | Evidence / next action |
