@@ -182,8 +182,15 @@ async function oauthForExpectedHandle(expectedHandle: string): Promise<string> {
 async function main() {
   if (process.argv.includes('--self-test')) {
     assert.equal(sameFedizenHandle('Test@fedizen.net', 'test'), true);
+    assert.equal(sameFedizenHandle('@Test@fedizen.net', 'TEST'), true);
     assert.equal(sameFedizenHandle('Test@other.invalid', 'test'), false);
     assert.equal(sameFedizenHandle('test@fedizen.net', 'other'), false);
+    assert.equal(sameFedizenHandle('test', 'test@evil.invalid'), false);
+    assert.equal(sameFedizenHandle('test', 'test@fedizen.net.evil.invalid'), false);
+    assert.equal(sameFedizenHandle('test', ''), false);
+    assert.equal(sameFedizenHandle('test', 'test\\n'), true);
+    assert.equal(normalizeFedizenHandle('test@other.invalid'), null);
+    assert.equal(normalizeFedizenHandle('bad user'), null);
     console.log('PASS: local Fedizen account identity validation');
     return;
   }
