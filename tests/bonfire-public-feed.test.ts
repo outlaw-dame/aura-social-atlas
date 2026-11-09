@@ -73,4 +73,18 @@ describe('Bonfire anonymous public GraphQL reads', () => {
     expect(await fetchPublicFeed()).toEqual({ posts: [], error: 'unavailable' });
     expect(calls).toBe(3);
   });
+  test('malformed nested article media cannot crash Spotlight aggregation', async () => {
+    stub({ data: { feedActivities: { edges: [{
+      node: { id: 'article-1', objectPostContent: { name: 'Valid title' }, media: [null] },
+    }] } } });
+    expect(await fetchRecentArticles()).toEqual({ articles: [], error: 'unavailable' });
+  });
+
+  test('malformed nested post media fails closed rather than rejecting the page', async () => {
+    stub({ data: { feedActivities: { edges: [{
+      node: { id: 'post-1', objectPostContent: { htmlBody: '<p>test</p>' }, media: [null] },
+    }] } } });
+    expect(await fetchPublicFeed()).toEqual({ posts: [], error: 'unavailable' });
+  });
+
 });
