@@ -20,6 +20,14 @@ Atlas already implements this exchange in `src/lib/fedizen.server.ts`: `startCon
 
 The live workflows deliberately refuse to run successfully if configured grants are missing or do not resolve to the expected consenting account. The native workflow emits sanitized check names, now including a fixed failure-stage label if a request throws before its result summary. No raw HTTP response, GraphQL error or identity may be logged. In the A/B workflow, a live job with **zero steps** is not evidence of an API denial: check GitHub environment approval, branch deployment policy and run-level job annotations first.
 
+## Atlas-session-bound native read probe (no GitHub OAuth token copying)
+
+The manual two-account Fedizen UI visibility check has already been performed by the operator. It is **not** the same as an automated private GraphQL authorization result; do not request repeat manual setup solely to create GitHub secrets.
+
+A staging-only authenticated server function, `getFedizenNativeAcceptance` in `src/lib/bonfire-acceptance.functions.ts`, uses the existing `fedizen_connections` row bound to the **server-authenticated Supabase user**, acquired through Atlas's established Fedizen OAuth consent. To run this diagnostic in a controlled Atlas staging session, configure `ATLAS_FEDIZEN_ACCEPTANCE_PROBES=enabled` on that staging deployment only and invoke the server function with the signed-in Atlas user's UUID as `expectedAtlasUserId`. Session mismatch is rejected before any database lookup. The function re-verifies the stored grant against REST and cross-checks its owner with GraphQL Me and own profile. It then validates native Home, notifications and anonymous Me denial. Only static check names, boolean outcomes and a generic status are returned. No token, handle, post content, cursor, upstream error or account ID is sent to the caller.
+
+This diagnostic is disabled by default and **does not** enable `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS` or expose another account's data. Its test workflow uses mocks only, never GitHub environment bearer secrets. A native API acceptance status of `passed` still requires a real staging session and does not establish Atlas OIDC callback correctness or A/B private-post GraphQL visibility. The latter remains a separate two-session release gate.
+
 ## Live automated read acceptance
 
 With explicit test-account consent, approve and manually dispatch the workflow on main. It uses fixed-origin, non-redirecting, bounded reads to:
