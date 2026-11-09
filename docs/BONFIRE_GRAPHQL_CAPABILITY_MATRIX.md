@@ -64,6 +64,12 @@ The [second live GitHub Actions run](https://github.com/outlaw-dame/aura-social-
 
 **Evidence boundary:** This verifies successful anonymous Atlas public reads on the currently deployed Fedizen instance at the time of the run. It does not verify Home, notifications, mutation support, account permissions, pagination consistency, source fidelity, exact installed extensions, or schema digest.
 
+### Fedizen OIDC public discovery — 2026-11-09 04:11 UTC
+
+The [public issuer metadata acceptance run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42560440836) retrieved `https://fedizen.net/.well-known/openid-configuration` using a bounded anonymous GET and tested only sanitized metadata comparisons. The reported fields were all `true`: `issuerMatches`, `authorizationEndpointSameOrigin`, `tokenEndpointSameOrigin`, `jwksEndpointSameOrigin`, `supportsAuthorizationCode`, `supportsAsymmetricIdTokenSigning`, `publishedPkceS256`, and `publishedOpenIdScope`.
+
+**Scope limit:** This validates public OIDC issuer metadata, not the registered Atlas client, redirect URI, Supabase callback, PKCE exchange, nonce/state validation, signature acceptance, account mapping, refresh/revocation, or any delegated Bonfire GraphQL resource scope. Do not label login `verified-live` until a consented real sign-in and relevant account-isolation tests pass.
+
 ### Versioned schema capture record
 
 | Field | Current value | Evidence / next action |
@@ -74,7 +80,7 @@ The [second live GitHub Actions run](https://github.com/outlaw-dame/aura-social-
 | Enabled extensions | **unknown** | Operator/source-matched inventory |
 | Query schema hash | **unknown** | Sanitized operator GraphQL schema snapshot |
 | Mutation schema hash | **unknown** | Permissioned introspection or offline export |
-| OAuth resource scopes | **unknown for GraphQL** | Do not infer from OIDC `openid profile email` |
+| OAuth resource scopes | **unknown for GraphQL**; OIDC `openid` is publicly advertised | Identity discovery verified [2026-11-09](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42560440836); delegated resource scopes and consent still require an authorized test account |
 | GraphQL subscription transport | **unverified on Fedizen** | Versioned WS/HTTP capability and auth probe |
 | Last schema-tested date | **Schema not captured**; public queries tested 2026-11-09 | Minimal acceptance at 04:05 UTC ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42559791682)); actual Atlas read acceptance at 04:07 UTC ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42560027193)); auth/schema remain open |
 | Client GraphQL coverage numerator / denominator | **0 verified / unknown eligible** | Only calculate after schema capture |
