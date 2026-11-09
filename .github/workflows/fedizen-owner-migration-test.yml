@@ -8,6 +8,8 @@ on:
       - 'drizzle/migrations/meta/_journal.json'
       - 'drizzle/migrations/meta/0003_snapshot.json'
       - 'scripts/test-fedizen-owner-migration.mjs'
+      - 'scripts/disposable-postgres-url.mjs'
+      - 'scripts/test-disposable-postgres-url.mjs'
       - '.github/workflows/fedizen-owner-migration-test.yml'
   push:
     branches: [main]
@@ -15,6 +17,8 @@ on:
       - 'drizzle/migrations/0002_fedizen_connections.sql'
       - 'drizzle/migrations/0003_fedizen_oauth_ownership.sql'
       - 'scripts/test-fedizen-owner-migration.mjs'
+      - 'scripts/disposable-postgres-url.mjs'
+      - 'scripts/test-disposable-postgres-url.mjs'
       - '.github/workflows/fedizen-owner-migration-test.yml'
 
 permissions:
@@ -46,20 +50,8 @@ jobs:
           bun-version: '1.3.4'
       - name: Install pinned dependencies without lifecycle scripts
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Assert integration test refuses substring-match and remote database URLs
-        shell: bash
-        run: |
-          set -euo pipefail
-          for target in \
-            'postgres://postgres:ci-only@localhost:5432/atlas_migration_test_production' \
-            'postgres://postgres:ci-only@db.example.com:5432/atlas_migration_test' \
-            'postgres://postgres:ci-only@localhost:5433/atlas_migration_test'
-          do
-            if ATLAS_MIGRATION_TEST_DATABASE_URL="$target" bun scripts/test-fedizen-owner-migration.mjs >/dev/null 2>&1; then
-              echo 'Unsafe migration test database URL accepted'
-              exit 1
-            fi
-          done
+      - name: Assert migration target guard before opening any database connection
+        run: bun scripts/test-disposable-postgres-url.mjs
       - name: Apply exact migrations and assert account deletion, uniqueness, and denied client access
         env:
           ATLAS_MIGRATION_TEST_DATABASE_URL: postgres://postgres:temporary-ci-only@localhost:5432/atlas_migration_test
