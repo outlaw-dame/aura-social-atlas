@@ -156,31 +156,7 @@ export async function verifyFedizenReadGrant(
       await response.body?.cancel().catch(() => {});
       return null;
     }
-    const size = response.headers.get('content-length');
-    if (size !== null && Number(size) > 16384) {
-      await response.body?.cancel().catch(() => {});
-      return null;
-    }
-    if (!response.body) return null;
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        total += value.byteLength;
-        if (total > 16384) return null;
-        chunks.push(value);
-      }
-    } finally {
-      await reader.cancel().catch(() => {});
-      reader.releaseLock();
-    }
-    const bytes = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-    const data: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    const data = await readBoundedFedizenJson(response, 16384);
     return parseFedizenAccount(data);
   } catch {
     return null;
@@ -264,34 +240,6 @@ const notificationsSchema = z.array(notice).max(20);
 
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;
 
-async function readPrivateJson(response: Response): Promise<unknown> {
-  const length = response.headers.get('content-length');
-  if (length !== null && Number(length) > MAX_PRIVATE_READ_BYTES) {
-    await response.body?.cancel().catch(() => {});
-    throw new Error('oversize');
-  }
-  if (!response.body) throw new Error('missing body');
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_PRIVATE_READ_BYTES) throw new Error('oversize');
-      chunks.push(value);
-    }
-  } finally {
-    await reader.cancel().catch(() => {});
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
-}
-
 export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {
   // The only permitted private REST fallbacks until the equivalent GraphQL
   // operations are verified against Fedizen's installed Community schema.
@@ -319,7 +267,7 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
 
   let payload: unknown;
   try {
-    payload = await readPrivateJson(response);
+    payload = await readBoundedFedizenJson(response, MAX_PRIVATE_READ_BYTES);
   } catch {
     // Includes decode, timeout/stream, oversize and malformed JSON failures.
     // Do not log bearer values or private response bodies.
