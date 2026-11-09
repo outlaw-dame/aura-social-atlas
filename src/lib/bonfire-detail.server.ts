@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { htmlToParagraphs } from './spotlight';
+import { bonfireDetailIDSchema, profileSelectorSchema, type ProfileSelector } from './bonfire-detail-contract';
 import { requestBonfireGraphQL, type BonfireGraphQLRequest } from './bonfire-graphql.server';
 import {
   NATIVE_POST_BY_ID_DOCUMENT,
@@ -14,14 +15,6 @@ import {
  * GraphQL still owns boundary and object-visibility decisions.
  */
 type ReadOptions = Pick<BonfireGraphQLRequest<unknown>, 'fetchImpl' | 'waitImpl' | 'signal'>;
-const safeID = z.string().min(1).max(320).regex(/^[^\u0000-\u001f\u007f]+$/);
-const safeUsername = z.string().min(1).max(320).regex(/^[\p{L}\p{N}_.@-]+$/u);
-
-export const profileSelectorSchema = z.discriminatedUnion('by', [
-  z.object({ by: z.literal('id'), value: safeID }),
-  z.object({ by: z.literal('username'), value: safeUsername }),
-]);
-export type ProfileSelector = z.infer<typeof profileSelectorSchema>;
 
 const characterSchema = z.object({
   username: z.string().max(320).nullish(),
@@ -126,7 +119,7 @@ export async function readNativeBonfirePost(
   id: string,
   options: ReadOptions = {},
 ): Promise<NativeBonfirePostDetail | null> {
-  const validId = safeID.parse(id);
+  const validId = bonfireDetailIDSchema.parse(id);
   return requestBonfireGraphQL({
     ...options,
     operation: 'query',
