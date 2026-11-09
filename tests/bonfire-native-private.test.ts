@@ -53,6 +53,7 @@ describe('deployed schema-verified Bonfire native read operations', () => {
     expect(matchesLinkedFedizenHandle(null, 'testaccount')).toBe(false);
     expect(matchesLinkedFedizenHandle('testaccount', null)).toBe(false);
     expect(matchesLinkedFedizenHandle('testaccount/path', 'testaccount')).toBe(false);
+    expect(matchesLinkedFedizenHandle('test account', 'test account')).toBe(false);
   });
 
   test('native Me uses only server-injected bearer at fixed Fedizen origin', async () => {
