@@ -1,7 +1,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
-import { allowedCallback, fromNotifications, fromStatuses, type FedizenNotice, type FedizenPost } from './fedizen-feed';
+import { allowedCallback, fedizenReadError, fromNotifications, fromStatuses, type FedizenNotice, type FedizenPost } from './fedizen-feed';
 
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const { tokenFor } = await import('./fedizen.server');
@@ -37,6 +37,6 @@ export const getFedizenHome = createServerFn({ method: 'GET' }).middleware([requ
   const t = await tokenFor(context.userId);
   if (!t) return { connected: false, posts: [], notices: [] };
   const [home, notes] = await Promise.all([fedizenGet(t.access_token, '/api/v1/timelines/home?limit=20'), fedizenGet(t.access_token, '/api/v1/notifications?limit=20')]);
-  const error = home.status === 401 ? 'expired' : home.status !== 200 ? 'unavailable' : undefined;
+  const error = fedizenReadError(home.status, notes.status);
   return { connected: true, posts: fromStatuses(home.data as never), notices: fromNotifications(notes.data as never), error };
 });
