@@ -4,9 +4,10 @@ import {
   NATIVE_PROFILE_BY_USERNAME_DOCUMENT,
 } from '../src/lib/bonfire/graphql/operations';
 import {
-  normalizeNativeBonfirePost, profileSelectorSchema,
+  normalizeNativeBonfirePost,
   readNativeBonfirePost, readNativeBonfireProfile,
 } from '../src/lib/bonfire-detail.server';
+import { profileSelectorSchema, bonfireDetailIDSchema } from '../src/lib/bonfire-detail-contract';
 
 const respond = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status });
 const user = {
@@ -59,6 +60,7 @@ describe('Bonfire deployed-schema profile and post detail readers', () => {
         .rejects.toThrow();
     }
     expect(() => profileSelectorSchema.parse({ by: 'unknown', value: 'example' })).toThrow();
+    expect(() => bonfireDetailIDSchema.parse('bad\\ncontrol')).toThrow();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
