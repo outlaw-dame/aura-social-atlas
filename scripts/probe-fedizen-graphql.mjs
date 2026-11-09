@@ -70,8 +70,23 @@ async function probe(name, fetcher = fetch) {
   if (Number.isFinite(sizeHeader) && sizeHeader > MAX_RESPONSE_BYTES) {
     throw new Error('GraphQL response exceeds size limit');
   }
-  const bytes = await response.arrayBuffer();
-  if (bytes.byteLength > MAX_RESPONSE_BYTES) throw new Error('GraphQL response exceeds size limit');
+  if (!response.body) throw new Error('GraphQL response has no body');
+  // Enforce the byte ceiling while streaming, not after buffering untrusted data.
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_RESPONSE_BYTES) throw new Error('GraphQL response exceeds size limit');
+      chunks.push(value);
+    }
+  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   let payload;
   try { payload = JSON.parse(new TextDecoder().decode(bytes)); }
   catch { return { httpStatus: response.status, graphqlData: 'invalid-json', feedActivities: 'missing', edges: null, errors: [] }; }
@@ -92,7 +107,7 @@ async function selfTest() {
     assert.equal(options.method, 'POST');
     assert.equal(options.redirect, 'error');
     assert.deepEqual(JSON.parse(options.body).variables, { name: 'local' });
-    return { status: 200, headers: { get: () => null }, arrayBuffer: async () => new TextEncoder().encode(JSON.stringify({ data: { feedActivities: { edges: [] } } })).buffer };
+    return { status: 200, headers: { get: () => null }, body: new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode(JSON.stringify({ data: { feedActivities: { edges: [] } } }))); controller.close(); } }) };
   };
   assert.equal((await probe('local', fake)).edges, 0);
   const huge = async () => ({ status: 200, headers: { get: () => String(MAX_RESPONSE_BYTES + 1) } });
