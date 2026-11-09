@@ -103,6 +103,12 @@ The [live schema acceptance run #42609196886](https://github.com/outlaw-dame/aur
 
 **Do not infer** the bearer scheme, OIDC identity mapping, authorization boundary, source image pin, native private feed contents, read-after-write behavior or mutation success from this introspection. These are schema-observed read signatures; authenticated acceptance is still required before enabling in the UI.
 
+### Live profile, post and activity detail contracts — 2026-11-09
+
+[Deployed read-only metadata run #42617139471](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42617139471) observed root `user(filter:CharacterFilters):User`, `post(filter:PostFilters):Post`, and `activity(filter:ActivityFilter):Activity`. `CharacterFilters` contains `id:ID`, `username:String`, `autocomplete:String`; `PostFilters` contains `id:ID`; `ActivityFilter` contains `activityId:ID` and `objectId:ID`. Bounded wrapper-preserving root/type metadata fingerprint: `4413a836fb3db365e2299205a4fb306b31d9ec44e1fe82bd082681e4d37a3a57`.
+
+`Post` exposes `id`, `postContent:PostContent`, `creator:AnyCharacter`, `activity:Activity`, `activities:[Activity]`, `media:[Media]`, `context:AnyContext`, and `permissionGrants:[BoundaryPermission]`. `PostContent` exposes `name`, `htmlBody`, `summary`, `rawBody`. `Activity` exposes `id`, `date`, `canonicalUri`, `objectPostContent`, `subject`, `object`, `verb`, `media`, `replied`, `repliesCount`, `likeCount`, `boostCount`, `likedByMe`, `boostedByMe`, `bookmarkedByMe`, and `restricted` among others. This is a **schema** finding, not authorization acceptance; no post contents or member identities were fetched.
+
 ### Versioned schema capture record
 
 | Field | Current value | Evidence / next action |
