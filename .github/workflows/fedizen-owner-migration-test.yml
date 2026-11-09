@@ -46,6 +46,20 @@ jobs:
           bun-version: '1.3.4'
       - name: Install pinned dependencies without lifecycle scripts
         run: bun install --frozen-lockfile --ignore-scripts
+      - name: Assert integration test refuses substring-match and remote database URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for target in \
+            'postgres://postgres:ci-only@localhost:5432/atlas_migration_test_production' \
+            'postgres://postgres:ci-only@db.example.com:5432/atlas_migration_test' \
+            'postgres://postgres:ci-only@localhost:5433/atlas_migration_test'
+          do
+            if ATLAS_MIGRATION_TEST_DATABASE_URL="$target" bun scripts/test-fedizen-owner-migration.mjs >/dev/null 2>&1; then
+              echo 'Unsafe migration test database URL accepted'
+              exit 1
+            fi
+          done
       - name: Apply exact migrations and assert account deletion, uniqueness, and denied client access
         env:
           ATLAS_MIGRATION_TEST_DATABASE_URL: postgres://postgres:temporary-ci-only@localhost:5432/atlas_migration_test
