@@ -1,6 +1,6 @@
 # Atlas → Fedizen: consented API and identity acceptance
 
-**Status (2026-11-09):** blocked on a consenting disposable Fedizen test identity and the actual Atlas Supabase OIDC client/project. Public OIDC discovery and public GraphQL reads are live-verified. Native private GraphQL permissions and end-to-end identity mapping are not.
+**Status (2026-11-09):** live Lovable-managed Atlas Supabase database access is confirmed and read-only schema/identity-provider checks completed; the standalone Supabase plugin still lists no projects. Public OIDC discovery and public GraphQL reads are live-verified. The outstanding blockers are *consented disposable A/B API grants* and *fresh end-to-end OIDC/Atlas session acceptance*, not database existence. Native private GraphQL permissions and end-to-end identity mapping have not been proven.
 
 Atlas remains a Bonfire client. The Fedify discovery gateway does not participate in this authentication workflow.
 
@@ -32,7 +32,7 @@ On the real Atlas deployment and with authorized Supabase project access, comple
 
 Confirm correct Atlas account → Fedizen identity mapping across refresh, logout, re-login, account switch, callback replay/expiration and grant revocation. Test a second disposable user trying to access the first user's non-public test content, blocked actors and insufficient permissions. Record accurate privacy outcomes without logging contents or identifiers. Test feed cursor stability, post deletion, media handling, offline recovery and Framework7 mobile behavior.
 
-**Current blocker:** The connected Supabase integration exposes no Atlas project in this conversation, and no disposable Fedizen test bearer has been supplied through a protected runtime. These steps cannot be marked complete without real acceptance results.
+**Current blocker:** Atlas's Lovable-managed Supabase **database** can now be inspected through the matching Aura Browser deployment, but the separate Supabase plugin exposes no projects and the current session has no consented disposable Fedizen bearer nor browser-accessible A/B Atlas sessions. Read-only catalog queries cannot demonstrate CSRF behavior, OAuth callback completeness, delegated token permissions, or IDOR denial. Those checks still require real, consenting test sessions.
 
 ## Deployed same-origin CSRF and logging acceptance
 
