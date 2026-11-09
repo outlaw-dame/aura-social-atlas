@@ -52,3 +52,37 @@ export function validatedBonfireNodes(edges: unknown, max = 20): BonfireActivity
   }
   return edges.map(e => e.node as BonfireActivityNode);
 }
+
+/**
+ * Profile and post-detail field names were observed on the live Fedizen
+ * GraphQL deployment (PR #104). These are deliberately read-only selection
+ * sets; no rawBody, permission grants, or private author metadata requested.
+ * These documents require authenticated acceptance before UI promotion.
+ */
+export const NATIVE_PROFILE_BY_USERNAME_DOCUMENT = `query AtlasNativeProfileByUsername($username:String!) {
+  user(filter:{username:$username}) {
+    id character { username canonicalUri }
+    profile { name summary icon image website location }
+    followersCount followingCount statusesCount
+  }
+}`;
+
+export const NATIVE_PROFILE_BY_ID_DOCUMENT = `query AtlasNativeProfileById($id:ID!) {
+  user(filter:{id:$id}) {
+    id character { username canonicalUri }
+    profile { name summary icon image website location }
+    followersCount followingCount statusesCount
+  }
+}`;
+
+export const NATIVE_POST_BY_ID_DOCUMENT = `query AtlasNativePostById($id:ID!) {
+  post(filter:{id:$id}) {
+    id postContent { name summary htmlBody }
+    creator { ... on User { character { username canonicalUri } profile { name icon } } }
+    activity {
+      id date canonicalUri
+      repliesCount likeCount boostCount
+      likedByMe boostedByMe bookmarkedByMe
+    }
+  }
+}`;
