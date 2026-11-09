@@ -41,32 +41,29 @@ export const getNativeBonfireDetail = createServerFn({ method: 'GET' })
     if (!nativeBonfireReadEnabled(process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'])) {
       return { ...base, status: 'disabled' };
     }
-    const [{ tokenFor }, privateReads, detailReads] = await Promise.all([
-      import('./fedizen.server'),
-      import('./bonfire-private.server'),
-      import('./bonfire-detail.server'),
-    ]);
-    const connection = await tokenFor(context.userId);
-    if (!connection) return { ...base, status: 'disconnected' };
-
     try {
-      // Always resolve the delegated bearer to a Bonfire identity first;
-      // never expose a detail record through a mismatched Atlas connection.
-      const me = await privateReads.readNativeBonfireMe(connection.access_token);
-      if (!me?.user) return { ...base, status: 'authorization-required' };
-      if (!privateReads.matchesLinkedFedizenHandle(
-        connection.account_handle, me.user.character?.username,
-      )) return { ...base, status: 'identity-unverified' };
+      const [{ verifiedNativeBonfireConnection }, detailReads] = await Promise.all([
+        import('./bonfire-verified-connection.server'),
+        import('./bonfire-detail.server'),
+      ]);
+      // Server-verified Supabase subject, not the caller's requested ID,
+      // selects the account's credential; Me must agree with the stored owner.
+      const connection = await verifiedNativeBonfireConnection(
+        data.expectedAtlasUserId, context.userId,
+      );
+      if (connection.status !== 'available') {
+        return { ...base, status: connection.status };
+      }
 
       if (data.kind === 'profile') {
         const profile = await detailReads.readNativeBonfireProfile(
-          connection.access_token, data.selector,
+          connection.accessToken, data.selector,
         );
         return { ...base, status: 'available', profile };
       }
 
       const post = await detailReads.readNativeBonfirePost(
-        connection.access_token, data.id,
+        connection.accessToken, data.id,
       );
       return { ...base, status: 'available', post };
     } catch {
