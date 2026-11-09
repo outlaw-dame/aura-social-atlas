@@ -77,6 +77,17 @@ The following are verified **repository implementation and test** milestones, no
 
 **Current gate:** public Bonfire GraphQL is live-verified and private operation shapes are schema-observed. Authenticated private GraphQL and Atlas identity acceptance are **not** live verified. No native private GraphQL UI promotion or mutation deployment before real consenting disposable-account tests, effective-version compatibility confirmation and negative permission testing.
 
+### Authentication security and Mastodon REST verification — 2026-11-09
+
+- **[PR #99](https://github.com/outlaw-dame/aura-social-atlas/pull/99):** eliminated unnecessary native private GraphQL RPCs while the server's native-read feature flag is off. Connected, signed-in and operator-gated states are verified before requesting native content. The independent server auth gate remains authoritative.
+- **[PR #100](https://github.com/outlaw-dame/aura-social-atlas/pull/100):** added the [deployed Mastodon-compatible REST capability matrix](FEDIZEN_MASTODON_REST_CAPABILITY_MATRIX.md) and a bounded, anonymous GET-only live contract observer. Fedizen returned 200 on instance v2; 401 on instance v1, custom emojis and public REST timeline; 401 on anonymous credential verification, Home and notifications. An HTTP 401 is **not** evidence that a route is missing. GitHub Actions validates only public response structure and private anonymous denial, without account content.
+- **[PR #101](https://github.com/outlaw-dame/aura-social-atlas/pull/101):** extended the protected disposable-account acceptance workflow to require real, bounded **authenticated Mastodon REST Home and notifications** results, in addition to identity-matched GraphQL `Me`, Home and notifications. Offline preflight passes; the live secret-bearing job is **manual and unexecuted** until a consenting test account and protected GitHub environment are configured.
+- **[PR #102](https://github.com/outlaw-dame/aura-social-atlas/pull/102):** explicitly registered TanStack Start's CSRF middleware for browser server-function requests in the custom `src/start.ts` configuration and redacted raw unexpected server exceptions. Atlas and gateway CI passed. A controlled deployed-origin negative test is still required to verify deployment proxy and browser behavior.
+
+**Mastodon REST does not have GraphQL-style runtime introspection.** Treat the route probe, upstream Community rc.1 inventory and actual authenticated response/permission tests as separate evidence sources. Do not equate upstream 53/225 reported implemented REST routes with Fedizen's measured compatibility, and never implement speculative statuses, lists, groups or search solely from Mastodon documentation. GraphQL remains Atlas's first-class Bonfire interface, with REST used for verified per-feature compatibility.
+
+**Remaining actual acceptance requirement:** Configure a disposable consenting Fedizen account's delegated read token and expected handle as protected GitHub `fedizen-integration` secrets, dispatch the manual workflow from `main`, then independently verify real Supabase/Bonfire OIDC session, account switching, expiry/revocation, negative user A/B privacy cases and CSRF denial on the deployed Atlas origin. Neither repository tests nor anonymous route probes can substitute for these results. Keep `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS` disabled until satisfied.
+
 ## 2. Delivery priorities and dependency sequence
 
 | Rank | Phase | Result | May advance when |

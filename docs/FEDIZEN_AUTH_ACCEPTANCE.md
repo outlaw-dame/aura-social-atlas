@@ -33,6 +33,12 @@ Confirm correct Atlas account → Fedizen identity mapping across refresh, logou
 
 **Current blocker:** The connected Supabase integration exposes no Atlas project in this conversation, and no disposable Fedizen test bearer has been supplied through a protected runtime. These steps cannot be marked complete without real acceptance results.
 
+## Deployed same-origin CSRF and logging acceptance
+
+The custom TanStack Start request pipeline now includes the framework's `createCsrfMiddleware` for server-function RPCs ([PR #102](https://github.com/outlaw-dame/aura-social-atlas/pull/102)); raw unhandled exception objects are not logged. These are code-reviewed and CI-checked changes, **not yet** an externally observed browser/proxy security result.
+
+On a controlled Atlas staging domain, confirm using a disposable authenticated Atlas test session that (a) ordinary same-origin read/connect/disconnect server functions behave correctly, (b) malicious cross-site or sibling-subdomain POST requests with a mismatched `Origin` are rejected **before** any Fedizen state, token, app registration, or connection mutation occurs, (c) the trusted proxy preserves the actual public request origin and does not trust arbitrary client-supplied forwarded-host headers, (d) unauthorized and malformed requests never return private account data, and (e) error responses are non-cacheable and do not expose token/code/PKCE or upstream content. Do not test against unrelated tenants or real user accounts.
+
 ## Promotion rules and mutations
 
 The typed private server function is deliberately disabled unless the operator sets **ATLAS_BONFIRE_NATIVE_GRAPHQL_READS=verified**. Do not set this merely because introspection or mocked tests passed. The existing read-only REST personal feed remains active until real private GraphQL acceptance, identity reconciliation and UI verification succeed.
