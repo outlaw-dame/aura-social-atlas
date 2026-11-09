@@ -98,6 +98,28 @@ export async function readNativeBonfirePage(
   });
 }
 
+/**
+ * A delegated bearer can resolve to an unexpected Bonfire account if an old
+ * connection is swapped or an upstream adapter changes identity semantics.
+ * Compare the independently obtained REST and GraphQL local names before
+ * returning private content. This is a consistency check, not OIDC subject
+ * equivalence (which still needs live verification).
+ */
+export function matchesLinkedFedizenHandle(
+  verifiedRestHandle: string | null,
+  nativeUsername: string | null | undefined,
+): boolean {
+  const localName = (value: string | null | undefined): string | null => {
+    if (!value || value.length > 320) return null;
+    const parts = value.replace(/^@/, '').split('@');
+    if (parts.length < 1 || parts.length > 2 || !parts[0] || /[\\s/#?]/.test(parts[0])) return null;
+    if (parts.length === 2 && parts[1].toLowerCase() !== 'fedizen.net') return null;
+    return parts[0].toLowerCase();
+  };
+  const rest = localName(verifiedRestHandle);
+  return rest !== null && rest === localName(nativeUsername);
+}
+
 /** Map the native Home read through the same proven post normalizer as public feeds. */
 export function normalizeNativeBonfireHome(page: NativeBonfirePage) {
   return {
