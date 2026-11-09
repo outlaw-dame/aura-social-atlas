@@ -39,7 +39,7 @@ export function FedizenFeed() {
         : null}
     {f.nativeQueryError && <p role="status" className="mb-4 text-xs text-muted-foreground">Native Bonfire request failed. Showing the existing Fedizen timeline.</p>}
     {f.error && <p role="alert" className="mb-4 text-sm text-destructive">{f.error}</p>}
-    {error && <p className="mb-4 text-sm text-muted-foreground">Fedizen couldn’t send your timeline right now. <Button variant="link" size="sm" className="px-1" onClick={f.retry}>Try again</Button></p>}
+    {error && displayed.source !== 'native' && <p className="mb-4 text-sm text-muted-foreground">Fedizen couldn’t send your timeline right now. <Button variant="link" size="sm" className="px-1" onClick={f.retry}>Try again</Button></p>}
     <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_240px]">
       <div className="space-y-6">{posts.length ? posts.map(p => <article key={p.id} className="border-b border-border pb-5">
         {p.boostedBy && <p className="mb-2 flex items-center gap-1 text-[11px] text-muted-foreground"><Repeat2 className="size-3" />{p.boostedBy} boosted</p>}
@@ -47,7 +47,18 @@ export function FedizenFeed() {
         <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div>
         {p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
         <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Open on Fedizen<ArrowUpRight className="size-3" /></a>
-      </article>) : error ? null : <p className="text-sm text-muted-foreground">Your Fedizen timeline is empty. Follow people on Fedizen and their posts will appear here.</p>}</div>
+      </article>) : error && displayed.source !== 'native' ? null : <p className="text-sm text-muted-foreground">Your Fedizen timeline is empty. Follow people on Fedizen and their posts will appear here.</p>}
+        {displayed.source === 'native' && (
+          <div className="space-y-2">
+            {f.moreNativeError && <p role="status" className="text-xs text-muted-foreground">
+              Couldn’t load the next page. Your existing posts are unchanged.
+            </p>}
+            {f.hasMoreNative && <Button type="button" variant="outline" size="sm"
+              disabled={f.loadingMoreNative} onClick={f.loadMoreNative}>
+              {f.loadingMoreNative ? 'Loading more…' : 'Load more posts'}
+            </Button>}
+          </div>
+        )}</div>
       <aside><h3 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><Bell className="size-3" />Activity</h3>
         {notices.length ? <ul className="space-y-3">{notices.map(n => <li key={n.id} className="flex gap-2 text-xs">{n.avatar && <img src={n.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-6 shrink-0 rounded-full object-cover" />}<span><span className="font-semibold">{n.author}</span> <span className="text-muted-foreground">{n.text}</span></span></li>)}</ul> : <p className="text-xs text-muted-foreground">No new activity.</p>}
         <Button variant="link" size="sm" className="mt-4 px-0 text-xs text-muted-foreground" onClick={() => void f.disconnect()} disabled={f.actionBusy}>{f.actionBusy ? 'Disconnecting…' : 'Disconnect Fedizen'}</Button>

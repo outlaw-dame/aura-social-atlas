@@ -1,10 +1,10 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { useRef, useState } from 'react';
 import { useAtlasAuth } from './AuthState';
 import { disconnectFedizen, getFedizenHome, startFedizenConnect, type FedizenHome } from '@/lib/fedizen.functions';
-import { getNativeBonfireSnapshot } from '@/lib/bonfire-private.functions';
-import { shouldRequestNativeBonfireHome } from '@/lib/bonfire-native-presentation';
+import { getNativeBonfireSnapshot, getNativeBonfireHomeContinuation } from '@/lib/bonfire-private.functions';
+import { mergeNativeBonfirePages, nextNativeHomeCursor, shouldRequestNativeBonfireHome } from '@/lib/bonfire-native-presentation';
 import { isEmbeddedPreview } from '@/lib/bonfire-auth';
 
 /** Personal, server-authorized Fedizen feed; cached only under the Atlas user ID. */
@@ -13,6 +13,7 @@ export function useFedizen() {
   const qc = useQueryClient();
   const home = useServerFn(getFedizenHome), start = useServerFn(startFedizenConnect), drop = useServerFn(disconnectFedizen);
   const nativeHome = useServerFn(getNativeBonfireSnapshot);
+  const nativeContinuation = useServerFn(getNativeBonfireHomeContinuation);
   const [actionError, setActionError] = useState<{ userId: string; message: string } | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const pending = useRef(false);
@@ -28,12 +29,24 @@ export function useFedizen() {
     staleTime: 60_000,
   });
   const nativeKey = ['bonfire-native-home', id] as const;
-  const nativeQuery = useQuery({
+  const nativeQuery = useInfiniteQuery({
     queryKey: nativeKey,
-    queryFn: () => {
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => {
       if (!id) throw new Error('Atlas user is not signed in.');
-      return nativeHome({ data: { expectedAtlasUserId: id } });
+      if (pageParam === null) {
+        return nativeHome({ data: { expectedAtlasUserId: id } });
+      }
+      const page = await nativeContinuation({
+        data: { expectedAtlasUserId: id, after: pageParam },
+      });
+      // A failed continuation must not erase previously accepted pages, or
+      // misrepresent an authorization error as a successful empty page.
+      if (page.status !== 'available') throw new Error('Native Home continuation unavailable');
+      return page;
     },
+    getNextPageParam: (_last, pages, _lastParam, pageParams) =>
+      nextNativeHomeCursor(pages, pageParams),
     enabled: shouldRequestNativeBonfireHome(!!id, q.data),
     staleTime: 60_000,
     retry: false,
@@ -44,7 +57,15 @@ export function useFedizen() {
     signedIn: !!id,
     loading: !!id && q.isLoading,
     data: q.data,
-    native: nativeQuery.data,
+    native: mergeNativeBonfirePages(q.data ?? { connected: false, accountHandle: null, posts: [], notices: [] }, nativeQuery.data?.pages),
+    loadingMoreNative: nativeQuery.isFetchingNextPage,
+    hasMoreNative: nativeQuery.hasNextPage,
+    moreNativeError: nativeQuery.isFetchNextPageError,
+    loadMoreNative: () => {
+      if (id && shouldRequestNativeBonfireHome(true, q.data) && nativeQuery.hasNextPage && !nativeQuery.isFetching) {
+        void nativeQuery.fetchNextPage();
+      }
+    },
     nativeQueryError: nativeQuery.isError,
     // Only expose a message to the account which initiated the operation.
     error: actionError && actionError.userId === id ? actionError.message : null,
