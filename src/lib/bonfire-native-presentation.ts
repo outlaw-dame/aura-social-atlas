@@ -10,7 +10,7 @@ export function selectBonfireHome(
   rest: FedizenHome,
   native?: NativeBonfireSnapshot,
 ) {
-  const validNative = rest.connected && native?.status === 'available' &&
+  const validNative = rest.connected && rest.nativeReadEnabled === true && native?.status === 'available' &&
     native.restAccountHandle !== null &&
     native.restAccountHandle === rest.accountHandle;
   if (validNative) {
@@ -65,7 +65,7 @@ export function mergeNativeBonfirePages(
   const first = pages[0];
   if (!first || first.status !== 'available') return first;
   if (!first.identity?.user?.id || first.restAccountHandle === null ||
-    !rest.connected || first.restAccountHandle !== rest.accountHandle) {
+    !rest.connected || rest.nativeReadEnabled !== true || first.restAccountHandle !== rest.accountHandle) {
     return undefined;
   }
   const seen = new Set<string>();
