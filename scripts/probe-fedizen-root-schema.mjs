@@ -16,39 +16,39 @@ const DOCUMENT = `query AtlasReadOnlyRootContract {
   __schema {
     queryType {
       name
-      fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
+      fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
     }
     mutationType {
       name
-      fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
+      fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
     }
   }
   feedFilters: __type(name: "FeedFilters") {
-    kind inputFields { name type { kind name ofType { kind name ofType { kind name } } } }
+    kind inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
   }
   postContentInput: __type(name: "PostContentInput") {
-    kind inputFields { name type { kind name ofType { kind name ofType { kind name } } } }
+    kind inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
   }
   meType: __type(name: "Me") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
   }
   userType: __type(name: "User") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
   }
   activityConnectionType: __type(name: "ActivityConnection") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
   }
   activityEdgeType: __type(name: "ActivityEdge") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
   }
   characterType: __type(name: "Character") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
   }
   profileType: __type(name: "Profile") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
   }
   pageInfoType: __type(name: "PageInfo") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
   }
 }`;
 const FOCUS = new Set([
@@ -62,12 +62,21 @@ function validName(name) {
   return typeof name === 'string' && /^[A-Za-z_][A-Za-z_0-9]{0,100}$/.test(name);
 }
 function typeBrief(t) {
-  if (!t || typeof t !== 'object' || !['NON_NULL','LIST','SCALAR','ENUM','INPUT_OBJECT','OBJECT','INTERFACE','UNION'].includes(t.kind)) return null;
-  return {
-    kind: t.kind,
-    name: validName(t.name) ? t.name : (validName(t.ofType?.name) ? t.ofType.name :
-      (validName(t.ofType?.ofType?.name) ? t.ofType.ofType.name : null)),
-  };
+  const kinds = [];
+  let current = t;
+  let name = null;
+  for (let depth = 0; depth < 5 && current; depth++) {
+    if (typeof current !== 'object' ||
+      !['NON_NULL','LIST','SCALAR','ENUM','INPUT_OBJECT','OBJECT','INTERFACE','UNION'].includes(current.kind)) return null;
+    kinds.push(current.kind);
+    if (validName(current.name)) {
+      name = current.name;
+      break;
+    }
+    current = current.ofType;
+  }
+  if (!name || kinds.length === 0) return null;
+  return { kind: kinds[0], name, wrappers: kinds };
 }
 
 function inspectInput(t) {
@@ -112,9 +121,9 @@ function inspectRoot(root) {
     const args = [];
     for (const a of item.args) {
       if (!a || !validName(a.name)) return null;
-      const t = a.type;
-      if (!t || typeof t !== 'object' || !['NON_NULL','LIST','SCALAR','ENUM','INPUT_OBJECT'].includes(t.kind)) return null;
-      args.push({ name: a.name, kind: t.kind, type: validName(t.name) ? t.name : (validName(t.ofType?.name) ? t.ofType.name : null) });
+      const type = typeBrief(a.type);
+      if (!type) return null;
+      args.push({ name: a.name, kind: type.kind, type: type.name, wrappers: type.wrappers });
     }
     const returnType = typeBrief(item.type);
     fields.push({ name: item.name, args, returnType });
@@ -219,6 +228,12 @@ async function test() {
   assert.equal(result.candidateMutationFields[0].name,'createPost');
   assert.equal(result.candidateMutationFields[0].returnType.name,'Post');
   assert.equal(result.feedFiltersInput[0].name,'feedName');
+  const listElement = typeBrief({
+    kind:'NON_NULL',ofType:{kind:'LIST',ofType:{kind:'NON_NULL',ofType:{kind:'OBJECT',name:'Post'}}},
+  });
+  const requiredSingle = typeBrief({kind:'NON_NULL',ofType:{kind:'OBJECT',name:'Post'}});
+  assert.deepEqual(listElement.wrappers, ['NON_NULL','LIST','NON_NULL','OBJECT']);
+  assert.notDeepEqual(listElement,requiredSingle);
   assert.equal(summarizeSchema({ ...fixture, errors:[{message:'secret'}] }),null);
   assert.equal(summarizeSchema({ data:{__schema:{queryType:{name:'Query',fields:[{name:'bad name',args:[]}]},mutationType:null}} }),null);
   assert.equal(summarizeSchema(null), null);
