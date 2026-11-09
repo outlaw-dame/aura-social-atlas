@@ -83,17 +83,20 @@ describe('Fedizen read-side failure isolation', () => {
     expect(result.data[0]).toMatchObject({ id: 'notification-1', status: { id: 'post-2' } });
   });
 
-  test.each([
-    [null],
-    [[null]],
-    [[{ id: 12 }]],
-    [[{ id: 'post-1', media_attachments: [null] }]],
-    [[{ id: 'post-1', account: 'not-an-account' }]],
-    [[{ id: 'post-1', reblog: { id: 'x', media_attachments: [null] } }]],
-    [Array.from({ length: 21 }, (_, i) => ({ id: String(i) }))],
-  ])('rejects malformed personal Home content instead of crashing normalizers %#', async (payload) => {
-    globalThis.fetch = mock(async () => new Response(JSON.stringify(payload))) as typeof fetch;
-    expect(await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20')).toEqual({ status: 502, data: [] });
+  test('rejects malformed personal Home content instead of crashing normalizers', async () => {
+    const invalid: unknown[] = [
+      null,
+      [null],
+      [{ id: 12 }],
+      [{ id: 'post-1', media_attachments: [null] }],
+      [{ id: 'post-1', account: 'not-an-account' }],
+      [{ id: 'post-1', reblog: { id: 'x', media_attachments: [null] } }],
+      Array.from({ length: 21 }, (_, i) => ({ id: String(i) })),
+    ];
+    for (const payload of invalid) {
+      globalThis.fetch = mock(async () => new Response(JSON.stringify(payload))) as typeof fetch;
+      expect(await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20')).toEqual({ status: 502, data: [] });
+    }
   });
 
   test('rejects malformed notification status nested objects', async () => {
