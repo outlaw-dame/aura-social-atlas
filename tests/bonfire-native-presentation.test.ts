@@ -6,6 +6,7 @@ import type { NativeBonfireSnapshot } from '../src/lib/bonfire-private.functions
 const rest: FedizenHome = {
   connected: true,
   accountHandle: 'alice',
+  nativeReadEnabled: true,
   posts: [{ id: 'rest-1', author: 'REST author', handle: '@rest', paragraphs: ['existing'], url: 'https://fedizen.net/1' }],
   notices: [{ id: 'rest-notice', type: 'mention', author: 'REST actor', text: 'mentioned you' }],
 };
@@ -58,6 +59,7 @@ describe('Atlas native Bonfire presentation gate', () => {
       expect(view.posts).toEqual(rest.posts);
     }
     expect(selectBonfireHome(rest).posts).toEqual(rest.posts);
+    expect(selectBonfireHome({ ...rest, nativeReadEnabled: false }, native).source).toBe('rest');
   });
 
   test('native entry does not override REST if linked handle is missing', () => {
@@ -68,7 +70,7 @@ describe('Atlas native Bonfire presentation gate', () => {
 
 describe('Native GraphQL rollout avoids unnecessary authenticated requests', () => {
   test('default, disconnected, expired, and unsigned-in states never query native', () => {
-    expect(shouldRequestNativeBonfireHome(true, rest)).toBe(false);
+    expect(shouldRequestNativeBonfireHome(true, { ...rest, nativeReadEnabled: undefined })).toBe(false);
     expect(shouldRequestNativeBonfireHome(true, undefined)).toBe(false);
     expect(shouldRequestNativeBonfireHome(false, { ...rest, nativeReadEnabled: true })).toBe(false);
     expect(shouldRequestNativeBonfireHome(true, { ...rest, connected: false, nativeReadEnabled: true })).toBe(false);
@@ -110,6 +112,7 @@ describe('Native Home cursor and account-scoped pagination', () => {
     }])).toBeUndefined();
     expect(mergeNativeBonfirePages({ ...rest, accountHandle: 'bob' }, [native])).toBeUndefined();
     expect(mergeNativeBonfirePages({ ...rest, connected: false }, [native])).toBeUndefined();
+    expect(mergeNativeBonfirePages({ ...rest, nativeReadEnabled: false }, [native])).toBeUndefined();
     expect(mergeNativeBonfirePages(rest, [native, { ...other, status: 'authorization-required' }])).toBeUndefined();
   });
 
