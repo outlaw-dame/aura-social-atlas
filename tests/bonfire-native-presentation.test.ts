@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { selectBonfireHome } from '../src/lib/bonfire-native-presentation';
+import { selectBonfireHome, shouldRequestNativeBonfireHome } from '../src/lib/bonfire-native-presentation';
 import type { FedizenHome } from '../src/lib/fedizen.functions';
 import type { NativeBonfireSnapshot } from '../src/lib/bonfire-private.functions';
 
@@ -63,5 +63,20 @@ describe('Atlas native Bonfire presentation gate', () => {
   test('native entry does not override REST if linked handle is missing', () => {
     expect(selectBonfireHome(rest, { ...native, restAccountHandle: null }).source).toBe('rest');
     expect(selectBonfireHome({ ...rest, accountHandle: null }, native).source).toBe('rest');
+  });
+});
+
+describe('Native GraphQL rollout avoids unnecessary authenticated requests', () => {
+  test('default, disconnected, expired, and unsigned-in states never query native', () => {
+    expect(shouldRequestNativeBonfireHome(true, rest)).toBe(false);
+    expect(shouldRequestNativeBonfireHome(true, undefined)).toBe(false);
+    expect(shouldRequestNativeBonfireHome(false, { ...rest, nativeReadEnabled: true })).toBe(false);
+    expect(shouldRequestNativeBonfireHome(true, { ...rest, connected: false, nativeReadEnabled: true })).toBe(false);
+    expect(shouldRequestNativeBonfireHome(true, { ...rest, nativeReadEnabled: true, error: 'expired' })).toBe(false);
+    expect(shouldRequestNativeBonfireHome(true, { ...rest, nativeReadEnabled: false })).toBe(false);
+  });
+
+  test('an explicitly operator-enabled authenticated connection may query native', () => {
+    expect(shouldRequestNativeBonfireHome(true, { ...rest, nativeReadEnabled: true })).toBe(true);
   });
 });
