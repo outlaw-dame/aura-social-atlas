@@ -60,7 +60,7 @@ describe('Bonfire deployed-schema profile and post detail readers', () => {
         .rejects.toThrow();
     }
     expect(() => profileSelectorSchema.parse({ by: 'unknown', value: 'example' })).toThrow();
-    expect(() => bonfireDetailIDSchema.parse('bad\\ncontrol')).toThrow();
+    expect(() => bonfireDetailIDSchema.parse('bad' + String.fromCharCode(10) + 'control')).toThrow();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
