@@ -100,7 +100,21 @@ async function live() {
   report('private-fixture-other-owner-denied', denied);
   if (!denied) throw new Error('Second owner access was exposed or inconclusive');
 
-  console.log('PASS: consented A/B private post read boundary');
+  // A non-public fixture must not resolve anonymously either. A generic
+  // GraphQL error, timeout, rate-limit or transport failure is inconclusive:
+  // only a validated null object or explicit HTTP 403/404 is accepted.
+  activeCheck = 'private-fixture-anonymous-denied';
+  let anonymousDenied = false;
+  try {
+    const anonymousResult = await readNativeBonfirePost('', privatePostId);
+    anonymousDenied = conclusiveOtherAccountDenial(anonymousResult);
+  } catch (error) {
+    anonymousDenied = conclusiveOtherAccountDenial(undefined, error);
+  }
+  report('private-fixture-anonymous-denied', anonymousDenied);
+  if (!anonymousDenied) throw new Error('Anonymous access was exposed or inconclusive');
+
+  console.log('PASS: consented A/B and anonymous private post read boundary');
 }
 
 function selfTest() {
