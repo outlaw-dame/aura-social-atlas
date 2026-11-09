@@ -31,7 +31,7 @@ export function useFedizen() {
     loading: !!id && q.isLoading,
     data: q.data,
     // Only expose a message to the account which initiated the operation.
-    error: actionError?.userId === id ? actionError.message : null,
+    error: actionError && actionError.userId === id ? actionError.message : null,
     actionBusy,
     embedded,
     queryError: q.isError,
