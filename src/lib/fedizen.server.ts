@@ -1,4 +1,5 @@
 import { FEDIZEN, FEDIZEN_API_SCOPE } from './fedizen-feed';
+import { z } from 'zod';
 
 const b64url = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const random = (n = 32) => b64url(crypto.getRandomValues(new Uint8Array(n)));
@@ -155,24 +156,104 @@ export async function disconnect(userId: string): Promise<void> {
   if (error) throw new Error('Could not disconnect Fedizen account.');
 }
 
-export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {
-  // Only fixed, same-origin Mastodon-compatible read paths are accepted.
-  if (path !== '/api/v1/timelines/home?limit=20' && path !== '/api/v1/notifications?limit=20') {
-    throw new Error('Unsupported Fedizen read path.');
+/** Server-side schema projection for the two existing read-only endpoints.
+ * Reject malformed nested objects instead of crashing the personal timeline,
+ * and strip unknown fields before they reach UI normalizers. */
+const account = z.object({
+  display_name: z.string().nullish(),
+  username: z.string().nullish(),
+  acct: z.string().nullish(),
+  avatar: z.string().nullish(),
+});
+const media = z.object({
+  type: z.string().nullish(),
+  url: z.string().nullish(),
+  preview_url: z.string().nullish(),
+});
+const status = z.object({
+  id: z.string().min(1),
+  url: z.string().nullish(),
+  uri: z.string().nullish(),
+  created_at: z.string().nullish(),
+  content: z.string().nullish(),
+  account: account.nullish(),
+  media_attachments: z.array(media).nullish(),
+});
+// The REST client only reads one reblog level. Avoid unbounded recursion.
+const timelineStatus = status.extend({ reblog: status.nullish() });
+const notice = z.object({
+  id: z.string().min(1),
+  type: z.string().nullish(),
+  created_at: z.string().nullish(),
+  account: account.nullish(),
+  status: timelineStatus.nullish(),
+});
+const homeSchema = z.array(timelineStatus).max(20);
+const notificationsSchema = z.array(notice).max(20);
+
+const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;
+
+async function readPrivateJson(response: Response): Promise<unknown> {
+  const length = response.headers.get('content-length');
+  if (length !== null && Number(length) > MAX_PRIVATE_READ_BYTES) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error('oversize');
   }
+  if (!response.body) throw new Error('missing body');
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
   try {
-    const res = await fetch(`${FEDIZEN}${path}`, {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_PRIVATE_READ_BYTES) throw new Error('oversize');
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
+}
+
+export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {
+  // The only permitted private REST fallbacks until the equivalent GraphQL
+  // operations are verified against Fedizen's installed Community schema.
+  const home = path === '/api/v1/timelines/home?limit=20';
+  const notifications = path === '/api/v1/notifications?limit=20';
+  if (!home && !notifications) throw new Error('Unsupported Fedizen read path.');
+
+  let response: Response;
+  try {
+    response = await fetch(`${FEDIZEN}${path}`, {
+      method: 'GET',
       headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
       signal: AbortSignal.timeout(10000),
       redirect: 'error',
       cache: 'no-store',
     });
-    if (!res.ok) return { status: res.status, data: [] };
-    const payload: unknown = await res.json();
-    // Returning 200/[] for a malformed payload silently masks upstream drift.
-    return Array.isArray(payload) ? { status: 200, data: payload } : { status: 502, data: [] };
   } catch {
-    // Never log the bearer token or remote response body.
     return { status: 503, data: [] };
   }
+
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    return { status: response.status, data: [] };
+  }
+
+  let payload: unknown;
+  try {
+    payload = await readPrivateJson(response);
+  } catch {
+    // Includes decode, timeout/stream, oversize and malformed JSON failures.
+    // Do not log bearer values or private response bodies.
+    return { status: 502, data: [] };
+  }
+  const parsed = (home ? homeSchema : notificationsSchema).safeParse(payload);
+  return parsed.success ? { status: 200, data: parsed.data } : { status: 502, data: [] };
 }

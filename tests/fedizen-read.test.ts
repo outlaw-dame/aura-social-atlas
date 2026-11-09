@@ -56,4 +56,73 @@ describe('Fedizen read-side failure isolation', () => {
     expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 503, data: [] });
     expect(calls).toBe(1);
   });
+  test('valid Home response preserves the fields used by the UI', async () => {
+    globalThis.fetch = mock(async () => new Response(JSON.stringify([{
+      id: 'post-1',
+      content: '<p>Hello</p>',
+      account: { acct: 'writer@fedizen.net', display_name: 'Writer', avatar: 'https://fedizen.net/a.png' },
+      media_attachments: [{ type: 'image', preview_url: 'https://fedizen.net/media.png' }],
+      reblog: null,
+      unexpected_sensitive_field: 'must-not-return',
+    }]))) as typeof fetch;
+    const result = await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20');
+    expect(result.status).toBe(200);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({ id: 'post-1', content: '<p>Hello</p>' });
+    expect(result.data[0]).not.toHaveProperty('unexpected_sensitive_field');
+  });
+
+  test('valid notification and status fields survive read projection', async () => {
+    globalThis.fetch = mock(async () => new Response(JSON.stringify([{
+      id: 'notification-1', type: 'mention',
+      account: { acct: 'friend' },
+      status: { id: 'post-2', content: '<p>Hi</p>' },
+    }]))) as typeof fetch;
+    const result = await fedizenGet('sentinel', '/api/v1/notifications?limit=20');
+    expect(result).toMatchObject({ status: 200 });
+    expect(result.data[0]).toMatchObject({ id: 'notification-1', status: { id: 'post-2' } });
+  });
+
+  test('rejects malformed personal Home content instead of crashing normalizers', async () => {
+    const invalid: unknown[] = [
+      null,
+      [null],
+      [{ id: 12 }],
+      [{ id: 'post-1', media_attachments: [null] }],
+      [{ id: 'post-1', account: 'not-an-account' }],
+      [{ id: 'post-1', reblog: { id: 'x', media_attachments: [null] } }],
+      Array.from({ length: 21 }, (_, i) => ({ id: String(i) })),
+    ];
+    for (const payload of invalid) {
+      globalThis.fetch = mock(async () => new Response(JSON.stringify(payload))) as typeof fetch;
+      expect(await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20')).toEqual({ status: 502, data: [] });
+    }
+  });
+
+  test('rejects malformed notification status nested objects', async () => {
+    globalThis.fetch = mock(async () => new Response(JSON.stringify([{ id: 'n', status: { id: 'p', account: [null] } }]))) as typeof fetch;
+    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 502, data: [] });
+  });
+
+  test('declared private response oversize cancels the response stream', async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({ cancel() { cancelled = true; } });
+    globalThis.fetch = mock(async () => new Response(body, { headers: { 'content-length': '3000000' } })) as typeof fetch;
+    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 502, data: [] });
+    expect(cancelled).toBe(true);
+  });
+
+  test('streamed private response cannot exceed the byte cap', async () => {
+    let pulls = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) { pulls++; controller.enqueue(new Uint8Array(1024 * 1024)); },
+      cancel() { cancelled = true; },
+    }, { highWaterMark: 0 });
+    globalThis.fetch = mock(async () => new Response(body)) as typeof fetch;
+    expect(await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20')).toEqual({ status: 502, data: [] });
+    expect(cancelled).toBe(true);
+    expect(pulls).toBeLessThan(6);
+  });
+
 });
