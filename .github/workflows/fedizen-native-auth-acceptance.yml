@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'scripts/verify-fedizen-native-auth.ts'
+      - 'scripts/provision-fedizen-acceptance.ts'
       - '.github/workflows/fedizen-native-auth-acceptance.yml'
   workflow_dispatch:
 
@@ -22,7 +23,9 @@ jobs:
       - name: Install pinned dependencies without lifecycle scripts
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Verify offline acceptance preflight
-        run: bun scripts/verify-fedizen-native-auth.ts --self-test
+        run: |
+          bun scripts/verify-fedizen-native-auth.ts --self-test
+          bun scripts/provision-fedizen-acceptance.ts --self-test
 
   # Never run on PRs, forks, pushes or schedules. The environment should
   # require an operator's approval and contain a disposable consenting user's
