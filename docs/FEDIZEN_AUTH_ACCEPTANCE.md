@@ -8,7 +8,7 @@ Atlas remains a Bonfire client. The Fedify discovery gateway does not participat
 
 Use a dedicated disposable test Fedizen account. Obtain its **separately consented read-only resource OAuth grant** through the existing connection flow; an OIDC identity scope is not a replacement for delegated API read permission.
 
-In GitHub **Settings → Environments**, create **fedizen-integration**. Configure required reviewers and restrict the environment to the **main** branch. Add environment secrets named **FEDIZEN_TEST_READ_TOKEN** and **FEDIZEN_TEST_EXPECTED_HANDLE**. Never store credentials in PRs, chat, logs, issues, documentation or workflow inputs.
+In GitHub **Settings → Environments**, create **fedizen-integration**. Configure required reviewers and restrict the environment to the **main** branch. Add environment secrets named **FEDIZEN_TEST_READ_TOKEN** and **FEDIZEN_TEST_EXPECTED_HANDLE**. Optionally add **FEDIZEN_TEST_POST_ID** for a post intentionally created on the disposable test account; if absent, post-detail acceptance is explicitly reported as **not configured**, not as a successful test. Never store credentials in PRs, chat, logs, issues, documentation or workflow inputs.
 
 The **Fedizen consented native GraphQL acceptance** workflow runs its secret-bearing live job only on manual dispatch from main; pull requests run offline-only checks. Review/pin third-party workflow actions under the repository supply-chain policy before production promotion.
 
@@ -19,6 +19,7 @@ With explicit test-account consent, approve and manually dispatch the workflow o
 1. Verify the token using Fedizen's verify_credentials REST endpoint and match the expected test handle.
 2. With that same consenting delegated token, test **the exact Atlas REST fallback requests** to `GET /api/v1/timelines/home?limit=20` and `GET /api/v1/notifications?limit=20` through the existing bounded, schema-validating `fedizenGet` transport. Both must be HTTP 200; empty valid feeds are acceptable. A 401, malformed JSON, bad nested response, 5xx or timeout fails acceptance.
 3. Fetch native GraphQL Me.user and compare the native username with the independently verified REST identity.
+   Then resolve the same authenticated account using the deployed GraphQL `user(filter:{id})` and `user(filter:{username})` operations; both projections must match the independently verified account and canonical Bonfire ID. If a disposable post ID is configured, use `post(filter:{id})` to verify that specific known post and reject a mismatch or inaccessible result. Never infer a test fixture from another user's content.
 4. Read Me.myFeed and Me.notifications using the deployed-schema projections, verify pagination metadata, and safely normalize response shapes.
 5. Probe anonymous native Me: only an explicit HTTP 401/403 authorization denial or a valid null Me identity counts as a pass. Timeouts, 5xx, generic GraphQL errors and invalid data are inconclusive failures, never proof of privacy enforcement.
 6. Report only sanitized pass/fail check names—never account IDs, handles, posts, tokens, cursor strings, item counts or upstream error text.
