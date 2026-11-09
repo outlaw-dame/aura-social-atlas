@@ -26,7 +26,7 @@ const b64url = (v: Buffer) => v.toString('base64url');
 const fail = (message: string): never => { throw new Error(message); };
 
 export function normalizeFedizenHandle(input: string): string | null {
-  const handle = input.trim().toLowerCase().replace(/^@/, '');
+  const handle = input.toLowerCase().replace(/^@/, '');
   const name = handle.endsWith('@fedizen.net') ? handle.slice(0, -'@fedizen.net'.length) : handle;
   if (!/^[a-z0-9_][a-z0-9_.-]{0,318}$/.test(name)) return null;
   return name;
@@ -188,7 +188,7 @@ async function main() {
     assert.equal(sameFedizenHandle('test', 'test@evil.invalid'), false);
     assert.equal(sameFedizenHandle('test', 'test@fedizen.net.evil.invalid'), false);
     assert.equal(sameFedizenHandle('test', ''), false);
-    assert.equal(sameFedizenHandle('test', 'test\\n'), true);
+    assert.equal(sameFedizenHandle('test', 'test\\n'), false);
     assert.equal(normalizeFedizenHandle('test@other.invalid'), null);
     assert.equal(normalizeFedizenHandle('bad user'), null);
     console.log('PASS: local Fedizen account identity validation');
