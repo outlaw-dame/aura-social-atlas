@@ -50,7 +50,7 @@ export type FedizenHome = {
   /** Verified Fedizen account identifier from the user's own delegated grant. */
   accountHandle: string | null;
   /** Server-authoritative rollout gate; prevents unnecessary native requests while disabled. */
-  nativeReadEnabled: boolean;
+  nativeReadEnabled?: boolean;
   posts: FedizenPost[];
   notices: FedizenNotice[];
   error?: 'expired' | 'unavailable';
