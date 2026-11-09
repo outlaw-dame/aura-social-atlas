@@ -1,6 +1,6 @@
 # Atlas Bonfire GraphQL Capability Matrix
 
-> **Version:** 2026-11-08 / first draft. **Fedizen runtime schema inventory: NOT YET CAPTURED.** This table is a **research-backed candidate map**, *not a list of available production mutations*. Maintain alongside [implementation plan](ATLAS_IMPLEMENTATION_PLAN.md). Current primary test instance is `https://fedizen.net`, reported Bonfire Community v1.1.0-rc.1, actual image digest/extension set unconfirmed.
+> **Version:** 2026-11-08 / first draft. **Fedizen live root and selected nested-type metadata captured 2026-11-09; full effective SDL, installed image digest, and authenticated permission contract remain incomplete.** This table is a **research-backed candidate map**, *not a list of available production mutations*. Maintain alongside [implementation plan](ATLAS_IMPLEMENTATION_PLAN.md). Current primary test instance is `https://fedizen.net`, reported Bonfire Community v1.1.0-rc.1, actual image digest/extension set unconfirmed.
 
 ## Evidence protocol
 
