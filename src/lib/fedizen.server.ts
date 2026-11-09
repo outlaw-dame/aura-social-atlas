@@ -51,9 +51,9 @@ export function parseFedizenReadGrant(payload: unknown): { access_token: string;
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const token = (payload as Record<string, unknown>).access_token;
   const scope = (payload as Record<string, unknown>).scope;
-  if (typeof token !== 'string' || !token.trim() || token.length > 8192 || /[\\r\\n]/.test(token)) return null;
+  if (typeof token !== 'string' || !token.trim() || token.length > 8192 || /[\r\n]/.test(token)) return null;
   if (scope !== undefined && (typeof scope !== 'string' ||
-    !scope.split(/\\s+/).includes(FEDIZEN_API_SCOPE))) return null;
+    !scope.split(/\s+/).includes(FEDIZEN_API_SCOPE))) return null;
   return { access_token: token, scope: typeof scope === 'string' ? scope : FEDIZEN_API_SCOPE };
 }
 
@@ -64,7 +64,7 @@ export function parseFedizenAccount(payload: unknown): string | null {
   // local Atlas account. Do not persist an unverified anonymous bearer.
   return typeof account.id === 'string' && account.id.length > 0 &&
     typeof account.acct === 'string' && account.acct.length > 0 &&
-    account.acct.length <= 320 && !/[\\s\\r\\n]/.test(account.acct)
+    account.acct.length <= 320 && !/[\s\r\n]/.test(account.acct)
     ? account.acct : null;
 }
 
