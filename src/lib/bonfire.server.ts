@@ -21,13 +21,19 @@ function validatePublicFeed(data: unknown): BonfireActivityNode[] {
   return edges.map(e => e.node as BonfireActivityNode);
 }
 
-async function readPublicFeed(name: PublicFeedName): Promise<BonfireActivityNode[] | null> {
+async function readPublicFeed<T>(
+  name: PublicFeedName,
+  normalize: (nodes: BonfireActivityNode[]) => T,
+): Promise<T | null> {
   try {
-    return await requestBonfireGraphQL({
+    const nodes = await requestBonfireGraphQL({
       operation: 'query',
       document: FEED_QUERY(name),
       validate: validatePublicFeed,
     });
+    // Normalize inside the same failure boundary: nested remote fields can be
+    // malformed even after the top-level GraphQL edge shape is valid.
+    return normalize(nodes);
   } catch {
     console.error('Bonfire public feed unavailable', { feed: name });
     return null;
@@ -35,11 +41,11 @@ async function readPublicFeed(name: PublicFeedName): Promise<BonfireActivityNode
 }
 
 export async function fetchPublicFeed(): Promise<PublicFeedResult> {
-  const nodes = await readPublicFeed('local');
-  return nodes ? { posts: fromBonfirePosts(nodes) } : { posts: [], error: 'unavailable' };
+  const posts = await readPublicFeed('local', fromBonfirePosts);
+  return posts ? { posts } : { posts: [], error: 'unavailable' };
 }
 
 export async function fetchRecentArticles(): Promise<RecentArticlesResult> {
-  const nodes = await readPublicFeed('articles');
-  return nodes ? { articles: fromBonfireArticles(nodes) } : { articles: [], error: 'unavailable' };
+  const articles = await readPublicFeed('articles', fromBonfireArticles);
+  return articles ? { articles } : { articles: [], error: 'unavailable' };
 }

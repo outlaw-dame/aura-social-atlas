@@ -142,4 +142,56 @@ describe('server-only Bonfire GraphQL transport', () => {
     const err = new BonfireGraphQLError('graphql');
     expect(err.message).toBe('Bonfire GraphQL graphql');
   });
+  test('query retries interrupted HTTP 200 body and succeeds on the next response', async () => {
+    let calls = 0;
+    let waits = 0;
+    const fetchImpl = mock(async () => {
+      calls++;
+      if (calls > 1) return ok();
+      let read = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (read++ === 0) controller.enqueue(new TextEncoder().encode('{"data":'));
+          else controller.error(new Error('private interrupted stream metadata'));
+        },
+      }, { highWaterMark: 0 });
+      return new Response(body, { status: 200 });
+    }) as typeof fetch;
+    expect(await requestBonfireGraphQL(query({
+      fetchImpl, waitImpl: async () => { waits++; },
+    }))).toEqual({ ok: true });
+    expect(calls).toBe(2);
+    expect(waits).toBe(1);
+  });
+
+  test('mutation interrupted during HTTP 200 body is never replayed', async () => {
+    let calls = 0;
+    const fetchImpl = mock(async () => {
+      calls++;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) { controller.error(new Error('private transport context')); },
+      });
+      return new Response(body, { status: 200 });
+    }) as typeof fetch;
+    await expect(requestBonfireGraphQL({
+      operation: 'mutation', document: 'mutation AtlasTest { ok }', validate: accept, fetchImpl,
+    })).rejects.toMatchObject({ kind: 'network' });
+    expect(calls).toBe(1);
+  });
+
+  test('declared oversized response is cancelled without consuming the stream', async () => {
+    let cancelled = false;
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) { pulls++; controller.enqueue(new Uint8Array(64)); },
+      cancel() { cancelled = true; },
+    }, { highWaterMark: 0 });
+    const fetchImpl = mock(async () => new Response(body, {
+      status: 200, headers: { 'content-length': String(4 * 1024 * 1024) },
+    })) as typeof fetch;
+    await expect(requestBonfireGraphQL(query({ fetchImpl }))).rejects.toMatchObject({ kind: 'too-large' });
+    expect(cancelled).toBe(true);
+    expect(pulls).toBe(0);
+  });
+
 });
