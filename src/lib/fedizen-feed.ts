@@ -35,12 +35,52 @@ export function fromNotifications(list: Notice[]): FedizenNotice[] {
   }));
 }
 
-/** Only Atlas's own hosts may receive the Fedizen authorization code. */
-export function allowedCallback(origin: string): string | null {
-  let u: URL; try { u = new URL(origin); } catch { return null; }
-  const host = u.hostname;
-  const ok = (u.protocol === 'https:' && (/\.lovable\.app$/.test(host) || /\.lovableproject\.com$/.test(host))) || (u.protocol === 'http:' && host === 'localhost');
-  return ok ? `${u.origin}/fedizen/callback` : null;
+/**
+ * A caller-supplied hostname is NOT a valid OAuth redirect trust boundary.
+ * The HTTP Origin header must match the requested callback origin exactly.
+ *
+ * ATLAS_FEDIZEN_CALLBACK_ORIGINS is an optional comma-separated list of
+ * canonical deployment origins. If configured it is an exact allowlist;
+ * otherwise only the origin that served this request on an existing Atlas
+ * Lovable host (or localhost for development) can initiate the connection.
+ *
+ * Custom domains MUST be explicitly configured in the exact allowlist.
+ */
+function parseCanonicalOrigin(value: string): URL | null {
+  if (value.length > 256) return null;
+  try {
+    const url = new URL(value);
+    if (url.origin !== value || url.username || url.password || url.pathname !== '/' ||
+      url.search || url.hash) return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+export function allowedCallback(
+  requestedOrigin: string,
+  requestOrigin: string | null,
+  configuredOrigins = '',
+): string | null {
+  const requested = parseCanonicalOrigin(requestedOrigin);
+  const caller = requestOrigin ? parseCanonicalOrigin(requestOrigin) : null;
+  if (!requested || !caller || requested.origin !== caller.origin) return null;
+
+  const configured = configuredOrigins.split(',').map(origin => origin.trim()).filter(Boolean);
+  let allowed: boolean;
+  if (configured.length) {
+    allowed = configured.some(origin => {
+      const parsed = parseCanonicalOrigin(origin);
+      return parsed !== null && parsed.protocol === 'https:' && parsed.origin === requested.origin;
+    });
+  } else {
+    const host = requested.hostname;
+    allowed = (requested.protocol === 'https:' &&
+      (host.endsWith('.lovable.app') || host.endsWith('.lovableproject.com'))) ||
+      (requested.protocol === 'http:' && host === 'localhost');
+  }
+  return allowed ? `${requested.origin}/fedizen/callback` : null;
 }
 
 /**
