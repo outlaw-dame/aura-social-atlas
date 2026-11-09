@@ -36,6 +36,8 @@ Confirm correct Atlas account → Fedizen identity mapping across refresh, logou
 
 The typed private server function is deliberately disabled unless the operator sets **ATLAS_BONFIRE_NATIVE_GRAPHQL_READS=verified**. Do not set this merely because introspection or mocked tests passed. The existing read-only REST personal feed remains active until real private GraphQL acceptance, identity reconciliation and UI verification succeed.
 
+As of [PR #97](https://github.com/outlaw-dame/aura-social-atlas/pull/97), Atlas can render the native read in the desktop Home **only** when the server returns an authorized `available` snapshot and a linked-handle match. Every denied, disabled, identity-mismatch, unavailable or disconnected result preserves the actual REST feed, with no mock substitution. Before enabling the flag, verify the operator-protected live job and separate OIDC/other-user privacy acceptance described above. Verify that switching Atlas users, disconnecting a Fedizen grant and signing out purge both native and REST private caches. Native cursor paging and broader profile/thread read interactions remain work in progress.
+
 After the read gate, promote native Home, profiles, posts/threads and notifications with type-safe cursor pagination. Only then test deployed createPost, reply, like, boost, follow and bookmark mutations using consenting disposable accounts and server-confirmed canonical IDs. Verify privacy boundaries, permission denial, read-after-write, duplicate prevention and eventual federation. Never blindly retry a mutation with ambiguous completion and never claim a local draft or mock reaction is published.
 
 ## Evidence
@@ -45,3 +47,5 @@ After the read gate, promote native Home, profiles, posts/threads and notificati
 - [Deployed nested-field evidence, PR #93](https://github.com/outlaw-dame/aura-social-atlas/pull/93)
 - [Typed private reads, PR #94](https://github.com/outlaw-dame/aura-social-atlas/pull/94)
 - [Protected consented acceptance, PR #95](https://github.com/outlaw-dame/aura-social-atlas/pull/95)
+- [Public-client live contract regression, PR #96](https://github.com/outlaw-dame/aura-social-atlas/pull/96)
+- [Gated native Home UI integration, PR #97](https://github.com/outlaw-dame/aura-social-atlas/pull/97)
