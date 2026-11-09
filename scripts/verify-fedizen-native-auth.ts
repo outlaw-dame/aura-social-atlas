@@ -13,6 +13,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { verifyFedizenReadGrant } from '../src/lib/fedizen.server';
+import { BonfireGraphQLError } from '../src/lib/bonfire-graphql.server';
 import {
   matchesLinkedFedizenHandle,
   readNativeBonfireMe,
@@ -69,12 +70,16 @@ async function live() {
 
   // Anonymous read MUST NOT resolve the authenticated test identity. A GraphQL
   // permission error is an acceptable denial, as is me:null.
-  let anonymousDenied = true;
+  let anonymousDenied = false;
   try {
     const anonymousMe = await readNativeBonfireMe('');
     anonymousDenied = anonymousMe === null || anonymousMe.user === null;
-  } catch {
-    anonymousDenied = true;
+  } catch (error) {
+    // A request failure does not prove permission denial. The transport
+    // deliberately removes GraphQL error text, so only an explicit HTTP
+    // unauthorized/forbidden status is conclusive here.
+    anonymousDenied = error instanceof BonfireGraphQLError &&
+      error.kind === 'http' && (error.status === 401 || error.status === 403);
   }
   summarizeResult('graphql-anonymous-owner-denied', anonymousDenied);
   if (!anonymousDenied) throw Error('Anonymous GraphQL unexpectedly exposed a signed-in identity.');
