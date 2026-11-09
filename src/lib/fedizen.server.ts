@@ -68,7 +68,23 @@ export async function disconnect(userId: string): Promise<void> {
 }
 
 export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {
-  const res = await fetch(`${FEDIZEN}${path}`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
-  if (!res.ok) { console.error(`Fedizen ${path} failed [${res.status}]`); return { status: res.status, data: [] }; }
-  const j = await res.json(); return { status: 200, data: Array.isArray(j) ? j : [] };
+  // Only fixed, same-origin Mastodon-compatible read paths are accepted.
+  if (path !== '/api/v1/timelines/home?limit=20' && path !== '/api/v1/notifications?limit=20') {
+    throw new Error('Unsupported Fedizen read path.');
+  }
+  try {
+    const res = await fetch(`${FEDIZEN}${path}`, {
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(10000),
+      redirect: 'error',
+      cache: 'no-store',
+    });
+    if (!res.ok) return { status: res.status, data: [] };
+    const payload: unknown = await res.json();
+    // Returning 200/[] for a malformed payload silently masks upstream drift.
+    return Array.isArray(payload) ? { status: 200, data: payload } : { status: 502, data: [] };
+  } catch {
+    // Never log the bearer token or remote response body.
+    return { status: 503, data: [] };
+  }
 }
