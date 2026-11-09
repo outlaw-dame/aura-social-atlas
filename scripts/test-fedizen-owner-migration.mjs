@@ -6,25 +6,8 @@
 import postgres from 'postgres';
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+import { safeDisposablePostgresUrl } from './disposable-postgres-url.mjs';
 
-/**
- * Guard against accidentally targeting another local or remotely forwarded
- * database. The former substring check accepted database names such as
- * atlas_migration_test_production and arbitrary remote database hosts.
- */
-export function safeDisposablePostgresUrl(value) {
-  if (!value) return false;
-  try {
-    const parsed = new URL(value);
-    return (parsed.protocol === 'postgres:' || parsed.protocol === 'postgresql:') &&
-      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
-      parsed.pathname === '/atlas_migration_test' &&
-      !parsed.search && !parsed.hash && !parsed.username.includes('%') &&
-      parsed.port === '5432';
-  } catch {
-    return false;
-  }
-}
 const url = process.env['ATLAS_MIGRATION_TEST_DATABASE_URL'];
 if (!safeDisposablePostgresUrl(url)) {
   throw new Error('Migration integration tests require local, exact atlas_migration_test database on port 5432');
