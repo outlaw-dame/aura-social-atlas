@@ -179,6 +179,31 @@ async function selfTest() {
   assert.equal(result.outcome, 'unexpected-anonymous-success');
   assert.equal(JSON.stringify(result).includes('private-post'), false);
   assert.equal(count, 1);
+  let cancelled = false;
+  const declaredStream = new ReadableStream({ cancel() { cancelled = true; } });
+  await assert.rejects(readBoundedJson(new Response(declaredStream, {
+    headers: { 'content-type': 'application/json', 'content-length': String(MAX_BYTES + 1) },
+  })), /oversize/);
+  assert.equal(cancelled, true);
+
+  let pulled = 0;
+  let streamedCancelled = false;
+  const streamed = new ReadableStream({
+    pull(controller) { pulled++; controller.enqueue(new Uint8Array(65536)); },
+    cancel() { streamedCancelled = true; },
+  }, { highWaterMark: 0 });
+  await assert.rejects(readBoundedJson(new Response(streamed, {
+    headers: { 'content-type': 'application/json' },
+  })), /oversize/);
+  assert.equal(streamedCancelled, true);
+  assert.ok(pulled <= 4);
+
+  await assert.rejects(readBoundedJson(new Response('not JSON', {
+    headers: { 'content-type': 'text/html' },
+  })), /non-json/);
+  await assert.rejects(readBoundedJson(new Response(new Uint8Array([0xff]), {
+    headers: { 'content-type': 'application/json' },
+  })), /encoded|valid|utf|character|decode/i);
   console.log('PASS: Mastodon REST route shape, denial and no-content-output tests');
 }
 
