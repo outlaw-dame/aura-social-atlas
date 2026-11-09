@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { useAtlasAuth } from './AuthState';
 import { disconnectFedizen, getFedizenHome, startFedizenConnect, type FedizenHome } from '@/lib/fedizen.functions';
 import { getNativeBonfireSnapshot, getNativeBonfireHomeContinuation } from '@/lib/bonfire-private.functions';
-import { mergeNativeBonfirePages, nextNativeHomeCursor, shouldRequestNativeBonfireHome } from '@/lib/bonfire-native-presentation';
+import { mergeNativeBonfirePages, nextNativeHomeCursor, reconcileNativeContinuationStatus, shouldRequestNativeBonfireHome } from '@/lib/bonfire-native-presentation';
 import { isEmbeddedPreview } from '@/lib/bonfire-auth';
 
 /** Personal, server-authorized Fedizen feed; cached only under the Atlas user ID. */
@@ -40,9 +40,17 @@ export function useFedizen() {
       const page = await nativeContinuation({
         data: { expectedAtlasUserId: id, after: pageParam },
       });
-      // A failed continuation must not erase previously accepted pages, or
-      // misrepresent an authorization error as a successful empty page.
-      if (page.status !== 'available') throw new Error('Native Home continuation unavailable');
+      // A definitive server-side denial/revocation supersedes a cached
+      // nativeReadEnabled flag. Fail closed immediately, even when the REST
+      // status was fetched shortly before the operator disabled native reads.
+      // A merely unavailable page keeps earlier valid posts untouched.
+      if (page.status !== 'available') {
+        if (page.status !== 'unavailable') {
+          qc.setQueryData<FedizenHome | undefined>(key, previous =>
+            reconcileNativeContinuationStatus(previous, page.status));
+        }
+        throw new Error('Native Home continuation unavailable');
+      }
       return page;
     },
     getNextPageParam: (_last, pages, _lastParam, pageParams) =>
