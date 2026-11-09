@@ -70,6 +70,12 @@ The [public issuer metadata acceptance run](https://github.com/outlaw-dame/aura-
 
 **Scope limit:** This validates public OIDC issuer metadata, not the registered Atlas client, redirect URI, Supabase callback, PKCE exchange, nonce/state validation, signature acceptance, account mapping, refresh/revocation, or any delegated Bonfire GraphQL resource scope. Do not label login `verified-live` until a consented real sign-in and relevant account-isolation tests pass.
 
+### Delegated access and authenticated REST fallback: implementation evidence, NOT live auth acceptance
+
+- [PR #85](https://github.com/outlaw-dame/aura-social-atlas/pull/85): the existing server-only `Connect Fedizen` OAuth code now validates a returned read grant and uses the fixed-origin `verify_credentials` endpoint to confirm a Fedizen account before writing its token. Invalid scope/identity, unauthorized responses, malformed/oversized bodies and connection-database failures have regression tests. **No consenting test-account OAuth redirect/exchange or native GraphQL authorization was exercised by these mocked tests.**
+- [PR #86](https://github.com/outlaw-dame/aura-social-atlas/pull/86): Home and notifications' existing authenticated REST fallback now validates and strips unexpected fields from nested response objects and caps payloads before client normalizers. Malformed responses become explicit errors. This is **not** a claim that Fedizen's logged-in REST fallback or native authenticated GraphQL query passed live acceptance.
+- The `me`, authenticated Home, notifications, subject-to-actor mapping, permission-denied, revoke/refresh, pagination and mutations rows remain **candidate-upstream / existing-client-code / blocked** as appropriate until separately verified against the exact installed Fedizen build.
+
 ### Versioned schema capture record
 
 | Field | Current value | Evidence / next action |

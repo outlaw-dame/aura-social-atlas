@@ -37,6 +37,20 @@
 
 **Gateway is a separate workstream:** isolated Railway staging, encrypted R2 backup, restored archive, scheduled job, independent monitor and signed synthetic federation checks are valuable **gateway** evidence, not proof Atlas is an operational Bonfire client. No new gateway feature is a client milestone unless it directly unlocks an explicitly chosen Atlas discovery use case.
 
+## Implementation evidence update — 2026-11-09
+
+The following are verified **repository implementation and test** milestones, not evidence of a completed authenticated Fedizen session or all GraphQL capabilities.
+
+| PR | Tested change | Evidence boundary |
+| --- | --- | --- |
+| [#78](https://github.com/outlaw-dame/aura-social-atlas/pull/78), [#82](https://github.com/outlaw-dame/aura-social-atlas/pull/82) | Safe public GraphQL contract probes; actual Atlas `local` and `articles` queries accepted live against Fedizen, 20 normalized items each | Anonymous public reads only, not authorized Home or mutation capability |
+| [#83](https://github.com/outlaw-dame/aura-social-atlas/pull/83) | Public OIDC discovery validated live: issuer, endpoints, PKCE advertisement, authorization code and signing algorithms | Does not prove registered Atlas client, login, exchange, ID token or per-user mapping |
+| [#81](https://github.com/outlaw-dame/aura-social-atlas/pull/81), [#84](https://github.com/outlaw-dame/aura-social-atlas/pull/84) | Shared server-only GraphQL boundary, bounded query retries, safe mutation non-replay, response streaming and error hardening, real public reads | No authenticated operation schema or scope verification yet |
+| [#85](https://github.com/outlaw-dame/aura-social-atlas/pull/85) | Delegated read grant and Fedizen account verification required before persisting a connection; database lookup failures fail closed; scoped regression tests | Live consented OAuth flow, actual scope and subject consistency remain unverified |
+| [#86](https://github.com/outlaw-dame/aura-social-atlas/pull/86) | Validated/size-bounded private REST Home and notification fallback; malformed entries and unsafe response structures rejected in tests | Existing REST fallback only; user-authorized acceptance and equivalent GraphQL queries remain pending |
+
+**Immediate remaining gate:** use a consented disposable Fedizen test identity to confirm Atlas OIDC sign-in, separate delegated API authorization, the exact installed GraphQL `me` and Home contract, account ↔ subject ↔ actor mapping, denial/expiry/refresh and account-switch isolation. Obtain the exact installed Bonfire version/extension pins or sanitized schema export before shipping inferred mutations. Phases A–C are **not** complete. Fedify gateway deployment and release gates remain separate.
+
 ## 2. Delivery priorities and dependency sequence
 
 | Rank | Phase | Result | May advance when |
