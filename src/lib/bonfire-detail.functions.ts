@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent } from './fedizen-feed';
 import { nativeBonfireReadEnabled } from './bonfire-private.functions';
-import { profileSelectorSchema, type NativeBonfirePostDetail, type NativeBonfireProfile } from './bonfire-detail.server';
+import { bonfireDetailIDSchema, profileSelectorSchema } from './bonfire-detail-contract';
+import type { NativeBonfirePostDetail, NativeBonfireProfile } from './bonfire-detail.server';
 
 const requestSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -14,7 +15,7 @@ const requestSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('post'),
     expectedAtlasUserId: z.string().uuid(),
-    id: z.string().min(1).max(320).regex(/^[^\u0000-\u001f\u007f]+$/),
+    id: bonfireDetailIDSchema,
   }),
 ]);
 
