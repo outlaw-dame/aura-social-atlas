@@ -97,6 +97,14 @@ The following are verified **repository implementation and test** milestones, no
 
 **Current acceptance distinction:** public Fedizen schema/query verification and Atlas-side code/mock regression checks are passing. A real disposable-account OAuth REST+GraphQL acceptance, verified Supabase OIDC subject, cross-user authorization denial, expired/revoked token behavior, and deployed CSRF origin rejection **have not been established**. Keep the operator-only `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS` flag off. Do not label read adapters or observed mutation fields production-certified. The independent Fedify discovery gateway remains outside the Bonfire authorization layer.
 
+### Native Home pagination and two-account denial acceptance — 2026-11-09
+
+- **[PR #109](https://github.com/outlaw-dame/aura-social-atlas/pull/109):** implemented native Bonfire Home cursor continuation without re-fetching notifications, re-verifying the Atlas-authenticated user's linked Bonfire grant on every page, bounded to ten pages, with ID deduplication, cursor-loop detection, read-only load-more UI and REST fallback. CI passed.
+- **[PR #110](https://github.com/outlaw-dame/aura-social-atlas/pull/110):** added a separate manual-only, environment-protected **two consenting disposable-account** visibility test. A must read its explicitly non-public test post; independently credential-verified B must be denied the same post with null or explicit HTTP 403/404. Generic GraphQL errors, 401, 429, 5xx and timeouts are inconclusive failures. Offline tests and Codex review passed. The **live protected job has not been run** because operator-provisioned grants/private fixture are unavailable. Follow [authorization runbook](FEDIZEN_AUTH_ACCEPTANCE.md).
+- **[PR #111](https://github.com/outlaw-dame/aura-social-atlas/pull/111):** addressed a late Codex security finding on #109: an authoritative `disabled`, `disconnected` or identity/authorization-denied continuation now invalidates cached native display immediately, even when an earlier REST response said the feature was enabled. Transient upstream errors do not discard otherwise valid REST connections. New tests and Atlas/gateway CI passed; original #109 review thread resolved.
+
+**Remaining P0 permission gate:** operator-configured `fedizen-integration` environment and disposable A/B API grants; actual private Bonfire Post ID with A allowed/B denied; manual protected GitHub acceptance from `main`; independently accessible Atlas Supabase project for real OIDC, two-account Atlas session/IDOR, cache switching, revocation, and deployed CSRF-origin testing. Do not enable `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS` or mutation surfaces based on schema introspection, offline tests, or public API success.
+
 ## 2. Delivery priorities and dependency sequence
 
 | Rank | Phase | Result | May advance when |
