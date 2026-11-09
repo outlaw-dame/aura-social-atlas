@@ -1,3 +1,9 @@
+-- REVIEWED ONLY — DO NOT PLACE IN drizzle/migrations OR JOURNAL BEFORE
+-- VERIFIED BACKUP + DISPOSABLE RESTORE AND EXPLICIT OPERATOR APPROVAL.
+-- Lovable automatically applies journaled pending Drizzle migrations when
+-- an unrelated schema change is requested. This file is deliberately staged
+-- outside the executable migration directory.
+--
 -- Atlas Fedizen OAuth ownership constraints.
 --
 -- Run under the normal privileged Drizzle migration role, never in a

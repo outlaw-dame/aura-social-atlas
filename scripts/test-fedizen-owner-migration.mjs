@@ -17,6 +17,9 @@ const A = '00000000-0000-4000-8000-000000000001';
 const B = '00000000-0000-4000-8000-000000000002';
 const C = '00000000-0000-4000-8000-000000000003';
 const migration = (name) => readFileSync(new URL(`../drizzle/migrations/${name}`, import.meta.url), 'utf8');
+const reviewedOwnershipMigration = readFileSync(
+  new URL('../drizzle/reviewed-not-applied/0003_fedizen_oauth_ownership.sql', import.meta.url), 'utf8',
+);
 
 async function rejectCode(run, code) {
   let found = null;
@@ -46,7 +49,7 @@ try {
   await assert.rejects(sql.begin(async tx => {
     await tx`INSERT INTO public.fedizen_connections
       (user_id, access_token, scope) VALUES (${C}, 'test-orphan', 'read')`;
-    await tx.unsafe(migration('0003_fedizen_oauth_ownership.sql'));
+    await tx.unsafe(reviewedOwnershipMigration);
   }), /Fedizen connection ownership preflight failed/);
   assert.equal((await sql`SELECT count(*)::int AS count FROM public.fedizen_connections
     WHERE user_id = ${C}`)[0].count, 0);
@@ -57,12 +60,12 @@ try {
     await tx`INSERT INTO public.fedizen_oauth_states
       (state, user_id, code_verifier, redirect_uri)
       VALUES ('test-state-a-2', ${A}, 'test-pkce-2', 'https://atlas.example/fedizen/callback')`;
-    await tx.unsafe(migration('0003_fedizen_oauth_ownership.sql'));
+    await tx.unsafe(reviewedOwnershipMigration);
   }), /More than one pending OAuth state/);
   assert.equal((await sql`SELECT count(*)::int AS count FROM public.fedizen_oauth_states
     WHERE user_id = ${A}`)[0].count, 1);
 
-  await sql.unsafe(migration('0003_fedizen_oauth_ownership.sql'));
+  await sql.unsafe(reviewedOwnershipMigration);
 
   const fk = await sql`SELECT conname, pg_get_constraintdef(oid) AS definition
     FROM pg_constraint WHERE conrelid IN

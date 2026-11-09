@@ -4,9 +4,9 @@ on:
   pull_request:
     paths:
       - 'drizzle/migrations/0002_fedizen_connections.sql'
-      - 'drizzle/migrations/0003_fedizen_oauth_ownership.sql'
+      - 'drizzle/reviewed-not-applied/0003_fedizen_oauth_ownership.sql'
       - 'drizzle/migrations/meta/_journal.json'
-      - 'drizzle/migrations/meta/0003_snapshot.json'
+      - 'scripts/test-drizzle-release-gate.mjs'
       - 'scripts/test-fedizen-owner-migration.mjs'
       - 'scripts/disposable-postgres-url.mjs'
       - 'scripts/test-disposable-postgres-url.mjs'
@@ -15,7 +15,7 @@ on:
     branches: [main]
     paths:
       - 'drizzle/migrations/0002_fedizen_connections.sql'
-      - 'drizzle/migrations/0003_fedizen_oauth_ownership.sql'
+      - 'drizzle/reviewed-not-applied/0003_fedizen_oauth_ownership.sql'
       - 'scripts/test-fedizen-owner-migration.mjs'
       - 'scripts/disposable-postgres-url.mjs'
       - 'scripts/test-disposable-postgres-url.mjs'
@@ -50,6 +50,8 @@ jobs:
           bun-version: '1.3.4'
       - name: Install pinned dependencies without lifecycle scripts
         run: bun install --frozen-lockfile --ignore-scripts
+      - name: Assert unapproved migration cannot be applied automatically
+        run: bun scripts/test-drizzle-release-gate.mjs
       - name: Assert migration target guard before opening any database connection
         run: bun scripts/test-disposable-postgres-url.mjs
       - name: Apply exact migrations and assert account deletion, uniqueness, and denied client access

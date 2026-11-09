@@ -1,7 +1,7 @@
 # Fedizen OAuth ownership constraints — production rollout gate
 
-**Migration:** [`0003_fedizen_oauth_ownership.sql`](../drizzle/migrations/0003_fedizen_oauth_ownership.sql)  
-**Status:** Source merged, disposable PostgreSQL 18 migration and failure-path tests pass. **Not applied to the live Atlas/Lovable database.**  
+**Migration:** [`0003_fedizen_oauth_ownership.sql`](../drizzle/reviewed-not-applied/0003_fedizen_oauth_ownership.sql)  
+**Status:** Reviewed SQL is quarantined **outside the executable Drizzle migrations directory and journal**. Disposable PostgreSQL tests pass. **Not applied to live Atlas/Lovable.** Releasing it requires verified backup/restore and separate operator approval.  
 **Scope:** Atlas's own Supabase tables; no Fedizen or discovery-gateway schema changes.
 
 ## Evidence collected (2026-11-09)
@@ -15,7 +15,7 @@ No backup/restore interface has been exposed through the available Lovable conne
 1. Confirm the target is Atlas's **Lovable-managed Supabase** database for the GitHub repository `outlaw-dame/aura-social-atlas`. Never point migration tools at Fedizen's Bonfire database or the Fedify gateway.
 2. Establish a *verified*, recent backup of that exact database, including `auth.users` and the Fedizen tables. Perform a **successful disposable restore** and record the restore result. If a provider-managed backup cannot be verified, **stop**. Never export bearer tokens, PKCE verifiers or client secrets into chat, logs, PRs or CI artifacts.
 3. Have a privileged operator and rollback owner available. Arrange a short maintenance window or temporarily block *new Fedizen Connect starts* at the application edge to avoid a delete/insert race; existing read-only REST Home and native GraphQL gate remain unchanged. No user content edits are required.
-4. Confirm the Drizzle migration runner has the expected journal state (`0002_fedizen_connections` already applied; `0003_fedizen_oauth_ownership` pending). It must run migrations **exactly once**. Do not manually apply the SQL and then run Drizzle again.
+4. Confirm the Drizzle journal currently ends at `0002_fedizen_connections` and the reviewed SQL is quarantined. **Only after** the verified backup, test restore, preflight, and operator approval, create a separately reviewed release PR that restores the SQL under `drizzle/migrations/`, adds its correct snapshot and journal entry, and runs the ordinary migration pipeline exactly once. Do not manually apply the SQL and then run Drizzle again.
 5. Confirm disposable PostgreSQL [ownership migration CI](../.github/workflows/fedizen-owner-migration-test.yml) passed on the deployment commit, including negative preflight transaction rollback. Confirm the latest code security review has no unresolved findings.
 
 ## 2. Fresh live read-only preflight
@@ -58,7 +58,7 @@ ORDER BY table_name, conname;
 
 ## 3. Controlled migration application
 
-Use the deployment's standard privileged, journal-aware migration pipeline. Configure appropriate short **lock_timeout** and bounded **statement_timeout** in the migration session/transaction according to the runner's supported settings; verify the settings before applying. Schema changes require table locks, and existing Connect traffic should be quiesced.
+Do **not** apply the quarantined file directly. Promote it in a separate reviewed release PR **only after backup approval**, then use the deployment's standard privileged, journal-aware migration pipeline. Configure appropriate short **lock_timeout** and bounded **statement_timeout** in the migration session/transaction according to the runner's supported settings; verify the settings before applying. Schema changes require table locks, and existing Connect traffic should be quiesced.
 
 The migration performs preflight checks, then adds:
 
