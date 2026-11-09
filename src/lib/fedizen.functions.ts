@@ -12,11 +12,20 @@ export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([re
 export const startFedizenConnect = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator(d => z.object({ origin: z.string().max(200) }).parse(d))
   .handler(async ({ data, context }) => {
-    const redirect = allowedCallback(data.origin);
+    // The request Origin is supplied by the browser, unlike data.origin.
+    // Bind the callback to this exact serving origin (and optional deployment
+    // allowlist), not merely to any tenant of the same hosting provider.
+    const { getRequest } = await import('@tanstack/react-start/server');
+    const requestOrigin = getRequest().headers.get('origin');
+    const redirect = allowedCallback(
+      data.origin,
+      requestOrigin,
+      process.env['ATLAS_FEDIZEN_CALLBACK_ORIGINS'] ?? '',
+    );
     if (!redirect) return { url: null, error: 'This address can’t connect to Fedizen.' };
     const { startConnect } = await import('./fedizen.server');
     try { return { url: await startConnect(context.userId, redirect), error: null }; }
-    catch (e) { console.error(e); return { url: null, error: 'Fedizen couldn’t be reached. Try again shortly.' }; }
+    catch { console.error('Fedizen connection initiation unavailable'); return { url: null, error: 'Fedizen couldn’t be reached. Try again shortly.' }; }
   });
 
 export const finishFedizenConnect = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
