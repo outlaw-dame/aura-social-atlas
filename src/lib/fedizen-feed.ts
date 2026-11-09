@@ -94,3 +94,14 @@ export function fedizenReadError(homeStatus: number, notificationStatus: number)
   if (homeStatus !== 200 || notificationStatus !== 200) return 'unavailable';
   return undefined;
 }
+
+/**
+ * Bind a browser-initiated Fedizen action to the Atlas session that displayed
+ * it. The server's independently verified Supabase user ID is authoritative;
+ * the expected ID only prevents session-switch races, never grants access.
+ */
+export function assertFedizenSessionIntent(expectedUserId: string, authenticatedUserId: string): void {
+  if (!expectedUserId || expectedUserId !== authenticatedUserId) {
+    throw new Error('Atlas session changed. Sign in again before continuing with Fedizen.');
+  }
+}
