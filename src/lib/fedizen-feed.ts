@@ -42,3 +42,15 @@ export function allowedCallback(origin: string): string | null {
   const ok = (u.protocol === 'https:' && (/\.lovable\.app$/.test(host) || /\.lovableproject\.com$/.test(host))) || (u.protocol === 'http:' && host === 'localhost');
   return ok ? `${u.origin}/fedizen/callback` : null;
 }
+
+/**
+ * Both Home and notifications are distinct authorized reads. A successful
+ * timeline must never mask a failed notifications request (or vice versa).
+ * 401 indicates the API grant must be reconnected; other failures are transient
+ * or permission-specific and must not silently appear as empty results.
+ */
+export function fedizenReadError(homeStatus: number, notificationStatus: number): 'expired' | 'unavailable' | undefined {
+  if (homeStatus === 401 || notificationStatus === 401) return 'expired';
+  if (homeStatus !== 200 || notificationStatus !== 200) return 'unavailable';
+  return undefined;
+}
