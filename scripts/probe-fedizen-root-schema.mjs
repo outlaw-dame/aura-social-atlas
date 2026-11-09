@@ -30,22 +30,25 @@ const DOCUMENT = `query AtlasReadOnlyRootContract {
     kind inputFields { name type { kind name ofType { kind name ofType { kind name } } } }
   }
   meType: __type(name: "Me") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
   }
   userType: __type(name: "User") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
   }
   activityConnectionType: __type(name: "ActivityConnection") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
   }
   activityEdgeType: __type(name: "ActivityEdge") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
   }
   characterType: __type(name: "Character") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
   }
   profileType: __type(name: "Profile") {
-    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
+  }
+  pageInfoType: __type(name: "PageInfo") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
   }
 }`;
 const FOCUS = new Set([
@@ -76,7 +79,12 @@ function inspectInput(t) {
     if (!f || !validName(f.name)) return null;
     const type = typeBrief(f.type);
     if (!type) return null;
-    fields.push({ name: f.name, type });
+    const args = Array.isArray(f.args) ? f.args.map(a => ({
+      name: validName(a?.name) ? a.name : null,
+      type: typeBrief(a?.type),
+    })) : [];
+    if (args.length > 32 || args.some(a => !a.name || !a.type)) return null;
+    fields.push({ name: f.name, type, args });
   }
   return fields.sort((a,b) => a.name.localeCompare(b.name));
 }
@@ -129,6 +137,7 @@ export function summarizeSchema(payload) {
     ActivityEdge: inspectObjectType(payload?.data?.activityEdgeType),
     Character: inspectObjectType(payload?.data?.characterType),
     Profile: inspectObjectType(payload?.data?.profileType),
+    PageInfo: inspectObjectType(payload?.data?.pageInfoType),
   };
   const normalized = JSON.stringify({ queries, mutations, filterFields, postContentFields, nestedTypes });
   const focused = roots => roots.fields.filter(x => FOCUS.has(x.name));
