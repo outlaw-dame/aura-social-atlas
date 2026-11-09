@@ -1,0 +1,53 @@
+name: Fedizen protected two-account privacy acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/verify-fedizen-two-account-privacy.ts'
+      - '.github/workflows/fedizen-two-account-privacy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-two-account-privacy-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.4'
+      - name: Install pinned dependencies without lifecycle scripts
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Verify offline two-account denial and failure classification
+        run: bun scripts/verify-fedizen-two-account-privacy.ts --self-test
+
+  # Manual from main only; never run on PRs, forks or ordinary pushes.
+  # The named environment must require an operator's explicit approval.
+  # All fixtures MUST be created solely on consenting disposable accounts.
+  live-two-account-privacy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    environment: fedizen-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.4'
+      - name: Install pinned dependencies without lifecycle scripts
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Prove owner can read a non-public fixture and unrelated owner cannot
+        env:
+          FEDIZEN_TEST_READ_TOKEN: ${{ secrets.FEDIZEN_TEST_READ_TOKEN }}
+          FEDIZEN_TEST_EXPECTED_HANDLE: ${{ secrets.FEDIZEN_TEST_EXPECTED_HANDLE }}
+          FEDIZEN_TEST_SECOND_READ_TOKEN: ${{ secrets.FEDIZEN_TEST_SECOND_READ_TOKEN }}
+          FEDIZEN_TEST_SECOND_EXPECTED_HANDLE: ${{ secrets.FEDIZEN_TEST_SECOND_EXPECTED_HANDLE }}
+          FEDIZEN_TEST_PRIVATE_POST_ID: ${{ secrets.FEDIZEN_TEST_PRIVATE_POST_ID }}
+        run: bun scripts/verify-fedizen-two-account-privacy.ts
