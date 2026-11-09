@@ -16,12 +16,39 @@ const DOCUMENT = `query AtlasReadOnlyRootContract {
   __schema {
     queryType {
       name
-      fields { name args { name type { kind name ofType { kind name } } } }
+      fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
     }
     mutationType {
       name
-      fields { name args { name type { kind name ofType { kind name } } } }
+      fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
     }
+  }
+  feedFilters: __type(name: "FeedFilters") {
+    kind inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
+  }
+  postContentInput: __type(name: "PostContentInput") {
+    kind inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
+  }
+  meType: __type(name: "Me") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
+  }
+  userType: __type(name: "User") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
+  }
+  activityConnectionType: __type(name: "ActivityConnection") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
+  }
+  activityEdgeType: __type(name: "ActivityEdge") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
+  }
+  characterType: __type(name: "Character") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
+  }
+  profileType: __type(name: "Profile") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
+  }
+  pageInfoType: __type(name: "PageInfo") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
   }
 }`;
 const FOCUS = new Set([
@@ -34,6 +61,57 @@ const FOCUS = new Set([
 function validName(name) {
   return typeof name === 'string' && /^[A-Za-z_][A-Za-z_0-9]{0,100}$/.test(name);
 }
+function typeBrief(t) {
+  const kinds = [];
+  let current = t;
+  let name = null;
+  for (let depth = 0; depth < 5 && current; depth++) {
+    if (typeof current !== 'object' ||
+      !['NON_NULL','LIST','SCALAR','ENUM','INPUT_OBJECT','OBJECT','INTERFACE','UNION'].includes(current.kind)) return null;
+    kinds.push(current.kind);
+    if (validName(current.name)) {
+      name = current.name;
+      break;
+    }
+    current = current.ofType;
+  }
+  if (!name || kinds.length === 0) return null;
+  return { kind: kinds[0], name, wrappers: kinds };
+}
+
+function inspectInput(t) {
+  if (t === undefined || t === null) return null;
+  if (!t || t.kind !== 'INPUT_OBJECT' || !Array.isArray(t.inputFields) ||
+    t.inputFields.length > 120) return null;
+  const fields = [];
+  for (const f of t.inputFields) {
+    if (!f || !validName(f.name)) return null;
+    const type = typeBrief(f.type);
+    if (!type) return null;
+    fields.push({ name: f.name, type });
+  }
+  return fields.sort((a,b) => a.name.localeCompare(b.name));
+}
+
+function inspectObjectType(t) {
+  if (t === undefined || t === null) return null;
+  if (!t || t.kind !== 'OBJECT' || !Array.isArray(t.fields) ||
+    t.fields.length > 180) return null;
+  const fields = [];
+  for (const f of t.fields) {
+    if (!f || !validName(f.name)) return null;
+    const type = typeBrief(f.type);
+    if (!type) return null;
+    const args = Array.isArray(f.args) ? f.args.map(a => ({
+      name: validName(a?.name) ? a.name : null,
+      type: typeBrief(a?.type),
+    })) : [];
+    if (args.length > 32 || args.some(a => !a.name || !a.type)) return null;
+    fields.push({ name: f.name, type, args });
+  }
+  return fields.sort((a,b) => a.name.localeCompare(b.name));
+}
+
 function inspectRoot(root) {
   if (!root || typeof root !== 'object' || !Array.isArray(root.fields) ||
     root.fields.length > 1000 || !validName(root.name)) return null;
@@ -43,11 +121,12 @@ function inspectRoot(root) {
     const args = [];
     for (const a of item.args) {
       if (!a || !validName(a.name)) return null;
-      const t = a.type;
-      if (!t || typeof t !== 'object' || !['NON_NULL','LIST','SCALAR','ENUM','INPUT_OBJECT'].includes(t.kind)) return null;
-      args.push({ name: a.name, kind: t.kind, type: validName(t.name) ? t.name : (validName(t.ofType?.name) ? t.ofType.name : null) });
+      const type = typeBrief(a.type);
+      if (!type) return null;
+      args.push({ name: a.name, kind: type.kind, type: type.name, wrappers: type.wrappers });
     }
-    fields.push({ name: item.name, args });
+    const returnType = typeBrief(item.type);
+    fields.push({ name: item.name, args, returnType });
   }
   return { name: root.name, fields: fields.sort((a,b) => a.name.localeCompare(b.name)) };
 }
@@ -58,7 +137,18 @@ export function summarizeSchema(payload) {
   const queries = inspectRoot(schema.queryType);
   const mutations = schema.mutationType === null ? { name: null, fields: [] } : inspectRoot(schema.mutationType);
   if (!queries || !mutations) return null;
-  const normalized = JSON.stringify({ queries, mutations });
+  const filterFields = inspectInput(payload?.data?.feedFilters);
+  const postContentFields = inspectInput(payload?.data?.postContentInput);
+  const nestedTypes = {
+    Me: inspectObjectType(payload?.data?.meType),
+    User: inspectObjectType(payload?.data?.userType),
+    ActivityConnection: inspectObjectType(payload?.data?.activityConnectionType),
+    ActivityEdge: inspectObjectType(payload?.data?.activityEdgeType),
+    Character: inspectObjectType(payload?.data?.characterType),
+    Profile: inspectObjectType(payload?.data?.profileType),
+    PageInfo: inspectObjectType(payload?.data?.pageInfoType),
+  };
+  const normalized = JSON.stringify({ queries, mutations, filterFields, postContentFields, nestedTypes });
   const focused = roots => roots.fields.filter(x => FOCUS.has(x.name));
   return {
     status: 'root-introspection-available',
@@ -69,6 +159,9 @@ export function summarizeSchema(payload) {
     mutationFieldCount: mutations.fields.length,
     candidateQueryFields: focused(queries),
     candidateMutationFields: focused(mutations),
+    feedFiltersInput: filterFields,
+    postContentInput: postContentFields,
+    nestedTypes,
     // Counts and names are schema metadata only, never user content.
   };
 }
@@ -125,13 +218,22 @@ async function test() {
       { name: 'feedActivities', args: [{name:'first',type:{kind:'SCALAR',name:'Int'}}] },
       { name: 'me', args: [] },
     ] },
-    mutationType: { name: 'RootMutationType', fields: [{name:'createPost',args:[]}] },
-  } } };
+    mutationType: { name: 'RootMutationType', fields: [{name:'createPost',args:[],type:{kind:'OBJECT',name:'Post'}}] },
+  }, feedFilters:{kind:'INPUT_OBJECT', inputFields:[{ name:'feedName', type:{kind:'SCALAR',name:'String'} }]},
+    postContentInput:{kind:'INPUT_OBJECT',inputFields:[]} } };
   const result = summarizeSchema(fixture);
   assert.equal(result?.status, 'root-introspection-available');
   assert.equal(result.queryFieldCount,2);
   assert.deepEqual(result.candidateQueryFields.map(x=>x.name), ['feedActivities','me']);
   assert.equal(result.candidateMutationFields[0].name,'createPost');
+  assert.equal(result.candidateMutationFields[0].returnType.name,'Post');
+  assert.equal(result.feedFiltersInput[0].name,'feedName');
+  const listElement = typeBrief({
+    kind:'NON_NULL',ofType:{kind:'LIST',ofType:{kind:'NON_NULL',ofType:{kind:'OBJECT',name:'Post'}}},
+  });
+  const requiredSingle = typeBrief({kind:'NON_NULL',ofType:{kind:'OBJECT',name:'Post'}});
+  assert.deepEqual(listElement.wrappers, ['NON_NULL','LIST','NON_NULL','OBJECT']);
+  assert.notDeepEqual(listElement,requiredSingle);
   assert.equal(summarizeSchema({ ...fixture, errors:[{message:'secret'}] }),null);
   assert.equal(summarizeSchema({ data:{__schema:{queryType:{name:'Query',fields:[{name:'bad name',args:[]}]},mutationType:null}} }),null);
   assert.equal(summarizeSchema(null), null);

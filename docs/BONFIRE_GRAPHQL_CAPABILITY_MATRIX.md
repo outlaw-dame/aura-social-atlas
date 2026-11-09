@@ -92,6 +92,17 @@ A bounded anonymous introspection request successfully returned Fedizen's runnin
 
 **Evidence boundary:** Existence and root arguments alone do **not** establish authorization, per-user identity mapping, object return selections, field nullability, pagination accuracy, boundary enforcement, successful mutations, schema extension inventory, or implementation of the UI. These operations are **observed-schema**, not **verified-live authenticated**. Do not invoke any write operation against member data until explicit disposable-account consent and permission testing.
 
+### Deployed GraphQL operation signatures and nested read fields — 2026-11-09
+
+The [live schema acceptance run #42609196886](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42609196886) confirmed the following additional actual Fedizen types, argument names and pagination fields (wrapper-preserving normalized metadata SHA-256 `b06322cd3375ed98f3bcfba453584bad7cb54d47768653ca927cd85c07970ef8`, NOT a container image digest):
+
+- `RootQueryType.me: Me` (no root arguments); `Me.user: User`, `Me.accountId: ID`, `Me.myFeed(first:Int, after:String, before:String, last:Int): ActivityConnection`, `Me.notifications(first:Int, after:String, before:String, last:Int, filter:FeedFilters): ActivityConnection`.
+- `User.id: ID`, `User.character: Character`, `User.profile: Profile`, `User.followersCount:Int`, `User.followingCount:Int`; `Character.username:String`, `Character.canonicalUri:String`; `Profile.name:String`, `Profile.icon:String`, `Profile.summary:String`.
+- `ActivityConnection.edges:[ActivityEdge]`, `ActivityConnection.pageInfo: PageInfo!`, `ActivityEdge.node:Activity`, `ActivityEdge.cursor:String`; `PageInfo.endCursor:String`, `PageInfo.startCursor:String`, `PageInfo.hasNextPage:Boolean!`, `PageInfo.hasPreviousPage:Boolean!`.
+- `FeedFilters` includes `feedName:String`, `feedIds:[ID]`, `tags:[String]`, `subjects:[String]`, `sortBy:SortBy`, and other observed filters. `PostContentInput` has exactly `htmlBody:String`, `name:String`, `summary:String` in this probe.
+
+**Do not infer** the bearer scheme, OIDC identity mapping, authorization boundary, source image pin, native private feed contents, read-after-write behavior or mutation success from this introspection. These are schema-observed read signatures; authenticated acceptance is still required before enabling in the UI.
+
 ### Versioned schema capture record
 
 | Field | Current value | Evidence / next action |
