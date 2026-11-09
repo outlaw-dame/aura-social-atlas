@@ -60,12 +60,14 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
     const priorId = previousUser.current;
     previousUser.current = userId ?? null;
     if (priorId && priorId !== userId) {
-      const oldKey = ['fedizen-home', priorId];
-      // This cache is private. A signed-out or switched account must never
-      // leave its Home or notifications available to a later browser session.
-      void queryClient.cancelQueries({ queryKey: oldKey, exact: true }).then(() => {
-        queryClient.removeQueries({ queryKey: oldKey, exact: true });
-      });
+      // Both REST and native GraphQL results can contain private data. Drop
+      // only the prior account's keys so switching accounts never reuses them.
+      for (const prefix of ['fedizen-home', 'bonfire-native-home']) {
+        const oldKey = [prefix, priorId];
+        void queryClient.cancelQueries({ queryKey: oldKey, exact: true }).then(() => {
+          queryClient.removeQueries({ queryKey: oldKey, exact: true });
+        });
+      }
     }
   }, [userId, queryClient]);
 
