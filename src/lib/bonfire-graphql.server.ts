@@ -67,6 +67,9 @@ function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {
 async function readBoundedJson(response: Response): Promise<unknown> {
   const declared = response.headers.get('content-length');
   if (declared !== null && Number(declared) > MAX_RESPONSE_BYTES) {
+    // A declared oversize response must be cancelled too, not just responses
+    // that cross the limit while streaming.
+    await response.body?.cancel().catch(() => {});
     throw new BonfireGraphQLError('too-large');
   }
   if (!response.body) throw new BonfireGraphQLError('invalid-response');
@@ -114,6 +117,7 @@ export async function requestBonfireGraphQL<T>(request: BonfireGraphQLRequest<T>
   const maxAttempts = operation === 'query' ? 3 : 1;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (signal?.aborted) throw new BonfireGraphQLError('cancelled');
+    const pause = () => waitImpl(Math.random() * Math.min(1000, 200 * 2 ** attempt), signal);
     let response: Response;
     try {
       const headers: Record<string, string> = {
@@ -134,21 +138,34 @@ export async function requestBonfireGraphQL<T>(request: BonfireGraphQLRequest<T>
     } catch {
       if (signal?.aborted) throw new BonfireGraphQLError('cancelled');
       if (attempt === maxAttempts - 1) throw new BonfireGraphQLError('network');
-      await waitImpl(Math.random() * Math.min(1000, 200 * 2 ** attempt), signal);
+      await pause();
       continue;
     }
 
     if (!response.ok) {
       if (RETRY_STATUSES.has(response.status) && attempt < maxAttempts - 1) {
         await response.body?.cancel().catch(() => {});
-        await waitImpl(Math.random() * Math.min(1000, 200 * 2 ** attempt), signal);
+        await pause();
         continue;
       }
       await response.body?.cancel().catch(() => {});
       throw new BonfireGraphQLError('http', response.status);
     }
 
-    const envelope = await readBoundedJson(response);
+    let envelope: unknown;
+    try {
+      envelope = await readBoundedJson(response);
+    } catch (error) {
+      if (signal?.aborted) throw new BonfireGraphQLError('cancelled');
+      // Safe query only: a failed stream after HTTP 200 is a transient read
+      // failure. Never replay a mutation whose result may already be committed.
+      if (error instanceof BonfireGraphQLError &&
+        error.kind === 'network' && attempt < maxAttempts - 1) {
+        await pause();
+        continue;
+      }
+      throw error;
+    }
     if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
       throw new BonfireGraphQLError('invalid-response');
     }
