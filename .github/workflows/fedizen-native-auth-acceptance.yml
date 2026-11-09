@@ -19,6 +19,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.4'
+      - name: Install pinned dependencies without lifecycle scripts
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Verify offline acceptance preflight
         run: bun scripts/verify-fedizen-native-auth.ts --self-test
 
@@ -37,6 +39,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.4'
+      - name: Install pinned dependencies without lifecycle scripts
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Test native GraphQL identity, Home, notifications and permissions
         env:
           FEDIZEN_TEST_READ_TOKEN: ${{ secrets.FEDIZEN_TEST_READ_TOKEN }}
