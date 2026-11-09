@@ -16,12 +16,18 @@ const DOCUMENT = `query AtlasReadOnlyRootContract {
   __schema {
     queryType {
       name
-      fields { name args { name type { kind name ofType { kind name } } } }
+      fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
     }
     mutationType {
       name
       fields { name args { name type { kind name ofType { kind name } } } }
     }
+  }
+  feedFilters: __type(name: "FeedFilters") {
+    kind inputFields { name type { kind name ofType { kind name ofType { kind name } } } }
+  }
+  postContentInput: __type(name: "PostContentInput") {
+    kind inputFields { name type { kind name ofType { kind name ofType { kind name } } } }
   }
 }`;
 const FOCUS = new Set([
@@ -34,6 +40,29 @@ const FOCUS = new Set([
 function validName(name) {
   return typeof name === 'string' && /^[A-Za-z_][A-Za-z_0-9]{0,100}$/.test(name);
 }
+function typeBrief(t) {
+  if (!t || typeof t !== 'object' || !['NON_NULL','LIST','SCALAR','ENUM','INPUT_OBJECT','OBJECT','INTERFACE','UNION'].includes(t.kind)) return null;
+  return {
+    kind: t.kind,
+    name: validName(t.name) ? t.name : (validName(t.ofType?.name) ? t.ofType.name :
+      (validName(t.ofType?.ofType?.name) ? t.ofType.ofType.name : null)),
+  };
+}
+
+function inspectInput(t) {
+  if (t === undefined || t === null) return null;
+  if (!t || t.kind !== 'INPUT_OBJECT' || !Array.isArray(t.inputFields) ||
+    t.inputFields.length > 120) return null;
+  const fields = [];
+  for (const f of t.inputFields) {
+    if (!f || !validName(f.name)) return null;
+    const type = typeBrief(f.type);
+    if (!type) return null;
+    fields.push({ name: f.name, type });
+  }
+  return fields.sort((a,b) => a.name.localeCompare(b.name));
+}
+
 function inspectRoot(root) {
   if (!root || typeof root !== 'object' || !Array.isArray(root.fields) ||
     root.fields.length > 1000 || !validName(root.name)) return null;
@@ -47,7 +76,8 @@ function inspectRoot(root) {
       if (!t || typeof t !== 'object' || !['NON_NULL','LIST','SCALAR','ENUM','INPUT_OBJECT'].includes(t.kind)) return null;
       args.push({ name: a.name, kind: t.kind, type: validName(t.name) ? t.name : (validName(t.ofType?.name) ? t.ofType.name : null) });
     }
-    fields.push({ name: item.name, args });
+    const returnType = typeBrief(item.type);
+    fields.push({ name: item.name, args, returnType });
   }
   return { name: root.name, fields: fields.sort((a,b) => a.name.localeCompare(b.name)) };
 }
@@ -58,7 +88,9 @@ export function summarizeSchema(payload) {
   const queries = inspectRoot(schema.queryType);
   const mutations = schema.mutationType === null ? { name: null, fields: [] } : inspectRoot(schema.mutationType);
   if (!queries || !mutations) return null;
-  const normalized = JSON.stringify({ queries, mutations });
+  const filterFields = inspectInput(payload?.data?.feedFilters);
+  const postContentFields = inspectInput(payload?.data?.postContentInput);
+  const normalized = JSON.stringify({ queries, mutations, filterFields, postContentFields });
   const focused = roots => roots.fields.filter(x => FOCUS.has(x.name));
   return {
     status: 'root-introspection-available',
@@ -69,6 +101,8 @@ export function summarizeSchema(payload) {
     mutationFieldCount: mutations.fields.length,
     candidateQueryFields: focused(queries),
     candidateMutationFields: focused(mutations),
+    feedFiltersInput: filterFields,
+    postContentInput: postContentFields,
     // Counts and names are schema metadata only, never user content.
   };
 }
@@ -125,13 +159,16 @@ async function test() {
       { name: 'feedActivities', args: [{name:'first',type:{kind:'SCALAR',name:'Int'}}] },
       { name: 'me', args: [] },
     ] },
-    mutationType: { name: 'RootMutationType', fields: [{name:'createPost',args:[]}] },
-  } } };
+    mutationType: { name: 'RootMutationType', fields: [{name:'createPost',args:[],type:{kind:'OBJECT',name:'Post'}}] },
+  }, feedFilters:{kind:'INPUT_OBJECT', inputFields:[{ name:'feedName', type:{kind:'SCALAR',name:'String'} }]},
+    postContentInput:{kind:'INPUT_OBJECT',inputFields:[]} } };
   const result = summarizeSchema(fixture);
   assert.equal(result?.status, 'root-introspection-available');
   assert.equal(result.queryFieldCount,2);
   assert.deepEqual(result.candidateQueryFields.map(x=>x.name), ['feedActivities','me']);
   assert.equal(result.candidateMutationFields[0].name,'createPost');
+  assert.equal(result.candidateMutationFields[0].returnType.name,'Post');
+  assert.equal(result.feedFiltersInput[0].name,'feedName');
   assert.equal(summarizeSchema({ ...fixture, errors:[{message:'secret'}] }),null);
   assert.equal(summarizeSchema({ data:{__schema:{queryType:{name:'Query',fields:[{name:'bad name',args:[]}]},mutationType:null}} }),null);
   assert.equal(summarizeSchema(null), null);
