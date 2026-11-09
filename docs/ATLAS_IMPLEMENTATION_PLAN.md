@@ -51,6 +51,18 @@ The following are verified **repository implementation and test** milestones, no
 
 **Immediate remaining gate:** use a consented disposable Fedizen test identity to confirm Atlas OIDC sign-in, separate delegated API authorization, the exact installed GraphQL `me` and Home contract, account ↔ subject ↔ actor mapping, denial/expiry/refresh and account-switch isolation. Obtain the exact installed Bonfire version/extension pins or sanitized schema export before shipping inferred mutations. Phases A–C are **not** complete. Fedify gateway deployment and release gates remain separate.
 
+### Authentication and user-bound client progress — November 9, 2026
+
+| Merge | Completed, tested change | What it does **not** prove |
+| --- | --- | --- |
+| [PR #88](https://github.com/outlaw-dame/aura-social-atlas/pull/88) | Fedizen delegated OAuth callback is bound to the request `Origin`, and optional `ATLAS_FEDIZEN_CALLBACK_ORIGINS` permits an exact HTTPS deployment allowlist; cross-tenant origins rejected before app registration | No live end-to-end Fedizen OAuth callback was exercised |
+| [PR #89](https://github.com/outlaw-dame/aura-social-atlas/pull/89) | Home/connect/callback/disconnect validate expected Atlas user identity against server-authenticated Supabase identity; account-linked handle shown, private feed cache cleared on disconnect/session switch, duplicate action taps guarded | No identity mapping between a consented Bonfire OIDC subject and delegated OAuth account has been proven live |
+| [PR #90](https://github.com/outlaw-dame/aura-social-atlas/pull/90) | Server-side OAuth registration/code exchange now refuse redirects, read bounded credential responses and avoid retrying one-time codes; shared response reader replaces duplicates across Fedizen REST/OAuth code | Actual deployed OAuth grants, callback configuration, token lifecycle and authenticated GraphQL schema still need evidence |
+
+**Deployment configuration:** Set `ATLAS_FEDIZEN_CALLBACK_ORIGINS` to a comma-separated list of canonical HTTPS Atlas deployment origins when a custom domain is used or an exact production tenant list is required. When unset, the browser request `Origin` must exactly match the submitted callback origin on an existing Lovable-hosted Atlas origin; HTTP localhost is accepted only when the requesting browser also uses the same localhost origin, intended for local development. A custom domain without explicit configuration fails closed. Never configure an untrusted hostname or wildcard.
+
+**Next P0 integration acceptance:** Obtain a consented, disposable Fedizen test account and an operator-confirmed sanitized effective GraphQL schema for the **running** Bonfire Community version. Verify Atlas OIDC login/redirect → Supabase session → explicitly delegated OAuth grant → account mapping → authenticated `me` and personal Home operations, then test owner/other-user/denied/expired/cross-account cases. Record which operations are actually supported and require no invented mutation fields. The optional Fedify relay remains independent and is not an authentication or API fallback.
+
 ## 2. Delivery priorities and dependency sequence
 
 | Rank | Phase | Result | May advance when |

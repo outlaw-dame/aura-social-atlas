@@ -76,6 +76,14 @@ The [public issuer metadata acceptance run](https://github.com/outlaw-dame/aura-
 - [PR #86](https://github.com/outlaw-dame/aura-social-atlas/pull/86): Home and notifications' existing authenticated REST fallback now validates and strips unexpected fields from nested response objects and caps payloads before client normalizers. Malformed responses become explicit errors. This is **not** a claim that Fedizen's logged-in REST fallback or native authenticated GraphQL query passed live acceptance.
 - The `me`, authenticated Home, notifications, subject-to-actor mapping, permission-denied, revoke/refresh, pagination and mutations rows remain **candidate-upstream / existing-client-code / blocked** as appropriate until separately verified against the exact installed Fedizen build.
 
+### Additional authenticated-client safeguards (code-tested, not live auth-tested)
+
+- [PR #88](https://github.com/outlaw-dame/aura-social-atlas/pull/88): OAuth callback registration rejects browser-supplied origins that do not match the HTTP request `Origin`. Optional exact canonical HTTPS deployment allowlist; no automatic trust in other hosting tenants.
+- [PR #89](https://github.com/outlaw-dame/aura-social-atlas/pull/89): Bonfire-client operations that mutate the linked OAuth state, disconnect, or read private Home require the initiating Atlas user ID to match the server-authenticated account; linked account handle comes from prior `verify_credentials` acceptance, not client input. Account-switch/disconnect clears private cached results.
+- [PR #90](https://github.com/outlaw-dame/aura-social-atlas/pull/90): OAuth app registration and one-time token exchange are non-redirecting, no-store, bounded, and validated; no blind token exchange retry. Fedizen account verification, REST feeds, app registration and token exchange reuse a shared streaming response reader.
+
+**Status remains:** repository implementation and mocked regression tests. Private GraphQL `me`, owner-only Home, notifications, scopes, revocation, cache isolation across authenticated native Bonfire API operations, effective schema and mutation contracts are **not verified live**. OIDC discovery and public local/articles acceptance remain the only live-verified API paths.
+
 ### Versioned schema capture record
 
 | Field | Current value | Evidence / next action |
