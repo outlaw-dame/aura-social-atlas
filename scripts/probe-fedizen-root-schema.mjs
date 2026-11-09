@@ -79,12 +79,7 @@ function inspectInput(t) {
     if (!f || !validName(f.name)) return null;
     const type = typeBrief(f.type);
     if (!type) return null;
-    const args = Array.isArray(f.args) ? f.args.map(a => ({
-      name: validName(a?.name) ? a.name : null,
-      type: typeBrief(a?.type),
-    })) : [];
-    if (args.length > 32 || args.some(a => !a.name || !a.type)) return null;
-    fields.push({ name: f.name, type, args });
+    fields.push({ name: f.name, type });
   }
   return fields.sort((a,b) => a.name.localeCompare(b.name));
 }
@@ -98,7 +93,12 @@ function inspectObjectType(t) {
     if (!f || !validName(f.name)) return null;
     const type = typeBrief(f.type);
     if (!type) return null;
-    fields.push({ name: f.name, type });
+    const args = Array.isArray(f.args) ? f.args.map(a => ({
+      name: validName(a?.name) ? a.name : null,
+      type: typeBrief(a?.type),
+    })) : [];
+    if (args.length > 32 || args.some(a => !a.name || !a.type)) return null;
+    fields.push({ name: f.name, type, args });
   }
   return fields.sort((a,b) => a.name.localeCompare(b.name));
 }
