@@ -5,17 +5,88 @@ const b64url = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...ne
 const random = (n = 32) => b64url(crypto.getRandomValues(new Uint8Array(n)));
 const admin = async () => (await import('@/integrations/supabase/client.server')).supabaseAdmin;
 
+/**
+ * Bounded JSON for the existing Fedizen REST and OAuth transports. All callers
+ * use a trusted fixed endpoint; response data is untrusted until validated.
+ * This implementation cancels both declared and streamed oversized bodies.
+ */
+export async function readBoundedFedizenJson(response: Response, maxBytes: number): Promise<unknown> {
+  const length = response.headers.get('content-length');
+  if (length !== null && Number(length) > maxBytes) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error('Fedizen response too large.');
+  }
+  if (!response.body) throw new Error('Missing Fedizen response body.');
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) throw new Error('Fedizen response too large.');
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
+}
+
+export function parseFedizenOAuthApp(payload: unknown): { client_id: string; client_secret: string } | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const { client_id, client_secret } = payload as Record<string, unknown>;
+  if (typeof client_id !== 'string' || !client_id || client_id.length > 4096 ||
+    /[\r\n]/.test(client_id)) return null;
+  if (typeof client_secret !== 'string' || !client_secret || client_secret.length > 8192 ||
+    /[\r\n]/.test(client_secret)) return null;
+  return { client_id, client_secret };
+}
+
+export async function registerFedizenOAuthApp(
+  redirectUri: string,
+  fetcher: typeof fetch = fetch,
+): Promise<{ client_id: string; client_secret: string }> {
+  const response = await fetcher(`${FEDIZEN}/api/v1/apps`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({
+      client_name: 'Atlas', redirect_uris: redirectUri,
+      scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin,
+    }),
+    signal: AbortSignal.timeout(10000),
+    redirect: 'error',
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error('Fedizen OAuth app registration unavailable.');
+  }
+  const app = parseFedizenOAuthApp(await readBoundedFedizenJson(response, 32768));
+  if (!app) throw new Error('Fedizen returned invalid OAuth app credentials.');
+  return app;
+}
+
 async function appFor(redirectUri: string) {
   const db = await admin();
   const { data, error: lookupError } = await db.from('fedizen_oauth_apps').select('client_id, client_secret').eq('redirect_uri', redirectUri).maybeSingle();
   if (lookupError) throw new Error('Could not read Fedizen OAuth app registration.');
-  if (data) return data;
-  const res = await fetch(`${FEDIZEN}/api/v1/apps`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_name: 'Atlas', redirect_uris: redirectUri, scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin }), signal: AbortSignal.timeout(10000) });
-  if (!res.ok) throw new Error(`Fedizen app registration failed [${res.status}]`);
-  const j = await res.json() as { client_id: string; client_secret: string };
-  const { error: registrationError } = await db.from('fedizen_oauth_apps').insert({ redirect_uri: redirectUri, client_id: j.client_id, client_secret: j.client_secret });
+  if (data) {
+    const stored = parseFedizenOAuthApp(data);
+    if (!stored) throw new Error('Stored Fedizen OAuth app credentials are invalid.');
+    return stored;
+  }
+  const registered = await registerFedizenOAuthApp(redirectUri);
+  const { error: registrationError } = await db.from('fedizen_oauth_apps').insert({
+    redirect_uri: redirectUri, ...registered,
+  });
   if (registrationError) throw new Error('Could not persist Fedizen OAuth app registration.');
-  return j;
+  return registered;
 }
 
 export async function startConnect(userId: string, redirectUri: string) {
@@ -85,34 +156,54 @@ export async function verifyFedizenReadGrant(
       await response.body?.cancel().catch(() => {});
       return null;
     }
-    const size = response.headers.get('content-length');
-    if (size !== null && Number(size) > 16384) {
-      await response.body?.cancel().catch(() => {});
-      return null;
-    }
-    if (!response.body) return null;
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        total += value.byteLength;
-        if (total > 16384) return null;
-        chunks.push(value);
-      }
-    } finally {
-      await reader.cancel().catch(() => {});
-      reader.releaseLock();
-    }
-    const bytes = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-    const data: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    const data = await readBoundedFedizenJson(response, 16384);
     return parseFedizenAccount(data);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Single-attempt authorization-code redemption. A timeout is ambiguous, so
+ * never automatically replay a code or send its verifier/secret to redirects.
+ */
+export async function redeemFedizenReadCode(
+  code: string,
+  redirectUri: string,
+  codeVerifier: string,
+  app: { client_id: string; client_secret: string },
+  fetcher: typeof fetch = fetch,
+): Promise<
+  | { kind: 'ok'; grant: { access_token: string; scope: string } }
+  | { kind: 'rejected' | 'invalid' | 'unavailable' }
+> {
+  let response: Response;
+  try {
+    response = await fetcher(`${FEDIZEN}/oauth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code', code, redirect_uri: redirectUri,
+        client_id: app.client_id, client_secret: app.client_secret,
+        code_verifier: codeVerifier,
+      }),
+      signal: AbortSignal.timeout(10000),
+      redirect: 'error',
+      cache: 'no-store',
+    });
+  } catch {
+    return { kind: 'unavailable' };
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    return { kind: 'rejected' };
+  }
+  try {
+    const payload = await readBoundedFedizenJson(response, 32768);
+    const grant = parseFedizenReadGrant(payload);
+    return grant ? { kind: 'ok', grant } : { kind: 'invalid' };
+  } catch {
+    return { kind: 'invalid' };
   }
 }
 
@@ -122,13 +213,16 @@ export async function finishConnect(userId: string, code: string, state: string)
   const age = st ? Date.now() - new Date(st.created_at).getTime() : NaN;
   if (!st || !Number.isFinite(age) || age < 0 || age > 15 * 60_000) return { ok: false as const, error: 'This connection link expired. Please try again.' };
   const app = await appFor(st.redirect_uri);
-  const res = await fetch(`${FEDIZEN}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: st.redirect_uri, client_id: app.client_id, client_secret: app.client_secret, code_verifier: st.code_verifier }), signal: AbortSignal.timeout(10000) });
-  if (!res.ok) { console.error(`Fedizen token exchange failed [${res.status}]`); return { ok: false as const, error: 'Fedizen didn’t accept the connection. Please try again.' }; }
-  let payload: unknown;
-  try { payload = await res.json(); }
-  catch { return { ok: false as const, error: 'Fedizen returned an invalid authorization response. Connect again.' }; }
-  const grant = parseFedizenReadGrant(payload);
-  if (!grant) return { ok: false as const, error: 'Fedizen did not grant the expected read access. Connect again.' };
+  const exchange = await redeemFedizenReadCode(code, st.redirect_uri, st.code_verifier, app);
+  if (exchange.kind !== 'ok') {
+    return {
+      ok: false as const,
+      error: exchange.kind === 'rejected' ? 'Fedizen didn’t accept the connection. Please try again.' :
+        exchange.kind === 'invalid' ? 'Fedizen returned an invalid authorization response. Connect again.' :
+        'Fedizen could not complete the connection. Please try again.',
+    };
+  }
+  const { grant } = exchange;
   const handle = await verifyFedizenReadGrant(grant.access_token);
   if (!handle) return { ok: false as const, error: 'Fedizen could not verify the connected account. Connect again.' };
   const { error: saveError } = await db.from('fedizen_connections').upsert({ user_id: userId, access_token: grant.access_token, scope: grant.scope, account_handle: handle });
@@ -193,34 +287,6 @@ const notificationsSchema = z.array(notice).max(20);
 
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;
 
-async function readPrivateJson(response: Response): Promise<unknown> {
-  const length = response.headers.get('content-length');
-  if (length !== null && Number(length) > MAX_PRIVATE_READ_BYTES) {
-    await response.body?.cancel().catch(() => {});
-    throw new Error('oversize');
-  }
-  if (!response.body) throw new Error('missing body');
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_PRIVATE_READ_BYTES) throw new Error('oversize');
-      chunks.push(value);
-    }
-  } finally {
-    await reader.cancel().catch(() => {});
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
-}
-
 export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {
   // The only permitted private REST fallbacks until the equivalent GraphQL
   // operations are verified against Fedizen's installed Community schema.
@@ -248,7 +314,7 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
 
   let payload: unknown;
   try {
-    payload = await readPrivateJson(response);
+    payload = await readBoundedFedizenJson(response, MAX_PRIVATE_READ_BYTES);
   } catch {
     // Includes decode, timeout/stream, oversize and malformed JSON failures.
     // Do not log bearer values or private response bodies.
