@@ -10,6 +10,7 @@
  * Live:    bun scripts/verify-fedizen-two-account-privacy.ts
  */
 import { strict as assert } from 'node:assert';
+import { missingFedizenTestKeys } from './fedizen-acceptance-config';
 import { verifyFedizenReadGrant } from '../src/lib/fedizen.server';
 import { BonfireGraphQLError } from '../src/lib/bonfire-graphql.server';
 import { bonfireDetailIDSchema } from '../src/lib/bonfire-detail-contract';
@@ -53,6 +54,11 @@ async function resolveOwner(token: string, expectedHandle: string) {
 }
 
 async function live() {
+  const missing = missingFedizenTestKeys(process.env, ["FEDIZEN_TEST_READ_TOKEN","FEDIZEN_TEST_EXPECTED_HANDLE","FEDIZEN_TEST_SECOND_READ_TOKEN","FEDIZEN_TEST_SECOND_EXPECTED_HANDLE","FEDIZEN_TEST_PRIVATE_POST_ID"]);
+  if (missing.length) {
+    console.error(`CONFIGURATION: Missing environment secret names: ${missing.join(', ')}. Sign-in passwords and OIDC identity sessions are not Fedizen API read tokens.`);
+    throw new Error('Missing protected acceptance setup');
+  }
   const aToken = process.env['FEDIZEN_TEST_READ_TOKEN'];
   const aExpected = process.env['FEDIZEN_TEST_EXPECTED_HANDLE'];
   const bToken = process.env['FEDIZEN_TEST_SECOND_READ_TOKEN'];
