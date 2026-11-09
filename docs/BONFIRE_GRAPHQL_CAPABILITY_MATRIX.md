@@ -94,7 +94,7 @@ A bounded anonymous introspection request successfully returned Fedizen's runnin
 
 ### Deployed GraphQL operation signatures and nested read fields — 2026-11-09
 
-The [live schema acceptance run #42608980451](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42608980451) confirmed the following additional actual Fedizen types, argument names and pagination fields (normalized metadata SHA-256 `b38095bf35b861fd7c50352afba4566aa57ebd98603aa7551d1c1b698d97e727`, NOT a container image digest):
+The [live schema acceptance run #42609196886](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42609196886) confirmed the following additional actual Fedizen types, argument names and pagination fields (wrapper-preserving normalized metadata SHA-256 `b06322cd3375ed98f3bcfba453584bad7cb54d47768653ca927cd85c07970ef8`, NOT a container image digest):
 
 - `RootQueryType.me: Me` (no root arguments); `Me.user: User`, `Me.accountId: ID`, `Me.myFeed(first:Int, after:String, before:String, last:Int): ActivityConnection`, `Me.notifications(first:Int, after:String, before:String, last:Int, filter:FeedFilters): ActivityConnection`.
 - `User.id: ID`, `User.character: Character`, `User.profile: Profile`, `User.followersCount:Int`, `User.followingCount:Int`; `Character.username:String`, `Character.canonicalUri:String`; `Profile.name:String`, `Profile.icon:String`, `Profile.summary:String`.
