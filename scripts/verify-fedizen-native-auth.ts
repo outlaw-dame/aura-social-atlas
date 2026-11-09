@@ -47,19 +47,17 @@ async function live() {
   const home = await readNativeBonfirePage(token, 'myFeed');
   if (!home) throw Error('GraphQL Me.myFeed did not identify an authorized account.');
   const posts = normalizeNativeBonfireHome(home).posts;
+  if (!Array.isArray(posts)) throw Error('Unexpected native Home projection.');
   const homePageConsistent = !home.pageInfo.hasNextPage || !!home.pageInfo.endCursor;
-  summarizeResult('graphql-my-feed', homePageConsistent, {
-    items: posts.length, hasNextPage: home.pageInfo.hasNextPage,
-  });
+  summarizeResult('graphql-my-feed', homePageConsistent);
   if (!homePageConsistent) throw Error('Home pagination metadata is inconsistent.');
 
   const notices = await readNativeBonfirePage(token, 'notifications');
   if (!notices) throw Error('GraphQL Me.notifications did not identify an authorized account.');
   const normalizedNotices = normalizeNativeBonfireNotifications(notices).notices;
+  if (!Array.isArray(normalizedNotices)) throw Error('Unexpected native notifications projection.');
   const notificationPageConsistent = !notices.pageInfo.hasNextPage || !!notices.pageInfo.endCursor;
-  summarizeResult('graphql-notifications', notificationPageConsistent, {
-    items: normalizedNotices.length, hasNextPage: notices.pageInfo.hasNextPage,
-  });
+  summarizeResult('graphql-notifications', notificationPageConsistent);
   if (!notificationPageConsistent) throw Error('Notification pagination metadata is inconsistent.');
 
   if (home.pageInfo.hasNextPage && home.pageInfo.endCursor) {
