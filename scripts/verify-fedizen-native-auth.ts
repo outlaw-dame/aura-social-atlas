@@ -12,6 +12,7 @@
  * Supabase session/callback handling, other-user privacy or mutations.
  */
 import { strict as assert } from 'node:assert';
+import { missingFedizenTestKeys } from './fedizen-acceptance-config';
 import { fedizenGet, verifyFedizenReadGrant } from '../src/lib/fedizen.server';
 import { readNativeBonfirePost, readNativeBonfireProfile } from '../src/lib/bonfire-detail.server';
 import {
@@ -36,6 +37,11 @@ export function acceptedPrivateRestRead(result: { status: number; data: unknown[
 }
 
 async function live() {
+  const missing = missingFedizenTestKeys(process.env, ["FEDIZEN_TEST_READ_TOKEN","FEDIZEN_TEST_EXPECTED_HANDLE"]);
+  if (missing.length) {
+    console.error(`CONFIGURATION: Missing environment secret names: ${missing.join(', ')}. Sign-in passwords and OIDC identity sessions are not Fedizen API read tokens.`);
+    throw new Error('Missing protected acceptance setup');
+  }
   const token = process.env['FEDIZEN_TEST_READ_TOKEN'];
   const expected = process.env['FEDIZEN_TEST_EXPECTED_HANDLE'];
   if (!token || !expected || token.length > 8192 || expected.length > 320) {

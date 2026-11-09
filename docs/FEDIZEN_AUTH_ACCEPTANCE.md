@@ -12,6 +12,16 @@ In GitHub **Settings → Environments**, create **fedizen-integration**. Configu
 
 The **Fedizen consented native GraphQL acceptance** workflow runs its secret-bearing live job only on manual dispatch from main; pull requests run offline-only checks. Review/pin third-party workflow actions under the repository supply-chain policy before production promotion.
 
+## Where the API grant actually comes from
+
+**Fedizen account registration and sign-in do not display an API access token.** Atlas intentionally separates identity login (`custom:app-oidc`, scopes `openid profile email`) from its delegated **resource** OAuth connection (`read` scope). The Atlas **Connect Fedizen** action in the Following screen registers an OAuth application at `/api/v1/apps`, starts authorization with PKCE, exchanges the code server-side at `/oauth/token`, verifies `/api/v1/accounts/verify_credentials`, and stores the token in the server-only `fedizen_connections` table. The token must never be shown to the browser, copied from production tables, or exposed by a new token-export endpoint.
+
+**The GitHub protected workflows are separate test harnesses.** They cannot automatically use a browser OIDC session or the credentials stored in Atlas's Lovable database. To use these workflows, the operator must issue **separate, consenting disposable read-only OAuth API grants** through a dedicated local or controlled authorization flow and place those tokens in the protected GitHub *environment secrets*. Merely adding Fedizen usernames/passwords or linking accounts does not satisfy the `FEDIZEN_TEST_READ_TOKEN` requirements. Do not ask users to find a bearer token in Fedizen's account settings.
+
+For a more integrated Atlas-based acceptance path, first sign both disposable users into **Atlas independently** and use its **Connect Fedizen** UI for each. Verify the UI reports them as connected and that the server's credential table contains two independently linked records. Even then, browser linking alone does **not** populate GitHub environment secrets; a separately designed authorization-safe server-side A/B test is needed rather than exporting bearer tokens.
+
+The live workflows now report **only missing secret names** if required configuration is absent, while continuing to suppress secret values and upstream private payloads. Their offline tests do not prove successful live OAuth or GraphQL access.
+
 ## Live automated read acceptance
 
 With explicit test-account consent, approve and manually dispatch the workflow on main. It uses fixed-origin, non-redirecting, bounded reads to:
