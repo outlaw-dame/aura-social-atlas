@@ -17,10 +17,11 @@ The **Fedizen consented native GraphQL acceptance** workflow runs its secret-bea
 With explicit test-account consent, approve and manually dispatch the workflow on main. It uses fixed-origin, non-redirecting, bounded reads to:
 
 1. Verify the token using Fedizen's verify_credentials REST endpoint and match the expected test handle.
-2. Fetch native GraphQL Me.user and compare the native username with the independently verified REST identity.
-3. Read Me.myFeed and Me.notifications using the deployed-schema projections, verify pagination metadata, and safely normalize response shapes.
-4. Probe anonymous native Me: only an explicit HTTP 401/403 authorization denial or a valid null Me identity counts as a pass. Timeouts, 5xx, generic GraphQL errors and invalid data are inconclusive failures, never proof of privacy enforcement.
-5. Report only sanitized pass/fail check names—never account IDs, handles, posts, tokens, cursor strings, item counts or upstream error text.
+2. With that same consenting delegated token, test **the exact Atlas REST fallback requests** to `GET /api/v1/timelines/home?limit=20` and `GET /api/v1/notifications?limit=20` through the existing bounded, schema-validating `fedizenGet` transport. Both must be HTTP 200; empty valid feeds are acceptable. A 401, malformed JSON, bad nested response, 5xx or timeout fails acceptance.
+3. Fetch native GraphQL Me.user and compare the native username with the independently verified REST identity.
+4. Read Me.myFeed and Me.notifications using the deployed-schema projections, verify pagination metadata, and safely normalize response shapes.
+5. Probe anonymous native Me: only an explicit HTTP 401/403 authorization denial or a valid null Me identity counts as a pass. Timeouts, 5xx, generic GraphQL errors and invalid data are inconclusive failures, never proof of privacy enforcement.
+6. Report only sanitized pass/fail check names—never account IDs, handles, posts, tokens, cursor strings, item counts or upstream error text.
 
 A green offline job, skipped live job, successful schema introspection or HTTP 200 alone does not prove authenticated acceptance.
 
@@ -49,3 +50,4 @@ After the read gate, promote native Home, profiles, posts/threads and notificati
 - [Protected consented acceptance, PR #95](https://github.com/outlaw-dame/aura-social-atlas/pull/95)
 - [Public-client live contract regression, PR #96](https://github.com/outlaw-dame/aura-social-atlas/pull/96)
 - [Gated native Home UI integration, PR #97](https://github.com/outlaw-dame/aura-social-atlas/pull/97)
+- [Deployed Mastodon REST capability matrix](FEDIZEN_MASTODON_REST_CAPABILITY_MATRIX.md)
