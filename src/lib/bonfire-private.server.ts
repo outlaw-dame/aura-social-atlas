@@ -112,7 +112,7 @@ export function matchesLinkedFedizenHandle(
   const localName = (value: string | null | undefined): string | null => {
     if (!value || value.length > 320) return null;
     const parts = value.replace(/^@/, '').split('@');
-    if (parts.length < 1 || parts.length > 2 || !parts[0] || /[\\s/#?]/.test(parts[0])) return null;
+    if (parts.length < 1 || parts.length > 2 || !parts[0] || /[\s/#?]/.test(parts[0])) return null;
     if (parts.length === 2 && parts[1].toLowerCase() !== 'fedizen.net') return null;
     return parts[0].toLowerCase();
   };
