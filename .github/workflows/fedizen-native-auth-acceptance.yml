@@ -1,0 +1,48 @@
+name: Fedizen consented native GraphQL acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/verify-fedizen-native-auth.ts'
+      - '.github/workflows/fedizen-native-auth-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-native-acceptance-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.4'
+      - name: Install pinned dependencies without lifecycle scripts
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Verify offline acceptance preflight
+        run: bun scripts/verify-fedizen-native-auth.ts --self-test
+
+  # Never run on PRs, forks, pushes or schedules. The environment should
+  # require an operator's approval and contain a disposable consenting user's
+  # separate read-only API grant, not their password or OIDC client secret.
+  live-consented-read-acceptance:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    environment: fedizen-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.4'
+      - name: Install pinned dependencies without lifecycle scripts
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Test native GraphQL identity, Home, notifications and permissions
+        env:
+          FEDIZEN_TEST_READ_TOKEN: ${{ secrets.FEDIZEN_TEST_READ_TOKEN }}
+          FEDIZEN_TEST_EXPECTED_HANDLE: ${{ secrets.FEDIZEN_TEST_EXPECTED_HANDLE }}
+        run: bun scripts/verify-fedizen-native-auth.ts

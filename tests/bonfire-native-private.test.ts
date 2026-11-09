@@ -6,8 +6,10 @@ import {
 import {
   readNativeBonfireMe, readNativeBonfirePage, validateNativeBonfirePage,
   normalizeNativeBonfireHome, normalizeNativeBonfireNotifications, matchesLinkedFedizenHandle,
+  isConclusiveAnonymousMeDenial,
 } from '../src/lib/bonfire-private.server';
 import { nativeBonfireReadEnabled } from '../src/lib/bonfire-private.functions';
+import { BonfireGraphQLError } from '../src/lib/bonfire-graphql.server';
 
 const response = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status });
@@ -54,6 +56,20 @@ describe('deployed schema-verified Bonfire native read operations', () => {
     expect(matchesLinkedFedizenHandle('testaccount', null)).toBe(false);
     expect(matchesLinkedFedizenHandle('testaccount/path', 'testaccount')).toBe(false);
     expect(matchesLinkedFedizenHandle('test account', 'test account')).toBe(false);
+  });
+
+  test('only a validated null identity or explicit HTTP 401/403 counts as anonymous denial', () => {
+    expect(isConclusiveAnonymousMeDenial(null)).toBe(true);
+    expect(isConclusiveAnonymousMeDenial({ accountId: null, user: null })).toBe(true);
+    expect(isConclusiveAnonymousMeDenial(undefined)).toBe(false);
+    expect(isConclusiveAnonymousMeDenial(authUser)).toBe(false);
+    expect(isConclusiveAnonymousMeDenial(undefined, new BonfireGraphQLError('http', 401))).toBe(true);
+    expect(isConclusiveAnonymousMeDenial(undefined, new BonfireGraphQLError('http', 403))).toBe(true);
+    expect(isConclusiveAnonymousMeDenial(undefined, new BonfireGraphQLError('http', 500))).toBe(false);
+    expect(isConclusiveAnonymousMeDenial(undefined, new BonfireGraphQLError('graphql'))).toBe(false);
+    expect(isConclusiveAnonymousMeDenial(undefined, new BonfireGraphQLError('network'))).toBe(false);
+    expect(isConclusiveAnonymousMeDenial(undefined, new BonfireGraphQLError('invalid-response'))).toBe(false);
+    expect(isConclusiveAnonymousMeDenial(undefined, new Error('permission denied in arbitrary text'))).toBe(false);
   });
 
   test('native Me uses only server-injected bearer at fixed Fedizen origin', async () => {

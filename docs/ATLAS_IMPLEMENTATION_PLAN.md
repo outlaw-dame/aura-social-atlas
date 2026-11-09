@@ -63,6 +63,16 @@ The following are verified **repository implementation and test** milestones, no
 
 **Next P0 integration acceptance:** Obtain a consented, disposable Fedizen test account and an operator-confirmed sanitized effective GraphQL schema for the **running** Bonfire Community version. Verify Atlas OIDC login/redirect → Supabase session → explicitly delegated OAuth grant → account mapping → authenticated `me` and personal Home operations, then test owner/other-user/denied/expired/cross-account cases. Record which operations are actually supported and require no invented mutation fields. The optional Fedify relay remains independent and is not an authentication or API fallback.
 
+### Bonfire-native API progress — deployed schema evidence and gated reads (2026-11-09)
+
+- **[PR #92](https://github.com/outlaw-dame/aura-social-atlas/pull/92):** live Fedizen root introspection observed 39 query fields and 54 mutation fields. This proves field presence, not granted permission.
+- **[PR #93](https://github.com/outlaw-dame/aura-social-atlas/pull/93):** captured bounded nested schema metadata for Me, User, ActivityConnection, ActivityEdge, PageInfo, Character, Profile and relevant inputs. The wrapper-preserving metadata fingerprint and accepted fields are recorded in the [living capability matrix](BONFIRE_GRAPHQL_CAPABILITY_MATRIX.md); this fingerprint does not replace the installed Docker image digest or full schema export.
+- **[PR #94](https://github.com/outlaw-dame/aura-social-atlas/pull/94):** implemented typed server-only read paths for Me, native Home, native notifications, page cursors, validated activity mappings and an authenticated Atlas user-scoped server function. The native path remains operator-gated off; the existing REST Home remains the default. All newly implemented behaviors have mocked regression tests and passed Atlas/gateway CI.
+- **[PR #95](https://github.com/outlaw-dame/aura-social-atlas/pull/95):** adds a separately protected manual live consented API-read acceptance workflow. PR CI runs offline tests only. Live acceptance requires a disposable Fedizen grant in a protected environment; missing grant is **not** simulated or called successful.
+- **[Fedizen authentication acceptance runbook](FEDIZEN_AUTH_ACCEPTANCE.md):** source-of-truth for the separate real OIDC callback, authorized bearer, private data/IDOR, account-switch and mutation release gates.
+
+**Current gate:** public Bonfire GraphQL is live-verified and private operation shapes are schema-observed. Authenticated private GraphQL and Atlas identity acceptance are **not** live verified. No native private GraphQL UI promotion or mutation deployment before real consenting disposable-account tests, effective-version compatibility confirmation and negative permission testing.
+
 ## 2. Delivery priorities and dependency sequence
 
 | Rank | Phase | Result | May advance when |

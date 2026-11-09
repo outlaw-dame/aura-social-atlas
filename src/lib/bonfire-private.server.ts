@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { fromBonfirePosts, type BonfireActivityNode } from './spotlight';
-import { requestBonfireGraphQL, type BonfireGraphQLRequest } from './bonfire-graphql.server';
+import { BonfireGraphQLError, requestBonfireGraphQL, type BonfireGraphQLRequest } from './bonfire-graphql.server';
 import {
   NATIVE_HOME_DOCUMENT, NATIVE_ME_DOCUMENT, NATIVE_NOTIFICATIONS_DOCUMENT,
   validatedBonfireNodes,
@@ -118,6 +118,22 @@ export function matchesLinkedFedizenHandle(
   };
   const rest = localName(verifiedRestHandle);
   return rest !== null && rest === localName(nativeUsername);
+}
+
+/**
+ * A network/GraphQL parser failure is NOT proof of authorization enforcement.
+ * Only an explicitly empty Me identity or HTTP unauthorized/forbidden response
+ * can satisfy the anonymous-access acceptance check.
+ */
+export function isConclusiveAnonymousMeDenial(
+  identity: NativeBonfireIdentity | undefined,
+  error?: unknown,
+): boolean {
+  if (error !== undefined) {
+    return error instanceof BonfireGraphQLError &&
+      error.kind === 'http' && (error.status === 401 || error.status === 403);
+  }
+  return identity === null || identity?.user === null;
 }
 
 /** Map the native Home read through the same proven post normalizer as public feeds. */
