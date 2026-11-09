@@ -10,8 +10,8 @@ For each row, add **exact** deployed root field, args/return, type fragments, OA
 
 | Capability / phase | Candidate GraphQL operation(s) or present fallback | Evidence today | Current status | Atlas priority and acceptance |
 | --- | --- | --- | --- | --- |
-| Public local feed (A/C) | `feedActivities(filter:{feedName:"local"})` | **Fedizen live 2026-11-09:** anonymous `first:1`, `edges.node.id` returned HTTP 200, one edge, no GraphQL errors ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42559791682)) | observed-fedizen | P0: validate remaining Atlas selection fields, pagination and actual post fidelity |
-| Articles feed (A/C) | `feedActivities(filter:{feedName:"articles"})` | **Fedizen live 2026-11-09:** anonymous `first:1`, `edges.node.id` returned HTTP 200, one edge, no GraphQL errors ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42559791682)) | observed-fedizen | P0: validate remaining Atlas selection fields, page order and article fidelity |
+| Public local feed (A/C) | `feedActivities(filter:{feedName:"local"})` | Live 2026-11-09: minimal first:1 HTTP 200 ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42559791682)); actual Atlas first:20 query + normalization accepted, 20 posts ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42560027193)) | observed-fedizen | P0: verify ordering, cursors and canonical fidelity |
+| Articles feed (A/C) | `feedActivities(filter:{feedName:"articles"})` | Live 2026-11-09: minimal first:1 HTTP 200 ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42559791682)); actual Atlas first:20 query + normalization accepted, 20 articles ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42560027193)) | observed-fedizen | P0: verify pagination, ordering and native article fidelity |
 | Personal Home feed (A/C) | `feedActivities` (verify `feedName` and auth), existing scoped REST timeline fallback | Bonfire social schema; existing `fedizen.server.ts` REST client | candidate-upstream | P0: authenticated A/B results match native Home |
 | Account / me (A/C) | `me`, `user`, `users`; `/api/v1/accounts/verify_credentials` fallback | `bonfire_me` source; REST implemented in client | candidate-upstream | P0: correct account and denied-scope behavior |
 | User profile and counts (C) | `user` + profile/character/relationship, counts | `bonfire_me` source | candidate-upstream | P0: actual own/remote profile and permissions |
@@ -56,7 +56,13 @@ For each row, add **exact** deployed root field, args/return, type fragments, OA
 
 The [GitHub Actions acceptance run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42559791682) executed the bounded, anonymous, non-introspection probe from the Atlas repository against the real `https://fedizen.net/api/graphql` endpoint. Both `local` and `articles` returned `httpStatus:200`, `graphqlData:"object"`, `feedActivities:"object"`, `edges:1`, and `errors:[]`. Each requested `first:1` and only `node.id`.
 
-**Scope limit:** This is `observed-fedizen` for those **minimal read projections only**. It does not verify the richer current Atlas feed selection (`subject`, `object`, `media`, `objectPostContent`, etc.), pagination, authenticated user data, permissions, schema digest or Community extension availability. Do not increase the `verified-live` capability coverage numerator yet.
+**Scope limit:** The initial run established only minimal public projection support. The second run below also accepted the existing Atlas public query selection and normalization. Neither run proves private authorization, pagination, effective schema, deployed image digest or extension inventory. Do not increase the full-feature verified-live coverage numerator yet.
+
+### Actual Atlas public read acceptance — 2026-11-09 04:07 UTC
+
+The [second live GitHub Actions run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42560027193) invoked the existing `fetchPublicFeed()` and `fetchRecentArticles()` code, including the current GraphQL selection sets, request transport, response validation and normalization. Both `local` and `articles` emitted `status:"accepted"` and `items:20`. No post content, account data or raw errors were logged.
+
+**Evidence boundary:** This verifies successful anonymous Atlas public reads on the currently deployed Fedizen instance at the time of the run. It does not verify Home, notifications, mutation support, account permissions, pagination consistency, source fidelity, exact installed extensions, or schema digest.
 
 ### Versioned schema capture record
 
@@ -70,7 +76,7 @@ The [GitHub Actions acceptance run](https://github.com/outlaw-dame/aura-social-a
 | Mutation schema hash | **unknown** | Permissioned introspection or offline export |
 | OAuth resource scopes | **unknown for GraphQL** | Do not infer from OIDC `openid profile email` |
 | GraphQL subscription transport | **unverified on Fedizen** | Versioned WS/HTTP capability and auth probe |
-| Last schema-tested date | **Schema not captured**; minimal public operation tested 2026-11-09 | [Read-only acceptance run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42559791682) at 04:05 UTC; full projection/schema and auth remain open |
+| Last schema-tested date | **Schema not captured**; public queries tested 2026-11-09 | Minimal acceptance at 04:05 UTC ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42559791682)); actual Atlas read acceptance at 04:07 UTC ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42560027193)); auth/schema remain open |
 | Client GraphQL coverage numerator / denominator | **0 verified / unknown eligible** | Only calculate after schema capture |
 
 ## Review and regression gates
