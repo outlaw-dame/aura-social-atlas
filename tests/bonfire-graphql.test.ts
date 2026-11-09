@@ -127,6 +127,17 @@ describe('server-only Bonfire GraphQL transport', () => {
     expect(cancelled).toBe(true);
   });
 
+  test('mid-stream transport exception is sanitized', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { controller.error(new Error('private upstream network metadata')); },
+    });
+    const fetchImpl = mock(async () => new Response(body, { status: 200 })) as typeof fetch;
+    await expect(requestBonfireGraphQL(query({ fetchImpl }))).rejects.toMatchObject({
+      kind: 'network',
+      message: 'Bonfire GraphQL network',
+    });
+  });
+
   test('error taxonomy does not include remote private messages', () => {
     const err = new BonfireGraphQLError('graphql');
     expect(err.message).toBe('Bonfire GraphQL graphql');
