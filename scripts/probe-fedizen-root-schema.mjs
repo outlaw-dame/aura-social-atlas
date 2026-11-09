@@ -29,6 +29,24 @@ const DOCUMENT = `query AtlasReadOnlyRootContract {
   postContentInput: __type(name: "PostContentInput") {
     kind inputFields { name type { kind name ofType { kind name ofType { kind name } } } }
   }
+  meType: __type(name: "Me") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+  }
+  userType: __type(name: "User") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+  }
+  activityConnectionType: __type(name: "ActivityConnection") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+  }
+  activityEdgeType: __type(name: "ActivityEdge") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+  }
+  characterType: __type(name: "Character") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+  }
+  profileType: __type(name: "Profile") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name } } } }
+  }
 }`;
 const FOCUS = new Set([
   'me', 'user', 'users', 'feedActivities', 'notifications',
@@ -55,6 +73,20 @@ function inspectInput(t) {
     t.inputFields.length > 120) return null;
   const fields = [];
   for (const f of t.inputFields) {
+    if (!f || !validName(f.name)) return null;
+    const type = typeBrief(f.type);
+    if (!type) return null;
+    fields.push({ name: f.name, type });
+  }
+  return fields.sort((a,b) => a.name.localeCompare(b.name));
+}
+
+function inspectObjectType(t) {
+  if (t === undefined || t === null) return null;
+  if (!t || t.kind !== 'OBJECT' || !Array.isArray(t.fields) ||
+    t.fields.length > 180) return null;
+  const fields = [];
+  for (const f of t.fields) {
     if (!f || !validName(f.name)) return null;
     const type = typeBrief(f.type);
     if (!type) return null;
@@ -90,7 +122,15 @@ export function summarizeSchema(payload) {
   if (!queries || !mutations) return null;
   const filterFields = inspectInput(payload?.data?.feedFilters);
   const postContentFields = inspectInput(payload?.data?.postContentInput);
-  const normalized = JSON.stringify({ queries, mutations, filterFields, postContentFields });
+  const nestedTypes = {
+    Me: inspectObjectType(payload?.data?.meType),
+    User: inspectObjectType(payload?.data?.userType),
+    ActivityConnection: inspectObjectType(payload?.data?.activityConnectionType),
+    ActivityEdge: inspectObjectType(payload?.data?.activityEdgeType),
+    Character: inspectObjectType(payload?.data?.characterType),
+    Profile: inspectObjectType(payload?.data?.profileType),
+  };
+  const normalized = JSON.stringify({ queries, mutations, filterFields, postContentFields, nestedTypes });
   const focused = roots => roots.fields.filter(x => FOCUS.has(x.name));
   return {
     status: 'root-introspection-available',
@@ -103,6 +143,7 @@ export function summarizeSchema(payload) {
     candidateMutationFields: focused(mutations),
     feedFiltersInput: filterFields,
     postContentInput: postContentFields,
+    nestedTypes,
     // Counts and names are schema metadata only, never user content.
   };
 }
