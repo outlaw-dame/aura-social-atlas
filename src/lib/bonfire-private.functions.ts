@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent } from './fedizen-feed';
 import type { NativeBonfireIdentity, NativeBonfireNotice } from './bonfire-private.server';
-import type { BonfirePost } from './spotlight';
+import type { fromBonfirePosts } from './spotlight';
+type NativeBonfirePost = ReturnType<typeof fromBonfirePosts>[number];
 
 export function nativeBonfireReadEnabled(value: string | undefined): boolean {
   return value === 'verified';
@@ -14,7 +15,7 @@ export type NativeBonfireSnapshot = {
   identity: NativeBonfireIdentity;
   /** Native IDs and account fields are not assumed to equal REST or OIDC IDs. */
   restAccountHandle: string | null;
-  posts: BonfirePost[];
+  posts: NativeBonfirePost[];
   notices: NativeBonfireNotice[];
   homeEndCursor: string | null;
   homeHasNextPage: boolean;
