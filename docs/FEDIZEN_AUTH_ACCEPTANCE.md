@@ -19,7 +19,7 @@ With explicit test-account consent, approve and manually dispatch the workflow o
 1. Verify the token using Fedizen's verify_credentials REST endpoint and match the expected test handle.
 2. Fetch native GraphQL Me.user and compare the native username with the independently verified REST identity.
 3. Read Me.myFeed and Me.notifications using the deployed-schema projections, verify pagination metadata, and safely normalize response shapes.
-4. Probe anonymous native Me to confirm it cannot resolve the authenticated account.
+4. Probe anonymous native Me: only an explicit HTTP 401/403 authorization denial or a valid null Me identity counts as a pass. Timeouts, 5xx, generic GraphQL errors and invalid data are inconclusive failures, never proof of privacy enforcement.
 5. Report only sanitized pass/fail check names—never account IDs, handles, posts, tokens, cursor strings, item counts or upstream error text.
 
 A green offline job, skipped live job, successful schema introspection or HTTP 200 alone does not prove authenticated acceptance.
