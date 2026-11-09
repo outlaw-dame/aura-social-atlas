@@ -52,6 +52,16 @@ The [two-account protected workflow](../.github/workflows/fedizen-two-account-pr
 
 The script logs only static check names and booleans; it never logs handles, identifiers, post content, tokens or upstream error details. No writes are executed by Atlas. This is a **release gate**, not a feature flag or permissions workaround.
 
+## Live Atlas OAuth credential-store verification and owner-constraint rollout
+
+**Observed 2026-11-09 via the matching Lovable Aura Browser project’s enabled Supabase database** (read-only schema queries, no tokens/identities returned): `fedizen_connections`, `fedizen_oauth_states`, and `fedizen_oauth_apps` have RLS enabled, **no client policies**, and no `anon`/`authenticated` grants; `service_role` has the necessary server privileges. The connection table is keyed by `user_id`, OAuth apps by `redirect_uri`, and one-time OAuth states by `state`. No FK currently ties connection/state ownership to `auth.users`, and pending states do not have a unique `user_id` constraint. A read-only preflight found **zero orphaned connections/states** and one expired, unconsumed state. The migration intentionally **does not** remove it.
+
+The matching deployment also has an `auth.identities` row under `custom:app-oidc`. This confirms the OIDC provider has created an identity record, **not** a successful current browser login, valid resource grant, active two-user session, or completed OIDC callback acceptance.
+
+The additive [`0003_fedizen_oauth_ownership.sql`](../drizzle/migrations/0003_fedizen_oauth_ownership.sql) migration is **prepared, not applied to the live database**. It fails if any stored credential/state is orphaned or if multiple pending states exist for a user; then it adds `ON DELETE CASCADE` foreign keys from the two user-owned tables to `auth.users`, plus a unique per-user pending OAuth state constraint. The redirect-scoped OAuth application registration is intentionally not deleted with a user. Its companion [disposable PostgreSQL CI](../.github/workflows/fedizen-owner-migration-test.yml) must pass.
+
+Controlled production promotion requires an operator-approved database backup/verified restore, fresh read-only orphan/duplicate checks, review of transaction/lock duration and any concurrent Connect traffic, and execution through the normal migration pipeline. Re-check `pg_constraint`, `pg_policies`, and `information_schema.role_table_grants` after applying. Do not truncate or delete expired states or user credentials as a prerequisite without a separate retention decision. The existing read-only REST fallback and disabled native GraphQL gate remain unchanged.
+
 ## Promotion rules and mutations
 
 The typed private server function is deliberately disabled unless the operator sets **ATLAS_BONFIRE_NATIVE_GRAPHQL_READS=verified**. Do not set this merely because introspection or mocked tests passed. The existing read-only REST personal feed remains active until real private GraphQL acceptance, identity reconciliation and UI verification succeed.
