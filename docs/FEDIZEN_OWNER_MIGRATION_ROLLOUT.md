@@ -10,6 +10,14 @@ Read-only queries against the matching Lovable project **Aura Browser** confirme
 
 No backup/restore interface has been exposed through the available Lovable connector. Accordingly, **do not run the production migration just because these SQL preflight checks pass**.
 
+## Lovable Cloud recovery method (provider-verified)
+
+Lovable Cloud takes daily project backups, but **its built-in Restore action replaces the same project's live database**, with downtime and loss of changes made after the snapshot. It is **not** a disposable-restore verification method. The official [Lovable backup/export documentation](https://docs.lovable.dev/features/database-backups) explains that a full database export is a compressed PostgreSQL archive which can be restored to a **separate** PostgreSQL instance with `pg_restore`. Exports include account records and password hashes, so restrict access to the archive and do not place it in GitHub Actions artifacts, chat, logs, the repository or public storage.
+
+In the [matching Aura Browser Lovable project](https://lovable.dev/projects/d3fdefe8-1c72-40dc-8fa6-0b966befbe5b), use **More → Database → Manage → Backups** to inspect recovery points and **More → Database → Manage → Settings → Export project data** for a full independent archive. Confirm the export succeeds, move it into encrypted operator-controlled storage outside the application's own storage area, and validate **a disposable offline restore** of the archive with `pg_restore`. Review the restored schema, auth account records, non-secret aggregate row counts and owner constraints; do **not** copy live account passwords, Fedizen tokens, client secrets or PKCE verifiers into test logs. Destroy the disposable copy after verification.
+
+The current Lovable connector cannot list backups, initiate exports or validate that disposable restore. **Do not click "Restore to this backup" on the live project as a test.** If export or disposable restore cannot be verified, the production migration remains quarantined. The provider backup alone does not certify a functioning off-project recovery path.
+
 ## 1. Operator-only prerequisites
 
 1. Confirm the target is Atlas's **Lovable-managed Supabase** database for the GitHub repository `outlaw-dame/aura-social-atlas`. Never point migration tools at Fedizen's Bonfire database or the Fedify gateway.
