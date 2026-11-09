@@ -88,6 +88,15 @@ The following are verified **repository implementation and test** milestones, no
 
 **Remaining actual acceptance requirement:** Configure a disposable consenting Fedizen account's delegated read token and expected handle as protected GitHub `fedizen-integration` secrets, dispatch the manual workflow from `main`, then independently verify real Supabase/Bonfire OIDC session, account switching, expiry/revocation, negative user A/B privacy cases and CSRF denial on the deployed Atlas origin. Neither repository tests nor anonymous route probes can substitute for these results. Keep `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS` disabled until satisfied.
 
+### Phase C profile/post readiness — 2026-11-09
+
+- **[PR #104](https://github.com/outlaw-dame/aura-social-atlas/pull/104):** observed the running Fedizen `CharacterFilters`, `PostFilters`, `ActivityFilter`, `Post`, `Activity` and `PostContent` schemas. The effective metadata fingerprint and fields are recorded in the [GraphQL capability matrix](BONFIRE_GRAPHQL_CAPABILITY_MATRIX.md). No member content was queried; schema presence is not permission acceptance.
+- **[PR #105](https://github.com/outlaw-dame/aura-social-atlas/pull/105):** added static, typed read-only `user(filter:{id})`, `user(filter:{username})` and `post(filter:{id})` server adapters, strict bounded result validation, plain-text post normalization and a server-authenticated, linked-account-checked detail function. Disabled by default, not enabled in the UI. Atlas/gateway tests and public GraphQL CI passed.
+- **[PR #106](https://github.com/outlaw-dame/aura-social-atlas/pull/106):** expanded the *existing* protected consented test workflow to verify native profile identity via both lookup paths, with an optional operator-created disposable post fixture. Missing `FEDIZEN_TEST_POST_ID` is reported as **not configured**, never accepted. Offline preflight succeeded; live owner-data checks remain unexecuted until protected credentials are configured.
+- **[PR #107](https://github.com/outlaw-dame/aura-social-atlas/pull/107):** removed a runtime `.server`-module import from the detail server-function input validator, moving common selector parsing into one browser-safe, non-privileged contract. Reuses a single bounded ID validator. The corrected Atlas/security and gateway CI passed.
+
+**Current acceptance distinction:** public Fedizen schema/query verification and Atlas-side code/mock regression checks are passing. A real disposable-account OAuth REST+GraphQL acceptance, verified Supabase OIDC subject, cross-user authorization denial, expired/revoked token behavior, and deployed CSRF origin rejection **have not been established**. Keep the operator-only `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS` flag off. Do not label read adapters or observed mutation fields production-certified. The independent Fedify discovery gateway remains outside the Bonfire authorization layer.
+
 ## 2. Delivery priorities and dependency sequence
 
 | Rank | Phase | Result | May advance when |
