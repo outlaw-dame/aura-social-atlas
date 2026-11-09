@@ -13,6 +13,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { fedizenGet, verifyFedizenReadGrant } from '../src/lib/fedizen.server';
+import { readNativeBonfirePost, readNativeBonfireProfile } from '../src/lib/bonfire-detail.server';
 import {
   matchesLinkedFedizenHandle,
   readNativeBonfireMe,
@@ -65,6 +66,35 @@ async function live() {
   summarizeResult('graphql-me-owner', !!nativeIdentityOK);
   if (!nativeIdentityOK) throw Error('Native GraphQL owner identity did not match the REST grant.');
 
+  // Consent-bound own profile acceptance. The IDs are read in memory from
+  // native Me, and never printed or sent to any destination except Fedizen.
+  const byId = await readNativeBonfireProfile(token, { by: 'id', value: me.user.id });
+  const ownProfileByIdOK = !!byId && byId.id === me.user.id &&
+    matchesLinkedFedizenHandle(restHandle, byId.character?.username);
+  summarizeResult('graphql-profile-by-id-owner', ownProfileByIdOK);
+  if (!ownProfileByIdOK) throw Error('GraphQL own profile by ID did not match the verified account.');
+
+  const byUsername = await readNativeBonfireProfile(token, {
+    by: 'username', value: me.user.character.username,
+  });
+  const ownProfileByUsernameOK = !!byUsername && byUsername.id === me.user.id &&
+    matchesLinkedFedizenHandle(restHandle, byUsername.character?.username);
+  summarizeResult('graphql-profile-by-username-owner', ownProfileByUsernameOK);
+  if (!ownProfileByUsernameOK) throw Error('GraphQL own profile by username did not match the verified account.');
+
+  // A post lookup can only be tested when the consenting operator supplies
+  // an explicitly known disposable test post. Never infer a private post ID
+  // from a third party's activity, and never mark an absent test as passed.
+  const disposablePostId = process.env['FEDIZEN_TEST_POST_ID'];
+  if (disposablePostId) {
+    const detail = await readNativeBonfirePost(token, disposablePostId);
+    const postOK = !!detail && detail.id === disposablePostId;
+    summarizeResult('graphql-consented-post-detail', postOK);
+    if (!postOK) throw Error('Consented GraphQL post detail was not resolved.');
+  } else {
+    console.log(JSON.stringify({ check: 'graphql-consented-post-detail', accepted: false, status: 'not-configured' }));
+  }
+
   const home = await readNativeBonfirePage(token, 'myFeed');
   if (!home) throw Error('GraphQL Me.myFeed did not identify an authorized account.');
   const posts = normalizeNativeBonfireHome(home).posts;
@@ -100,7 +130,7 @@ async function live() {
   summarizeResult('graphql-anonymous-owner-denied', anonymousDenied);
   if (!anonymousDenied) throw Error('Anonymous GraphQL unexpectedly exposed a signed-in identity.');
 
-  console.log('PASS: consented native and Mastodon REST read acceptance (no private content logged)');
+  console.log('PASS: configured consented native and Mastodon REST read acceptance checks (unconfigured optional checks are not accepted)');
 }
 
 function selfTest() {
