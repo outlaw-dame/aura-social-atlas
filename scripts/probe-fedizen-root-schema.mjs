@@ -20,7 +20,7 @@ const DOCUMENT = `query AtlasReadOnlyRootContract {
     }
     mutationType {
       name
-      fields { name args { name type { kind name ofType { kind name } } } }
+      fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } }
     }
   }
   feedFilters: __type(name: "FeedFilters") {
