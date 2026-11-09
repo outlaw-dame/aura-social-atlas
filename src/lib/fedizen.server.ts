@@ -5,17 +5,88 @@ const b64url = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...ne
 const random = (n = 32) => b64url(crypto.getRandomValues(new Uint8Array(n)));
 const admin = async () => (await import('@/integrations/supabase/client.server')).supabaseAdmin;
 
+/**
+ * Bounded JSON for the existing Fedizen REST and OAuth transports. All callers
+ * use a trusted fixed endpoint; response data is untrusted until validated.
+ * This implementation cancels both declared and streamed oversized bodies.
+ */
+export async function readBoundedFedizenJson(response: Response, maxBytes: number): Promise<unknown> {
+  const length = response.headers.get('content-length');
+  if (length !== null && Number(length) > maxBytes) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error('Fedizen response too large.');
+  }
+  if (!response.body) throw new Error('Missing Fedizen response body.');
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) throw new Error('Fedizen response too large.');
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
+}
+
+export function parseFedizenOAuthApp(payload: unknown): { client_id: string; client_secret: string } | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const { client_id, client_secret } = payload as Record<string, unknown>;
+  if (typeof client_id !== 'string' || !client_id || client_id.length > 4096 ||
+    /[\\r\\n]/.test(client_id)) return null;
+  if (typeof client_secret !== 'string' || !client_secret || client_secret.length > 8192 ||
+    /[\\r\\n]/.test(client_secret)) return null;
+  return { client_id, client_secret };
+}
+
+export async function registerFedizenOAuthApp(
+  redirectUri: string,
+  fetcher: typeof fetch = fetch,
+): Promise<{ client_id: string; client_secret: string }> {
+  const response = await fetcher(`${FEDIZEN}/api/v1/apps`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({
+      client_name: 'Atlas', redirect_uris: redirectUri,
+      scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin,
+    }),
+    signal: AbortSignal.timeout(10000),
+    redirect: 'error',
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error('Fedizen OAuth app registration unavailable.');
+  }
+  const app = parseFedizenOAuthApp(await readBoundedFedizenJson(response, 32768));
+  if (!app) throw new Error('Fedizen returned invalid OAuth app credentials.');
+  return app;
+}
+
 async function appFor(redirectUri: string) {
   const db = await admin();
   const { data, error: lookupError } = await db.from('fedizen_oauth_apps').select('client_id, client_secret').eq('redirect_uri', redirectUri).maybeSingle();
   if (lookupError) throw new Error('Could not read Fedizen OAuth app registration.');
-  if (data) return data;
-  const res = await fetch(`${FEDIZEN}/api/v1/apps`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_name: 'Atlas', redirect_uris: redirectUri, scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin }), signal: AbortSignal.timeout(10000) });
-  if (!res.ok) throw new Error(`Fedizen app registration failed [${res.status}]`);
-  const j = await res.json() as { client_id: string; client_secret: string };
-  const { error: registrationError } = await db.from('fedizen_oauth_apps').insert({ redirect_uri: redirectUri, client_id: j.client_id, client_secret: j.client_secret });
+  if (data) {
+    const stored = parseFedizenOAuthApp(data);
+    if (!stored) throw new Error('Stored Fedizen OAuth app credentials are invalid.');
+    return stored;
+  }
+  const registered = await registerFedizenOAuthApp(redirectUri);
+  const { error: registrationError } = await db.from('fedizen_oauth_apps').insert({
+    redirect_uri: redirectUri, ...registered,
+  });
   if (registrationError) throw new Error('Could not persist Fedizen OAuth app registration.');
-  return j;
+  return registered;
 }
 
 export async function startConnect(userId: string, redirectUri: string) {
