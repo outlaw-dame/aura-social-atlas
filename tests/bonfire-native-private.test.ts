@@ -5,7 +5,7 @@ import {
 } from '../src/lib/bonfire/graphql/operations';
 import {
   readNativeBonfireMe, readNativeBonfirePage, validateNativeBonfirePage,
-  normalizeNativeBonfireHome, normalizeNativeBonfireNotifications,
+  normalizeNativeBonfireHome, normalizeNativeBonfireNotifications, matchesLinkedFedizenHandle,
 } from '../src/lib/bonfire-private.server';
 import { nativeBonfireReadEnabled } from '../src/lib/bonfire-private.functions';
 
@@ -41,6 +41,18 @@ describe('deployed schema-verified Bonfire native read operations', () => {
     expect(NATIVE_HOME_DOCUMENT).toContain('objectPostContent{name summary htmlBody}');
     expect(NATIVE_NOTIFICATIONS_DOCUMENT).toContain('pageInfo { endCursor hasNextPage');
     expect(NATIVE_ME_DOCUMENT).not.toMatch(/mutation/i);
+  });
+
+  test('keeps independently verified REST and native account identity consistent', () => {
+    expect(matchesLinkedFedizenHandle('testaccount', 'testaccount')).toBe(true);
+    expect(matchesLinkedFedizenHandle('testaccount@fedizen.net', '@testaccount')).toBe(true);
+    expect(matchesLinkedFedizenHandle('@testaccount@fedizen.net', 'TESTACCOUNT')).toBe(true);
+    expect(matchesLinkedFedizenHandle('testaccount@evil.example', 'testaccount')).toBe(false);
+    expect(matchesLinkedFedizenHandle('testaccount@fedizen.net.evil.example', 'testaccount')).toBe(false);
+    expect(matchesLinkedFedizenHandle('testaccount', 'different')).toBe(false);
+    expect(matchesLinkedFedizenHandle(null, 'testaccount')).toBe(false);
+    expect(matchesLinkedFedizenHandle('testaccount', null)).toBe(false);
+    expect(matchesLinkedFedizenHandle('testaccount/path', 'testaccount')).toBe(false);
   });
 
   test('native Me uses only server-injected bearer at fixed Fedizen origin', async () => {
