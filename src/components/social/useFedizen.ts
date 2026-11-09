@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useAtlasAuth } from './AuthState';
 import { disconnectFedizen, getFedizenHome, startFedizenConnect, type FedizenHome } from '@/lib/fedizen.functions';
 import { getNativeBonfireSnapshot } from '@/lib/bonfire-private.functions';
+import { shouldRequestNativeBonfireHome } from '@/lib/bonfire-native-presentation';
 import { isEmbeddedPreview } from '@/lib/bonfire-auth';
 
 /** Personal, server-authorized Fedizen feed; cached only under the Atlas user ID. */
@@ -33,7 +34,7 @@ export function useFedizen() {
       if (!id) throw new Error('Atlas user is not signed in.');
       return nativeHome({ data: { expectedAtlasUserId: id } });
     },
-    enabled: !!id && q.data?.connected === true && q.data.nativeReadEnabled === true && q.data.error !== 'expired',
+    enabled: shouldRequestNativeBonfireHome(!!id, q.data),
     staleTime: 60_000,
     retry: false,
   });
@@ -50,7 +51,7 @@ export function useFedizen() {
     actionBusy,
     embedded,
     queryError: q.isError,
-    retry: () => { void q.refetch(); if (id && q.data?.nativeReadEnabled) void nativeQuery.refetch(); },
+    retry: () => { void q.refetch(); if (shouldRequestNativeBonfireHome(!!id, q.data)) void nativeQuery.refetch(); },
     connect: async () => {
       if (!id || pending.current) return;
       pending.current = true;
