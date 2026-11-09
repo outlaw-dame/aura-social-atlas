@@ -3,6 +3,7 @@ import { useServerFn } from '@tanstack/react-start';
 import { useRef, useState } from 'react';
 import { useAtlasAuth } from './AuthState';
 import { disconnectFedizen, getFedizenHome, startFedizenConnect, type FedizenHome } from '@/lib/fedizen.functions';
+import { getNativeBonfireSnapshot } from '@/lib/bonfire-private.functions';
 import { isEmbeddedPreview } from '@/lib/bonfire-auth';
 
 /** Personal, server-authorized Fedizen feed; cached only under the Atlas user ID. */
@@ -10,6 +11,7 @@ export function useFedizen() {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();
   const home = useServerFn(getFedizenHome), start = useServerFn(startFedizenConnect), drop = useServerFn(disconnectFedizen);
+  const nativeHome = useServerFn(getNativeBonfireSnapshot);
   const [actionError, setActionError] = useState<{ userId: string; message: string } | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const pending = useRef(false);
@@ -24,18 +26,31 @@ export function useFedizen() {
     enabled: !!id,
     staleTime: 60_000,
   });
+  const nativeKey = ['bonfire-native-home', id] as const;
+  const nativeQuery = useQuery({
+    queryKey: nativeKey,
+    queryFn: () => {
+      if (!id) throw new Error('Atlas user is not signed in.');
+      return nativeHome({ data: { expectedAtlasUserId: id } });
+    },
+    enabled: !!id && q.data?.connected === true && q.data.error !== 'expired',
+    staleTime: 60_000,
+    retry: false,
+  });
   const embedded = typeof window !== 'undefined' && isEmbeddedPreview();
 
   return {
     signedIn: !!id,
     loading: !!id && q.isLoading,
     data: q.data,
+    native: nativeQuery.data,
+    nativeQueryError: nativeQuery.isError,
     // Only expose a message to the account which initiated the operation.
     error: actionError && actionError.userId === id ? actionError.message : null,
     actionBusy,
     embedded,
     queryError: q.isError,
-    retry: () => { void q.refetch(); },
+    retry: () => { void q.refetch(); if (id) void nativeQuery.refetch(); },
     connect: async () => {
       if (!id || pending.current) return;
       pending.current = true;
@@ -66,7 +81,11 @@ export function useFedizen() {
         await drop({ data: { expectedAtlasUserId: id } });
         // Cancel old user-bound reads before dropping their private responses;
         // an in-flight GET must not repopulate the cache after disconnect.
-        await qc.cancelQueries({ queryKey: key, exact: true });
+        await Promise.all([
+          qc.cancelQueries({ queryKey: key, exact: true }),
+          qc.cancelQueries({ queryKey: nativeKey, exact: true }),
+        ]);
+        qc.removeQueries({ queryKey: nativeKey, exact: true });
         const disconnected: FedizenHome = {
           connected: false, accountHandle: null, posts: [], notices: [],
         };
