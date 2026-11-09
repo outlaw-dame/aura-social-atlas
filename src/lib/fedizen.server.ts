@@ -69,7 +69,7 @@ export async function disconnect(userId: string): Promise<void> {
 
 export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {
   // Only fixed, same-origin Mastodon-compatible read paths are accepted.
-  if (!/^\\/api\\/v1\\/(?:timelines\\/home|notifications)\\?limit=20$/.test(path)) {
+  if (path !== '/api/v1/timelines/home?limit=20' && path !== '/api/v1/notifications?limit=20') {
     throw new Error('Unsupported Fedizen read path.');
   }
   try {
