@@ -47,6 +47,24 @@ const DOCUMENT = `query AtlasReadOnlyRootContract {
   profileType: __type(name: "Profile") {
     kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
   }
+  postFilters: __type(name: "PostFilters") {
+    kind inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
+  }
+  characterFilters: __type(name: "CharacterFilters") {
+    kind inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
+  }
+  activityFilter: __type(name: "ActivityFilter") {
+    kind inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
+  }
+  postType: __type(name: "Post") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
+  }
+  activityType: __type(name: "Activity") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
+  }
+  postContentType: __type(name: "PostContent") {
+    kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
+  }
   pageInfoType: __type(name: "PageInfo") {
     kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
   }
@@ -139,6 +157,9 @@ export function summarizeSchema(payload) {
   if (!queries || !mutations) return null;
   const filterFields = inspectInput(payload?.data?.feedFilters);
   const postContentFields = inspectInput(payload?.data?.postContentInput);
+  const postFiltersInput = inspectInput(payload?.data?.postFilters);
+  const characterFiltersInput = inspectInput(payload?.data?.characterFilters);
+  const activityFilterInput = inspectInput(payload?.data?.activityFilter);
   const nestedTypes = {
     Me: inspectObjectType(payload?.data?.meType),
     User: inspectObjectType(payload?.data?.userType),
@@ -147,8 +168,12 @@ export function summarizeSchema(payload) {
     Character: inspectObjectType(payload?.data?.characterType),
     Profile: inspectObjectType(payload?.data?.profileType),
     PageInfo: inspectObjectType(payload?.data?.pageInfoType),
+    Post: inspectObjectType(payload?.data?.postType),
+    Activity: inspectObjectType(payload?.data?.activityType),
+    PostContent: inspectObjectType(payload?.data?.postContentType),
   };
-  const normalized = JSON.stringify({ queries, mutations, filterFields, postContentFields, nestedTypes });
+  const normalized = JSON.stringify({ queries, mutations, filterFields, postContentFields,
+    postFiltersInput, characterFiltersInput, activityFilterInput, nestedTypes });
   const focused = roots => roots.fields.filter(x => FOCUS.has(x.name));
   return {
     status: 'root-introspection-available',
@@ -161,6 +186,7 @@ export function summarizeSchema(payload) {
     candidateMutationFields: focused(mutations),
     feedFiltersInput: filterFields,
     postContentInput: postContentFields,
+    postFiltersInput, characterFiltersInput, activityFilterInput,
     nestedTypes,
     // Counts and names are schema metadata only, never user content.
   };
