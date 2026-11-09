@@ -1,6 +1,7 @@
-name: Fedizen GraphQL contract probe offline tests
+name: Fedizen GraphQL public contract verification
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - 'scripts/probe-fedizen-graphql.mjs'
@@ -24,3 +25,19 @@ jobs:
         with:
           node-version: '22'
       - run: node scripts/probe-fedizen-graphql.mjs --self-test
+
+  # Live acceptance is isolated from the standard Atlas CI workflow.
+  # Runs only on a manual dispatch or when a PR changes this contract probe.
+  # Performs exactly two anonymous, bounded read-only GraphQL POSTs, with no
+  # credentials, introspection, mutations, private content, or raw response logs.
+  live-public-contract:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify current anonymous Fedizen GraphQL feed contract
+        run: node scripts/probe-fedizen-graphql.mjs
