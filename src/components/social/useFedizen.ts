@@ -17,7 +17,10 @@ export function useFedizen() {
   const key = ['fedizen-home', id] as const;
   const q = useQuery({
     queryKey: key,
-    queryFn: () => home(),
+    queryFn: () => {
+      if (!id) throw new Error('Atlas user is not signed in.');
+      return home({ data: { expectedAtlasUserId: id } });
+    },
     enabled: !!id,
     staleTime: 60_000,
   });
@@ -39,7 +42,7 @@ export function useFedizen() {
       setActionBusy(true);
       setActionError(null);
       try {
-        const result = await start({ data: { origin: window.location.origin } });
+        const result = await start({ data: { origin: window.location.origin, expectedAtlasUserId: id } });
         if (!result.url) {
           setActionError({ userId: id, message: result.error || 'Fedizen connection was not started.' });
           return;
@@ -60,7 +63,7 @@ export function useFedizen() {
       setActionBusy(true);
       setActionError(null);
       try {
-        await drop();
+        await drop({ data: { expectedAtlasUserId: id } });
         // Cancel old user-bound reads before dropping their private responses;
         // an in-flight GET must not repopulate the cache after disconnect.
         await qc.cancelQueries({ queryKey: key, exact: true });
