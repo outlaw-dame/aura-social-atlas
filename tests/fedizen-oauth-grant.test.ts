@@ -11,7 +11,7 @@ describe('Fedizen delegated OAuth grant acceptance', () => {
   test('rejects malformed or insufficient token grants', () => {
     const cases: unknown[] = [
       null, [], {}, { access_token: '' }, { access_token: 42 },
-      { access_token: 'secret\\r\\nheader' }, { access_token: 'x'.repeat(8193) },
+      { access_token: 'secret' + String.fromCharCode(13, 10) + 'header' }, { access_token: 'x'.repeat(8193) },
       { access_token: 'opaque', scope: 'write' },
       { access_token: 'opaque', scope: 'read:accounts write' },
       { access_token: 'opaque', scope: 42 },
