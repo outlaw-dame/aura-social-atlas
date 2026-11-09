@@ -8,6 +8,10 @@ on:
       - 'scripts/probe-fedizen-root-schema.mjs'
       - 'scripts/probe-fedizen-oidc.mjs'
       - 'scripts/probe-fedizen-public-client.ts'
+      - 'src/lib/bonfire.server.ts'
+      - 'src/lib/bonfire-graphql.server.ts'
+      - 'src/lib/bonfire/graphql/operations.ts'
+      - 'src/lib/spotlight.ts'
       - '.github/workflows/fedizen-graphql-probe.yml'
   push:
     branches: [main]
@@ -16,6 +20,10 @@ on:
       - 'scripts/probe-fedizen-root-schema.mjs'
       - 'scripts/probe-fedizen-oidc.mjs'
       - 'scripts/probe-fedizen-public-client.ts'
+      - 'src/lib/bonfire.server.ts'
+      - 'src/lib/bonfire-graphql.server.ts'
+      - 'src/lib/bonfire/graphql/operations.ts'
+      - 'src/lib/spotlight.ts'
       - '.github/workflows/fedizen-graphql-probe.yml'
 
 permissions:
@@ -34,6 +42,9 @@ jobs:
       - run: node scripts/probe-fedizen-root-schema.mjs --self-test
       - run: node scripts/probe-fedizen-oidc.mjs --self-test
 
+  # Actual client schema/normalization changes are included in workflow path
+  # filters, ensuring PR code changes trigger live public acceptance rather
+  # than depending on an unrelated edit to a probe script.
   # Live acceptance is isolated from the standard Atlas CI workflow.
   # Runs only on a manual dispatch or when a PR changes this contract probe.
   # Performs exactly two anonymous, bounded read-only GraphQL POSTs, with no
