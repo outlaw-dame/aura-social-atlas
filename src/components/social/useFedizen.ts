@@ -33,7 +33,7 @@ export function useFedizen() {
       if (!id) throw new Error('Atlas user is not signed in.');
       return nativeHome({ data: { expectedAtlasUserId: id } });
     },
-    enabled: !!id && q.data?.connected === true && q.data.error !== 'expired',
+    enabled: !!id && q.data?.connected === true && q.data.nativeReadEnabled === true && q.data.error !== 'expired',
     staleTime: 60_000,
     retry: false,
   });
@@ -50,7 +50,7 @@ export function useFedizen() {
     actionBusy,
     embedded,
     queryError: q.isError,
-    retry: () => { void q.refetch(); if (id) void nativeQuery.refetch(); },
+    retry: () => { void q.refetch(); if (id && q.data?.nativeReadEnabled) void nativeQuery.refetch(); },
     connect: async () => {
       if (!id || pending.current) return;
       pending.current = true;
