@@ -12,7 +12,7 @@
  * Supabase session/callback handling, other-user privacy or mutations.
  */
 import { strict as assert } from 'node:assert';
-import { verifyFedizenReadGrant } from '../src/lib/fedizen.server';
+import { fedizenGet, verifyFedizenReadGrant } from '../src/lib/fedizen.server';
 import {
   matchesLinkedFedizenHandle,
   readNativeBonfireMe,
@@ -23,6 +23,15 @@ import {
 
 function summarizeResult(name: string, accepted: boolean, details: Record<string, boolean | number> = {}) {
   console.log(JSON.stringify({ check: name, accepted, ...details }));
+}
+
+/**
+ * The actual Fedizen REST fallback validates the nested response schema and
+ * caps the response before returning. Empty lists are legitimate; HTTP 200
+ * alone on an unvalidated endpoint would not be enough.
+ */
+export function acceptedPrivateRestRead(result: { status: number; data: unknown[] }): boolean {
+  return result.status === 200 && Array.isArray(result.data) && result.data.length <= 20;
 }
 
 async function live() {
@@ -36,6 +45,18 @@ async function live() {
   const restIdentityOK = !!restHandle && matchesLinkedFedizenHandle(expected, restHandle);
   summarizeResult('delegated-rest-owner', restIdentityOK);
   if (!restIdentityOK) throw Error('Test bearer does not match the explicitly expected account.');
+
+  const [restHome, restNotifications] = await Promise.all([
+    fedizenGet(token, '/api/v1/timelines/home?limit=20'),
+    fedizenGet(token, '/api/v1/notifications?limit=20'),
+  ]);
+  const restHomeOK = acceptedPrivateRestRead(restHome);
+  const restNotificationsOK = acceptedPrivateRestRead(restNotifications);
+  summarizeResult('mastodon-rest-home-owner', restHomeOK);
+  summarizeResult('mastodon-rest-notifications-owner', restNotificationsOK);
+  if (!restHomeOK || !restNotificationsOK) {
+    throw Error('Delegated read grant could not access validated REST Home and notifications.');
+  }
 
   const me = await readNativeBonfireMe(token);
   const nativeIdentityOK = !!me?.user?.character?.username &&
@@ -79,7 +100,7 @@ async function live() {
   summarizeResult('graphql-anonymous-owner-denied', anonymousDenied);
   if (!anonymousDenied) throw Error('Anonymous GraphQL unexpectedly exposed a signed-in identity.');
 
-  console.log('PASS: consented native read acceptance (no private content logged)');
+  console.log('PASS: consented native and Mastodon REST read acceptance (no private content logged)');
 }
 
 function selfTest() {
@@ -87,6 +108,11 @@ function selfTest() {
   assert.equal(matchesLinkedFedizenHandle('other@fedizen.net', 'atlas-test'), false);
   assert.equal(matchesLinkedFedizenHandle('atlas-test@lookalike.invalid', 'atlas-test'), false);
   assert.equal(matchesLinkedFedizenHandle(null, 'atlas-test'), false);
+  assert.equal(acceptedPrivateRestRead({ status: 200, data: [] }), true);
+  assert.equal(acceptedPrivateRestRead({ status: 200, data: [{ id: 'private', content: 'not-logged' }] }), true);
+  assert.equal(acceptedPrivateRestRead({ status: 401, data: [] }), false);
+  assert.equal(acceptedPrivateRestRead({ status: 502, data: [] }), false);
+  assert.equal(acceptedPrivateRestRead({ status: 503, data: [] }), false);
   console.log('PASS: offline native read acceptance preflight');
 }
 
