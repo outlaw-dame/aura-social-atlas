@@ -22,6 +22,7 @@ export function selectBonfireHome(
         type: 'activity',
         author: n.actor,
         date: n.date,
+        avatar: undefined,
         text: n.verb,
       })),
       profile: native.identity?.user ?? null,
