@@ -72,11 +72,13 @@ const postSchema = z.object({
     htmlBody: z.string().max(256_000).nullish(),
   }).nullable(),
   creator: z.object({
-    character: characterSchema,
+    // AnyCharacter also includes non-User implementations. A User-only
+    // fragment legitimately yields an empty object for those variants.
+    character: characterSchema.optional(),
     profile: z.object({
       name: z.string().max(320).nullish(),
       icon: z.string().max(2048).nullish(),
-    }).nullable(),
+    }).nullable().optional(),
   }).nullable(),
   activity: z.object({
     id: z.string().min(1).max(320),
