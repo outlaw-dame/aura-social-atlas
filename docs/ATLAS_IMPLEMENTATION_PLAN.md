@@ -105,6 +105,14 @@ The following are verified **repository implementation and test** milestones, no
 
 **Remaining P0 permission gate:** operator-configured `fedizen-integration` environment and disposable A/B API grants; actual private Bonfire Post ID with A allowed/B denied; manual protected GitHub acceptance from `main`; independently accessible Atlas Supabase project for real OIDC, two-account Atlas session/IDOR, cache switching, revocation, and deployed CSRF-origin testing. Do not enable `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS` or mutation surfaces based on schema introspection, offline tests, or public API success.
 
+### Atlas session isolation and credential ownership — verified 2026-11-09
+
+- **[PR #113](https://github.com/outlaw-dame/aura-social-atlas/pull/113):** shared the actual server-only Supabase-subject-to-Fedizen grant verification path across native Home, cursor continuation, and profile/post detail; caller intent mismatch now fails before any token DB access. Offline tests simulate simultaneous Atlas A/B reads, disconnection, corrupted native owner, and backend failure. Atlas/gateway CI and Codex review passed; these are unit-level security checks, **not real user A/B sessions**.
+- **Live Lovable/Supabase discovery:** Lovable project **Aura Browser** matched the Atlas GitHub commit, with an enabled Supabase database. Read-only catalog access verified RLS and service-only access on the three Fedizen OAuth/credential tables, primary keys and the installed `custom:app-oidc` identity provider. The standalone Supabase plugin has zero visible projects. No user tokens, private posts or OIDC credentials were accessed.
+- **[PR #114](https://github.com/outlaw-dame/aura-social-atlas/pull/114):** prepared `0003_fedizen_oauth_ownership.sql` to bind local credential/state ownership to `auth.users` with cascading cleanup and enforce one pending state per account. Disposable PostgreSQL 18 CI applied the exact 0002→0003 SQL and passed the permission/constraint tests. **This migration is NOT applied to the live database** pending a controlled, backed-up operator rollout. Live read-only preflight found no orphaned owner rows and one expired, unconsumed OAuth state; no records were changed.
+
+**Release criteria remain unchanged:** use two consenting disposable Fedizen accounts and one explicitly private disposable post, manually run protected tests, then verify fresh Bonfire OIDC login and Atlas-side A/B bearer/CSRF/IDOR behavior against a real deployment. Never equate an OIDC identity record, a green offline test or a PostgreSQL catalog check with complete authorization acceptance. Native private GraphQL and write actions remain gated off.
+
 ## 2. Delivery priorities and dependency sequence
 
 | Rank | Phase | Result | May advance when |
