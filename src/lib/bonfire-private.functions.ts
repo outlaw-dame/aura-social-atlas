@@ -11,7 +11,7 @@ export function nativeBonfireReadEnabled(value: string | undefined): boolean {
 }
 
 export type NativeBonfireSnapshot = {
-  status: 'disabled' | 'disconnected' | 'authorization-required' | 'unavailable' | 'available';
+  status: 'disabled' | 'disconnected' | 'authorization-required' | 'identity-unverified' | 'unavailable' | 'available';
   identity: NativeBonfireIdentity;
   /** Native IDs and account fields are not assumed to equal REST or OIDC IDs. */
   restAccountHandle: string | null;
@@ -63,6 +63,11 @@ export const getNativeBonfireSnapshot = createServerFn({ method: 'GET' })
       const identity = await native.readNativeBonfireMe(connection.access_token);
       if (!identity?.user) {
         return { ...base, status: 'authorization-required' };
+      }
+      if (!native.matchesLinkedFedizenHandle(
+        connection.account_handle, identity.user.character?.username,
+      )) {
+        return { ...base, status: 'identity-unverified' };
       }
       const [home, notifications] = await Promise.all([
         native.readNativeBonfirePage(connection.access_token, 'myFeed', data.homeAfter ?? null),
