@@ -89,9 +89,26 @@ export async function verifyFedizenReadGrant(
       await response.body?.cancel().catch(() => {});
       return null;
     }
-    // This account response is normally small. The bounded streaming transport
-    // used for public GraphQL will be generalized later for all auth reads.
-    const data: unknown = await response.json();
+    if (!response.body) return null;
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > 16384) return null;
+        chunks.push(value);
+      }
+    } finally {
+      await reader.cancel().catch(() => {});
+      reader.releaseLock();
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    const data: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
     return parseFedizenAccount(data);
   } catch {
     return null;
