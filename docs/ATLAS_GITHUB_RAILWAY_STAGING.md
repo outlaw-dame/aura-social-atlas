@@ -5,10 +5,10 @@
 ## Owned resources (2026-11-10)
 - GitHub canonical source: `outlaw-dame/aura-social-atlas`; staging branch `staging/atlas-bonfire-client`.
 - Railway project: `atlas-bonfire-client-staging` (`74c7ecfc-222c-455d-ab23-1c64449c8807`), environment `staging` (`20af7761-b3c0-44e1-8d9b-59fa271589c3`).
-- Railway empty `atlas-web-staging` service (`2e85109c-6fe0-4296-a848-faa74e14bddf`), not yet connected to a repo or public hostname. No application rollout should occur until the staging Supabase backend and secret configuration exist.
+- Railway `atlas-web-staging` service (`2e85109c-6fe0-4296-a848-faa74e14bddf`) is now connected to GitHub branch `staging/atlas-bonfire-client` and deployed successfully at commit `c02812105b24677a29306027b023dda75bfd2f3f`, deployment `c7589419-2a84-471b-882a-220b524fa639`. Runtime reports Node server listening on port 3000. **Authenticated operations are not accepted as production-ready:** server-only Supabase key and OIDC configuration remain incomplete.
 - Existing independent Fedify gateway Railway project `atlas-discovery-gateway` is unchanged.
 - Existing Lovable **isolated** staging preview is still available for browser diagnostics and has its own backend; do not reuse its service keys in Railway or assume they are exportable.
-- Supabase organization `outlaw-dame's Org` contains zero listed connector-visible projects at inspection. New project `atlas-fedizen-staging` quote was $0/month but Management API requires explicit cost-confirmation ID; **creation not yet completed**.
+- Supabase project `atlas-fedizen-staging` (`nprmdytcoqiribpwedjc`) is provisioned and healthy, PostgreSQL 17.11; three base Atlas migrations plus staging-only ownership and trigger-privilege hardening are applied with zero users and credentials.
 
 ## CI registry
 The [staging-only Node build workflow](../.github/workflows/atlas-bonfire-staging.yml) is registered on `main` through PR #126 without deploying staging code. Staging branch pushes now run its targeted authorization tests and Nitro Node build, while the ordinary Atlas and gateway CI also runs on the draft staging PR.
@@ -38,9 +38,16 @@ Use the official Railway TanStack guide and Supabase custom OAuth/OIDC guide for
 - The CI-reviewed, formerly quarantined `0003_fedizen_oauth_ownership.sql` was applied **only to new zero-user staging** under migration name `staging_only_fedizen_owner_constraints`; the production migration remains quarantined and unapplied.
 - Staging-only `staging_only_profile_trigger_privilege_hardening` revoked anon/authenticated `EXECUTE` on the SECURITY DEFINER signup trigger and anon reads on profiles. SQL is recorded in `drizzle/staging/0004_profile_trigger_grants.sql`, not production's migration journal.
 - Security verification: three owner constraints exist, no orphaned grants (0 users and 0 OAuth states/connections), anon and authenticated cannot execute the privileged trigger; RLS enabled with no browser policies on all Fedizen token tables. Security advisors have only intentional info-level no-policy findings on these locked-down tables.
-- Railway service has Node/Nitro build/start commands, staging Supabase URL and **publishable** keys, and exact origin allowlist. A generated hostname is reserved: `https://atlas-web-staging-staging-3f822964.up.railway.app`. Edge CDN caching is disabled. No GitHub source or running application deployment yet.
+- Railway service has Node/Nitro build/start commands and has been deployed successfully from the staging GitHub branch. The staging Supabase URL and **publishable** keys are configured, as is the exact callback allowlist. Generated hostname: `https://atlas-web-staging-staging-3f822964.up.railway.app`. Edge CDN caching is disabled. Live external HTTP response has not been verified, but Railway reports successful runtime startup.
 - **Missing server-side credential:** This Supabase connector exposes only publishable keys, not a dedicated service-role key. Securely place `SUPABASE_SERVICE_ROLE_KEY` from the **staging** Supabase dashboard into the **staging Railway service**. Never copy keys from production or put tokens in chat/GitHub.
 - **Missing OIDC provider:** Supabase Authentication > Providers > Custom OAuth/OIDC must register an independent `custom:app-oidc` with issuer `https://fedizen.net`. Bonfire client registration must use the exact new staging callback `https://nprmdytcoqiribpwedjc.supabase.co/auth/v1/callback` (verify against Supabase provider form). Scopes `openid profile email`. This is not the separate delegated API `read` consent.
 - **Missing Auth redirect configuration:** add the generated Railway staging origin to the new Supabase Auth redirect URLs/site URL, not to production's.
 - The Node CI workflow was registered on main; PR #127 adds a staging draft PR trigger. Verify that check before deploying.
 - The full integration is still not live-authenticated; the existing Fedizen A/B manual UI observation remains completed, API-level proof remains outstanding.
+
+## First Railway deployment verified (2026-11-10)
+
+- GitHub staging CI: [Node build and security tests](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42932287019) passed; [Atlas and Fedify gateway checks](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42932287048) passed. Neither alone proves authentication.
+- Railway deployment `c7589419-2a84-471b-882a-220b524fa639`: `SUCCESS`, Node listening on 3000, from staging commit `c02812105b24677a29306027b023dda75bfd2f3f`. The generated domain is Railway-managed; web search/fetch in this session did not independently verify a GET response, so do not claim end-to-end HTTP acceptance.
+- Active blocking variable in service configuration: `SUPABASE_SERVICE_ROLE_KEY` is **absent**. No real Fedizen OAuth read grant can be persisted until a staging-only server key is securely configured. Do not inject production secrets.
+- Staging OIDC custom provider is not registered; exact Supabase Auth callback and origin redirects must be configured in the new staging project. No real Fedizen identity authorization or A/B GraphQL API acceptance has run.
