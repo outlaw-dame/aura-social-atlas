@@ -39,3 +39,22 @@ jobs:
         run: |
           bun run build
           test -f .output/server/index.mjs
+
+  smoke-public-staging:
+    if: github.event_name == 'pull_request' && github.head_ref == 'staging/atlas-bonfire-client'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify live staging public pages without credentials
+        env:
+          STAGING_ORIGIN: https://atlas-web-staging-staging-3f822964.up.railway.app
+        run: |
+          set -euo pipefail
+          for path in / /fedizen-acceptance; do
+            status=$(curl --proto '=https' --tlsv1.2 --silent --show-error --max-time 15 --output /dev/null --write-out '%{http_code}' "$STAGING_ORIGIN$path")
+            if [[ "$status" != 200 ]]; then
+              echo "Staging path $path returned HTTP $status (wanted 200)"
+              exit 1
+            fi
+            echo "PASS staging HTTP $path: 200"
+          done
