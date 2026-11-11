@@ -29,6 +29,26 @@ describe('Fedizen acceptance page sanitization', () => {
     expect(sanitizeAcceptanceResult({ status: 'passed', checks: [{ check: 'delegated-rest-owner', accepted: true }] }).status).toBe('failed');
     expect(sanitizeAcceptanceResult({ status: 'passed', checks: allChecks.map(check => ({ check, accepted: true })) }).status).toBe('passed');
   });
+  test('repeated check names cannot forge an overall passing result', () => {
+    const repeated = allChecks.slice(0, 5).map(check => ({ check, accepted: true }));
+    repeated.push({ check: 'delegated-rest-owner', accepted: true });
+    const view = sanitizeAcceptanceResult({ status: 'passed', checks: repeated });
+    expect(view.status).toBe('failed');
+    expect(view.checks).toHaveLength(5);
+  });
+  test('only a literal boolean true counts as a passing check', () => {
+    for (const accepted of ['true', 1, null, [], {}]) {
+      const view = sanitizeAcceptanceResult({
+        status: 'passed',
+        checks: allChecks.map(check => ({
+          check,
+          accepted: check === 'graphql-my-feed' ? accepted : true,
+        })),
+      });
+      expect(view.status).toBe('failed');
+      expect(view.checks.find(check => check.check === 'graphql-my-feed')?.passed).toBe(false);
+    }
+  });
   test('disabled and disconnected show no checks', () => {
     expect(sanitizeAcceptanceResult({ status: 'disabled', checks: [{ check: 'graphql-my-feed', accepted: true }] })).toEqual({ status: 'disabled', checks: [] });
     expect(sanitizeAcceptanceResult({ status: 'disconnected', checks: [] })).toEqual({ status: 'disconnected', checks: [] });
