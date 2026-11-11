@@ -1,0 +1,32 @@
+name: Atlas Bonfire staging branch checks
+on:
+  push:
+    branches:
+      - staging/atlas-bonfire-client
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.4'
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Test session authorization and sanitized staging UI
+        run: |
+          bun test tests/bonfire-atlas-acceptance.test.ts tests/fedizen-acceptance-view.test.ts tests/fedizen-session-intent.test.ts tests/fedizen-callback-origin.test.ts tests/fedizen-oauth-grant.test.ts
+      - name: Build Node server for Railway without privileged secrets
+        env:
+          NITRO_PRESET: node-server
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+        run: |
+          bun run build
+          test -f .output/server/index.mjs
