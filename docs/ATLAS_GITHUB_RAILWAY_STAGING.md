@@ -10,6 +10,9 @@
 - Existing Lovable **isolated** staging preview is still available for browser diagnostics and has its own backend; do not reuse its service keys in Railway or assume they are exportable.
 - Supabase organization `outlaw-dame's Org` contains zero listed connector-visible projects at inspection. New project `atlas-fedizen-staging` quote was $0/month but Management API requires explicit cost-confirmation ID; **creation not yet completed**.
 
+## CI registry
+The [staging-only Node build workflow](../.github/workflows/atlas-bonfire-staging.yml) is registered on `main` through PR #126 without deploying staging code. Staging branch pushes now run its targeted authorization tests and Nitro Node build, while the ordinary Atlas and gateway CI also runs on the draft staging PR.
+
 ## Host runtime
 Atlas is TanStack Start/Vite with Lovable's vite-tanstack-config plugin, whose default Nitro target is not a Railway Node server. For Railway, use `NITRO_PRESET=node-server` at build time and `node .output/server/index.mjs` as the start command (a `start` script is included on staging branch). Set Node.js 22, `NODE_ENV=production`, `HOST=0.0.0.0` and `PORT=3000`. The CI workflow runs the same Node-target build using **dummy publishable values**, without deployment or private credentials.
 
