@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as FedizenAcceptanceRouteImport } from './routes/fedizen-acceptance'
 import { Route as FollowingRouteImport } from './routes/following'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -38,6 +39,11 @@ const AppRoute = AppRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FedizenAcceptanceRoute = FedizenAcceptanceRouteImport.update({
+  id: '/fedizen-acceptance',
+  path: '/fedizen-acceptance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FollowingRoute = FollowingRouteImport.update({
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/following': typeof FollowingRoute
   '/intelligence': typeof IntelligenceRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/following': typeof FollowingRoute
   '/intelligence': typeof IntelligenceRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/following': typeof FollowingRoute
   '/intelligence': typeof IntelligenceRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -158,6 +167,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/fedizen-acceptance'
     | '/following'
     | '/intelligence'
     | '/reset-password'
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/fedizen-acceptance'
     | '/following'
     | '/intelligence'
     | '/reset-password'
@@ -191,6 +202,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/fedizen-acceptance'
     | '/following'
     | '/intelligence'
     | '/reset-password'
@@ -209,6 +221,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRoute
   AuthRoute: typeof AuthRoute
+  FedizenAcceptanceRoute: typeof FedizenAcceptanceRoute
   FollowingRoute: typeof FollowingRoute
   IntelligenceRoute: typeof IntelligenceRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -241,6 +254,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fedizen-acceptance': {
+      id: '/fedizen-acceptance'
+      path: '/fedizen-acceptance'
+      fullPath: '/fedizen-acceptance'
+      preLoaderRoute: typeof FedizenAcceptanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/following': {
@@ -350,6 +370,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRoute,
   AuthRoute: AuthRoute,
+  FedizenAcceptanceRoute: FedizenAcceptanceRoute,
   FollowingRoute: FollowingRoute,
   IntelligenceRoute: IntelligenceRoute,
   ResetPasswordRoute: ResetPasswordRoute,
