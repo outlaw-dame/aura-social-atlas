@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowUpRight, Hash, Link2, MessageCircle, Repeat2, Star, Tag
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { FEED_PROBLEM, useFollowedTags, useTagFeed } from '@/components/social/useFeeds';
-import { DesktopHosts } from '@/components/social/DesktopHosts';
+import { StandaloneDesktopHosts } from '@/components/social/DesktopHosts';
 import { useFedizen } from '@/components/social/useFedizen';
 import { Button } from '@/components/ui/button';
 import { FeedPostCard, useFeedPostActions } from '@/components/social/FeedPostCard';
@@ -27,8 +27,8 @@ export const Route = createFileRoute('/tags/$tag')({
 
 function TagPage() {
   const { tag } = Route.useParams();
-  // This page renders outside Discovery, so it mounts the profile dialog, mini player and VideoDock itself.
-  return <><TagBody tag={tag} /><DesktopHosts /></>;
+  // This page renders outside Discovery, so it mounts the profile and collection dialogs, mini player and VideoDock itself.
+  return <><TagBody tag={tag} /><StandaloneDesktopHosts /></>;
 }
 
 function TagBody({ tag }: { tag: string }) {
