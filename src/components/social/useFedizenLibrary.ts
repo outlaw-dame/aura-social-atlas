@@ -110,7 +110,8 @@ export function useCircleActions() {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();
   const circle = useServerFn(changeFedizenCircle), member = useServerFn(changeFedizenCircleMember);
-  const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ['fedizen-circles'] }), qc.invalidateQueries({ queryKey: ['fedizen-circle'] })]);
+  // Members (and so each pinned circle's feed) may have changed too.
+  const refresh = () => Promise.all(['fedizen-circles', 'fedizen-circle', 'fedizen-circle-feed'].map(k => qc.invalidateQueries({ queryKey: [k] })));
   const run = useMutation({
     mutationFn: async (fn: (uid: string) => Promise<{ ok: boolean; error?: LibraryProblem }>) => {
       if (!user) return LIBRARY_PROBLEM['not-connected'];
