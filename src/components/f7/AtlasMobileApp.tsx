@@ -150,6 +150,8 @@ export default function AtlasMobileApp() {
   };
   const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
   const [title, setTitle] = useState('Discover');
+  // Feeds stays mounted under the other dock tabs; it counts posts as seen only while its tab is on screen.
+  const [feedsShown, setFeedsShown] = useState(false);
   const [network, setNetwork] = useState<string>('All networks');
 
   useEffect(() => { setMode(dark ? 'dark' : 'light'); }, []);
@@ -328,8 +330,8 @@ export default function AtlasMobileApp() {
               )}
             </Tab>
 
-            <Tab id="tab-feeds" className="page-content" onTabShow={() => setTitle('Feeds')}>
-              <MobileFeeds following={<>
+            <Tab id="tab-feeds" className="page-content" onTabShow={() => { setTitle('Feeds'); setFeedsShown(true); }} onTabHide={() => setFeedsShown(false)}>
+              <MobileFeeds visible={feedsShown} following={<>
                 <BlockTitle>Atlas creators you follow</BlockTitle>
                 {followingPosts.length ? followingPosts.map(postCard) : (
                   <Block strong inset>Follow creators in Discover and their stories will show up here.</Block>

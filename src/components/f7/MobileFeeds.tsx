@@ -15,7 +15,7 @@ const KEY = 'atlas-feed';
  * the manner of Particle: plain names, the open one in a filled pill, and a dot before any with posts you haven't seen.
  * `following` is the extra content Following shows under your Fedizen timeline (Atlas creators you follow).
  */
-export function MobileFeeds({ following }: { following?: ReactNode }) {
+export function MobileFeeds({ following, visible = true }: { following?: ReactNode; /** Whether the Feeds dock tab is on screen. */ visible?: boolean }) {
   const { user } = useAtlasAuth();
   const pinned = usePinnedCircles(user?.id);
   const [feed, setFeed] = useState<FeedKind>('following');
@@ -25,7 +25,7 @@ export function MobileFeeds({ following }: { following?: ReactNode }) {
   const choose = (k: FeedKind) => { setFeed(k); try { sessionStorage.setItem(KEY, k); } catch { /* fine */ } };
   const circleId = circleIdOf(feed);
   useEffect(() => { if (circleId && !pinned.some(c => c.id === circleId)) choose('following'); }, [circleId, pinned]);
-  const tabs = useFeedTabs(restored ? feed : null);
+  const tabs = useFeedTabs(restored && visible ? feed : null);
   return <>
     <div className="atlas-feed-tabs" role="tablist" aria-label="Feeds">
       {tabs.map(t => <button key={t.id} type="button" role="tab" aria-selected={feed === t.id} onClick={e => { choose(t.id); e.currentTarget.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' }); }}

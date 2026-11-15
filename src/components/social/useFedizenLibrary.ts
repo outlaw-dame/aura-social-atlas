@@ -48,7 +48,8 @@ const savedStore = (() => {
     snapshot: () => entries,
     /** A different signed-in account starts from nothing. */
     own: (userId: string | undefined) => { if (owner !== userId) { owner = userId; entries = new Map(); } },
-    set: (statusId: string, e: SavedEntry) => { entries.set(statusId, e); emit(); },
+    /** Writes only while `userId` still owns the store: a reply that lands after an account switch is dropped. */
+    set: (userId: string, statusId: string, e: SavedEntry) => { if (owner !== userId) return; entries.set(statusId, e); emit(); },
   };
 })();
 export const _savedStoreForTests = savedStore;
@@ -66,15 +67,16 @@ export function useSaveToggle() {
     if (!user || !p.statusId || isPending(p)) return;
     const id = p.statusId, was = isSaved(p), on = !was;
     setError(null);
-    savedStore.set(id, { saved: on, pending: true });
+    const uid = user.id;
+    savedStore.set(uid, id, { saved: on, pending: true });
     try {
-      const r = await write({ data: { expectedAtlasUserId: user.id, statusId: id, on } });
-      if (!r.ok) { savedStore.set(id, { saved: was, pending: false }); setError(LIBRARY_PROBLEM[r.error]); return; }
-      savedStore.set(id, { saved: r.saved, pending: false });
+      const r = await write({ data: { expectedAtlasUserId: uid, statusId: id, on } });
+      if (!r.ok) { savedStore.set(uid, id, { saved: was, pending: false }); setError(LIBRARY_PROBLEM[r.error]); return; }
+      savedStore.set(uid, id, { saved: r.saved, pending: false });
       void qc.invalidateQueries({ queryKey: ['fedizen-saved'] });
       void qc.invalidateQueries({ queryKey: ['fedizen-home'] });
     } catch {
-      savedStore.set(id, { saved: was, pending: false });
+      savedStore.set(uid, id, { saved: was, pending: false });
       setError(LIBRARY_PROBLEM.unavailable);
     }
   };

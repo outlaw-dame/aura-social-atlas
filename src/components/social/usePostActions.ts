@@ -24,7 +24,8 @@ const store = (() => {
     subscribe: (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; },
     snapshot: () => entries,
     own: (userId: string | undefined) => { if (owner !== userId) { owner = userId; entries = new Map(); } },
-    set: (key: string, e: Entry) => { entries.set(key, e); emit(); },
+    /** Writes only while `userId` still owns the store: a reply that lands after an account switch is dropped. */
+    set: (userId: string, key: string, e: Entry) => { if (owner !== userId) return; entries.set(key, e); emit(); },
   };
 })();
 export const _reactionStoreForTests = store;
@@ -50,13 +51,14 @@ export function useReactions() {
     if (was.pending) return;
     const on = !was.on;
     setError(null);
-    store.set(k, { on, count: Math.max(0, was.count + (on ? 1 : -1)), pending: true });
+    const uid = user.id;
+    store.set(uid, k, { on, count: Math.max(0, was.count + (on ? 1 : -1)), pending: true });
     try {
-      const r = await write({ data: { expectedAtlasUserId: user.id, statusId: p.statusId, kind, on } });
-      if (!r.ok) { store.set(k, { ...was, pending: false }); setError(LIBRARY_PROBLEM[r.error]); return; }
-      store.set(k, { on: r.on, count: r.count ?? Math.max(0, was.count + (r.on === was.on ? 0 : r.on ? 1 : -1)), pending: false });
+      const r = await write({ data: { expectedAtlasUserId: uid, statusId: p.statusId, kind, on } });
+      if (!r.ok) { store.set(uid, k, { ...was, pending: false }); setError(LIBRARY_PROBLEM[r.error]); return; }
+      store.set(uid, k, { on: r.on, count: r.count ?? Math.max(0, was.count + (r.on === was.on ? 0 : r.on ? 1 : -1)), pending: false });
     } catch {
-      store.set(k, { ...was, pending: false });
+      store.set(uid, k, { ...was, pending: false });
       setError(LIBRARY_PROBLEM.unavailable);
     }
   };

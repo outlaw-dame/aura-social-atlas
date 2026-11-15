@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { getCircleFeed, getFedizenHome, getForYou } from '@/lib/fedizen.functions';
@@ -38,6 +38,8 @@ export const FEED_PROBLEM = {
   'not-found': 'This circle no longer exists on Fedizen.',
 } as const;
 
+const onVisibility = (l: () => void) => { document.addEventListener('visibilitychange', l); return () => document.removeEventListener('visibilitychange', l); };
+
 export type FeedTab = { id: FeedKind; label: string; hint?: string; circle?: boolean; isNew: boolean };
 
 /**
@@ -71,10 +73,13 @@ export function useFeedTabs(active: FeedKind | null): FeedTab[] {
     ...Object.fromEntries(pinned.map((c, i) => [circleFeed(c.id), newestOf(circles[i]?.data?.posts)])),
   };
   const key = JSON.stringify(newest);
+  // A feed in a background browser tab isn't being read either.
+  const pageVisible = useSyncExternalStore(onVisibility, () => document.visibilityState === 'visible', () => false);
+  const reading = pageVisible ? active : null;
   useEffect(() => {
     if (!uid) return;
-    for (const [feed, n] of Object.entries(newest)) if (n && (feed === active || !seen[feed])) markFeedSeen(uid, feed as FeedKind, n);
-  }, [uid, active, key]); // eslint-disable-line react-hooks/exhaustive-deps
+    for (const [feed, n] of Object.entries(newest)) if (n && ((reading && feed === reading) || !seen[feed])) markFeedSeen(uid, feed as FeedKind, n);
+  }, [uid, reading, key]); // eslint-disable-line react-hooks/exhaustive-deps
   return [
     ...BASE_FEEDS.map(f => ({ ...f, isNew: !!uid && f.id !== active && hasNew(seen[f.id], newest[f.id]) })),
     ...pinned.map(c => ({ id: circleFeed(c.id), label: c.title, circle: true, isNew: !!uid && circleFeed(c.id) !== active && hasNew(seen[circleFeed(c.id)], newest[circleFeed(c.id)]) })),
