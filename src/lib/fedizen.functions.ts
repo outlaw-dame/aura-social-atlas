@@ -198,3 +198,43 @@ export const changeFedizenCircleMember = createServerFn({ method: 'POST' }).midd
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
     return { ok: true, person };
   });
+
+/* ── Moderation: people you block (Bonfire blocks, through the Mastodon API) ──────────────────────────── */
+
+/** People you block on Fedizen. Bonfire lists blocked instances with them in its own pages; its API returns people only. */
+export const getFedizenBlocks = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ people: FedizenPerson[]; canWrite: boolean; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor, fedizenGet } = await import('./fedizen.server');
+    const t = await tokenFor(context.userId);
+    if (!t) return { people: [], canWrite: false, error: 'not-connected' };
+    const r = await fedizenGet(t.access_token, '/api/v1/blocks?limit=80');
+    const canWrite = hasScope(t.scope, 'write');
+    return r.status === 200 ? { people: fromAccounts(r.data as never), canWrite } : { people: [], canWrite, error: problem(r.status) };
+  });
+
+/** Block someone by handle (looked up on Fedizen), or unblock them by account id. */
+export const changeFedizenBlock = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ block: z.string().trim().min(1).max(320).optional(), unblock: ulid.optional() }).refine(v => !!v.block !== !!v.unblock).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; person?: FedizenPerson } | { ok: false; error: Problem | 'not-found' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenGet, fedizenSend } = await import('./fedizen.server');
+    let person: FedizenPerson | undefined;
+    let accountId = data.unblock;
+    if (data.block) {
+      const acct = lookupAcct(data.block);
+      if (!acct) return { ok: false, error: 'not-found' };
+      const found = await fedizenGet(c.token, `/api/v1/accounts/lookup?acct=${encodeURIComponent(acct)}`);
+      if (found.status === 404 || (found.status === 200 && !found.data.length)) return { ok: false, error: 'not-found' };
+      if (found.status !== 200) return { ok: false, error: problem(found.status) };
+      person = fromAccounts(found.data as never)[0];
+      if (!person) return { ok: false, error: 'not-found' };
+      accountId = person.id;
+    }
+    const r = await fedizenSend(c.token, 'POST', `/api/v1/accounts/${accountId}/${data.block ? 'block' : 'unblock'}`);
+    if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
+    return { ok: true, person };
+  });

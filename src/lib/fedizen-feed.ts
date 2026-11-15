@@ -3,6 +3,9 @@ import { htmlToParagraphs } from './spotlight';
 import { collectionLinksIn } from './collections';
 
 export const FEDIZEN = 'https://fedizen.net';
+/** Fedizen's own pages for what its API doesn't offer yet (Bonfire v1.1.0-rc.1: bonfire_ui_me SafetyLive, bonfire_ui_boundaries BoundariesLive). */
+export const FEDIZEN_KEYWORD_FILTERS_URL = `${FEDIZEN}/settings/user/safety`;
+export const FEDIZEN_BLOCKED_URL = `${FEDIZEN}/settings/boundaries/blocked`;
 /** What Atlas asks Fedizen for: read your timeline and notifications, and act for you — join and leave
  *  groups, follow, post. Mastodon scope names, which Bonfire's OAuth provider (bonfire_open_id) supports. */
 export const FEDIZEN_API_SCOPE = 'read write follow';

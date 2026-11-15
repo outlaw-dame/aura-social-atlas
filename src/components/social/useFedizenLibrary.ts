@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { useAtlasAuth } from './AuthState';
 import {
-  changeFedizenCircle, changeFedizenCircleMember, getFedizenCircleMembers, getFedizenCircles, getFedizenSaved, setFedizenSaved,
+  changeFedizenBlock, changeFedizenCircle, changeFedizenCircleMember, getFedizenBlocks, getFedizenCircleMembers, getFedizenCircles, getFedizenSaved, setFedizenSaved,
 } from '@/lib/fedizen.functions';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 
@@ -124,4 +124,37 @@ export function useCircleActions() {
     addMember: (id: string, handle: string) => run.mutateAsync(uid => member({ data: { expectedAtlasUserId: uid, id, add: handle } })),
     removeMember: (id: string, accountId: string) => run.mutateAsync(uid => member({ data: { expectedAtlasUserId: uid, id, remove: accountId } })),
   };
+}
+
+/** People you block on Fedizen (Settings → Moderation). */
+export function useFedizenBlocks(enabled = true) {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getFedizenBlocks);
+  const id = user?.id;
+  return useQuery({
+    queryKey: ['fedizen-blocks', id],
+    queryFn: () => { if (!id) throw new Error('Atlas user is not signed in.'); return read({ data: { expectedAtlasUserId: id } }); },
+    enabled: !!id && enabled,
+  });
+}
+
+/** Block by handle or unblock by account id; resolves to an error message or null. */
+export function useBlockActions() {
+  const { user } = useAtlasAuth();
+  const qc = useQueryClient();
+  const change = useServerFn(changeFedizenBlock);
+  const run = useMutation({
+    mutationFn: async (d: { block?: string; unblock?: string }) => {
+      if (!user) return LIBRARY_PROBLEM['not-connected'];
+      try {
+        const r = await change({ data: { expectedAtlasUserId: user.id, ...d } });
+        if (!r.ok) return LIBRARY_PROBLEM[r.error];
+        // The block changes what the feeds may show: refresh the list and every personal feed holding their posts.
+        await Promise.all(['fedizen-blocks', 'fedizen-home', 'bonfire-native-home', 'fedizen-messages', 'fedizen-saved']
+          .map(k => qc.invalidateQueries({ queryKey: [k] })));
+        return null;
+      } catch { return LIBRARY_PROBLEM.unavailable; }
+    },
+  });
+  return { busy: run.isPending, block: (handle: string) => run.mutateAsync({ block: handle }), unblock: (id: string) => run.mutateAsync({ unblock: id }) };
 }

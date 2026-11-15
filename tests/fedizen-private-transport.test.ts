@@ -80,3 +80,17 @@ describe('Saved (Bonfire bookmarks) and Circles (Bonfire circles as Mastodon Lis
     expect(seen.length).toBe(4);
   });
 });
+
+describe('Moderation: blocked people only (Bonfire rc.1 has no client API for keyword filters or instance blocks)', () => {
+  test('blocks are read and changed through their own allowlisted routes', async () => {
+    const seen: string[] = [];
+    globalThis.fetch = (async (u: string, init?: RequestInit) => { seen.push(`${init?.method} ${new URL(u).pathname}${new URL(u).search}`); return new Response(init?.method === 'GET' ? '[{"id":"01A","acct":"x@y.z"}]' : '{}'); }) as unknown as typeof fetch;
+    expect((await fedizenGet('t', '/api/v1/blocks?limit=80')).data).toEqual([{ id: '01A', acct: 'x@y.z' }]);
+    await fedizenSend('t', 'POST', '/api/v1/accounts/01A/block');
+    await fedizenSend('t', 'POST', '/api/v1/accounts/01A/unblock');
+    expect(seen).toEqual(['GET /api/v1/blocks?limit=80', 'POST /api/v1/accounts/01A/block', 'POST /api/v1/accounts/01A/unblock']);
+    await expect(fedizenGet('t', '/api/v1/domain_blocks')).rejects.toThrow('Unsupported Fedizen read path.');
+    await expect(fedizenGet('t', '/api/v2/filters')).rejects.toThrow('Unsupported Fedizen read path.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/accounts/01A/block', { reason: 'x' })).rejects.toThrow('Unsupported Fedizen write body.');
+  });
+});

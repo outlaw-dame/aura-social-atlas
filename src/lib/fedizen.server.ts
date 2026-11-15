@@ -328,6 +328,8 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: new RegExp(`^/api/v1/accounts/relationships\\?id%5B%5D=${ID}(&id%5B%5D=${ID}){0,39}$`), schema: relationshipsSchema },
   { match: /^\/api\/v1\/bookmarks\?limit=40$/, schema: bookmarksSchema },
   { match: /^\/api\/v1\/lists$/, schema: listsSchema },
+  // People you block (Bonfire: MastoAccountController.blocks, people both ghosted and silenced). Instances aren't in it.
+  { match: /^\/api\/v1\/blocks\?limit=80$/, schema: accountsSchema },
   { match: new RegExp(`^/api/v1/lists/${ID}/accounts\\?limit=80$`), schema: accountsSchema },
   // One account by handle, to add someone to a circle. Answers a single Account, returned here as a one-item list.
   { match: new RegExp(`^/api/v1/accounts/lookup\\?acct=${ACCT}$`), schema: account.extend({ id: z.string().min(1).max(64) }), single: true },
@@ -373,7 +375,7 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
 /**
  * The writes Atlas makes as the person, and nothing else:
  * - join or leave a Bonfire group (/api/v1-bonfire/groups/:id/join|leave); follow or unfollow an account;
- * - bookmark or unbookmark a post (Saved);
+ * - bookmark or unbookmark a post (Saved); block or unblock a person (Moderation);
  * - create, rename and delete a circle, and add or remove its members (Mastodon Lists, served from Bonfire Circles).
  * Each route names its method and the only body it may carry. Same transport rules as reads: fixed host,
  * no redirects, no caching, bounded reply, nothing logged.
@@ -384,6 +386,7 @@ const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTy
   { method: 'POST', match: new RegExp(`^/api/v1-bonfire/groups/${ID}/(join|leave)$`) },
   { method: 'POST', match: new RegExp(`^/api/v1/accounts/${ID}/(follow|unfollow)$`) },
   { method: 'POST', match: new RegExp(`^/api/v1/statuses/${ID}/(bookmark|unbookmark)$`) },
+  { method: 'POST', match: new RegExp(`^/api/v1/accounts/${ID}/(block|unblock)$`) },
   { method: 'POST', match: /^\/api\/v1\/lists$/, body: title },
   { method: 'PUT', match: new RegExp(`^/api/v1/lists/${ID}$`), body: title },
   { method: 'DELETE', match: new RegExp(`^/api/v1/lists/${ID}$`) },
