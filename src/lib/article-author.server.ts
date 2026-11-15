@@ -202,7 +202,8 @@ async function fromOwnPage(
   const id = String(embedded.id);
   if (normalizeHost(new URL(id).hostname) !== normalizeHost(new URL(pageUrl).hostname)) return [];
   const actor = await fetchActor(id, fetchImpl, lookup);
-  if (!actor) return [];
+  // The fetched actor must be the one the page named (a redirect can't swap in someone else) and may claim the page.
+  if (!actor || actor.id !== id || !actorMayClaim(actor, pageUrl)) return [];
   const pod = await safeFetch(id, PODCAST_ACCEPT, fetchImpl, lookup);
   const asPodcast = pod && isJsonType(pod.type) ? parseJson(pod.text) : null;
   const isPodcast =

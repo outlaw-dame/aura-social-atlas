@@ -70,6 +70,20 @@ describe("Castopod episodes and podcasts get creator tags", () => {
     expect(await resolveArticleAuthors(page, fetchImpl, dns)).toEqual([]);
   });
 
+  test("a same-host actor id that redirects to someone else's account isn't credited", async () => {
+    const page = `${HOST}/@decoy`;
+    const alice = { id: "https://social.example.net/users/alice", type: "Person", preferredUsername: "alice", name: "Alice" };
+    const seen: string[] = [];
+    const fetchImpl = async (url: string) => {
+      seen.push(url);
+      if (url === page) return new Response(JSON.stringify({ ...person, id: `${HOST}/go/alice` }), { headers: { "content-type": "application/activity+json" } });
+      if (url === `${HOST}/go/alice`) return new Response(null, { status: 302, headers: { location: alice.id } });
+      if (url === alice.id) return new Response(JSON.stringify(alice), { headers: { "content-type": "application/activity+json" } });
+      return new Response("nope", { status: 404 });
+    };
+    expect(await resolveArticleAuthors(page, fetchImpl, dns)).toEqual([]);
+  });
+
   test("a podcast sharing its own episode isn't tagged with itself", () => {
     const credit = { name: "Open Web Radio", acct: "@openweb@pods.example.org", url: POD, verifiedBy: "activitypub" as const, work: "episode" as const };
     expect(creditsBesidesAuthor({ handle: "@OpenWeb@pods.example.org" }, [credit])).toEqual([]);
