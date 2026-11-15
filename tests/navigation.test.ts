@@ -22,6 +22,12 @@ describe("Phone: a hashtag's feed is pushed, not a sheet", () => {
     expect(readFileSync("src/components/f7/navigation.ts", "utf8")).toMatch(/export function showTab[\s\S]*popToRoot\(\);[\s\S]*f7\.tab\.show/);
   });
 
+  test("routed pages read current app state, not a closure captured when they were pushed", () => {
+    expect(app).not.toMatch(/pushPage\([^)]*render:/);
+    expect(app).toContain("<SampleCards.Provider value={postCard}>");
+    expect(app).toMatch(/function SampleTagPage[\s\S]*useContext\(SampleCards\)/);
+  });
+
   test("the stack sits under the tab bar and passes touches through until something is pushed", () => {
     const rule = css.match(/\.view\.atlas-stack \{([^}]*)\}/)?.[1] ?? "";
     expect(rule).toContain("z-index: 500");

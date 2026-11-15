@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import Framework7 from 'framework7/lite-bundle';
 import Framework7React, {
   App, View, Page, Navbar, Link, Toolbar, Tabs, Tab, PageContent,
@@ -204,11 +204,7 @@ export default function AtlasMobileApp() {
   const openCreatorTag = (creatorId: string, tag: string) => {
     const c = creatorOf(creatorId);
     if (!c) return;
-    const list = postsByTag(creatorId, tag);
-    pushPage(`/creator-tag/${encodeURIComponent(creatorId)}/${encodeURIComponent(tag)}/`, {
-      title: tag, subtitle: c.name,
-      render: () => list.length ? list.map(postCard) : <Block strong inset>No stories with this tag yet.</Block>,
-    });
+    pushPage(`/creator-tag/${encodeURIComponent(creatorId)}/${encodeURIComponent(tag)}/`);
   };
   const followingPosts = posts.filter(p => followed.includes(p.creatorId));
 
@@ -268,6 +264,9 @@ export default function AtlasMobileApp() {
   };
 
   return (
+    // Routed pages render inside <App>, so this context hands them the current card renderer (with today's saved
+    // state, follows and so on) on every render, rather than a closure from the moment they were pushed.
+    <SampleCards.Provider value={postCard}>
     <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: accentHex(accent) }}>
       <Panel left cover swipe resizable={false} visibleBreakpoint={panelHeldAtStart ? 1 : undefined} className="atlas-panel">
         <Page>
@@ -433,14 +432,24 @@ export default function AtlasMobileApp() {
       <VideoDock />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
+    </SampleCards.Provider>
   );
 }
 
-/** A sample creator's stories under one tag, pushed onto the main view. */
-function SampleTagPage({ title, subtitle, render }: { title?: string; subtitle?: string; render?: () => React.ReactNode }) {
+/** The current sample story card renderer, for routed pages (see the provider in AtlasMobileApp). */
+const SampleCards = createContext<((p: (typeof posts)[number]) => React.ReactNode) | null>(null);
+
+/** A sample creator's stories under one tag, pushed onto the stack. It reads the creator and tag from its route and the
+ *  card renderer from context, so Save, Follow and the rest show their current state. */
+function SampleTagPage({ f7route }: { f7route?: { params: { creator?: string; tag?: string } } }) {
+  const postCard = useContext(SampleCards);
+  const creatorId = decodeURIComponent(f7route?.params.creator ?? '');
+  const tag = decodeURIComponent(f7route?.params.tag ?? '');
+  const creator = creators.find(c => c.id === creatorId);
+  const list = creator ? postsByTag(creatorId, tag) : [];
   return <Page>
-    <Navbar title={title} subtitle={subtitle} backLink backLinkShowText={false} />
-    {render?.()}
+    <Navbar title={tag} subtitle={creator?.name} backLink backLinkShowText={false} />
+    {list.length && postCard ? list.map(postCard) : <Block strong inset>No stories with this tag yet.</Block>}
   </Page>;
 }
 
