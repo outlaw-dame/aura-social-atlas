@@ -41,7 +41,8 @@ export function VideoPlayer({ video, className = '' }: { video: FediVideo; class
   const start = () => { if (playable) void playVideo(video); else if (video.embed) setEmbed(true); };
   const host = (() => { try { return new URL(video.url).hostname; } catch { return ''; } })();
   return <section className={`atlas-video ${className}`} aria-label={video.title ? `Video: ${video.title}` : 'Video'}>
-    <div className="atlas-video-frame" style={{ aspectRatio: String(ratio) }} data-video-slot={video.url}>
+    {/* Never taller than the screen leaves room for (landscape phones, a folded cover screen): narrower instead. */}
+    <div className="atlas-video-frame" style={{ aspectRatio: String(ratio), maxWidth: `max(240px, calc((100dvh - 190px) * ${ratio.toFixed(4)}))` }} data-video-slot={video.url}>
       {embed && video.embed
         ? <iframe src={`${video.embed}?autoplay=1&title=0&warningTitle=0&peertubeLink=0`} title={video.title ?? 'PeerTube video'} allow="autoplay; fullscreen; picture-in-picture"
             sandbox="allow-same-origin allow-scripts allow-popups allow-presentation" referrerPolicy="no-referrer" loading="lazy" className="atlas-video-iframe" />

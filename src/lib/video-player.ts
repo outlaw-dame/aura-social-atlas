@@ -59,6 +59,7 @@ export function dockFrame(): HTMLElement {
   if (frame) return frame;
   frame = document.createElement('div');
   frame.className = 'atlas-pip';
+  frame.dataset.corner = 'br';
   frame.hidden = true;
   dock = document.createElement('div');
   dock.className = 'atlas-pip-slot';

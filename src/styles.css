@@ -531,7 +531,7 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-fedi-post summary { cursor: pointer; opacity: .7; }
 /* Video in posts, and the floating mini player (after Arc's Mini Player). */
 .atlas-video { margin-top: 12px; }
-.atlas-video-frame { position: relative; width: 100%; max-height: 70vh; overflow: hidden; border-radius: 18px; background: #000; }
+.atlas-video-frame { position: relative; width: 100%; margin-inline: auto; overflow: hidden; border-radius: 18px; background: #000; }
 .atlas-video-slot, .atlas-video-poster, .atlas-video-iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .atlas-video-slot { display: flex; align-items: center; justify-content: center; }
 .atlas-video-slot .atlas-video-el, .atlas-pip-slot .atlas-video-el { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
@@ -553,7 +553,7 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-video-creator b { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .atlas-video-creator small, .atlas-video-host { font-size: 11px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.atlas-pip { --pip-gap: 16px; --pip-bottom: calc(var(--pip-gap) + var(--atlas-player-offset, 0px)); position: fixed; z-index: 6000; width: var(--pip-w, 320px); max-width: calc(100vw - 2 * var(--pip-gap)); aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #000; box-shadow: 0 18px 50px rgba(0,0,0,.45), 0 0 0 .5px rgba(255,255,255,.12); touch-action: none; transition: inset .25s ease, width .1s; }
+.atlas-pip { --pip-gap: 16px; --pip-bottom: calc(var(--pip-gap) + var(--atlas-player-offset, 0px)); position: fixed; z-index: 6000; width: var(--pip-w, min(320px, 56vw, 72vh)); max-width: calc(100vw - 2 * var(--pip-gap)); aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #000; box-shadow: 0 18px 50px rgba(0,0,0,.45), 0 0 0 .5px rgba(255,255,255,.12); touch-action: none; transition: inset .25s ease, width .1s; }
 .atlas-pip[hidden] { display: none; }
 .atlas-pip[data-corner="br"] { right: var(--pip-gap); bottom: var(--pip-bottom); }
 .atlas-pip[data-corner="bl"] { left: var(--pip-gap); bottom: var(--pip-bottom); }

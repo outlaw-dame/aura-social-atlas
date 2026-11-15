@@ -16,13 +16,14 @@ export function VideoDock() {
   const s = useVideoState();
   const [frame, setFrame] = useState<HTMLElement | null>(null);
   const [corner, setCorner] = useState<Corner>('br');
-  const [width, setWidth] = useState(320);
+  // Unset until the reader resizes it: the default is sized to the screen (CSS).
+  const [width, setWidth] = useState<number | null>(null);
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   useEffect(() => { setFrame(dockFrame()); }, []);
   useEffect(() => {
     if (!frame) return;
     frame.dataset.corner = corner;
-    frame.style.setProperty('--pip-w', `${width}px`);
+    if (width) frame.style.setProperty('--pip-w', `${width}px`); else frame.style.removeProperty('--pip-w');
   }, [frame, corner, width]);
   if (!frame || s.mode !== 'floating' || !s.video) return null;
   const video = s.video;
@@ -50,7 +51,7 @@ export function VideoDock() {
   };
   const resize = (e: React.PointerEvent) => {
     e.stopPropagation();
-    const startX = e.clientX, startW = width, left = corner.endsWith('r');
+    const startX = e.clientX, startW = width ?? frame.getBoundingClientRect().width, left = corner.endsWith('r');
     const move = (ev: PointerEvent) => setWidth(Math.round(Math.max(MIN_W, Math.min(MAX_W, startW + (left ? startX - ev.clientX : ev.clientX - startX)))));
     const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); };
     addEventListener('pointermove', move); addEventListener('pointerup', up);
