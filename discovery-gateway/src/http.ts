@@ -23,6 +23,7 @@ import { listFacets, queryItems, suppressItem, type GatewayItem } from './db.ts'
 import { listAll, retrySubscription, subscribe, unsubscribe, type SubscribeInput } from './subscribe.ts';
 import { readLimited } from './limits.ts';
 import { checkRemoteUrl } from './urlguard.ts';
+import { compress } from './compress.ts';
 import { log } from './federation.ts';
 
 type HandlerDeps = { cfg: GatewayConfig; gateway: Gateway; sql: Sql; adminEnabled?: boolean };
@@ -95,6 +96,16 @@ function publicSubscription(s: { id: string; kind: string; actorUrl: string; act
 }
 
 export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Response> {
+  const handle = createRawHandler(deps);
+  const adminEnabled = deps.adminEnabled ?? false;
+  // Public read API only: zstd, Brotli or gzip by Accept-Encoding (src/compress.ts). The admin listener never compresses.
+  return async (req: Request) => {
+    const res = await handle(req);
+    return !adminEnabled && new URL(req.url).pathname.startsWith('/api/') ? compress(req, res) : res;
+  };
+}
+
+function createRawHandler(deps: HandlerDeps): (req: Request) => Promise<Response> {
   const { cfg, gateway, sql, adminEnabled = false } = deps;
   const readLimiter = new RateLimiter(cfg.readRateLimitPerMinute);
   const adminLimiter = new RateLimiter(cfg.adminRateLimitPerMinute);
