@@ -373,6 +373,33 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
     return { posts: withAuthors as ForYouPost[], tags, groups: (joined?.groups ?? []).map(g => g.name), missing };
   });
 
+/** The hashtags the person follows on Fedizen (lowercase, no "#"), for marking posts that use them. */
+export const getFollowedTags = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ tags: string[]; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { tags: [], error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const r = await fedizenGet(c.token, '/api/v1/followed_tags?limit=100').catch(() => null);
+    if (!r || r.status !== 200) return { tags: [], error: r ? problem(r.status) : 'unavailable' };
+    return { tags: [...new Set((r.data as { name: string }[]).map(t => t.name.replace(/^#/, '').toLowerCase()))] };
+  });
+
+/** A hashtag's feed as the person sees it on Fedizen: the posts using it that they may see and act on (Bonfire applies
+ *  each post's audience to their account). */
+export const getFedizenTagFeed = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ tag: z.string().regex(/^[\p{L}\p{N}_]{1,100}$/u) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { posts: [], error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const r = await fedizenGet(c.token, `/api/v1/timelines/tag/${encodeURIComponent(data.tag)}?limit=20`).catch(() => null);
+    if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
+    return { posts: await withArticleAuthors(fromStatuses(r.data as never)) };
+  });
+
 /** A circle's feed: posts from the people in it (Bonfire serves circles as Mastodon lists). */
 export const getCircleFeed = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.extend({ id: ulid }).parse(d))

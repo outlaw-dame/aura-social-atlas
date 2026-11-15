@@ -4,6 +4,7 @@ import { useMyCollections } from '@/components/social/useCollections';
 import { useServerFn } from '@tanstack/react-start';
 import { Block, BlockFooter, BlockTitle, Button, Icon, Link, List, ListInput, ListItem, Navbar, NavLeft, NavRight, Page, Popup, Segmented, Sheet, Toggle, f7 } from 'framework7-react';
 import { useAtlasAuth } from '@/components/social/AuthState';
+import { hashtagLabel, openTag, TagText } from '@/lib/hashtags';
 import { COLLECTIONS_MAX, DESCRIPTION_MAX, ITEMS_MAX, NAME_MAX, collectionInput, type Collection } from '@/lib/collections';
 import {
   addToCollection, createCollection, deleteCollection, getCollection, removeFromCollection, updateCollection,
@@ -172,7 +173,7 @@ export function CollectionPopup({ opened, onClose, collection, id, link }: { ope
           </p>
           <p className="atlas-coll-meta">
             {c.itemCount} {c.itemCount === 1 ? 'account' : 'accounts'}
-            {c.tag && <> · <a href={`/tags/${encodeURIComponent(c.tag.toLowerCase())}`} className="atlas-tag">#{c.tag}</a></>}
+            {c.tag && <> · <button type="button" className="atlas-tag atlas-hashtag atlas-hashtag-btn" aria-label={hashtagLabel(c.tag)} onClick={() => openTag(c.tag ?? "")}><TagText tag={c.tag} /></button></>}
             {!c.discoverable && ' · Unlisted'}
           </p>
           {c.source === 'atlas' && <p className="atlas-coll-local">Made in Atlas. Mastodon and Fedizen can’t show it yet: it will federate once Fedizen supports collections.</p>}

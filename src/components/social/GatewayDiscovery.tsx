@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Compass, RefreshCw, Search } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
+import { hashtagLabel, TagText } from '@/lib/hashtags';
 import { discoveryGatewayOrigin, fetchDiscoveryPage, safeExternalUrl, type DiscoveryItem } from '@/lib/discovery-gateway';
 
 type Mode = 'all' | 'hashtags' | 'instances';
@@ -86,7 +88,7 @@ export function GatewayDiscovery() {
           </div>
           {item.summary && <p className="mt-2 font-semibold">{item.summary}</p>}
           <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed">{item.text}</p>
-          <div className="mt-3 flex flex-wrap gap-2">{(item.hashtags ?? []).slice(0, 8).map(tag => <span key={tag} className="text-xs text-muted-foreground">#{tag}</span>)}</div>
+          <div className="mt-3 flex flex-wrap gap-2">{(item.hashtags ?? []).slice(0, 8).map(tag => <Link key={tag} to="/tags/$tag" params={{ tag: tag.toLowerCase() }} className="atlas-hashtag text-xs" aria-label={hashtagLabel(tag)}><TagText tag={tag} /></Link>)}</div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
             <span title={item.via}>Discovered via external relay</span>
             {link && <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline">Open original <ArrowUpRight className="size-3" /></a>}

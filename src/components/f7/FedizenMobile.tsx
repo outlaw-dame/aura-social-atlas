@@ -26,7 +26,7 @@ export function MobileRecentArticles() {
       : list.slice(0, 6).map(a => <div key={a.id} role="button" tabIndex={0} onClick={() => setOpen(a)} onKeyDown={e => e.key === 'Enter' && setOpen(a)} style={{ cursor: 'pointer' }}><Card outline>
         {a.image && <img src={a.image} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }} />}
         <CardContent><div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22, lineHeight: 1.2 }}>{a.title}</div>{a.summary && <p style={{ opacity: .7, fontSize: 14, marginBottom: 0 }}>{a.summary.slice(0, 140)}</p>}</CardContent>
-        <CardFooter><span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>{a.avatar && <img src={a.avatar} alt="" width={20} height={20} style={{ borderRadius: 10 }} />}{a.author} · {when(a.date)}</span></CardFooter>
+        <CardFooter><span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>{a.avatar && <img src={a.avatar} alt="" width={20} height={20} className="atlas-avatar" style={{ objectFit: 'cover' }} />}{a.author} · {when(a.date)}</span></CardFooter>
       </Card></div>)}
     <Popup opened={!!open} onPopupClosed={() => setOpen(null)} swipeToClose>
       <Page>
@@ -36,7 +36,7 @@ export function MobileRecentArticles() {
           <h1 style={{ fontFamily: 'Instrument Serif, serif', fontWeight: 400, fontSize: 30, lineHeight: 1.15 }}>{open.title}</h1>
           {open.authorUrl
             ? <Link onClick={() => openFediProfile({ actor: open.authorUrl, acct: open.handle, name: open.author })} aria-label={`More from ${open.author}`} style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'inherit', margin: '4px 0 8px' }}>
-                {open.avatar && <img src={open.avatar} alt="" width={36} height={36} referrerPolicy="no-referrer" style={{ borderRadius: 10, objectFit: 'cover' }} />}
+                {open.avatar && <img src={open.avatar} alt="" width={36} height={36} referrerPolicy="no-referrer" className="atlas-avatar" style={{ objectFit: 'cover' }} />}
                 <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}><b style={{ fontSize: 14 }}>{open.author}</b><span style={{ opacity: .6, fontSize: 12 }}>{open.handle}</span></span>
               </Link>
             : null}
@@ -117,7 +117,7 @@ export function MobilePublicFedizen() {
       : !list.length ? <Block strong inset>No public posts on Fedizen yet.</Block>
       : list.slice(0, 8).map(p => <Card key={p.id} outline>
         <CardContent>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} style={{ borderRadius: 16 }} referrerPolicy="no-referrer" />}<span><b>{p.author}</b> <span style={{ opacity: .6 }}>{p.handle}</span></span></div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} className="atlas-avatar" style={{ objectFit: 'cover' }} referrerPolicy="no-referrer" />}<span><b>{p.author}</b> <span style={{ opacity: .6 }}>{p.handle}</span></span></div>
           {p.paragraphs.slice(0, 5).map((t, i) => <p key={i} style={{ lineHeight: 1.5, overflowWrap: 'anywhere' }}>{t}</p>)}
           {p.image && <img src={p.image} alt="" loading="lazy" style={{ width: '100%', borderRadius: 12 }} referrerPolicy="no-referrer" />}
         </CardContent>

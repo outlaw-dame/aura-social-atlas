@@ -5,7 +5,7 @@ import { useSocial } from '@/components/social/SocialState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { creators, posts, fullHandle, type Creator } from '@/lib/social-catalogue';
 import { CreatorTag } from '@/components/social/CreatorTag';
-import { linkifyHashtags, extractHashtags, hashtagUrl } from '@/lib/hashtags';
+import { linkifyHashtags, extractHashtags, hashtagLabel, hashtagUrl, TagText } from '@/lib/hashtags';
 import type { Collection } from '@/lib/collections';
 import { MyCollections } from './Collections';
 import { MobileCircles, MobileSaved } from './SavedAndCircles';
@@ -138,7 +138,7 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
         </div>}
         {section === 'Featured' && featured.length > 0 && <div className="atlas-featured">
           <h3>Hashtags</h3>
-          <div className="atlas-profile-tags" aria-label="Featured hashtags">{featured.map(tag => <a key={tag} className="atlas-profile-tag" href={hashtagUrl(tag)}>#{tag}</a>)}</div>
+          <div className="atlas-profile-tags" aria-label="Featured hashtags">{featured.map(tag => <a key={tag} className="atlas-profile-tag" href={hashtagUrl(tag)} aria-label={hashtagLabel(tag)}><TagText tag={tag} /></a>)}</div>
           <h3>Profiles</h3>
           <p>People you feature from their profiles on Fedizen will appear here.</p>
         </div>}
@@ -173,7 +173,7 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
             <List strong inset dividers mediaList>
               {followedCreators.map(c => (
                 <ListItem key={c.id} title={c.name} subtitle={fullHandle(c)} link="#" onClick={() => { setFollowsOpen(false); onOpenCreator(c); }}>
-                  <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={40} height={40} style={{ borderRadius: 20 }} />
+                  <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={40} height={40} className="atlas-avatar" style={{ objectFit: 'cover' }} />
                   <Button slot="after" small round tonal onClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); toggleFollow(c.id); }}>Following</Button>
                 </ListItem>
               ))}

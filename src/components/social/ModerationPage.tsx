@@ -41,7 +41,7 @@ export function ModerationPage() {
       {(q.data?.error || q.isError) && <p role="alert" className="text-sm text-muted-foreground">{LIBRARY_PROBLEM[q.data?.error ?? 'unavailable']}</p>}
       <ul className="divide-y divide-border">
         {people.map(p => <li key={p.id} className="flex items-center gap-3 py-3">
-          {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" className="size-10 rounded-full object-cover" /> : <span className="social-avatar size-10 font-serif" aria-hidden="true">{p.name.charAt(0)}</span>}
+          {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" className="size-10 atlas-avatar object-cover" /> : <span className="social-avatar size-10 font-serif" aria-hidden="true">{p.name.charAt(0)}</span>}
           <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{p.name}</span><span className="block truncate text-xs text-muted-foreground">{p.handle}</span></span>
           {canWrite && (confirming === p.id
             ? <span className="flex gap-1"><Button size="sm" variant="outline" className="rounded-full" disabled={act.busy} onClick={async () => { setNote(await act.unblock(p.id)); setConfirming(null); }}>Unblock</Button><Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>Cancel</Button></span>

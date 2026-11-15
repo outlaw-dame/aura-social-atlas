@@ -2,7 +2,7 @@ import { Popup, Page, Navbar, NavRight, Link, Icon, Button, Card, CardContent, C
 import { promptSignInToSave } from './save-prompt';
 import { posts, fullHandle, podcastFeatureLabels, type Creator } from '@/lib/social-catalogue';
 import { avatarPreset } from '@/lib/atlas-avatars';
-import { linkifyHashtags, linkifyHashtagsWith, hashtagUrl } from '@/lib/hashtags';
+import { linkifyHashtags, linkifyHashtagsWith, hashtagUrl, hashtagLabel, TagText } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
 import { NetworkBadge, networkBrands } from '@/lib/networks';
 import { CreatorTag } from '@/components/social/CreatorTag';
@@ -60,8 +60,8 @@ export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator
             {creator.featured_hashtags.length > 0 && (
               <div className="atlas-profile-tags" aria-label="Featured hashtags">
                 {creator.featured_hashtags.map(tag => (
-                  <Link key={tag.name} className="atlas-profile-tag" href={onOpenTag ? undefined : hashtagUrl(tag.name)} external={!onOpenTag} onClick={() => onOpenTag?.(creator, tag.name)}>
-                    #{tag.name} <small>{tag.count} posts</small>
+                  <Link key={tag.name} className="atlas-profile-tag" href={onOpenTag ? undefined : hashtagUrl(tag.name)} external={!onOpenTag} onClick={() => onOpenTag?.(creator, tag.name)} aria-label={`${hashtagLabel(tag.name)}, ${tag.count} posts`}>
+                    <TagText tag={tag.name} /> <small>{tag.count} posts</small>
                   </Link>
                 ))}
               </div>
@@ -100,7 +100,7 @@ export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator
                 </div>
                 <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22, lineHeight: 1.15, margin: '6px 0' }}>{p.title}</div>
                 <div style={{ opacity: 0.75 }}>{p.excerpt}</div>
-                <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => onOpenTag?.(creator, tag)}>#{tag}</Link>)}</div>
+                <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => onOpenTag?.(creator, tag)} aria-label={hashtagLabel(tag)}><TagText tag={tag} /></Link>)}</div>
                 <CreatorTag creator={creator} onOpen={() => document.querySelector('.atlas-creator-popup .page-content')?.scrollTo({ top: 0, behavior: 'smooth' })} />
               </CardContent>
               <CardFooter>

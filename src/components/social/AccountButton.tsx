@@ -16,7 +16,7 @@ export function AccountButton() {
   const { user, profile, loading, signOut } = useAtlasAuth();
 
   if (loading) {
-    return <div className="size-8 shrink-0 rounded-full bg-muted" aria-hidden />;
+    return <div className="size-8 shrink-0 atlas-avatar bg-muted" aria-hidden />;
   }
 
   if (!user) {
@@ -25,7 +25,7 @@ export function AccountButton() {
         asChild
         size="sm"
         variant="ghost"
-        className="social-avatar h-8 shrink-0 rounded-full"
+        className="social-avatar h-8 shrink-0"
         aria-label="Sign in or create an account"
       >
         <Link to="/auth">
@@ -45,20 +45,20 @@ export function AccountButton() {
         <Button
           size="sm"
           variant="ghost"
-          className="social-avatar h-8 w-8 shrink-0 rounded-full p-0"
+          className="social-avatar h-8 w-8 shrink-0 p-0"
           aria-label={`Account menu for ${name}`}
         >
           <img
             src={preset.src}
             alt=""
-            className="size-8 rounded-full object-cover"
+            className="size-8 atlas-avatar object-cover"
           />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="normal-case">
           <div className="flex items-center gap-2">
-            <img src={preset.src} alt="" className="size-9 rounded-full object-cover" />
+            <img src={preset.src} alt="" className="size-9 atlas-avatar object-cover" />
             <div className="min-w-0">
               <div className="truncate text-sm font-medium">{name}</div>
               {user.email && <div className="truncate text-xs opacity-70">{user.email}</div>}

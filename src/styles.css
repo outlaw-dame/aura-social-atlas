@@ -179,7 +179,7 @@
   --social-avatar: color-mix(in oklab, var(--accent) 12%, var(--secondary));
 }
 .social-selected { background: var(--social-selected); box-shadow: inset 0 0 0 1px var(--border); }
-.social-avatar { display: inline-grid; place-items: center; border-radius: 50%; background: var(--social-avatar); color: var(--foreground); font-weight: 600; }
+.social-avatar { display: inline-grid; place-items: center; border-radius: var(--atlas-avatar-radius, 50%); background: var(--social-avatar); color: var(--foreground); font-weight: 600; }
 .social-topic-dot, .social-status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .social-status-dot { background: var(--social-status); }
 .social-topic-dot { margin-right: 4px; }
@@ -226,11 +226,11 @@
 /* Centered social profile; the six section names scroll rather than compress. */
 .atlas-profile-popup .page { background: var(--background); color: var(--foreground); }
 /* Dock: the person's avatar stands in for an icon; the active tab gets a ring in the theme colour. */
-.atlas-dock-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.atlas-dock-avatar { width: 28px; height: 28px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; }
 .atlas-tabbar .tab-link-active .atlas-dock-avatar { box-shadow: 0 0 0 2px var(--f7-tabbar-link-active-color, var(--f7-theme-color)); }
 /* Activity: avatar with a small badge for the kind of notification. */
 .atlas-activity-media { position: relative; display: block; width: 40px; height: 40px; }
-.atlas-activity-media img, .atlas-activity-initial { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+.atlas-activity-media img, .atlas-activity-initial { width: 40px; height: 40px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; }
 .atlas-activity-initial { display: grid; place-items: center; background: var(--secondary); font: 400 18px/1 'Instrument Serif', serif; }
 .atlas-activity-kind { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; background: var(--f7-theme-color); box-shadow: 0 0 0 2px var(--f7-list-strong-bg-color, #fff); }
 .atlas-activity-kind .icon { font-size: 12px; }
@@ -240,7 +240,7 @@
 .atlas-activity-added_to_collection, .atlas-activity-collection_update { background: #b8860b; }
 .atlas-activity .item-text { -webkit-line-clamp: 3; }
 .atlas-profile-header { text-align: center; padding: 32px 24px 24px; }
-.atlas-profile-avatar { display: block; margin: 0 auto 16px; border-radius: 50%; background: var(--secondary); object-fit: cover; }
+.atlas-profile-avatar { display: block; margin: 0 auto 16px; border-radius: var(--atlas-avatar-radius, 50%); background: var(--secondary); object-fit: cover; }
 .atlas-profile-header h1 { margin: 0; font-family: var(--font-sans); font-size: 27px; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
 .atlas-profile-email { margin: 8px 0 18px; font-size: 14px; color: var(--muted-foreground); overflow-wrap: anywhere; }
 .atlas-profile-stats { display: flex; gap: 24px; justify-content: center; font-size: 13px; color: var(--muted-foreground); }
@@ -282,7 +282,7 @@
 .atlas-bsky-banner { height: 132px; background: linear-gradient(135deg, color-mix(in oklab, var(--f7-theme-color) 30%, #fff), color-mix(in oklab, var(--f7-theme-color) 8%, #fff)); }
 .atlas-bsky-head { padding: 0 16px 8px; }
 .atlas-bsky-row { display: flex; align-items: flex-end; justify-content: space-between; margin-top: -44px; }
-.atlas-bsky-avatar { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; background: var(--secondary); border: 3px solid var(--f7-page-bg-color, var(--background)); }
+.atlas-bsky-avatar { width: 88px; height: 88px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; background: var(--secondary); border: 3px solid var(--f7-page-bg-color, var(--background)); }
 .atlas-bsky-edit { width: auto; padding: 0 16px; margin-bottom: 4px; }
 .atlas-bsky-name { margin: 10px 0 0; font-size: 28px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
 .atlas-bsky-handle { margin: 4px 0 0; font-size: 15px; color: var(--muted-foreground); overflow-wrap: anywhere; }
@@ -301,6 +301,7 @@
 .atlas-bsky-tabs button.is-active::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: 0; height: 3px; border-radius: 3px; background: var(--f7-theme-color); }
 .atlas-profile-section-title { margin: 8px 16px 12px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-foreground); }
 .atlas-hashtag { color: var(--accent); text-decoration: none; font-weight: 500; }
+.atlas-hashtag-mark { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .atlas-hashtag-btn { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; width: auto; text-align: start; }
 .atlas-blocktitle-icon { display: inline-flex; align-items: center; gap: 6px; }
 .atlas-creator-list { --f7-list-item-text-max-lines: 10; }
@@ -315,7 +316,7 @@
 
 
 
-.atlas-profile-feed-avatar { width: 44px; height: 44px; border-radius: 50%; flex: 0 0 44px; }
+.atlas-profile-feed-avatar { width: 44px; height: 44px; border-radius: var(--atlas-avatar-radius, 50%); flex: 0 0 44px; }
 .atlas-profile-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
 .atlas-profile-sample { text-align: center; font-size: 12px; opacity: 0.55; margin: 4px 16px 12px; }
 
@@ -340,7 +341,7 @@
 /* Compact article attribution, inspired by Mastodon's linked author strip. */
 .atlas-author-tag { display: flex; align-items: center; gap: 6px; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; color: var(--foreground); }
 .atlas-author-tag .atlas-author-profile { display: flex; flex: 1; min-width: 0; height: auto; gap: 10px; padding: 4px 0; justify-content: flex-start; text-align: left; white-space: normal; color: var(--foreground); border-radius: 6px; }
-.atlas-author-profile img { width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; background: var(--social-avatar); }
+.atlas-author-profile img { width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--atlas-avatar-radius, 50%); background: var(--social-avatar); }
 .atlas-author-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; overflow-wrap: anywhere; line-height: 1.35; }
 .atlas-author-name { font-size: 13px; font-weight: 600; }
 .atlas-author-name > small:first-child { font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
@@ -445,7 +446,7 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-coll-card-body strong { display: block; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
 .atlas-coll-card-body small { display: block; margin-top: 3px; font-size: 13px; color: var(--muted-foreground); }
 .atlas-coll-avatars { display: inline-flex; flex: 0 0 auto; }
-.atlas-coll-avatars > * { display: grid; place-items: center; width: 32px; height: 32px; margin-left: -10px; border-radius: 50%; object-fit: cover; background: var(--secondary); border: 2px solid var(--f7-list-strong-bg-color, var(--card)); font-size: 14px; color: var(--muted-foreground); }
+.atlas-coll-avatars > * { display: grid; place-items: center; width: 32px; height: 32px; margin-left: -10px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; background: var(--secondary); border: 2px solid var(--f7-list-strong-bg-color, var(--card)); font-size: 14px; color: var(--muted-foreground); }
 .atlas-coll-avatars > *:first-child { margin-left: 0; }
 .atlas-coll-new { justify-self: center; width: auto; padding: 0 18px; margin-top: 6px; gap: 6px; }
 .atlas-coll-new .icon { font-size: 16px; }
@@ -454,21 +455,21 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-coll-head .atlas-coll-avatars > *:first-child { margin-left: 0; }
 .atlas-coll-head h1 { margin: 14px 0 0; font-size: 26px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
 .atlas-coll-by { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 14px; color: var(--muted-foreground); }
-.atlas-coll-by img { width: 20px; height: 20px; border-radius: 50%; }
+.atlas-coll-by img { width: 20px; height: 20px; border-radius: var(--atlas-avatar-radius, 50%); }
 .atlas-coll-meta { margin: 6px 0 0; font-size: 13px; color: var(--muted-foreground); }
 .atlas-coll-desc { margin: 12px auto 0; max-width: 34em; font-size: 15px; line-height: 1.45; }
 .atlas-coll-cw { margin: 14px auto 0; padding: 12px 14px; max-width: 30em; border-radius: 14px; background: var(--secondary); font-size: 14px; }
 .atlas-coll-cw p { margin: 0 0 8px; }
 .atlas-coll-cw .button, .atlas-coll-owner-actions .button { width: auto; padding: 0 16px; display: inline-flex; }
 .atlas-coll-owner-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
-.atlas-coll-items .item-media img { border-radius: 50%; object-fit: cover; }
+.atlas-coll-items .item-media img { border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; }
 .atlas-coll-items .button { width: auto; padding: 0 8px; }
 .atlas-coll-editor .sheet-modal-swipe-step { padding-bottom: calc(12px + var(--f7-safe-area-bottom, 0px)); }
 .atlas-coll-editor-actions { display: flex; gap: 10px; justify-content: flex-end; }
 .atlas-coll-editor-actions .button { width: auto; padding: 0 20px; }
 
 /* Groups (Bonfire v1.1.0-rc.1 groups on Fedizen). Groups are rounded squares, people circles. */
-.atlas-group-avatar { display: block; border-radius: 26%; object-fit: cover; background: var(--secondary); flex: none; }
+.atlas-group-avatar { display: block; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; background: var(--secondary); flex: none; }
 .atlas-group-initial { display: grid; place-items: center; font-family: 'Instrument Serif', serif; color: var(--foreground); background: color-mix(in oklab, var(--accent) 12%, var(--secondary)); }
 .list.media-list.atlas-group-list .item-subtitle { font-size: 13px; color: var(--muted-foreground); white-space: normal; overflow: visible; text-overflow: clip; }
 .atlas-group-list .item-text { -webkit-line-clamp: 2; }
@@ -486,7 +487,7 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-group-about p { margin: 0 0 8px; line-height: 1.45; }
 .atlas-group-about p:last-child { margin-bottom: 0; }
 .atlas-group-post-head { display: flex; gap: 10px; align-items: center; font-size: 14px; }
-.atlas-group-post-head img, .atlas-group-post-head .atlas-activity-initial { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex: none; }
+.atlas-group-post-head img, .atlas-group-post-head .atlas-activity-initial { width: 32px; height: 32px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; }
 .atlas-group-post-head small { display: block; font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
 .atlas-group-in { color: var(--muted-foreground); font-weight: 400; }
 .atlas-group-post p { line-height: 1.5; overflow-wrap: anywhere; }
@@ -521,7 +522,7 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 /* A Mastodon collection linked in a post (Mastodon's tagged_collections): opens in Atlas. */
 .atlas-fedi-header { height: 120px; background: var(--muted) center / cover no-repeat; }
 .atlas-fedi-head { padding: 0 16px; display: flex; flex-direction: column; gap: 6px; }
-.atlas-fedi-head > img, .atlas-fedi-initial { width: 80px; height: 80px; margin-top: -40px; border-radius: 20px; object-fit: cover; border: 4px solid var(--f7-page-bg-color, var(--background)); background: var(--muted); }
+.atlas-fedi-head > img, .atlas-fedi-initial { width: 80px; height: 80px; margin-top: -40px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; border: 4px solid var(--f7-page-bg-color, var(--background)); background: var(--muted); }
 .atlas-fedi-initial { display: flex; align-items: center; justify-content: center; font: 32px 'Instrument Serif', serif; }
 .atlas-fedi-head h1 { margin: 4px 0 0; font: 400 30px/1.15 'Instrument Serif', serif; overflow-wrap: anywhere; }
 .atlas-fedi-head h1 small { font: 13px var(--f7-font-family); opacity: .6; }
@@ -553,7 +554,7 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-video-title { font-size: 15px; font-weight: 600; line-height: 1.3; color: inherit !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .atlas-video-title:hover { text-decoration: underline; }
 .atlas-video-creator { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 0; color: inherit; text-align: left; cursor: pointer; min-width: 0; }
-.atlas-video-creator img, .atlas-video-creator .atlas-episode-initial { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: none; font-size: 14px; }
+.atlas-video-creator img, .atlas-video-creator .atlas-episode-initial { width: 28px; height: 28px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; font-size: 14px; }
 .atlas-video-creator span { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .atlas-video-creator b { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .atlas-video-creator small, .atlas-video-host { font-size: 11px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -617,7 +618,7 @@ html.atlas-rail .atlas-mini { left: calc(var(--f7-panel-width, 88px) + 8px); }
 .atlas-episode-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .atlas-episode-title { display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: inherit !important; font-size: 15px; font-weight: 600; line-height: 1.25; }
 .atlas-episode-show { display: flex !important; align-items: center; gap: 8px; color: inherit !important; min-width: 0; }
-.atlas-episode-show img, .atlas-episode-show .atlas-episode-initial { width: 28px; height: 28px; border-radius: 8px; flex: none; font-size: 14px; }
+.atlas-episode-show img, .atlas-episode-show .atlas-episode-initial { width: 28px; height: 28px; border-radius: var(--atlas-avatar-radius, 50%); flex: none; font-size: 14px; }
 .atlas-episode-show span { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .atlas-episode-show b { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .atlas-episode-show small { font-size: 11px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -636,7 +637,7 @@ html.atlas-rail .atlas-mini { left: calc(var(--f7-panel-width, 88px) + 8px); }
 .atlas-article-link b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; }
 .atlas-article-author b, .atlas-article-author small:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .atlas-article small { font-size: 11px; opacity: .6; }
-.atlas-article-author img { width: 36px; height: 36px; border-radius: 10px; object-fit: cover; flex: none; }
+.atlas-article-author img { width: 36px; height: 36px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; }
 .atlas-article > a > .icon { font-size: 16px; opacity: .5; }
 .atlas-article-note { margin: 0; font-size: 11px; opacity: .6; }
 .atlas-coll-link { display: flex; align-items: center; gap: 10px; width: 100%; margin: 10px 0 0; padding: 10px 12px; border: .5px solid var(--border); border-radius: 14px; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
@@ -665,7 +666,7 @@ html.atlas-rail .atlas-mini { left: calc(var(--f7-panel-width, 88px) + 8px); }
 /* Post cards in Feeds: author row, text, media or link preview, then the standard actions. */
 .atlas-post-card .card-content { padding-bottom: 4px; }
 .atlas-post-head { display: flex; align-items: center; gap: 10px; }
-.atlas-post-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: none; }
+.atlas-post-avatar { width: 40px; height: 40px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; background: color-mix(in oklab, currentColor 8%, transparent); }
 span.atlas-post-avatar { display: inline-flex; align-items: center; justify-content: center; font-size: 17px; }
 .atlas-post-who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
 .atlas-post-who b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -711,9 +712,8 @@ span.atlas-post-avatar { display: inline-flex; align-items: center; justify-cont
 .atlas-rich-creator { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .atlas-rich-creator:active { opacity: .7; }
 .atlas-rich-creator:focus-visible { outline: 2px solid var(--f7-theme-color, var(--accent)); outline-offset: 2px; border-radius: 10px; }
-.atlas-rich-face { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: none; box-shadow: 0 0 0 .5px color-mix(in oklab, currentColor 25%, transparent); }
+.atlas-rich-face { width: 40px; height: 40px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; box-shadow: 0 0 0 .5px color-mix(in oklab, currentColor 25%, transparent); }
 span.atlas-rich-face { display: inline-flex; align-items: center; justify-content: center; background: color-mix(in oklab, currentColor 14%, transparent); font-size: 17px; font-weight: 600; }
-.atlas-rich-face.is-square { border-radius: 10px; }
 .atlas-rich-creator-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
 .atlas-rich-creator-text small { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; opacity: .6; }
 .atlas-rich-creator-text b { font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -738,7 +738,7 @@ span.atlas-rich-face { display: inline-flex; align-items: center; justify-conten
 .atlas-mention-bar::-webkit-scrollbar { display: none; }
 .atlas-mention-bar button { flex: none; width: auto; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 6px; border: 0; border-radius: 20px; background: color-mix(in oklab, currentColor 9%, transparent); color: inherit; font: inherit; font-size: 15px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .atlas-mention-bar button.active { background: color-mix(in oklab, currentColor 17%, transparent); }
-.atlas-mention-bar button img, .atlas-mention-bar button > span[aria-hidden] { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in oklab, currentColor 12%, transparent); font-size: 13px; }
+.atlas-mention-bar button img, .atlas-mention-bar button > span[aria-hidden] { width: 28px; height: 28px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in oklab, currentColor 12%, transparent); font-size: 13px; }
 .atlas-mention-bar .atlas-mention-typed { padding: 0 14px; background: none; font-weight: 500; opacity: .7; }
 .atlas-mention-hint { font-size: 13px; opacity: .55; padding: 0 8px; }
 .atlas-reply-field { margin-top: 8px; margin-bottom: 8px; }
@@ -746,5 +746,21 @@ span.atlas-rich-face { display: inline-flex; align-items: center; justify-conten
 .atlas-reason-group { gap: 5px !important; white-space: nowrap; }
 .atlas-reason-group button { display: inline-flex; align-items: center; gap: 5px; min-height: 24px; margin: -4px -2px; padding: 0 2px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .atlas-reason-group b { font-weight: 650; color: var(--f7-text-color, inherit); }
-.atlas-reason-face { width: 16px; height: 16px; border-radius: 4px; object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: color-mix(in oklab, currentColor 18%, transparent); }
-.atlas-reasons span.atlas-reason-face { padding: 0; border-radius: 4px; opacity: 1; }
+.atlas-reason-face { width: 16px; height: 16px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: color-mix(in oklab, currentColor 18%, transparent); }
+.atlas-reasons span.atlas-reason-face { padding: 0; border-radius: var(--atlas-avatar-radius, 50%); opacity: 1; }
+
+/* Avatar shape (Settings → Appearance: circle, rounded or square) for every avatar, people and groups alike. Tailwind
+   avatars carry .atlas-avatar; the classes above read the same variable. */
+:root { --atlas-avatar-radius: 50%; }
+.atlas-avatar { border-radius: var(--atlas-avatar-radius, 50%) !important; }
+.atlas-shape-picker { display: flex; gap: 12px; flex-wrap: wrap; }
+.atlas-shape-picker button { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 84px; padding: 10px 0 8px; border: 1.5px solid transparent; border-radius: 14px; background: color-mix(in oklab, currentColor 5%, transparent); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.atlas-shape-picker button[aria-checked="true"] { border-color: var(--f7-theme-color, var(--accent)); font-weight: 600; }
+.atlas-shape-picker button:focus-visible { outline: 2px solid var(--f7-theme-color, var(--accent)); outline-offset: 2px; }
+.atlas-shape-picker img { width: 48px; height: 48px; object-fit: cover; background: color-mix(in oklab, currentColor 10%, transparent); transition: border-radius .2s; }
+
+/* Followed hashtags a post uses, at its top left with a tag icon and no accent colour, after Ivory. */
+.atlas-post-tagline { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 6px; }
+.atlas-post-tagline button { display: inline-flex; align-items: center; gap: 4px; width: auto; min-height: 24px; margin: -3px 0; padding: 0; border: 0; background: none; color: var(--f7-text-color, inherit); opacity: .6; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.atlas-post-tagline .icon { font-size: 14px; }
+.atlas-post-text .atlas-hashtag, .atlas-post-text .atlas-hashtag-btn { color: var(--f7-theme-color, var(--accent)); font-weight: 500; }

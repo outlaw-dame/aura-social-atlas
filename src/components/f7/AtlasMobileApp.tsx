@@ -12,13 +12,15 @@ import { promptSignInToSave } from './save-prompt';
 import { Fab, NavRight, NavLeft, Panel, Popup, f7, f7ready } from 'framework7-react';
 import { creators, posts, networks, matchesCreator, fullHandle, postsByTag, type Creator } from '@/lib/social-catalogue';
 import { NetworkBadge } from '@/lib/networks';
-import { linkifyHashtagsWith } from '@/lib/hashtags';
+import { OPEN_TAG_EVENT, linkifyHashtagsWith, hashtagLabel, TagText } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { ProfileView, EditProfileSheet } from './ProfileView';
 import { CollectionPopup } from './Collections';
 import { AccentPicker } from '@/components/social/AccentPicker';
+import { AvatarShapePicker } from '@/components/social/AvatarShapePicker';
+import { useAvatarShape } from '@/lib/avatar-shape';
 import { accentHex, useAccent } from '@/lib/accent';
 import { FediProfilePopup } from './FediProfile';
 import { MiniPlayer } from './MiniPlayer';
@@ -29,6 +31,7 @@ import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileActivity, MessagesPopup } from './FedizenMobile';
 import { MobileFeeds } from './MobileFeeds';
+import { TagFeedPopup } from './TagFeed';
 import { ModerationPopup } from './Moderation';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
@@ -120,6 +123,13 @@ export default function AtlasMobileApp() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [collectionOpen, setCollectionOpen] = useState<{ collection?: Collection; id?: string; link?: string } | null>(null);
   const [groupOpen, setGroupOpen] = useState<Group | null>(null);
+  // A hashtag in a post (or a followed-tag line) opens its feed here.
+  const [tagOpen, setTagOpen] = useState<string | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => { const t = (e as CustomEvent<{ tag?: string }>).detail?.tag; if (t) setTagOpen(t); };
+    window.addEventListener(OPEN_TAG_EVENT, on);
+    return () => window.removeEventListener(OPEN_TAG_EVENT, on);
+  }, []);
   // A "Popular in" chip in For You opens its group here.
   useEffect(() => {
     const on = (e: Event) => { const t = (e as CustomEvent<GroupTarget>).detail; if (t?.id) setGroupOpen(groupStub(t)); };
@@ -146,6 +156,7 @@ export default function AtlasMobileApp() {
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [moderationOpen, setModerationOpen] = useState(false);
   const accent = useAccent();
+  useAvatarShape();
   // Framework7 derives its theme palette from the primary color; recompute it when the reader picks another accent.
   useEffect(() => { f7ready(() => f7.setColorTheme(accentHex(accent))); }, [accent]);
   const fediProfile = useFediProfileOpener();
@@ -211,7 +222,7 @@ export default function AtlasMobileApp() {
             <span slot="subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               {c.handle} · <NetworkBadge network={c.network} />
             </span>
-            <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={44} height={44} style={{ borderRadius: 22 }} />
+            <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={44} height={44} className="atlas-avatar" style={{ objectFit: 'cover' }} />
             <Button slot="after" small round fill={!followed.includes(c.id)} tonal={followed.includes(c.id)}
               onClick={(e: any) => { e.stopPropagation(); toggleFollow(c.id); }}>
               {followed.includes(c.id) ? 'Following' : 'Follow'}
@@ -232,7 +243,7 @@ export default function AtlasMobileApp() {
         <CardContent>
           <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 24, lineHeight: 1.15, margin: '6px 0' }}>{p.title}</div>
           <div style={{ opacity: 0.75 }}>{p.excerpt}</div>
-          <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => setTagFeed({ creatorId: c.id, tag })}>#{tag}</Link>)}</div>
+          <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => setTagFeed({ creatorId: c.id, tag })} aria-label={hashtagLabel(tag)}><TagText tag={tag} /></Link>)}</div>
           <CreatorTag creator={c} onOpen={() => setCreatorOpen(c)} />
         </CardContent>
         <CardFooter>
@@ -366,6 +377,8 @@ export default function AtlasMobileApp() {
               </List>
               <BlockTitle>Accent color</BlockTitle>
               <Block strong inset><AccentPicker /></Block>
+              <BlockTitle>Avatars</BlockTitle>
+              <Block strong inset><AvatarShapePicker /></Block>
               <BlockTitle>Safety</BlockTitle>
               <List strong inset dividers>
                 <ListItem link="#" title="Moderation" footer="Keyword filters, blocked people and blocked instances" onClick={() => setModerationOpen(true)}>
@@ -395,16 +408,13 @@ export default function AtlasMobileApp() {
       <Popup opened={!!tagFeed} onPopupClosed={() => setTagFeed(null)}>
         {tagFeed && tagFeedCreator && (
           <Page>
-            <Navbar title={`#${tagFeed.tag}`} subtitle={tagFeedCreator.name}>
+            <Navbar title={tagFeed.tag} subtitle={tagFeedCreator.name}>
               <NavRight>
                 <Link iconOnly popupClose aria-label="Close tag feed">
                   <Icon ios="f7:xmark" md="material:close" />
                 </Link>
               </NavRight>
             </Navbar>
-            <Block strong inset style={{ fontSize: 13 }}>
-              Stories by {tagFeedCreator.name} tagged <span className="atlas-hashtag">#{tagFeed.tag}</span>
-            </Block>
             {tagFeedPosts.length ? tagFeedPosts.map(postCard) : (
               <Block strong inset>No stories with this tag yet.</Block>
             )}
@@ -413,6 +423,7 @@ export default function AtlasMobileApp() {
       </Popup>
       <EditProfileSheet opened={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
       <GroupPopup group={groupOpen} onClose={() => setGroupOpen(null)} onOpen={setGroupOpen} />
+      <TagFeedPopup tag={tagOpen} onClose={() => setTagOpen(null)} />
       <CollectionPopup opened={!!collectionOpen} onClose={() => setCollectionOpen(null)} collection={collectionOpen?.collection} id={collectionOpen?.id} link={collectionOpen?.link} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       <MessagesPopup opened={messagesOpen} onClose={() => setMessagesOpen(false)} />

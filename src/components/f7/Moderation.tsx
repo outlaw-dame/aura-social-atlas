@@ -35,7 +35,7 @@ export function ModerationPopup({ opened, onClose }: { opened: boolean; onClose:
       {(q.data?.error || q.isError) && <Block>{LIBRARY_PROBLEM[q.data?.error ?? 'unavailable']}</Block>}
       <List strong inset dividers mediaList>
         {people.map(p => <ListItem key={p.id} title={p.name} subtitle={p.handle}>
-          {p.avatar ? <img slot="media" src={p.avatar} alt="" width={40} height={40} style={{ borderRadius: 20 }} referrerPolicy="no-referrer" />
+          {p.avatar ? <img slot="media" src={p.avatar} alt="" width={40} height={40} className="atlas-avatar" style={{ objectFit: 'cover' }} referrerPolicy="no-referrer" />
             : <span slot="media" className="atlas-activity-initial" aria-hidden="true">{p.name.charAt(0)}</span>}
           {canWrite && <Link slot="after" onClick={() => unblock(p.id, p.name)}>Unblock</Link>}
         </ListItem>)}

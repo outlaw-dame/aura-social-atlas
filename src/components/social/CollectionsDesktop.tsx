@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useAtlasAuth } from './AuthState';
 import { useMyCollections } from './useCollections';
+import { hashtagLabel, hashtagUrl, TagText } from '@/lib/hashtags';
 import { COLLECTIONS_MAX, DESCRIPTION_MAX, ITEMS_MAX, NAME_MAX, OPEN_COLLECTION_EVENT, collectionInput, mastodonCollectionApi, openCollection, type Collection } from '@/lib/collections';
 import { addToCollection, createCollection, deleteCollection, getCollection, removeFromCollection, updateCollection } from '@/lib/collections.functions';
 
@@ -26,7 +27,7 @@ function Avatars({ c, size = 'size-9' }: { c: Collection; size?: string }) {
   const shown = c.items.slice(0, 4);
   return <span className="flex shrink-0 -space-x-3" aria-hidden="true">
     {shown.map(a => a.avatar
-      ? <img key={a.actorUri} src={a.avatar} alt="" referrerPolicy="no-referrer" className={`${size} rounded-full object-cover ring-2 ring-background`} />
+      ? <img key={a.actorUri} src={a.avatar} alt="" referrerPolicy="no-referrer" className={`${size} atlas-avatar object-cover ring-2 ring-background`} />
       : <span key={a.actorUri} className={`social-avatar ${size} font-serif ring-2 ring-background`}>{a.name.charAt(0)}</span>)}
     {!shown.length && <span className={`grid ${size} place-items-center rounded-full bg-secondary text-muted-foreground`}><UsersRound className="size-4" /></span>}
   </span>;
@@ -152,7 +153,7 @@ export function CollectionDialog({ target, onClose }: { target: { collection?: C
             <DialogDescription className="flex flex-wrap items-center gap-x-1">
               By {c.curator.url ? <a className="underline" href={c.curator.url} target="_blank" rel="noopener noreferrer">{c.curator.name}</a> : c.curator.name}
               {c.source === 'mastodon' && c.curator.acct ? <span>· {c.curator.acct}</span> : null}
-              <span>· {count(c.itemCount)}</span>{c.tag && <span>· <a className="atlas-tag" href={`/tags/${encodeURIComponent(c.tag.toLowerCase())}`}>#{c.tag}</a></span>}{!c.discoverable && <span>· Unlisted</span>}
+              <span>· {count(c.itemCount)}</span>{c.tag && <span>· <a className="atlas-tag atlas-hashtag" href={hashtagUrl(c.tag.toLowerCase())} aria-label={hashtagLabel(c.tag)}><TagText tag={c.tag} /></a></span>}{!c.discoverable && <span>· Unlisted</span>}
             </DialogDescription>
           </DialogHeader>
           {c.source === 'atlas' && <p className="text-xs text-muted-foreground">{LOCAL_NOTE}</p>}
@@ -167,7 +168,7 @@ export function CollectionDialog({ target, onClose }: { target: { collection?: C
           </div>
           {!hidden && <ul className="divide-y divide-border">
             {c.items.map(a => <li key={a.actorUri} className="flex items-center gap-3 py-3">
-              {a.avatar ? <img src={a.avatar} alt="" referrerPolicy="no-referrer" className="size-10 rounded-full object-cover" /> : <span className="social-avatar size-10 font-serif" aria-hidden="true">{a.name.charAt(0)}</span>}
+              {a.avatar ? <img src={a.avatar} alt="" referrerPolicy="no-referrer" className="size-10 atlas-avatar object-cover" /> : <span className="social-avatar size-10 font-serif" aria-hidden="true">{a.name.charAt(0)}</span>}
               <a href={a.url ?? '#'} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{a.name}</span><span className="block truncate text-xs text-muted-foreground">{a.acct}{a.state === 'pending' ? ' · Pending' : ''}</span></a>
               {isOwner && <Button size="icon" variant="ghost" aria-label={`Remove ${a.name}`} onClick={async () => { if (!user) return; await removeItem({ data: { id: c.id, actorUri: a.actorUri, expectedAtlasUserId: user.id } }); await refresh(); }}><Minus /></Button>}
             </li>)}

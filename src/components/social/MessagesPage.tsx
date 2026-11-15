@@ -27,7 +27,7 @@ export function MessagesPage() {
     const names = c.people.map(p => p.name).join(', ') || 'Just you';
     const row = <>
       <span className="relative size-11 shrink-0">
-        {who?.avatar ? <img src={who.avatar} alt="" referrerPolicy="no-referrer" className="size-11 rounded-full object-cover" /> : <span className="social-avatar size-11 font-serif text-lg" aria-hidden="true">{names.charAt(0)}</span>}
+        {who?.avatar ? <img src={who.avatar} alt="" referrerPolicy="no-referrer" className="size-11 atlas-avatar object-cover" /> : <span className="social-avatar size-11 font-serif text-lg" aria-hidden="true">{names.charAt(0)}</span>}
         {c.unread && <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-accent ring-2 ring-background" aria-label="Unread" />}
       </span>
       <div className="min-w-0 flex-1"><p className="flex items-baseline justify-between gap-3 text-sm"><span className={`truncate ${c.unread ? 'font-semibold' : 'font-medium'}`}>{names}</span><span className="shrink-0 text-xs text-muted-foreground">{when(c.date)}</span></p>
