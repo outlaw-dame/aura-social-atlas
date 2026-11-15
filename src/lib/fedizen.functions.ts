@@ -292,9 +292,9 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
         const r = await fedizenGet(c.token, `/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=10`).catch(() => null);
         return { tag, posts: r?.status === 200 ? fromStatuses(r.data as never) : [] };
       })),
-      joined ? popularInGroups(joined.map(g => g.id)).catch(() => null) : Promise.resolve(null),
+      joined ? popularInGroups(joined.groups.map(g => g.id)).catch(() => null) : Promise.resolve(null),
     ]);
-    if (!joined || !popular) missing.push('groups');
+    if (!joined || !joined.complete || !popular) missing.push('groups');
     const posts = rankForYou({
       following: home.status === 200 ? fromStatuses(home.data as never) : [],
       tags: tagFeeds,
@@ -302,7 +302,7 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
     });
     // Credits and players for the links in them, as on Following.
     const withAuthors = await withArticleAuthors(posts);
-    return { posts: withAuthors as ForYouPost[], tags, groups: (joined ?? []).map(g => g.name), missing };
+    return { posts: withAuthors as ForYouPost[], tags, groups: (joined?.groups ?? []).map(g => g.name), missing };
   });
 
 /** A circle's feed: posts from the people in it (Bonfire serves circles as Mastodon lists). */

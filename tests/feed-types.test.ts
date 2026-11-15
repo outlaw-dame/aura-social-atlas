@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { BASE_FEEDS, circleIdOf, fromGroupPost, rankForYou } from "../src/lib/feed-types";
 import { fedizenGet } from "../src/lib/fedizen.server";
-import { joinedGroups, membershipNet, net, popularInGroups } from "../src/lib/groups.server";
+import { forgetJoinedGroups, joinedGroups, membershipNet, net, popularInGroups } from "../src/lib/groups.server";
 import type { FedizenPost } from "../src/lib/fedizen-feed";
 
 const NOW = Date.parse("2026-11-15T16:00:00Z");
@@ -86,6 +86,33 @@ describe("Popular in your groups", () => {
     ] } } }))) as unknown as typeof fetch;
     membershipNet.token = async () => ({ access_token: "t", scope: "read write follow" });
     membershipNet.get = (async () => ({ status: 200, data: [{ id: "g1", following: true }, { id: "g2", following: false }] })) as never;
-    expect((await joinedGroups("u"))?.map(g => g.id)).toEqual(["g1"]);
+    forgetJoinedGroups();
+    expect(await joinedGroups("u")).toEqual({ groups: [expect.objectContaining({ id: "g1" })], complete: true });
+  });
+
+  test("joined groups are found on every page of the directory, not just the first", async () => {
+    const pages: Record<string, unknown> = {
+      first: { pageInfo: { hasNextPage: true, endCursor: "g2" }, edges: [{ id: "g1", name: "A", type: "group" }, { id: "g2", name: "B", type: "group" }] },
+      g2: { pageInfo: { hasNextPage: false }, edges: [{ id: "g3", name: "Makers", type: "group" }] },
+    };
+    net.fetch = (async (_u: string, init: RequestInit) => {
+      const after = JSON.parse(String(init.body)).variables.after as string[] | null;
+      return new Response(JSON.stringify({ data: { categories: pages[after?.[0] ?? "first"] } }));
+    }) as unknown as typeof fetch;
+    membershipNet.token = async () => ({ access_token: "t", scope: "read" });
+    membershipNet.get = (async (_t: string, path: string) => ({ status: 200, data: [...path.matchAll(/id%5B%5D=(\w+)/g)].map(m => ({ id: m[1], following: m[1] === "g3" })) })) as never;
+    forgetJoinedGroups();
+    const r = await joinedGroups("u");
+    expect(r?.groups.map(g => g.id)).toEqual(["g3"]);
+    expect(r?.complete).toBe(true);
+  });
+
+  test("a membership check that fails marks the result incomplete", async () => {
+    net.fetch = (async () => new Response(JSON.stringify({ data: { categories: { pageInfo: { hasNextPage: false }, edges: Array.from({ length: 50 }, (_, i) => ({ id: `g${i}`, name: `G${i}`, type: "group" })) } } }))) as unknown as typeof fetch;
+    membershipNet.token = async () => ({ access_token: "t", scope: "read" });
+    let calls = 0;
+    membershipNet.get = (async () => (++calls === 1 ? { status: 200, data: [{ id: "g0", following: true }] } : { status: 503, data: null })) as never;
+    forgetJoinedGroups();
+    expect(await joinedGroups("u")).toEqual({ groups: [expect.objectContaining({ id: "g0" })], complete: false });
   });
 });

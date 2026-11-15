@@ -112,19 +112,60 @@ export async function popularInGroups(ids: string[]): Promise<GroupPost[] | null
 }
 
 /** The groups you're a member of, among the first ones Fedizen lists (relationships are read 40 at a time). */
-export async function joinedGroups(userId: string): Promise<Group[] | null> {
-  const page = await listGroups();
-  if (!page) return null;
-  const groups = page.groups.filter(g => g.type === 'group').slice(0, 80);
-  const joined: Group[] = [];
-  for (let i = 0; i < groups.length; i += 40) {
-    const batch = groups.slice(i, i + 40);
-    const m = await memberships(userId, batch.map(g => g.id));
-    if (!m.ok) return i ? joined : null;
-    joined.push(...batch.filter(g => m.memberships[g.id] === 'member'));
+/* Every group in the directory (public, the same for everyone), read page by page and kept briefly. */
+let directory: { at: number; groups: Group[]; complete: boolean } | null = null;
+const DIRECTORY_TTL = 10 * 60_000;
+async function allGroups(): Promise<{ groups: Group[]; complete: boolean } | null> {
+  if (directory && Date.now() - directory.at < DIRECTORY_TTL) return directory;
+  const groups: Group[] = [];
+  let after: string | undefined;
+  let complete = false;
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const page = await listGroups(after);
+    if (!page) { if (!i) return null; break; }
+    groups.push(...page.groups.filter(g => g.type === 'group'));
+    if (!page.next) { complete = true; break; }
+    after = page.next;
   }
-  return joined;
+  directory = { at: Date.now(), groups, complete };
+  return directory;
 }
+
+/* A person's memberships, kept briefly so each For You load doesn't re-check the whole directory. */
+const joinedCache = new Map<string, { at: number; value: { groups: Group[]; complete: boolean } }>();
+const JOINED_TTL = 5 * 60_000, JOINED_MAX = 500;
+
+/**
+ * The groups this person has joined. Bonfire's groups index has no member filter, so this walks the whole directory
+ * and asks relationships about 40 groups at a time (four requests at once). `complete` is false when part of the
+ * directory or of the membership checks couldn't be read; null when none of it could.
+ */
+export async function joinedGroups(userId: string): Promise<{ groups: Group[]; complete: boolean } | null> {
+  const hit = joinedCache.get(userId);
+  if (hit && Date.now() - hit.at < JOINED_TTL) return hit.value;
+  const dir = await allGroups();
+  if (!dir) return null;
+  const batches: Group[][] = [];
+  for (let i = 0; i < dir.groups.length; i += 40) batches.push(dir.groups.slice(i, i + 40));
+  const joined: Group[] = [];
+  let failed = 0;
+  for (let i = 0; i < batches.length; i += 4) {
+    const results = await Promise.all(batches.slice(i, i + 4).map(b => memberships(userId, b.map(g => g.id)).catch(() => null)));
+    results.forEach((m, k) => {
+      if (!m?.ok) { failed++; return; }
+      joined.push(...batches[i + k].filter(g => m.memberships[g.id] === 'member'));
+    });
+  }
+  if (batches.length && failed === batches.length) return null;
+  const value = { groups: joined, complete: dir.complete && !failed };
+  if (value.complete) {
+    if (joinedCache.size >= JOINED_MAX) joinedCache.delete(joinedCache.keys().next().value as string);
+    joinedCache.set(userId, { at: Date.now(), value });
+  }
+  return value;
+}
+/** Forget cached memberships (after joining or leaving a group, and in tests). */
+export function forgetJoinedGroups(userId?: string) { if (userId) joinedCache.delete(userId); else { joinedCache.clear(); directory = null; } }
 
 /** The latest posts across every group Fedizen knows (Bonfire's "All known groups" feed). */
 export async function latestInGroups(): Promise<GroupPost[] | null> {
@@ -159,6 +200,7 @@ export async function setMembership(userId: string, id: string, action: GroupAct
     ? `/api/v1/accounts/${encodeURIComponent(id)}/${on ? 'follow' : 'unfollow'}`
     : `/api/v1-bonfire/groups/${encodeURIComponent(id)}/${on ? 'join' : 'leave'}`;
   const r = await (membershipNet.send ?? (await fz()).fedizenSend)(t.access_token, 'POST', path);
+  forgetJoinedGroups(userId);
   if (r.status < 200 || r.status >= 300) return { ok: false, reason: problemFromStatus(r.status) };
   return { ok: true, membership: membershipFrom(r.data) };
 }
