@@ -1,9 +1,13 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Hash, MessageCircle, Repeat2, Star, Tag } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Hash, Link2, MessageCircle, Repeat2, Star, Tag } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from '@/components/social/AuthState';
-import { useFollowedTags, useTagFeed } from '@/components/social/useFeeds';
+import { FEED_PROBLEM, useFollowedTags, useTagFeed } from '@/components/social/useFeeds';
+import { useFediProfileOpener } from '@/components/social/useFediProfile';
+import { FediProfileDialog } from '@/components/social/FediProfileDialog';
+import { useFedizen } from '@/components/social/useFedizen';
+import { Button } from '@/components/ui/button';
 import { FeedPostCard, useFeedPostActions } from '@/components/social/FeedPostCard';
 import { getTagFeed } from '@/lib/tag-feed.functions';
 import { linkifyHashtags } from '@/lib/hashtags';
@@ -28,12 +32,13 @@ function TagPage() {
   const norm = tag.replace(/^#/, '').toLowerCase();
   const fedizen = useTagFeed(user && /^[\p{L}\p{N}_]{1,100}$/u.test(norm) ? norm : null);
   const followed = useFollowedTags();
-  // Signed in and connected: Fedizen's feed for the tag, as the person may see and act on it. Otherwise the public
-  // posts below, from mastodon.social.
-  const personal = !!user && !fedizen.data?.error;
+  // Signed in with Fedizen connected: Fedizen's feed for the tag, as the person may see and act on it — and when Fedizen
+  // fails or access lapsed, that failure with its retry or reconnect, never someone else's feed in its place. Only a
+  // signed-out reader, or one who hasn't connected Fedizen, gets the public posts below, from mastodon.social.
+  const personal = !!user && fedizen.data?.error !== 'not-connected';
   if (loading || (user && fedizen.isLoading)) return <TagShell tag={tag}><p className="text-sm text-muted-foreground">Loading posts…</p></TagShell>;
   if (personal) return <TagShell tag={tag} note={<>{followed.has(norm) && <><Tag className="size-3.5" aria-hidden="true" />You follow this hashtag · </>}Posts on Fedizen that use #{tag} and that you can see</>}>
-    <FedizenTagPosts posts={fedizen.data?.posts ?? []} tag={tag} failed={fedizen.isError} retry={() => void fedizen.refetch()} />
+    <FedizenTagPosts posts={fedizen.data?.posts ?? []} tag={tag} failed={fedizen.isError} problem={fedizen.data?.error} retry={() => void fedizen.refetch()} />
   </TagShell>;
   return <PublicTagPage tag={tag} />;
 }
@@ -49,15 +54,30 @@ function TagShell({ tag, note, children }: { tag: string; note?: React.ReactNode
   </main>;
 }
 
-function FedizenTagPosts({ posts, tag, failed, retry }: { posts: FedizenPost[]; tag: string; failed: boolean; retry: () => void }) {
+function FedizenTagPosts({ posts, tag, failed, problem, retry }: { posts: FedizenPost[]; tag: string; failed: boolean; problem?: keyof typeof FEED_PROBLEM; retry: () => void }) {
   const actions = useFeedPostActions();
-  if (failed) return <p className="text-sm text-muted-foreground">Fedizen couldn’t send this feed right now. <button type="button" className="underline" onClick={retry}>Try again</button></p>;
+  // Creators in link previews open their profile here too: this page sits outside Discovery, which hosts it elsewhere.
+  const profile = useFediProfileOpener();
+  const dialog = <FediProfileDialog target={profile.target} onClose={profile.close} />;
+  if (failed || problem === 'unavailable') return <p className="text-sm text-muted-foreground">{FEED_PROBLEM.unavailable} <button type="button" className="underline" onClick={retry}>Try again</button></p>;
+  if (problem) return <Reconnect message={FEED_PROBLEM[problem]} tag={tag} />;
   return <>
     {actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}
     {posts.length ? <div className="space-y-6">{posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} inTag={tag.replace(/^#/, '').toLowerCase()} />)}</div>
       : <p className="text-sm text-muted-foreground">No posts you can see use #{tag} yet.</p>}
     {actions.dialog}
+    {dialog}
   </>;
+}
+
+/** Access lapsed or lacks a permission: say so and offer to connect again, in place of the feed. */
+function Reconnect({ message, tag }: { message: string; tag: string }) {
+  const f = useFedizen();
+  return <div className="text-sm text-muted-foreground"><p>{message}</p>
+    {f.embedded ? <Button asChild className="mt-4"><a href={`${window.location.origin}/tags/${encodeURIComponent(tag)}`} target="_blank" rel="noopener noreferrer">Open Atlas in a new tab to connect<ArrowUpRight /></a></Button>
+      : <Button className="mt-4" onClick={() => void f.connect()} disabled={f.actionBusy}><Link2 />{f.actionBusy ? 'Connecting…' : 'Connect Fedizen'}</Button>}
+    {f.error && <p role="alert" className="mt-3 text-destructive">{f.error}</p>}
+  </div>;
 }
 
 function PublicTagPage({ tag }: { tag: string }) {

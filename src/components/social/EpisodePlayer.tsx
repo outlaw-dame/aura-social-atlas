@@ -27,7 +27,7 @@ export function EpisodePlayer({ episode: ep }: { episode: FediEpisode }) {
       <div className="min-w-0 flex-1">
         <a href={ep.url} target="_blank" rel="noopener noreferrer" className="line-clamp-2 text-sm font-semibold leading-snug hover:underline">{ep.title}</a>
         <button type="button" onClick={() => openFediProfile(ep.podcast)} className="mt-1.5 flex max-w-full items-center gap-2 rounded-xl text-left hover:opacity-80" aria-label={`Podcast: ${ep.podcast.name} (${ep.podcast.acct})`}>
-          <Art src={ep.podcast.avatar} fallback={ep.podcast.name} className="size-7 shrink-0 rounded-lg" />
+          <Art src={ep.podcast.avatar} fallback={ep.podcast.name} className="size-7 shrink-0 atlas-avatar" />
           <span className="min-w-0"><span className="block truncate text-xs font-medium">{ep.podcast.name}</span><span className="block truncate text-[11px] text-muted-foreground">{ep.podcast.acct}</span></span>
         </button>
       </div>
