@@ -32,7 +32,7 @@ import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileActivity, MessagesPopup } from './FedizenMobile';
 import { MobileFeeds } from './MobileFeeds';
 import { TagFeedPage } from './TagFeed';
-import { bindStack, popToRoot, pushPage, tagPageUrl } from './navigation';
+import { bindStack, popToRoot, pushPage, showTab, tagPageUrl } from './navigation';
 import { ModerationPopup } from './Moderation';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
@@ -167,7 +167,7 @@ export default function AtlasMobileApp() {
   const fediProfile = useFediProfileOpener();
   /* Search lives on Discover: go there and put the cursor in the field. */
   const openSearch = () => {
-    f7.tab.show('#tab-discover');
+    showTab('tab-discover');
     window.setTimeout(() => { const el = document.querySelector<HTMLInputElement>('#tab-discover .searchbar input'); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus(); }, 80);
   };
   const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
@@ -274,13 +274,13 @@ export default function AtlasMobileApp() {
           <Block className="atlas-brand" style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', fontSize: 32, marginTop: 24 }}>Atlas</Block>
           <List strong inset dividers>
             {dock.map(d => (
-              <ListItem key={d.id} link="#" panelClose title={d.label} selected={title === d.label} onClick={() => f7.tab.show(`#${d.id}`)}>
+              <ListItem key={d.id} link="#" panelClose title={d.label} selected={title === d.label} onClick={() => showTab(d.id)}>
                 {d.avatar ? <img slot="media" className="atlas-dock-avatar" src={d.avatar} alt="" width={28} height={28} /> : <Icon slot="media" ios={d.ios} md={d.md} />}
               </ListItem>
             ))}
           </List>
           <List strong inset dividers>
-            <ListItem link="#" panelClose title="Settings" selected={title === 'Settings'} onClick={() => f7.tab.show('#tab-settings')}>
+            <ListItem link="#" panelClose title="Settings" selected={title === 'Settings'} onClick={() => showTab('tab-settings')}>
               <Icon slot="media" ios="f7:gear_alt" md="material:settings" />
             </ListItem>
           </List>
@@ -314,7 +314,7 @@ export default function AtlasMobileApp() {
             )}
             {title === 'Profile' && (
               <NavRight>
-                <Link iconOnly aria-label="Settings" onClick={() => f7.tab.show('#tab-settings')}>
+                <Link iconOnly aria-label="Settings" onClick={() => showTab('tab-settings')}>
                   <Icon ios="f7:gear_alt" md="material:settings" />
                 </Link>
               </NavRight>

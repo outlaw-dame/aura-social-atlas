@@ -17,6 +17,9 @@ describe("Phone: a hashtag's feed is pushed, not a sheet", () => {
     expect(app).toMatch(/path: '\/tag\/:tag\/', component: TagFeedPage/);
     expect(app).toContain("onClick={popToRoot}");
     expect(app).not.toMatch(/aria-label="Close tag feed"/);
+    // Rail, sidebar and Settings choose destinations too: all through showTab, which pops the stack first.
+    expect(app).not.toContain("f7.tab.show(");
+    expect(readFileSync("src/components/f7/navigation.ts", "utf8")).toMatch(/export function showTab[\s\S]*popToRoot\(\);[\s\S]*f7\.tab\.show/);
   });
 
   test("the stack sits under the tab bar and passes touches through until something is pushed", () => {

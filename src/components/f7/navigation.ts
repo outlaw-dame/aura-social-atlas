@@ -47,4 +47,11 @@ export function bindStack() {
   return () => router.off('routeChanged', syncStackState);
 }
 
+/** Every way of choosing a destination (tab bar, rail, sidebar, Settings) goes through here, so a pushed page never
+ *  stays in front of the tab that was chosen. */
+export function showTab(id: string) {
+  popToRoot();
+  f7.tab.show(`#${id}`);
+}
+
 export const tagPageUrl = (tag: string) => `/tag/${encodeURIComponent(tag.toLowerCase())}/`;
