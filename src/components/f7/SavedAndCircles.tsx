@@ -14,7 +14,7 @@ const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { mo
 export function SaveLink({ post, save }: { post: Pick<FedizenPost, 'statusId' | 'bookmarked'>; save: ReturnType<typeof useSaveToggle> }) {
   if (!post.statusId || !save.canSave) return null;
   const on = save.isSaved(post);
-  return <Link onClick={() => void save.toggle(post)} aria-pressed={on} className="atlas-save-link">
+  return <Link onClick={() => void save.toggle(post)} aria-pressed={on} aria-disabled={save.isPending(post)} className={`atlas-save-link${save.isPending(post) ? ' disabled' : ''}`}>
     <Icon ios={on ? 'f7:bookmark_fill' : 'f7:bookmark'} md={on ? 'material:bookmark' : 'material:bookmark_border'} />{on ? 'Saved' : 'Save'}
   </Link>;
 }

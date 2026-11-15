@@ -16,7 +16,7 @@ const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { mo
 export function SaveButton({ post, save }: { post: Pick<FedizenPost, 'statusId' | 'bookmarked'>; save: ReturnType<typeof useSaveToggle> }) {
   if (!post.statusId || !save.canSave) return null;
   const on = save.isSaved(post);
-  return <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" aria-pressed={on} onClick={() => void save.toggle(post)}>
+  return <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" aria-pressed={on} disabled={save.isPending(post)} onClick={() => void save.toggle(post)}>
     <Bookmark className={on ? 'fill-accent text-accent' : ''} />{on ? 'Saved' : 'Save'}
   </Button>;
 }

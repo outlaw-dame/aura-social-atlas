@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { useAtlasAuth } from './AuthState';
@@ -32,30 +32,53 @@ export function useFedizenSaved(enabled = true) {
   });
 }
 
-/** Bookmark toggle for Fedizen posts, optimistic: the button changes at once and goes back if Fedizen says no. */
+/**
+ * Saved state shared by every view (feed, Profile → Saved, phone and desktop), so a post saved in one shows as saved
+ * in all. One request per post at a time: while a post's write is in flight its toggle is disabled, so writes reach
+ * Fedizen in the order the person made them and an older reply can't overwrite a newer choice.
+ */
+type SavedEntry = { saved: boolean; pending: boolean };
+const savedStore = (() => {
+  let owner: string | undefined;
+  let entries = new Map<string, SavedEntry>();
+  const listeners = new Set<() => void>();
+  const emit = () => { entries = new Map(entries); listeners.forEach(l => l()); };
+  return {
+    subscribe: (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; },
+    snapshot: () => entries,
+    /** A different signed-in account starts from nothing. */
+    own: (userId: string | undefined) => { if (owner !== userId) { owner = userId; entries = new Map(); } },
+    set: (statusId: string, e: SavedEntry) => { entries.set(statusId, e); emit(); },
+  };
+})();
+export const _savedStoreForTests = savedStore;
+
 export function useSaveToggle() {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();
   const write = useServerFn(setFedizenSaved);
-  const [override, setOverride] = useState<Record<string, boolean>>({});
+  savedStore.own(user?.id);
+  const entries = useSyncExternalStore(savedStore.subscribe, savedStore.snapshot, savedStore.snapshot);
   const [error, setError] = useState<string | null>(null);
-  const isSaved = (p: Pick<FedizenPost, 'statusId' | 'bookmarked'>) => (p.statusId && p.statusId in override ? override[p.statusId] : !!p.bookmarked);
+  const isSaved = (p: Pick<FedizenPost, 'statusId' | 'bookmarked'>) => { const e = p.statusId ? entries.get(p.statusId) : undefined; return e ? e.saved : !!p.bookmarked; };
+  const isPending = (p: Pick<FedizenPost, 'statusId'>) => !!(p.statusId && entries.get(p.statusId)?.pending);
   const toggle = async (p: Pick<FedizenPost, 'statusId' | 'bookmarked'>) => {
-    if (!user || !p.statusId) return;
-    const on = !isSaved(p);
+    if (!user || !p.statusId || isPending(p)) return;
+    const id = p.statusId, was = isSaved(p), on = !was;
     setError(null);
-    setOverride(o => ({ ...o, [p.statusId!]: on }));
+    savedStore.set(id, { saved: on, pending: true });
     try {
-      const r = await write({ data: { expectedAtlasUserId: user.id, statusId: p.statusId, on } });
-      if (!r.ok) { setOverride(o => ({ ...o, [p.statusId!]: !on })); setError(LIBRARY_PROBLEM[r.error]); return; }
-      setOverride(o => ({ ...o, [p.statusId!]: r.saved }));
+      const r = await write({ data: { expectedAtlasUserId: user.id, statusId: id, on } });
+      if (!r.ok) { savedStore.set(id, { saved: was, pending: false }); setError(LIBRARY_PROBLEM[r.error]); return; }
+      savedStore.set(id, { saved: r.saved, pending: false });
       void qc.invalidateQueries({ queryKey: ['fedizen-saved'] });
+      void qc.invalidateQueries({ queryKey: ['fedizen-home'] });
     } catch {
-      setOverride(o => ({ ...o, [p.statusId!]: !on }));
+      savedStore.set(id, { saved: was, pending: false });
       setError(LIBRARY_PROBLEM.unavailable);
     }
   };
-  return { isSaved, toggle, error, canSave: !!user };
+  return { isSaved, isPending, toggle, error, canSave: !!user };
 }
 
 export function useFedizenCircles(enabled = true) {
