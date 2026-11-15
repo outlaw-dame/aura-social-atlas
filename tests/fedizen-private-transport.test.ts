@@ -31,6 +31,17 @@ describe('Fedizen private reads and writes are allowlisted', () => {
     globalThis.fetch = (async () => new Response('[{"unread":true}]')) as unknown as typeof fetch;
     expect(await fedizenGet('t', '/api/v1/conversations?limit=30')).toEqual({ status: 502, data: [] });
   });
+  test('an oversized link preview is dropped field by field, never the whole timeline', async () => {
+    globalThis.fetch = (async () => new Response(JSON.stringify([
+      { id: '1', content: '<p>a</p>', card: { url: 'https://news.org/a', title: 'x'.repeat(600), provider_name: 'News', author_name: 'y'.repeat(300) } },
+      { id: '2', content: '<p>b</p>', card: 'not a card' },
+    ]))) as unknown as typeof fetch;
+    const r = await fedizenGet('t', '/api/v1/timelines/home?limit=20');
+    expect(r.status).toBe(200);
+    expect(r.data).toHaveLength(2);
+    expect((r.data[0] as { card: unknown }).card).toEqual({ url: 'https://news.org/a', title: null, provider_name: 'News', author_name: null });
+    expect((r.data[1] as { card: unknown }).card).toBeNull();
+  });
 
   test('joins a group with a bounded, schema-checked reply and never forwards a redirect', async () => {
     let seen: RequestInit | undefined;
