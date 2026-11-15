@@ -32,3 +32,41 @@ describe("Hashtag reads are allowlisted", () => {
     await expect(fedizenGet("t", "/api/v1/timelines/tag/linux?limit=40")).rejects.toThrow("Unsupported Fedizen read path.");
   });
 });
+
+describe("Avatar shape reaches every avatar", () => {
+  const { readFileSync, readdirSync } = require("node:fs") as typeof import("node:fs");
+  const { join } = require("node:path") as typeof import("node:path");
+  const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".tsx") ? [join(d, e.name)] : []);
+  // The mini player shows episode artwork, a picture rather than an avatar, so it keeps its own corners.
+  const ARTWORK = new Set(["src/components/social/MiniPlayer.tsx"]);
+  const files = [...walk("src/components/social"), ...walk("src/components/f7"), ...walk("src/routes")].filter(f => !ARTWORK.has(f));
+
+  test("no avatar or initial is drawn with a fixed Tailwind radius", () => {
+    const offenders: string[] = [];
+    for (const f of files) {
+      readFileSync(f, "utf8").split("\n").forEach((line, i) => {
+        // An image or initial tile with a fixed rounding and an avatar-ish source or fallback letter.
+        for (const tag of line.match(/<(img|span|div)\b[^>]*>/g) ?? []) {
+          if (!/rounded-(full|lg|xl|2xl|md|\[)/.test(tag) || /atlas-avatar/.test(tag)) continue;
+          const avatarish = /avatar|preset\.src|\bme\.src/i.test(tag) || (/size-\d+/.test(tag) && /bg-muted/.test(tag) && /aria-hidden/.test(tag) && !/px-/.test(tag));
+          if (avatarish) offenders.push(`${f}:${i + 1}`);
+        }
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test("avatar CSS rules use --atlas-avatar-radius", () => {
+    const css = readFileSync("src/styles.css", "utf8");
+    const offenders: string[] = [];
+    for (const m of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const [sel, body] = [m[1].trim(), m[2]];
+      const r = body.match(/border-radius:\s*([^;]+)/)?.[1].trim();
+      if (!r || r.includes("--atlas-avatar-radius")) continue;
+      // Episode artwork and the mini player's art keep their own corners.
+      if (/mini-open|episode-art|now-art/.test(sel)) continue;
+      if (/avatar|-initial|-face\b|coll-by img|item-media img|article-author img|fedi-head > img|mention-bar button img/.test(sel)) offenders.push(sel);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
