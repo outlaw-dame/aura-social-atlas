@@ -6,12 +6,11 @@ import type { BonfireArticle } from '@/lib/spotlight';
 import { useFedizen, useFedizenMessages } from '@/components/social/useFedizen';
 import { openCollection } from '@/lib/collections';
 import { openFediProfile } from '@/lib/fedi-profile';
-import { useSaveToggle } from '@/components/social/useFedizenLibrary';
 import { SaveLink } from './SavedAndCircles';
 import { ArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { Icon } from './F7Extras';
-import { MobilePostCard } from './MobilePostCard';
+import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 
@@ -52,10 +51,10 @@ export function MobileRecentArticles() {
 
 export function MobileFedizenFeed() {
   const f = useFedizen();
-  const save = useSaveToggle();
+  const actions = useMobilePostActions();
   return <>
     <BlockTitle>Your Fedizen feed</BlockTitle>
-    {save.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{save.error}</p></Block>}
+    {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
     {!f.signedIn ? <Block strong inset>Sign in to Atlas to see your Fedizen feed. <Link href="/auth" external>Sign in</Link></Block>
       : f.loading ? <Block strong inset>Loading your Fedizen feed…</Block>
       : !f.data?.connected || f.data.error === 'expired' ? <Block strong inset>
@@ -64,8 +63,9 @@ export function MobileFedizenFeed() {
         {f.error && <p role="alert" style={{ color: 'var(--f7-theme-color)' }}>{f.error}</p>}
       </Block>
       : !f.data.posts.length ? <Block strong inset>Your Fedizen timeline is empty.</Block>
-      : f.data.posts.map(p => <MobilePostCard key={p.id} post={p} save={save} />)}
+      : f.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}
     {(!f.signedIn || (!f.loading && (!f.data?.connected || f.data.error === 'expired'))) && <MobilePublicFedizen />}
+    {actions.sheet}
   </>;
 }
 

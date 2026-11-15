@@ -1,14 +1,14 @@
+import { useState } from 'react';
 import { Card, CardContent, CardFooter, Link } from 'framework7-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
-import type { ForYouReason } from '@/lib/feed-types';
+import { shortAgo, type ForYouReason } from '@/lib/feed-types';
 import { openCollection } from '@/lib/collections';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
-import type { useSaveToggle } from '@/components/social/useFedizenLibrary';
-import { SaveLink } from './SavedAndCircles';
+import { useSaveToggle } from '@/components/social/useFedizenLibrary';
+import { useReactions } from '@/components/social/usePostActions';
 import { ArticleCard } from './ArticleAuthors';
+import { MobilePostActions, ReplySheet } from './PostActions';
 import { Icon } from './F7Extras';
-
-const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 
 /** Phone: why a post is in For You. */
 export function MobileReasonChips({ reasons }: { reasons?: ForYouReason[] }) {
@@ -18,20 +18,45 @@ export function MobileReasonChips({ reasons }: { reasons?: ForYouReason[] }) {
   </span>)}</p>;
 }
 
-/** Phone: one post in a feed, with the standard post actions. */
-export function MobilePostCard({ post: p, save, reasons }: { post: FedizenPost; save: ReturnType<typeof useSaveToggle>; reasons?: ForYouReason[] }) {
-  return <Card outline>
+/** Everything a feed of post cards shares: Save, Like and Boost state, and the reply sheet (render `sheet` once). */
+export function useMobilePostActions() {
+  const save = useSaveToggle();
+  const reactions = useReactions();
+  const [replying, setReplying] = useState<FedizenPost | null>(null);
+  return {
+    save, reactions, onReply: setReplying,
+    error: save.error ?? reactions.error,
+    sheet: <ReplySheet post={replying} onClose={() => setReplying(null)} />,
+  };
+}
+export type MobileActions = ReturnType<typeof useMobilePostActions>;
+
+function Avatar({ post: p }: { post: FedizenPost }) {
+  const [broken, setBroken] = useState(false);
+  return p.avatar && !broken
+    ? <img className="atlas-post-avatar" src={p.avatar} alt="" width={40} height={40} referrerPolicy="no-referrer" loading="lazy" onError={() => setBroken(true)} />
+    : <span className="atlas-post-avatar atlas-activity-initial" aria-hidden="true">{p.author.charAt(0)}</span>;
+}
+
+/** Phone: one post in a feed — author, text, media or link preview — with the standard post actions. */
+export function MobilePostCard({ post: p, actions, reasons }: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[] }) {
+  const ago = shortAgo(p.date);
+  return <Card outline className="atlas-post-card">
     <CardContent>
       <MobileReasonChips reasons={reasons} />
-      {p.boostedBy && <p style={{ fontSize: 11, opacity: .6, marginTop: 0 }}>↻ {p.boostedBy} boosted</p>}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} style={{ borderRadius: 16 }} referrerPolicy="no-referrer" />}<span><b>{p.author}</b> <span style={{ opacity: .6 }}>{p.handle}</span></span></div>
-      {p.paragraphs.map((t, i) => <p key={i} style={{ lineHeight: 1.5 }}>{t}</p>)}
-      {p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" style={{ width: '100%', borderRadius: 12 }} referrerPolicy="no-referrer" />}
+      {p.boostedBy && <p className="atlas-post-boosted"><Icon ios="f7:arrow_2_squarepath" md="material:repeat" />{p.boostedBy} boosted</p>}
+      <div className="atlas-post-head">
+        <Avatar post={p} />
+        <span className="atlas-post-who"><b>{p.author}</b><small>{p.handle}</small></span>
+        {ago && <Link external target="_blank" href={p.url} className="atlas-post-time" aria-label={`Open the post on Fedizen, posted ${p.date ? new Date(p.date).toLocaleString() : ''}`}>{ago}</Link>}
+      </div>
+      {p.paragraphs.map((t, i) => <p key={i} className="atlas-post-text">{t}</p>)}
+      {p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}
       {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
         <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />
       </button>)}
       <ArticleCard article={p.article} />
     </CardContent>
-    <CardFooter><span style={{ fontSize: 12, opacity: .6 }}>{when(p.date)}</span><span style={{ display: 'flex', gap: 12 }}>{p.statusId && <SaveLink post={p} save={save} />}<Link external target="_blank" href={p.url}>Open</Link></span></CardFooter>
+    <CardFooter className="atlas-post-footer"><MobilePostActions post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply} /></CardFooter>
   </Card>;
 }

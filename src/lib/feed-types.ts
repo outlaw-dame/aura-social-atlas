@@ -24,7 +24,7 @@ export type ForYouReason = { kind: 'following' } | { kind: 'tag'; tag: string } 
 export type ForYouPost = FedizenPost & { reasons: ForYouReason[] };
 
 export function fromGroupPost(p: GroupPost): FedizenPost {
-  return { id: `g-${p.id}`, author: p.author, handle: p.handle, avatar: p.avatar, paragraphs: p.paragraphs, url: p.url, date: p.date, image: p.image };
+  return { id: `g-${p.id}`, ...(p.objectId ? { statusId: p.objectId } : {}), author: p.author, handle: p.handle, avatar: p.avatar, paragraphs: p.paragraphs, url: p.url, date: p.date, image: p.image };
 }
 
 const HOUR = 3600_000;
@@ -88,3 +88,65 @@ export function usePinnedCircles(uid: string | undefined): PinnedCircle[] {
 }
 export const circleFeed = (id: string): FeedKind => `circle:${id}`;
 export const circleIdOf = (k: FeedKind) => (k.startsWith('circle:') ? k.slice(7) : null);
+
+/** "now", "5m", "3h", "2d", then the date: the short times feeds show beside a post or story. */
+export function shortAgo(iso: string | undefined, now = Date.now()): string {
+  const t = iso ? Date.parse(iso) : NaN;
+  if (Number.isNaN(t)) return '';
+  const s = Math.max(0, (now - t) / 1000);
+  if (s < 60) return 'now';
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d`;
+  return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(new Date(t).getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}) });
+}
+
+/* ── New since your last visit (Particle's dot) ────────────────────────────────────────────────────────── */
+
+/**
+ * For each feed, the newest post the person has seen there, kept per Atlas user on this device. A feed shows a dot when
+ * it has a post newer than that. A feed never seen before takes its newest post as the starting point, so the first
+ * visit doesn't light every tab.
+ */
+const SEEN_KEY = (uid: string) => `atlas-feed-seen:${uid}`;
+const seenListeners = new Set<() => void>();
+const seenCache = new Map<string, Record<string, string>>();
+const NO_SEEN: Record<string, string> = {};
+const FEED_ID = /^(following|foryou|articles|local|circle:[A-Za-z0-9_-]{1,64})$/;
+
+function readSeen(uid: string): Record<string, string> {
+  if (seenCache.has(uid)) return seenCache.get(uid)!;
+  const v: Record<string, string> = {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(SEEN_KEY(uid)) ?? '{}');
+    if (raw && typeof raw === 'object' && !Array.isArray(raw))
+      for (const [k, t] of Object.entries(raw).slice(0, 40)) if (FEED_ID.test(k) && typeof t === 'string' && !Number.isNaN(Date.parse(t))) v[k] = t;
+  } catch { /* storage unavailable */ }
+  seenCache.set(uid, v);
+  return v;
+}
+/** Records that the person has seen `feed` up to `newest` (never moves backwards). */
+export function markFeedSeen(uid: string, feed: FeedKind, newest: string | undefined) {
+  if (!newest || Number.isNaN(Date.parse(newest)) || !FEED_ID.test(feed)) return;
+  const v = readSeen(uid), had = v[feed];
+  if (had && Date.parse(had) >= Date.parse(newest)) return;
+  const next = { ...v, [feed]: newest };
+  seenCache.set(uid, next);
+  try { localStorage.setItem(SEEN_KEY(uid), JSON.stringify(next)); } catch { /* this session only */ }
+  seenListeners.forEach(l => l());
+}
+export function useFeedsSeen(uid: string | undefined): Record<string, string> {
+  return useSyncExternalStore(l => { seenListeners.add(l); return () => { seenListeners.delete(l); }; }, () => (uid ? readSeen(uid) : NO_SEEN), () => NO_SEEN);
+}
+/** The newest date among posts (undefined when none has one). */
+export function newestOf(posts: { date?: string }[] | undefined): string | undefined {
+  let best: string | undefined, bestT = -Infinity;
+  for (const p of posts ?? []) { const t = p.date ? Date.parse(p.date) : NaN; if (!Number.isNaN(t) && t > bestT) { bestT = t; best = p.date; } }
+  return best;
+}
+/** Does this feed have something newer than the person last saw? Unknown either way means no dot. */
+export function hasNew(seen: string | undefined, newest: string | undefined): boolean {
+  return !!seen && !!newest && Date.parse(newest) > Date.parse(seen);
+}
+export function _clearSeenForTests() { seenCache.clear(); }
+export const _readSeenForTests = (uid: string) => readSeen(uid);

@@ -21,7 +21,9 @@ export const BONFIRE_VERSION = 'v1.1.0-rc.1';
 /** A post in a group's feed, as plain text (remote HTML is never rendered). `group` names the group it was posted in. */
 export type GroupPost = { id: string; paragraphs: string[]; date?: string; url: string; author: string; handle: string; avatar?: string; image?: string; group?: string;
   /** Every group it was shared into, when one post reached several (popularInGroups). */
-  groups?: string[] };
+  groups?: string[];
+  /** The post's own id, which Fedizen's REST API (like, boost, save, reply) accepts. */
+  objectId?: string };
 
 export type JoinMode = 'open' | 'local' | 'request' | 'invite';
 

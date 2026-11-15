@@ -291,6 +291,13 @@ const status = z.object({
   account: account.nullish(),
   media_attachments: z.array(media).nullish(),
   bookmarked: z.boolean().nullish(),
+  // Counts and the person's own reactions (Bonfire's status mapper fills all five); each fails on its own to null.
+  replies_count: z.number().int().min(0).nullish().catch(null),
+  reblogs_count: z.number().int().min(0).nullish().catch(null),
+  favourites_count: z.number().int().min(0).nullish().catch(null),
+  favourited: z.boolean().nullish().catch(null),
+  reblogged: z.boolean().nullish().catch(null),
+  visibility: z.enum(['public', 'unlisted', 'private', 'direct']).nullish().catch(null),
   /** The link preview Bonfire builds for the post's first link (no `authors`: Atlas works those out itself). */
   // Each field fails on its own (to null), so one odd preview never empties a feed.
   card: z.object({
@@ -299,6 +306,8 @@ const status = z.object({
     provider_name: z.string().max(200).nullish().catch(null),
     author_name: z.string().max(200).nullish().catch(null),
     author_url: z.string().max(2048).nullish().catch(null),
+    description: z.string().max(1000).nullish().catch(null),
+    image: z.string().max(2048).nullish().catch(null),
   }).nullish().catch(null),
 });
 // The REST client only reads one reblog level. Avoid unbounded recursion.
@@ -400,17 +409,24 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
 /**
  * The writes Atlas makes as the person, and nothing else:
  * - join or leave a Bonfire group (/api/v1-bonfire/groups/:id/join|leave); follow or unfollow an account;
- * - bookmark or unbookmark a post (Saved); block or unblock a person (Moderation);
+ * - bookmark, like or boost a post, and undo each; reply to a post; block or unblock a person (Moderation);
  * - create, rename and delete a circle, and add or remove its members (Mastodon Lists, served from Bonfire Circles).
  * Each route names its method and the only body it may carry. Same transport rules as reads: fixed host,
  * no redirects, no caching, bounded reply, nothing logged.
  */
 const title = z.object({ title: z.string().trim().min(1).max(100) }).strict();
+/** A reply, and nothing else: Atlas only posts in answer to a post, in that post's audience or a narrower one. */
+const reply = z.object({
+  status: z.string().trim().min(1).max(5000),
+  in_reply_to_id: z.string().regex(new RegExp(`^${ID}$`)),
+  visibility: z.enum(['public', 'unlisted', 'private', 'direct']),
+}).strict();
 const members = z.object({ account_ids: z.array(z.string().regex(new RegExp(`^${ID}$`))).min(1).max(20) }).strict();
 const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTypeAny }[] = [
   { method: 'POST', match: new RegExp(`^/api/v1-bonfire/groups/${ID}/(join|leave)$`) },
   { method: 'POST', match: new RegExp(`^/api/v1/accounts/${ID}/(follow|unfollow)$`) },
-  { method: 'POST', match: new RegExp(`^/api/v1/statuses/${ID}/(bookmark|unbookmark)$`) },
+  { method: 'POST', match: new RegExp(`^/api/v1/statuses/${ID}/(bookmark|unbookmark|favourite|unfavourite|reblog|unreblog)$`) },
+  { method: 'POST', match: /^\/api\/v1\/statuses$/, body: reply },
   { method: 'POST', match: new RegExp(`^/api/v1/accounts/${ID}/(block|unblock)$`) },
   { method: 'POST', match: /^\/api\/v1\/lists$/, body: title },
   { method: 'PUT', match: new RegExp(`^/api/v1/lists/${ID}$`), body: title },
@@ -424,6 +440,13 @@ const writeReply = z.object({
   following: z.boolean().nullish(),
   requested: z.boolean().nullish(),
   bookmarked: z.boolean().nullish(),
+  favourited: z.boolean().nullish(),
+  reblogged: z.boolean().nullish(),
+  favourites_count: z.number().int().min(0).nullish(),
+  reblogs_count: z.number().int().min(0).nullish(),
+  url: z.string().max(2048).nullish(),
+  /** Boosting answers with the boost, which wraps the post (whose flags and counts are what changed). */
+  reblog: z.object({ reblogged: z.boolean().nullish(), reblogs_count: z.number().int().min(0).nullish() }).nullish(),
   group: z.object({ member: z.boolean().nullish() }).nullish(),
 });
 

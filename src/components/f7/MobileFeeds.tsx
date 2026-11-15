@@ -1,17 +1,18 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Block, BlockFooter, BlockTitle, Link, List, ListItem, Navbar, NavRight, Page, Popup, Toggle } from 'framework7-react';
-import { BASE_FEEDS, circleFeed, circleIdOf, pinCircle, unpinCircle, usePinnedCircles, type FeedKind } from '@/lib/feed-types';
+import { circleIdOf, pinCircle, unpinCircle, usePinnedCircles, type FeedKind } from '@/lib/feed-types';
 import { useAtlasAuth } from '@/components/social/AuthState';
-import { FEED_PROBLEM, useCircleFeed, useForYou } from '@/components/social/useFeeds';
-import { useFedizenCircles, useSaveToggle } from '@/components/social/useFedizenLibrary';
+import { FEED_PROBLEM, useCircleFeed, useFeedTabs, useForYou } from '@/components/social/useFeeds';
+import { useFedizenCircles } from '@/components/social/useFedizenLibrary';
 import { MobileFedizenFeed, MobilePublicFedizen, MobileRecentArticles } from './FedizenMobile';
-import { MobilePostCard } from './MobilePostCard';
+import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
 import { Icon } from './F7Extras';
 
 const KEY = 'atlas-feed';
 
 /**
- * Phone Feeds tab: Following, For You, Articles, Local and pinned circles, as a scrollable row of chips at the top.
+ * Phone Feeds tab: Following, For You, Articles, Local and pinned circles, as a scrollable row of tabs at the top in
+ * the manner of Particle: plain names, the open one in a filled pill, and a dot before any with posts you haven't seen.
  * `following` is the extra content Following shows under your Fedizen timeline (Atlas creators you follow).
  */
 export function MobileFeeds({ following }: { following?: ReactNode }) {
@@ -19,17 +20,19 @@ export function MobileFeeds({ following }: { following?: ReactNode }) {
   const pinned = usePinnedCircles(user?.id);
   const [feed, setFeed] = useState<FeedKind>('following');
   const [pinning, setPinning] = useState(false);
-  useEffect(() => { try { const r = sessionStorage.getItem(KEY) as FeedKind | null; if (r) setFeed(r); } catch { /* fine */ } }, []);
+  const [restored, setRestored] = useState(false);
+  useEffect(() => { try { const r = sessionStorage.getItem(KEY) as FeedKind | null; if (r) setFeed(r); } catch { /* fine */ } setRestored(true); }, []);
   const choose = (k: FeedKind) => { setFeed(k); try { sessionStorage.setItem(KEY, k); } catch { /* fine */ } };
   const circleId = circleIdOf(feed);
   useEffect(() => { if (circleId && !pinned.some(c => c.id === circleId)) choose('following'); }, [circleId, pinned]);
-  const tabs = [...BASE_FEEDS, ...pinned.map(c => ({ id: circleFeed(c.id), label: c.title, hint: '' }))];
+  const tabs = useFeedTabs(restored ? feed : null);
   return <>
-    <div className="atlas-feed-chips" role="tablist" aria-label="Feeds">
-      {tabs.map(t => <button key={t.id} type="button" role="tab" aria-selected={feed === t.id} onClick={() => choose(t.id)} className={feed === t.id ? 'active' : ''}>
-        {t.id.startsWith('circle:') && <Icon ios="f7:circle_grid_hex" md="material:bubble_chart" />}{t.label}
+    <div className="atlas-feed-tabs" role="tablist" aria-label="Feeds">
+      {tabs.map(t => <button key={t.id} type="button" role="tab" aria-selected={feed === t.id} onClick={e => { choose(t.id); e.currentTarget.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' }); }}
+        className={feed === t.id ? 'active' : ''} aria-label={t.isNew ? `${t.label}, new posts` : undefined}>
+        {t.isNew && <span className="atlas-new-dot" aria-hidden="true" />}{t.label}
       </button>)}
-      {user && <button type="button" className="atlas-feed-chip-add" onClick={() => setPinning(true)} aria-label="Pin a circle to Feeds"><Icon ios="f7:plus" md="material:add" />Circle</button>}
+      {user && <button type="button" className="atlas-feed-tab-add" onClick={() => setPinning(true)} aria-label="Pin a circle to Feeds"><Icon ios="f7:plus" md="material:add" /></button>}
     </div>
     {feed === 'following' && <><MobileFedizenFeed />{following}</>}
     {feed === 'foryou' && <MobileForYou />}
@@ -43,33 +46,33 @@ export function MobileFeeds({ following }: { following?: ReactNode }) {
 function MobileForYou() {
   const { user } = useAtlasAuth();
   const q = useForYou(true);
-  const save = useSaveToggle();
+  const actions = useMobilePostActions();
   const d = q.data;
   return <>
-    <BlockTitle>For You</BlockTitle>
-    {save.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{save.error}</p></Block>}
+    {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
     {!user ? <Block strong inset>Sign in to Atlas and connect Fedizen for your For You feed.</Block>
       : q.isLoading ? <Block strong inset>Putting your feed together…</Block>
       : q.isError ? <Block strong inset>{FEED_PROBLEM.unavailable} <Link onClick={() => void q.refetch()}>Try again</Link></Block>
       : d?.error ? <Block strong inset>{FEED_PROBLEM[d.error]}</Block>
       : !d?.posts.length ? <Block strong inset>Nothing here yet. Follow people and hashtags, or join groups, and their posts will gather here.</Block>
-      : d.posts.map(p => <MobilePostCard key={p.url} post={p} save={save} reasons={p.reasons} />)}
+      : d.posts.map(p => <MobilePostCard key={p.url} post={p} actions={actions} reasons={p.reasons} />)}
     {d && !d.error && d.missing.length > 0 && <BlockFooter>Some of For You couldn’t load ({d.missing.map(m => (m === 'following' ? 'people you follow' : m === 'tags' ? 'followed hashtags' : 'your groups')).join(', ')}).</BlockFooter>}
+    {actions.sheet}
   </>;
 }
 
 function MobileCircleFeed({ id, title }: { id: string; title: string }) {
   const { user } = useAtlasAuth();
   const q = useCircleFeed(id);
-  const save = useSaveToggle();
+  const actions = useMobilePostActions();
   return <>
-    <BlockTitle>{title}</BlockTitle>
-    {save.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{save.error}</p></Block>}
+    {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
     {q.isLoading ? <Block strong inset>Loading posts from {title}…</Block>
       : q.isError ? <Block strong inset>{FEED_PROBLEM.unavailable} <Link onClick={() => void q.refetch()}>Try again</Link></Block>
       : q.data?.error ? <Block strong inset>{FEED_PROBLEM[q.data.error]}{q.data.error === 'not-found' && user && <> <Link onClick={() => unpinCircle(user.id, id)}>Unpin it</Link></>}</Block>
       : !q.data?.posts.length ? <Block strong inset>No recent posts from the people in {title}.</Block>
-      : q.data.posts.map(p => <MobilePostCard key={p.id} post={p} save={save} />)}
+      : q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}
+    {actions.sheet}
   </>;
 }
 

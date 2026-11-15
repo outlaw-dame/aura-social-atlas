@@ -11,7 +11,12 @@ describe('Fedizen private reads and writes are allowlisted', () => {
     await expect(fedizenGet('t', '/api/v1/accounts/verify_credentials')).rejects.toThrow('Unsupported Fedizen read path.');
     await expect(fedizenGet('t', '/api/v1/conversations?limit=31')).rejects.toThrow('Unsupported Fedizen read path.');
     await expect(fedizenGet('t', '/api/v1/accounts/relationships?id%5B%5D=a/../b')).rejects.toThrow('Unsupported Fedizen read path.');
-    await expect(fedizenSend('t', 'POST', '/api/v1/statuses')).rejects.toThrow('Unsupported Fedizen write path.');
+    // Atlas posts only replies: a body without the post it answers, or with anything else in it, never leaves.
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses')).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'hi', visibility: 'public' })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'hi', in_reply_to_id: '01A', visibility: 'public', media_ids: ['x'] })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: ' ', in_reply_to_id: '01A', visibility: 'public' })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses/01A/pin')).rejects.toThrow('Unsupported Fedizen write path.');
     await expect(fedizenSend('t', 'POST', '/api/v1-bonfire/groups/a%2F..%2Fx/join')).rejects.toThrow('Unsupported Fedizen write path.');
     await expect(fedizenSend('t', 'DELETE' as 'POST', '/api/v1/accounts/abc/follow')).rejects.toThrow('Unsupported Fedizen write path.');
     expect(called).toBe(false);
@@ -103,5 +108,33 @@ describe('Moderation: blocked people only (Bonfire rc.1 has no client API for ke
     await expect(fedizenGet('t', '/api/v1/domain_blocks')).rejects.toThrow('Unsupported Fedizen read path.');
     await expect(fedizenGet('t', '/api/v2/filters')).rejects.toThrow('Unsupported Fedizen read path.');
     await expect(fedizenSend('t', 'POST', '/api/v1/accounts/01A/block', { reason: 'x' })).rejects.toThrow('Unsupported Fedizen write body.');
+  });
+});
+
+describe('Likes, boosts and replies', () => {
+  test('like and boost reach Fedizen, and the answer keeps the flags and counts Atlas shows', async () => {
+    const seen: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      seen.push({ url, init });
+      return new Response(JSON.stringify(url.endsWith('/reblog')
+        ? { id: 'b1', reblog: { id: '01A', reblogged: true, reblogs_count: 4 }, extra: 'dropped' }
+        : { id: '01A', favourited: true, favourites_count: 9 }));
+    }) as unknown as typeof fetch;
+    const like = await fedizenSend('t', 'POST', '/api/v1/statuses/01A/favourite');
+    expect(like.data).toMatchObject({ favourited: true, favourites_count: 9 });
+    const boost = await fedizenSend('t', 'POST', '/api/v1/statuses/01A/reblog');
+    expect(boost.data?.reblog).toEqual({ reblogged: true, reblogs_count: 4 });
+    expect((boost.data as Record<string, unknown>).extra).toBeUndefined();
+    await fedizenSend('t', 'POST', '/api/v1/statuses/01A/unfavourite');
+    await fedizenSend('t', 'POST', '/api/v1/statuses/01A/unreblog');
+    expect(seen.map(s => s.url)).toEqual(['/api/v1/statuses/01A/favourite', '/api/v1/statuses/01A/reblog', '/api/v1/statuses/01A/unfavourite', '/api/v1/statuses/01A/unreblog'].map(p => `https://fedizen.net${p}`));
+  });
+  test('a reply carries only its text, the post it answers and the audience', async () => {
+    let body: unknown;
+    globalThis.fetch = (async (_u: string, init?: RequestInit) => { body = JSON.parse(String(init?.body)); return new Response(JSON.stringify({ id: 'r1', url: 'https://fedizen.net/post/r1' })); }) as unknown as typeof fetch;
+    const r = await fedizenSend('t', 'POST', '/api/v1/statuses', { status: '@rosa lovely', in_reply_to_id: '01A', visibility: 'private' });
+    expect(r.status).toBe(200);
+    expect(body).toEqual({ status: '@rosa lovely', in_reply_to_id: '01A', visibility: 'private' });
+    expect(r.data?.url).toBe('https://fedizen.net/post/r1');
   });
 });

@@ -8,15 +8,14 @@ import { CollectionLinks } from './CollectionsDesktop';
 import { SaveButton } from './SavedAndCircles';
 import { PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
-import { useSaveToggle } from './useFedizenLibrary';
-import { FeedPostCard } from './FeedPostCard';
+import { FeedPostCard, useFeedPostActions } from './FeedPostCard';
 
 const when = (d?: string) => d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
 /** Desktop: your real Fedizen home timeline and notifications, once you connect your Fedizen account. */
 export function FedizenFeed() {
   const f = useFedizen();
-  const save = useSaveToggle();
+  const actions = useFeedPostActions();
   const head = <div className="mb-5 flex items-baseline justify-between"><h2 className="font-serif text-2xl italic">Your Fedizen feed</h2><span className="text-[10px] uppercase text-muted-foreground">Live</span></div>;
   if (!f.signedIn) return <><section className="mb-12">{head}<p className="text-sm text-muted-foreground">Sign in to Atlas to see your Fedizen feed. <Link to="/auth" className="text-accent underline">Sign in</Link></p></section><PublicFedizenFeed /></>;
   if (f.loading) return <section className="mb-12">{head}<p className="text-sm text-muted-foreground">Loading your Fedizen feed…</p></section>;
@@ -46,10 +45,10 @@ export function FedizenFeed() {
         : null}
     {f.nativeQueryError && <p role="status" className="mb-4 text-xs text-muted-foreground">Native Bonfire request failed. Showing the existing Fedizen timeline.</p>}
     {f.error && <p role="alert" className="mb-4 text-sm text-destructive">{f.error}</p>}
-    {save.error && <p role="alert" className="mb-4 text-sm text-destructive">{save.error}</p>}
+    {actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}
     {error && displayed.source !== 'native' && <p className="mb-4 text-sm text-muted-foreground">Fedizen couldn’t send your timeline right now. <Button variant="link" size="sm" className="px-1" onClick={f.retry}>Try again</Button></p>}
     <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_240px]">
-      <div className="space-y-6">{posts.length ? posts.map(p => <FeedPostCard key={p.id} post={p} save={save} />) : error && displayed.source !== 'native' ? null : <p className="text-sm text-muted-foreground">Your Fedizen timeline is empty. Follow people on Fedizen and their posts will appear here.</p>}
+      <div className="space-y-6">{posts.length ? posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} />) : error && displayed.source !== 'native' ? null : <p className="text-sm text-muted-foreground">Your Fedizen timeline is empty. Follow people on Fedizen and their posts will appear here.</p>}
         {displayed.source === 'native' && (
           <div className="space-y-2">
             {f.moreNativeError && <p role="status" className="text-xs text-muted-foreground">
@@ -66,5 +65,6 @@ export function FedizenFeed() {
         <Button variant="link" size="sm" className="mt-4 px-0 text-xs text-muted-foreground" onClick={() => void f.disconnect()} disabled={f.actionBusy}>{f.actionBusy ? 'Disconnecting…' : 'Disconnect Fedizen'}</Button>
       </aside>
     </div>
+    {actions.dialog}
   </section>;
 }

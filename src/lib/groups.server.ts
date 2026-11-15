@@ -48,8 +48,15 @@ async function gql<T>(query: string, variables: Record<string, unknown> = {}): P
 }
 
 /** Posts reach a group through the group's boost, so the booster is the group, not a person who boosted. */
-const groupPosts = (nodes: BonfireActivityNode[]): GroupPost[] =>
-  fromBonfirePosts(nodes).map(({ boostedBy, ...p }) => ({ ...p, group: boostedBy }));
+/** Bonfire's REST API knows a post by its object id (the same ULID), so group posts can be liked, boosted,
+ *  saved and replied to like any other. */
+const groupPosts = (nodes: BonfireActivityNode[]): GroupPost[] => {
+  const objectOf = new Map(nodes.map(n => [n.id, n.object?.id ?? n.id]));
+  return fromBonfirePosts(nodes).map(({ boostedBy, ...p }) => {
+    const objectId = objectOf.get(p.id);
+    return { ...p, group: boostedBy, ...(objectId && /^[A-Za-z0-9_-]{1,64}$/.test(objectId) ? { objectId } : {}) };
+  });
+};
 
 /** Group posts that keep every group a post was boosted into: the shared mapping shows each post once, under its
  *  first booster, so the others are gathered here first. */

@@ -15,7 +15,7 @@ import type { FedizenPost } from '@/lib/fedizen-feed';
 export type LibraryProblem = 'not-connected' | 'needs-permission' | 'expired' | 'unavailable' | 'not-found';
 export const LIBRARY_PROBLEM: Record<LibraryProblem, string> = {
   'not-connected': 'Connect your Fedizen account to use this.',
-  'needs-permission': 'Reconnect Fedizen so Atlas can save posts and manage circles for you.',
+  'needs-permission': 'Reconnect Fedizen so Atlas can act for you: save, like, boost and reply to posts, and manage circles.',
   expired: 'Fedizen ended Atlas’s access. Connect again to continue.',
   unavailable: 'Fedizen couldn’t do that right now. Try again.',
   'not-found': 'No one with that handle was found on Fedizen.',
