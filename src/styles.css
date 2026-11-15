@@ -225,6 +225,20 @@
 
 /* Centered social profile; the six section names scroll rather than compress. */
 .atlas-profile-popup .page { background: var(--background); color: var(--foreground); }
+/* Dock: the person's avatar stands in for an icon; the active tab gets a ring in the theme colour. */
+.atlas-dock-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.atlas-tabbar .tab-link-active .atlas-dock-avatar { box-shadow: 0 0 0 2px var(--f7-tabbar-link-active-color, var(--f7-theme-color)); }
+/* Activity: avatar with a small badge for the kind of notification. */
+.atlas-activity-media { position: relative; display: block; width: 40px; height: 40px; }
+.atlas-activity-media img, .atlas-activity-initial { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+.atlas-activity-initial { display: grid; place-items: center; background: var(--secondary); font: 400 18px/1 'Instrument Serif', serif; }
+.atlas-activity-kind { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; background: var(--f7-theme-color); box-shadow: 0 0 0 2px var(--f7-list-strong-bg-color, #fff); }
+.atlas-activity-kind .icon { font-size: 12px; }
+.atlas-activity-favourite { background: #e0245e; }
+.atlas-activity-reblog { background: #17bf63; }
+.atlas-activity-follow, .atlas-activity-follow_request { background: #6364ff; }
+.atlas-activity-added_to_collection, .atlas-activity-collection_update { background: #b8860b; }
+.atlas-activity .item-text { -webkit-line-clamp: 3; }
 .atlas-profile-header { text-align: center; padding: 32px 24px 24px; }
 .atlas-profile-avatar { display: block; margin: 0 auto 16px; border-radius: 50%; background: var(--secondary); object-fit: cover; }
 .atlas-profile-header h1 { margin: 0; font-family: var(--font-sans); font-size: 27px; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
@@ -263,6 +277,29 @@
 .atlas-profile-footer .button { color: var(--muted-foreground); width: max-content; margin: 0 auto; }
 .atlas-profile-bio { margin: 14px auto 0; max-width: 320px; font-size: 14px; line-height: 1.6; color: var(--foreground); overflow-wrap: anywhere; white-space: pre-line; }
 .atlas-profile-bio-empty { color: var(--muted-foreground); }
+/* Own profile, Bluesky-style: banner, avatar overlapping it on the left, Edit profile on the right, then
+   name, handle, counts, bio, and an underlined, scrollable tab strip. */
+.atlas-bsky-banner { height: 132px; background: linear-gradient(135deg, color-mix(in oklab, var(--f7-theme-color) 30%, #fff), color-mix(in oklab, var(--f7-theme-color) 8%, #fff)); }
+.atlas-bsky-head { padding: 0 16px 8px; }
+.atlas-bsky-row { display: flex; align-items: flex-end; justify-content: space-between; margin-top: -44px; }
+.atlas-bsky-avatar { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; background: var(--secondary); border: 3px solid var(--f7-page-bg-color, var(--background)); }
+.atlas-bsky-edit { width: auto; padding: 0 16px; margin-bottom: 4px; }
+.atlas-bsky-name { margin: 10px 0 0; font-size: 28px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+.atlas-bsky-handle { margin: 4px 0 0; font-size: 15px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.atlas-bsky-counts { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 0; font-size: 15px; color: var(--muted-foreground); }
+.atlas-bsky-counts strong { color: var(--foreground); font-weight: 600; margin-right: 3px; }
+.atlas-bsky-count-link { color: inherit !important; }
+.atlas-bsky-bio { margin: 12px 0 0; font-size: 15px; line-height: 1.45; }
+.atlas-bsky .atlas-profile-tags { justify-content: flex-start; margin-top: 12px; }
+.atlas-bsky-joined { margin: 10px 0 0; font-size: 13px; color: var(--muted-foreground); }
+.atlas-bsky-joined .icon { font-size: 14px; vertical-align: -2px; margin-right: 3px; }
+.atlas-bsky-tabs { position: sticky; top: 0; z-index: 2; display: flex; overflow-x: auto; scrollbar-width: none; margin-top: 12px; border-bottom: .5px solid var(--border); background: var(--f7-page-bg-color, var(--background)); }
+.atlas-bsky-tabs::-webkit-scrollbar { display: none; }
+.atlas-bsky-tabs button { flex: 1 0 auto; width: auto; margin: 0; display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 44px; padding: 0 14px; border: 0; background: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--muted-foreground); cursor: pointer; position: relative; }
+.atlas-bsky-tabs button .icon { font-size: 12px; }
+.atlas-bsky-tabs button.is-active { color: var(--foreground); }
+.atlas-bsky-tabs button.is-active::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: 0; height: 3px; border-radius: 3px; background: var(--f7-theme-color); }
+.atlas-profile-section-title { margin: 8px 16px 12px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-foreground); }
 .atlas-hashtag { color: var(--accent); text-decoration: none; font-weight: 500; }
 .atlas-hashtag-btn { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; width: auto; text-align: start; }
 .atlas-blocktitle-icon { display: inline-flex; align-items: center; gap: 6px; }
@@ -394,3 +431,74 @@ html[data-nav="deck"] .atlas-tabbar { top: var(--atlas-bottom-y, auto); bottom: 
 html[data-nav="deck"] .atlas-tabbar .toolbar-inner { padding-top: var(--atlas-crease); align-items: flex-start; }
 html[data-nav="deck"] .atlas-tabbar .tab-link { height: 72px; }
 html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--atlas-crease) + 84px) !important; bottom: auto !important; margin-bottom: 0 !important; }
+
+/* Collections (Mastodon 4.6-style curated sets of accounts). */
+.atlas-coll-mine { display: grid; gap: 10px; }
+.atlas-coll-card { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 14px 14px 12px; border: 0; border-radius: 18px; background: var(--f7-list-strong-bg-color, var(--card)); color: var(--foreground); text-align: left; font: inherit; cursor: pointer; }
+.atlas-coll-card > .icon { font-size: 16px; color: var(--muted-foreground); }
+.atlas-coll-card-body { flex: 1; min-width: 0; }
+.atlas-coll-card-body strong { display: block; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.atlas-coll-card-body small { display: block; margin-top: 3px; font-size: 13px; color: var(--muted-foreground); }
+.atlas-coll-avatars { display: inline-flex; flex: 0 0 auto; }
+.atlas-coll-avatars > * { display: grid; place-items: center; width: 32px; height: 32px; margin-left: -10px; border-radius: 50%; object-fit: cover; background: var(--secondary); border: 2px solid var(--f7-list-strong-bg-color, var(--card)); font-size: 14px; color: var(--muted-foreground); }
+.atlas-coll-avatars > *:first-child { margin-left: 0; }
+.atlas-coll-new { justify-self: center; width: auto; padding: 0 18px; margin-top: 6px; gap: 6px; }
+.atlas-coll-new .icon { font-size: 16px; }
+.atlas-coll-head { padding: 20px 20px 4px; text-align: center; }
+.atlas-coll-head .atlas-coll-avatars > * { width: 52px; height: 52px; margin-left: -14px; border-color: var(--f7-page-bg-color, var(--background)); }
+.atlas-coll-head .atlas-coll-avatars > *:first-child { margin-left: 0; }
+.atlas-coll-head h1 { margin: 14px 0 0; font-size: 26px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.atlas-coll-by { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 14px; color: var(--muted-foreground); }
+.atlas-coll-by img { width: 20px; height: 20px; border-radius: 50%; }
+.atlas-coll-meta { margin: 6px 0 0; font-size: 13px; color: var(--muted-foreground); }
+.atlas-coll-desc { margin: 12px auto 0; max-width: 34em; font-size: 15px; line-height: 1.45; }
+.atlas-coll-cw { margin: 14px auto 0; padding: 12px 14px; max-width: 30em; border-radius: 14px; background: var(--secondary); font-size: 14px; }
+.atlas-coll-cw p { margin: 0 0 8px; }
+.atlas-coll-cw .button, .atlas-coll-owner-actions .button { width: auto; padding: 0 16px; display: inline-flex; }
+.atlas-coll-owner-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+.atlas-coll-items .item-media img { border-radius: 50%; object-fit: cover; }
+.atlas-coll-items .button { width: auto; padding: 0 8px; }
+.atlas-coll-editor .sheet-modal-swipe-step { padding-bottom: calc(12px + var(--f7-safe-area-bottom, 0px)); }
+.atlas-coll-editor-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.atlas-coll-editor-actions .button { width: auto; padding: 0 20px; }
+
+/* Groups (Bonfire v1.1.0-rc.1 groups on Fedizen). Groups are rounded squares, people circles. */
+.atlas-group-avatar { display: block; border-radius: 26%; object-fit: cover; background: var(--secondary); flex: none; }
+.atlas-group-initial { display: grid; place-items: center; font-family: 'Instrument Serif', serif; color: var(--foreground); background: color-mix(in oklab, var(--accent) 12%, var(--secondary)); }
+.list.media-list.atlas-group-list .item-subtitle { font-size: 13px; color: var(--muted-foreground); white-space: normal; overflow: visible; text-overflow: clip; }
+.atlas-group-list .item-text { -webkit-line-clamp: 2; }
+.atlas-group-banner { height: 140px; overflow: hidden; background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 26%, #fff), color-mix(in oklab, var(--accent) 6%, #fff)); }
+.atlas-group-banner img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.atlas-group-head { position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 20px 4px; margin-top: -38px; text-align: center; }
+.atlas-group-head .atlas-group-avatar { border: 3px solid var(--f7-page-bg-color, var(--background)); }
+.atlas-group-head h1 { margin: 12px 0 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 30px; line-height: 1.15; overflow-wrap: anywhere; }
+.atlas-group-address { margin: 6px 0 0; padding: 4px 8px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 14px; color: var(--muted-foreground); overflow-wrap: anywhere; cursor: copy; }
+.atlas-group-address:hover { background: var(--secondary); }
+.atlas-group-meta { margin: 4px 0 0; font-size: 13px; color: var(--muted-foreground); }
+.atlas-group-actions { display: flex; gap: 8px; margin-top: 16px; }
+.atlas-group-actions .button { width: auto; padding: 0 20px; }
+.atlas-group-note { margin: 8px 0 0; font-size: 12px; color: var(--muted-foreground); }
+.atlas-group-about p { margin: 0 0 8px; line-height: 1.45; }
+.atlas-group-about p:last-child { margin-bottom: 0; }
+.atlas-group-post-head { display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.atlas-group-post-head img, .atlas-group-post-head .atlas-activity-initial { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex: none; }
+.atlas-group-post-head small { display: block; font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.atlas-group-in { color: var(--muted-foreground); font-weight: 400; }
+.atlas-group-post p { line-height: 1.5; overflow-wrap: anywhere; }
+.atlas-group-post-image { width: 100%; border-radius: 12px; }
+.atlas-group-actions-col { display: flex; flex-direction: column; align-items: center; }
+.atlas-group-actions .button { gap: 4px; min-height: 44px; }
+.atlas-group-actions .button .icon { font-size: 18px; }
+.atlas-group-error { margin: 8px 0 0; font-size: 13px; color: var(--destructive); }
+.atlas-group-segment { margin-bottom: 8px; }
+.atlas-group-search { margin-top: 0; }
+.atlas-group-more { display: flex; justify-content: center; }
+.atlas-group-more .button { width: auto; padding: 0 22px; min-height: 44px; }
+
+/* Top-right actions on the phone's main tabs (Search, Messages), Facebook-style round buttons. Compose floats at the bottom. */
+.atlas-top-actions { gap: 8px; }
+.navbar .atlas-top-btn.link.icon-only { width: 36px; height: 36px; min-width: 36px; padding: 0; border-radius: 50%; justify-content: center;
+  background: color-mix(in oklab, currentColor 8%, transparent); }
+.navbar .atlas-top-btn .icon { font-size: 18px; }
+.atlas-msg-unread .item-title { font-weight: 700; }
+.atlas-msg-dot { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--f7-theme-color); box-shadow: 0 0 0 2px var(--f7-list-strong-bg-color, #fff); }

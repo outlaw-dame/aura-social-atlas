@@ -1,12 +1,12 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
-import { allowedCallback, assertFedizenSessionIntent, fedizenReadError, fromNotifications, fromStatuses, type FedizenNotice, type FedizenPost } from './fedizen-feed';
+import { allowedCallback, assertFedizenSessionIntent, fedizenReadError, fromConversations, fromNotifications, fromStatuses, hasScope, type FedizenConversation, type FedizenNotice, type FedizenPost } from './fedizen-feed';
 
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const { tokenFor } = await import('./fedizen.server');
   const t = await tokenFor(context.userId);
-  return { connected: !!t, handle: t?.account_handle ?? null };
+  return { connected: !!t, handle: t?.account_handle ?? null, canWrite: hasScope(t?.scope, 'write') };
 });
 
 export const startFedizenConnect = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
@@ -45,8 +45,24 @@ export const disconnectFedizen = createServerFn({ method: 'POST' }).middleware([
   await disconnect(context.userId); return { ok: true };
 });
 
+/** Direct conversations (Mastodon `GET /api/v1/conversations`, which Bonfire v1.1.0-rc.1 serves) for Messages. */
+export type FedizenMessages = { connected: boolean; conversations: FedizenConversation[]; error?: 'expired' | 'unavailable' };
+export const getFedizenMessages = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }): Promise<FedizenMessages> => {
+  assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+  const { tokenFor, fedizenGet } = await import('./fedizen.server');
+  const t = await tokenFor(context.userId);
+  if (!t) return { connected: false, conversations: [] };
+  const r = await fedizenGet(t.access_token, '/api/v1/conversations?limit=30');
+  const error = r.status === 401 ? 'expired' : r.status !== 200 ? 'unavailable' : undefined;
+  return { connected: true, conversations: fromConversations(r.data as never), error };
+});
+
 export type FedizenHome = {
   connected: boolean;
+  /** False for connections made before Atlas asked to act for people: they reconnect once to join groups. */
+  canWrite?: boolean;
   /** Verified Fedizen account identifier from the user's own delegated grant. */
   accountHandle: string | null;
   /** Server-authoritative rollout gate; prevents unnecessary native requests while disabled. */
@@ -67,6 +83,7 @@ export const getFedizenHome = createServerFn({ method: 'GET' }).middleware([requ
   return {
     connected: true,
     accountHandle: t.account_handle,
+    canWrite: hasScope(t.scope, 'write'),
     nativeReadEnabled: process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'] === 'verified',
     posts: fromStatuses(home.data as never),
     notices: fromNotifications(notes.data as never),

@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import { deepStrictEqual } from 'node:assert';
-import { creators, matchesCreator, postsByTag } from './social-catalogue';
+import { creators, fullHandle, matchesCreator, postsByTag } from './social-catalogue';
 
 describe('social discovery filters', () => {
   test('network selection limits matches to that network', () => {
@@ -24,5 +24,15 @@ describe('postsByTag', () => {
   });
   test('matches tags case-insensitively', () => {
     deepStrictEqual(postsByTag('airwaves', 'Podcasting20').map(p => p.id), ['waves', 'chapters', 'transcripts']);
+  });
+});
+
+describe('fullHandle', () => {
+  test('writes each network the way it writes handles', () => {
+    const base = creators[0];
+    deepStrictEqual(fullHandle({ ...base, handle: '@ann', domain: 'mastodon.social', network: 'Mastodon' }), '@ann@mastodon.social');
+    deepStrictEqual(fullHandle({ ...base, handle: '@ann', domain: 'bsky.social', network: 'Bluesky' }), '@ann.bsky.social');
+    deepStrictEqual(fullHandle({ ...base, handle: 'ann.example/feed.xml', domain: 'rss', network: 'RSS' }), 'ann.example/feed.xml');
+    deepStrictEqual(fullHandle({ ...base, handle: '@ann@fedizen.net', domain: 'fedizen.net', network: 'Fedizen' }), '@ann@fedizen.net');
   });
 });

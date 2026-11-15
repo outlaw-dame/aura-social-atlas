@@ -74,17 +74,25 @@ export async function registerFedizenOAuthApp(
 
 async function appFor(redirectUri: string) {
   const db = await admin();
-  const { data, error: lookupError } = await db.from('fedizen_oauth_apps').select('client_id, client_secret').eq('redirect_uri', redirectUri).maybeSingle();
+  // An app registered for fewer scopes can't be granted more, so the scopes it was registered with are kept
+  // and a new app is registered when Atlas asks for different ones (migration 0004).
+  const lookup = await db.from('fedizen_oauth_apps').select('client_id, client_secret, scopes').eq('redirect_uri', redirectUri).maybeSingle();
+  // Until migration 0004 adds `scopes` (Postgres 42703, undefined column), keep the existing registration as-is:
+  // connecting still works, and group joins ask to reconnect once the column exists.
+  const legacy = lookup.error?.code === '42703';
+  const { data, error: lookupError } = legacy
+    ? await db.from('fedizen_oauth_apps').select('client_id, client_secret').eq('redirect_uri', redirectUri).maybeSingle()
+    : lookup;
   if (lookupError) throw new Error('Could not read Fedizen OAuth app registration.');
-  if (data) {
+  if (data && (legacy || (data as { scopes?: string }).scopes === FEDIZEN_API_SCOPE)) {
     const stored = parseFedizenOAuthApp(data);
     if (!stored) throw new Error('Stored Fedizen OAuth app credentials are invalid.');
     return stored;
   }
   const registered = await registerFedizenOAuthApp(redirectUri);
-  const { error: registrationError } = await db.from('fedizen_oauth_apps').insert({
-    redirect_uri: redirectUri, ...registered,
-  });
+  const { error: registrationError } = await db.from('fedizen_oauth_apps').upsert(
+    legacy ? { redirect_uri: redirectUri, ...registered } : { redirect_uri: redirectUri, ...registered, scopes: FEDIZEN_API_SCOPE },
+  );
   if (registrationError) throw new Error('Could not persist Fedizen OAuth app registration.');
   return registered;
 }
@@ -124,8 +132,10 @@ export function parseFedizenReadGrant(payload: unknown): { access_token: string;
   const token = (payload as Record<string, unknown>).access_token;
   const scope = (payload as Record<string, unknown>).scope;
   if (typeof token !== 'string' || !token.trim() || token.length > 8192 || /[\r\n]/.test(token)) return null;
-  if (scope !== undefined && (typeof scope !== 'string' ||
-    !scope.split(/\s+/).includes(FEDIZEN_API_SCOPE))) return null;
+  // Atlas asks for "read write follow". Reading is required; whatever else Fedizen granted is stored as granted,
+  // and each write checks for its own scope (an older read-only grant reconnects before joining a group).
+  if (scope !== undefined && (typeof scope !== 'string' || scope.length > 512 ||
+    !scope.split(/\s+/).includes('read'))) return null;
   return { access_token: token, scope: typeof scope === 'string' ? scope : FEDIZEN_API_SCOPE };
 }
 
@@ -235,7 +245,7 @@ export async function connectionFor(
   userId: string,
 ) {
   const { data, error } = await db.from('fedizen_connections')
-    .select('access_token, account_handle').eq('user_id', userId).maybeSingle();
+    .select('access_token, account_handle, scope').eq('user_id', userId).maybeSingle();
   if (error) throw new Error('Could not read Fedizen connection.');
   return data;
 }
@@ -250,7 +260,7 @@ export async function disconnect(userId: string): Promise<void> {
   if (error) throw new Error('Could not disconnect Fedizen account.');
 }
 
-/** Server-side schema projection for the two existing read-only endpoints.
+/** Server-side schema projection for each private endpoint Atlas reads.
  * Reject malformed nested objects instead of crashing the personal timeline,
  * and strip unknown fields before they reach UI normalizers. */
 const account = z.object({
@@ -284,15 +294,36 @@ const notice = z.object({
 });
 const homeSchema = z.array(timelineStatus).max(20);
 const notificationsSchema = z.array(notice).max(20);
+/** Mastodon Relationship (Bonfire answers it for groups too; members follow their groups). */
+const relationship = z.object({
+  id: z.string().min(1).max(64),
+  following: z.boolean().nullish(),
+  requested: z.boolean().nullish(),
+});
+const relationshipsSchema = z.array(relationship).max(40);
+/** Mastodon Conversation (Bonfire v1.1.0-rc.1: bonfire_api_graphql masto_compatible_router, GET /conversations). */
+const conversation = z.object({
+  id: z.string().min(1),
+  unread: z.boolean().nullish(),
+  accounts: z.array(account).max(50).nullish(),
+  last_status: status.nullish(),
+});
+const conversationsSchema = z.array(conversation).max(30);
+
+const ID = '[A-Za-z0-9_-]{1,64}';
+/** Every private read Atlas makes, each with the schema its answer must match. Anything else is refused. */
+const READS: { match: RegExp; schema: z.ZodType<unknown[]> }[] = [
+  { match: /^\/api\/v1\/timelines\/home\?limit=20$/, schema: homeSchema },
+  { match: /^\/api\/v1\/notifications\?limit=20$/, schema: notificationsSchema },
+  { match: /^\/api\/v1\/conversations\?limit=30$/, schema: conversationsSchema },
+  { match: new RegExp(`^/api/v1/accounts/relationships\\?id%5B%5D=${ID}(&id%5B%5D=${ID}){0,39}$`), schema: relationshipsSchema },
+];
 
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;
 
 export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {
-  // The only permitted private REST fallbacks until the equivalent GraphQL
-  // operations are verified against Fedizen's installed Community schema.
-  const home = path === '/api/v1/timelines/home?limit=20';
-  const notifications = path === '/api/v1/notifications?limit=20';
-  if (!home && !notifications) throw new Error('Unsupported Fedizen read path.');
+  const read = READS.find(r => r.match.test(path));
+  if (!read) throw new Error('Unsupported Fedizen read path.');
 
   let response: Response;
   try {
@@ -320,6 +351,49 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
     // Do not log bearer values or private response bodies.
     return { status: 502, data: [] };
   }
-  const parsed = (home ? homeSchema : notificationsSchema).safeParse(payload);
+  const parsed = read.schema.safeParse(payload);
   return parsed.success ? { status: 200, data: parsed.data } : { status: 502, data: [] };
+}
+
+/**
+ * The writes Atlas makes as the person, and nothing else: join or leave a Bonfire group
+ * (/api/v1-bonfire/groups/:id/join|leave), and follow or unfollow an account or announcement channel.
+ * Same transport rules as reads: fixed host, no redirects, no caching, bounded reply, nothing logged.
+ */
+const WRITES = [
+  new RegExp(`^/api/v1-bonfire/groups/${ID}/(join|leave)$`),
+  new RegExp(`^/api/v1/accounts/${ID}/(follow|unfollow)$`),
+];
+const writeReply = z.object({
+  id: z.string().max(64).nullish(),
+  following: z.boolean().nullish(),
+  requested: z.boolean().nullish(),
+  group: z.object({ member: z.boolean().nullish() }).nullish(),
+});
+
+export async function fedizenSend(token: string, method: 'POST', path: string): Promise<{ status: number; data: Record<string, unknown> | null }> {
+  if (method !== 'POST' || !WRITES.some(w => w.test(path))) throw new Error('Unsupported Fedizen write path.');
+  let response: Response;
+  try {
+    response = await fetch(`${FEDIZEN}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(10000),
+      redirect: 'error',
+      cache: 'no-store',
+    });
+  } catch {
+    return { status: 503, data: null };
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    return { status: response.status, data: null };
+  }
+  try {
+    const parsed = writeReply.safeParse(await readBoundedFedizenJson(response, 65536));
+    return { status: response.status, data: parsed.success ? parsed.data : null };
+  } catch {
+    // A 2xx with an unreadable body: the write happened, so report success without state.
+    return { status: response.status, data: null };
+  }
 }

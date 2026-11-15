@@ -29,7 +29,7 @@ describe('Fedizen OAuth app-registration response boundary', () => {
       expect(init?.cache).toBe('no-store');
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       expect(body.redirect_uris).toBe('https://atlas.lovable.app/fedizen/callback');
-      expect(body.scopes).toBe('read');
+      expect(body.scopes).toBe('read write follow');
       return new Response('{"client_id":"id","client_secret":"secret"}');
     }) as typeof fetch;
     expect(await registerFedizenOAuthApp('https://atlas.lovable.app/fedizen/callback', fetcher))

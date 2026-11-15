@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { allowedCallback, FEDIZEN_API_SCOPE } from '../src/lib/fedizen-feed';
 
 describe('Fedizen OAuth redirect-origin trust boundary', () => {
-  test('delegated authorization remains read-only', () => {
-    expect(FEDIZEN_API_SCOPE).toBe('read');
+  test('asks Fedizen to read and to act for the person (join groups, follow)', () => {
+    expect(FEDIZEN_API_SCOPE).toBe('read write follow');
   });
 
   test('accepts only the exact browser request origin on the current Atlas host', () => {

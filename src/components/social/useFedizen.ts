@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { useServerFn } from '@tanstack/react-start';
 import { useRef, useState } from 'react';
 import { useAtlasAuth } from './AuthState';
-import { disconnectFedizen, getFedizenHome, startFedizenConnect, type FedizenHome } from '@/lib/fedizen.functions';
+import { disconnectFedizen, getFedizenHome, getFedizenMessages, startFedizenConnect, type FedizenHome } from '@/lib/fedizen.functions';
 import { getNativeBonfireSnapshot, getNativeBonfireHomeContinuation } from '@/lib/bonfire-private.functions';
 import { mergeNativeBonfirePages, nextNativeHomeCursor, reconcileNativeContinuationStatus, shouldRequestNativeBonfireHome } from '@/lib/bonfire-native-presentation';
 import { isEmbeddedPreview } from '@/lib/bonfire-auth';
@@ -128,4 +128,17 @@ export function useFedizen() {
       }
     },
   };
+}
+
+/** Direct conversations from the person's Fedizen account, for Messages. Loaded only when Messages is opened. */
+export function useFedizenMessages(enabled = true) {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getFedizenMessages);
+  const id = user?.id;
+  const q = useQuery({
+    queryKey: ['fedizen-messages', id],
+    queryFn: () => { if (!id) throw new Error('Atlas user is not signed in.'); return read({ data: { expectedAtlasUserId: id } }); },
+    enabled: !!id && enabled, staleTime: 30_000,
+  });
+  return { data: q.data, loading: !!user && enabled && q.isLoading, queryError: q.isError, retry: () => { void q.refetch(); } };
 }
