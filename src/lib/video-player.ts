@@ -27,6 +27,8 @@ const listeners = new Set<() => void>();
 const set = (patch: Partial<VideoState>) => { state = { ...state, ...patch }; listeners.forEach(l => l()); };
 
 let el: HTMLVideoElement | null = null;
+/** Bumped on every load and on close, so a load that resolves late (hls.js arriving) can tell it's stale. */
+let generation = 0;
 let hls: { destroy(): void } | null = null;
 let dock: HTMLElement | null = null;
 /** Posts showing the loaded video, and whether each is on screen. */
@@ -41,7 +43,7 @@ function element(): HTMLVideoElement {
   const sync = () => set({ time: v.currentTime, duration: Number.isFinite(v.duration) ? v.duration : state.video?.duration });
   v.addEventListener('timeupdate', sync);
   v.addEventListener('loadedmetadata', sync);
-  v.addEventListener('playing', () => { claimMedia('video', () => v.pause()); set({ playing: true, loading: false, error: false }); });
+  v.addEventListener('playing', () => { claimMedia('video', () => v.pause()); if (state.video) mediaSession(state.video); set({ playing: true, loading: false, error: false }); });
   v.addEventListener('pause', () => set({ playing: false, loading: false }));
   v.addEventListener('waiting', () => set({ loading: true }));
   v.addEventListener('volumechange', () => set({ muted: v.muted }));
@@ -79,7 +81,9 @@ function place() {
   if (mode !== state.mode) set({ mode });
 }
 
-async function load(v: HTMLVideoElement, video: FediVideo) {
+/** Loads the video; false if another load or a close superseded it meanwhile. */
+async function load(v: HTMLVideoElement, video: FediVideo): Promise<boolean> {
+  const mine = ++generation;
   hls?.destroy(); hls = null;
   v.removeAttribute('src');
   v.poster = video.poster ?? '';
@@ -89,7 +93,8 @@ async function load(v: HTMLVideoElement, video: FediVideo) {
     if (nativeHls) v.src = video.hls;
     else {
       const { default: Hls } = await import('hls.js');
-      if (!Hls.isSupported()) { if (file) v.src = file.src; else set({ error: true }); return; }
+      if (mine !== generation) return false;
+      if (!Hls.isSupported()) { if (file) v.src = file.src; else set({ error: true }); return true; }
       const h = new Hls({ capLevelToPlayerSize: true });
       h.loadSource(video.hls);
       h.attachMedia(v);
@@ -97,11 +102,20 @@ async function load(v: HTMLVideoElement, video: FediVideo) {
     }
   } else if (file) v.src = file.src;
   else set({ error: true });
+  return true;
 }
 
+/** Lock-screen and headphone controls follow whatever is playing: when the video takes over, its handlers replace
+ *  the podcast player's (which re-registers its own when it plays again). */
 function mediaSession(video: FediVideo) {
   if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
   navigator.mediaSession.metadata = new MediaMetadata({ title: video.title ?? 'Video', artist: video.creator?.name ?? '', artwork: video.poster ? [{ src: video.poster }] : [] });
+  const on = (a: MediaSessionAction, h: MediaSessionActionHandler | null) => { try { navigator.mediaSession.setActionHandler(a, h); } catch { /* unsupported */ } };
+  on('play', () => { void el?.play().catch(() => undefined); });
+  on('pause', () => el?.pause());
+  on('seekbackward', d => { if (el) seekVideo(el.currentTime - (d.seekOffset ?? 10)); });
+  on('seekforward', d => { if (el) seekVideo(el.currentTime + (d.seekOffset ?? 10)); });
+  on('seekto', d => { if (d.seekTime != null) seekVideo(d.seekTime); });
 }
 
 /** Play this video in its post (loading it if another was playing), or pause it. */
@@ -110,8 +124,7 @@ export async function playVideo(video: FediVideo) {
   if (state.video?.url !== video.url) {
     v.pause();
     set({ video, mode: 'inline', playing: false, loading: true, time: 0, duration: video.duration, error: false });
-    await load(v, video);
-    mediaSession(video);
+    if (!(await load(v, video)) || state.video?.url !== video.url) return;
   }
   place();
   v.play().catch((e: unknown) => { if (!(e instanceof DOMException && e.name === 'AbortError')) set({ loading: false, error: true }); });
@@ -123,6 +136,7 @@ export function seekVideo(t: number) { if (el) el.currentTime = Math.max(0, Math
 /** Close: stop and unload the video, and drop the floating player. */
 export function closeVideo() {
   const v = el;
+  generation++;
   if (v) { v.pause(); hls?.destroy(); hls = null; v.removeAttribute('src'); v.load(); v.remove(); }
   if (frame) frame.hidden = true;
   set({ video: undefined, mode: 'none', playing: false, loading: false, time: 0, duration: undefined, error: false });

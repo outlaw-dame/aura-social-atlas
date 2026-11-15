@@ -38,7 +38,7 @@ function element(): HTMLAudioElement {
   a.addEventListener('timeupdate', sync);
   a.addEventListener('durationchange', sync);
   a.addEventListener('loadedmetadata', sync);
-  a.addEventListener('playing', () => { claimMedia('audio', () => a.pause()); set({ playing: true, loading: false, error: false }); });
+  a.addEventListener('playing', () => { claimMedia('audio', () => a.pause()); if (episode) mediaSession(episode); set({ playing: true, loading: false, error: false }); });
   a.addEventListener('pause', () => set({ playing: false, loading: false }));
   a.addEventListener('waiting', () => set({ loading: true }));
   a.addEventListener('ended', () => set({ playing: false, time: a.duration || state.time }));

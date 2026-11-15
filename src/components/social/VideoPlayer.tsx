@@ -1,9 +1,10 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2, Play, PictureInPicture2, Radio } from 'lucide-react';
 import { openFediProfile } from '@/lib/fedi-profile';
 import type { FediVideo } from '@/lib/fedi-video';
 import { clock } from '@/lib/podcast-episode';
 import { hostVideo, playVideo, setHostVisible, useVideoState } from '@/lib/video-player';
+import { claimMedia, releaseMedia } from '@/lib/media-focus';
 
 /**
  * A video in a post (PeerTube, an attached video, a video podcast episode), on phone and desktop. It plays in the
@@ -26,6 +27,15 @@ export function VideoPlayer({ video, className = '' }: { video: FediVideo; class
     io.observe(el);
     return () => { io.disconnect(); off(); };
   }, [mine, video.url]);
+
+  // PeerTube's own player can't be paused from here, so when anything else starts it closes, and when it opens
+  // everything else pauses.
+  useEffect(() => {
+    if (!embed) return;
+    const owner = `embed:${video.url}`;
+    claimMedia(owner, () => setEmbed(false));
+    return () => releaseMedia(owner);
+  }, [embed, video.url]);
 
   const ratio = video.aspect ?? 16 / 9;
   const start = () => { if (playable) void playVideo(video); else if (video.embed) setEmbed(true); };
