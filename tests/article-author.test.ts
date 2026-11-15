@@ -79,6 +79,7 @@ describe("ActivityPub-native articles (what Mastodon's link previews ignore)", (
       name: "Jane Writer",
       acct: "@jane@blog.example.org",
       url: "https://blog.example.org/@jane",
+      actor: "https://blog.example.org/users/jane",
       avatar: "https://cdn.example.org/jane.png",
       verifiedBy: "activitypub",
     });

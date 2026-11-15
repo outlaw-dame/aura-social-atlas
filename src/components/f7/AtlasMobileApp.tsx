@@ -18,6 +18,8 @@ import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { ProfileView, EditProfileSheet } from './ProfileView';
 import { CollectionPopup } from './Collections';
+import { FediProfilePopup } from './FediProfile';
+import { useFediProfileOpener } from '@/components/social/useFediProfile';
 import { GroupPopup, MobileGroups } from './Groups';
 import type { Group } from '@/lib/groups';
 import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
@@ -130,6 +132,7 @@ export default function AtlasMobileApp() {
   const [fabHidden, setFabHidden] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [moderationOpen, setModerationOpen] = useState(false);
+  const fediProfile = useFediProfileOpener();
   /* Search lives on Discover: go there and put the cursor in the field. */
   const openSearch = () => {
     f7.tab.show('#tab-discover');
@@ -393,6 +396,7 @@ export default function AtlasMobileApp() {
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       <MessagesPopup opened={messagesOpen} onClose={() => setMessagesOpen(false)} />
       <ModerationPopup opened={moderationOpen} onClose={() => setModerationOpen(false)} />
+      <FediProfilePopup target={fediProfile.target} onClose={fediProfile.close} />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
   );

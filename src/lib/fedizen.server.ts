@@ -291,6 +291,7 @@ const status = z.object({
     title: z.string().max(500).nullish().catch(null),
     provider_name: z.string().max(200).nullish().catch(null),
     author_name: z.string().max(200).nullish().catch(null),
+    author_url: z.string().max(2048).nullish().catch(null),
   }).nullish().catch(null),
 });
 // The REST client only reads one reblog level. Avoid unbounded recursion.

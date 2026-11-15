@@ -17,12 +17,18 @@
  * The network side (safe fetching, caching) is in article-author.server.ts.
  */
 
-export type AttributionSource = "mastodon" | "activitypub" | "fediverse-creator" | "fedizen";
+export type AttributionSource =
+  | "mastodon"
+  | "activitypub"
+  | "fediverse-creator"
+  | "author-link"
+  | "fedizen";
 /** How each author was verified, in plain words for the reader. */
 export const ATTRIBUTION_NOTE: Record<AttributionSource, string> = {
   mastodon: "Credited by Mastodon from the publisher’s page",
   activitypub: "From the article’s own ActivityPub record",
   "fediverse-creator": "Confirmed by the author’s fediverse profile",
+  "author-link": "The publisher’s author page is their fediverse account",
   fedizen: "Published on Fedizen",
 };
 
@@ -30,8 +36,10 @@ export type FediAuthor = {
   name: string;
   /** Full handle, e.g. "@jane@example.social". */
   acct: string;
-  /** Profile page to open (the actor's `url`, else its id). */
+  /** Profile page on their own server (the actor's `url`, else its id). */
   url: string;
+  /** The ActivityPub actor id, so Atlas can open the account itself. Older cached entries may lack it. */
+  actor?: string;
   avatar?: string;
   /** How the authorship was established — shown to readers. */
   verifiedBy: AttributionSource;
@@ -201,7 +209,7 @@ export function actorToAuthor(
   const icon = list(actor.icon)
     .map((i) => (isObj(i) ? linkHref(i.url) : linkHref(i)))
     .find(Boolean);
-  return { name, acct, url: linkHref(actor.url) ?? id, avatar: icon, verifiedBy };
+  return { name, acct, url: linkHref(actor.url) ?? id, actor: id, avatar: icon, verifiedBy };
 }
 
 /** fediverse:creator value → "user@domain" (accepts "@user@domain" and "acct:user@domain"). */
@@ -240,7 +248,7 @@ function tags(html: string, name: string): Record<string, string>[] {
 export function parseArticleHead(
   html: string,
   pageUrl: string,
-): { apAlternate?: string; creators: string[] } {
+): { apAlternate?: string; creators: string[]; authorLinks: string[] } {
   const end = html.search(/<\/head\s*>/i);
   const head = (end > 0 ? html.slice(0, end) : html).slice(0, 262_144);
   let apAlternate: string | undefined;
@@ -272,7 +280,21 @@ export function parseArticleHead(
     .filter((m) => (m.name ?? m.property ?? "").toLowerCase() === "fediverse:creator")
     .map((m) => parseHandle(m.content))
     .filter((h): h is string => !!h);
-  return { apAlternate, creators: [...new Set(creators)].slice(0, MAX_AUTHORS) };
+  // rel="author" links (head <link>, or <a> anywhere): a publisher's author page is often the author's
+  // ActivityPub actor too (WordPress with the ActivityPub plugin serves both at one URL).
+  const authorLinks: string[] = [];
+  for (const t of [...tags(head, "link"), ...tags(html.slice(0, 524_288), "a")]) {
+    if (!(t.rel ?? "").toLowerCase().split(/\s+/).includes("author") || !t.href) continue;
+    try {
+      const u = new URL(t.href, pageUrl);
+      u.hash = "";
+      if (isPublicHttpsUrl(u.href) && !authorLinks.includes(u.href)) authorLinks.push(u.href);
+    } catch {
+      /* ignore */
+    }
+    if (authorLinks.length >= MAX_AUTHORS) break;
+  }
+  return { apAlternate, creators: [...new Set(creators)].slice(0, MAX_AUTHORS), authorLinks };
 }
 
 /** WebFinger JRD → the ActivityPub actor URL. */

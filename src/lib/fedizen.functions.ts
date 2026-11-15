@@ -101,7 +101,8 @@ async function withArticleAuthors(posts: FedizenPost[], budgetMs = 2000): Promis
   const urls = posts.map(p => p.article?.url).filter((u): u is string => !!u);
   if (!urls.length) return posts;
   const { resolveAuthorsFor } = await import('./article-author.server');
-  const found = await resolveAuthorsFor(urls, budgetMs).catch(() => new Map<string, never[]>());
+  const hints = Object.fromEntries(posts.flatMap(p => (p.article?.authorUrl ? [[p.article.url, { authorUrl: p.article.authorUrl }]] : [])));
+  const found = await resolveAuthorsFor(urls, budgetMs, undefined, undefined, hints).catch(() => new Map<string, never[]>());
   return posts.map(p => { const a = p.article && found.get(p.article.url); return a?.length ? { ...p, article: { ...p.article!, authors: a } } : p; });
 }
 
