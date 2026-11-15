@@ -26,7 +26,7 @@ function Callback() {
     ran.current = true;
     let back = '/feeds';
     try { back = safeReturnPath(sessionStorage.getItem(RETURN_KEY)); sessionStorage.removeItem(RETURN_KEY); } catch { /* storage unavailable */ }
-    finish({ data: { code, state } }).then(r => r.ok ? window.location.assign(back) : setMsg(r.error)).catch(() => setMsg('Something went wrong. Please try again.'));
+    finish({ data: { code, state, expectedAtlasUserId: user.id } }).then(r => r.ok ? window.location.assign(back) : setMsg(r.error)).catch(() => setMsg('Something went wrong. Please try again.'));
   }, [loading, user, finish, navigate]);
   return <main className="grid min-h-screen place-items-center bg-background p-6 text-center text-foreground"><div><h1 className="font-serif text-3xl">Fedizen</h1><p className="mt-3 text-sm text-muted-foreground">{msg}</p><a href="/feeds" className="mt-5 inline-block text-sm text-accent underline">Back to Feeds</a></div></main>;
 }

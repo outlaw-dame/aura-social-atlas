@@ -1,0 +1,72 @@
+name: Gateway disposable PostgreSQL outage and queue recovery
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-postgres-outage-drill.yml'
+      - 'discovery-gateway/scripts/postgres-outage-drill.ts'
+permissions:
+  contents: read
+jobs:
+  isolated-postgres-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      pg:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: atlas_drill
+          POSTGRES_PASSWORD: synthetic_ci_only
+          POSTGRES_DB: atlas_drill
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U atlas_drill -d atlas_drill"
+          --health-interval 2s --health-timeout 2s --health-retries 15
+    env:
+      GATEWAY_TEST_DATABASE_URL: postgres://atlas_drill:synthetic_ci_only@127.0.0.1:5432/atlas_drill
+      ATLAS_DISPOSABLE_DB_DRILL: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - name: Install pinned gateway packages
+        working-directory: discovery-gateway
+        run: bun install --frozen-lockfile
+      - name: Commit a durable message before the outage
+        working-directory: discovery-gateway
+        run: bun scripts/postgres-outage-drill.ts seed
+      - name: Stop isolated PostgreSQL and independently verify unavailability
+        env:
+          CONTAINER: ${{ job.services.pg.id }}
+        run: |
+          set -euo pipefail
+          test -n "$CONTAINER"
+          docker stop "$CONTAINER" >/dev/null
+          if pg_isready -h 127.0.0.1 -p 5432 -U atlas_drill; then
+            echo 'Database remained ready after stop' >&2
+            exit 1
+          fi
+          echo 'drill.postgres_unavailable'
+      - name: Restart only the disposable PostgreSQL and await readiness
+        if: always()
+        env:
+          CONTAINER: ${{ job.services.pg.id }}
+        run: |
+          set -euo pipefail
+          test -n "$CONTAINER"
+          docker start "$CONTAINER" >/dev/null
+          ready=0
+          for attempt in $(seq 1 30); do
+            if pg_isready -h 127.0.0.1 -p 5432 -U atlas_drill >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = 1
+          echo 'drill.postgres_restarted'
+      - name: Consume the same message once from a fresh worker
+        working-directory: discovery-gateway
+        run: bun scripts/postgres-outage-drill.ts verify

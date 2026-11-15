@@ -116,7 +116,7 @@ const fz = () => import('./fedizen.server');
 export async function memberships(userId: string, ids: string[]): Promise<{ ok: true; memberships: Record<string, Membership> } | { ok: false; reason: MembershipProblem }> {
   const t = await (membershipNet.token ?? (await fz()).tokenFor)(userId);
   if (!t) return { ok: false, reason: 'not-connected' };
-  const q = ids.map(id => `id[]=${encodeURIComponent(id)}`).join('&');
+  const q = ids.map(id => `id%5B%5D=${encodeURIComponent(id)}`).join('&');
   const r = await (membershipNet.get ?? (await fz()).fedizenGet)(t.access_token, `/api/v1/accounts/relationships?${q}`);
   if (r.status !== 200) return { ok: false, reason: problemFromStatus(r.status) };
   const out: Record<string, Membership> = {};

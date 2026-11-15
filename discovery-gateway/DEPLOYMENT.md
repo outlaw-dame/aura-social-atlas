@@ -1,6 +1,6 @@
 # Atlas Discovery Gateway — isolated staging deployment
 
-**State:** deployment template and CI image build only; no infrastructure has been provisioned, and no external signed federation has been proven. Do not use Fedizen's database, actor signing keys, relay subscriptions, or production domain.
+**State (2026-11-07):** The gateway is live in isolated Railway Hobby staging, accessible only through Cloudflare Tunnel, with separate web/worker and dedicated private PostgreSQL. Independent external signed federation acceptance and strict origin-denial checks have passed. **Production remains blocked** pending encrypted offsite backups, enforceable egress restrictions, fault-recovery/operations sign-off and moderation/retention. This document's Fly.io example is an **alternative deployment template**, not the live topology. For verified staging details and exact remaining gates, read [RAILWAY.md](./RAILWAY.md), [CLOUDFLARE_TUNNEL.md](./CLOUDFLARE_TUNNEL.md), [OPERATIONS.md](./OPERATIONS.md) and [release issue #23](https://github.com/outlaw-dame/aura-social-atlas/issues/23). Do not use Fedizen's database, actor signing keys, relay subscriptions, or production domain.
 
 ## 1. Environment and isolation
 

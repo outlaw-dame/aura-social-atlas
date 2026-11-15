@@ -1,10 +1,10 @@
 # Atlas Discovery Gateway
 
-**Status: merged prototype on `main`; not deployed and not production-ready.** This is an independent ActivityPub **subscriber**, not the existing `relay/` relay server and not a native Bonfire extension.
+**Status (2026-11-07): deployed to isolated Railway staging behind a healthy outbound-only Cloudflare Tunnel; tested, but NOT production-approved.** This is an independent ActivityPub **subscriber**, not the existing `relay/` relay server and not a native Bonfire extension.
 
 The gateway runs on its own HTTPS origin with a service actor, durable PostgreSQL, Fedify-based signed Follow/Undo delivery and authenticated inbox handling, and a public read-only discovery API. It never uses Fedizen's signing keys or modifies Fedizen's database.
 
-For isolated container staging, separated web/worker processes, database connection requirements, backups, and the go/no-go checklist, see [DEPLOYMENT.md](./DEPLOYMENT.md). No hosting resources are provisioned by this repository.
+For verified Railway/Cloudflare staging, signed external acceptance, incident/recovery requirements and production go/no-go, see [OPERATIONS.md](./OPERATIONS.md), [RAILWAY.md](./RAILWAY.md), [CLOUDFLARE_TUNNEL.md](./CLOUDFLARE_TUNNEL.md) and [release issue #23](https://github.com/outlaw-dame/aura-social-atlas/issues/23). [DEPLOYMENT.md](./DEPLOYMENT.md) retains a separate Fly.io template, not the current live configuration.
 
 ## Run locally
 
@@ -49,7 +49,7 @@ For staging, `combined` is suitable for validating behavior on a single instance
 - `GET /healthz` returns database health.
 - `GET /api/v1/items?limit=15&cursor=&tag=&domain=&q=` returns `{items,nextCursor}` from verified stored content. No demo records.
 - `GET /api/v1/facets` returns observed tags and domains.
-- `GET /admin/subscriptions`, `POST /admin/subscriptions`, `DELETE /admin/subscriptions/:id`, `POST /admin/subscriptions/:id/retry`: all require `Authorization: Bearer <admin token>`. The admin API has no cross-origin browser access and should be restricted to a private network or operator-only gateway.
+- `GET /admin/subscriptions`, `POST /admin/subscriptions`, `DELETE /admin/subscriptions/:id`, `POST /admin/subscriptions/:id/retry`: all require `Authorization: Bearer <admin token>`. The admin API is bound to a **separate private listener** (default port 4101) and requires the bearer token; the public listener (default 4100) returns 404 for every /admin route even if Cloudflare is bypassed. Never attach a public Railway domain or TCP proxy to port 4101.
 
 ## Inbound federation admission control
 

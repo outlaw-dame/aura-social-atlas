@@ -238,6 +238,6 @@ describe("membership", () => {
     membershipNet.token = async () => ({ access_token: "tok", scope: "read" });
     membershipNet.get = (async (_t: string, p: string) => { path = p; return { status: 200, data: [{ id: "g1", following: true }, { id: "g2", requested: true }, { id: "g3" }] }; }) as never;
     expect(await memberships("u1", ["g1", "g2", "g3"])).toEqual({ ok: true, memberships: { g1: "member", g2: "requested", g3: "none" } });
-    expect(path).toBe("/api/v1/accounts/relationships?id[]=g1&id[]=g2&id[]=g3");
+    expect(path).toBe("/api/v1/accounts/relationships?id%5B%5D=g1&id%5B%5D=g2&id%5B%5D=g3");
   });
 });

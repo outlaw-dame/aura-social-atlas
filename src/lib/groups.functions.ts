@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import type { Group, GroupPost, Membership, MembershipProblem } from './groups';
+import { assertFedizenSessionIntent } from './fedizen-feed';
 
 const server = () => import('./groups.server');
 
@@ -34,12 +35,16 @@ const groupId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 
 /** Your membership of these groups (needs a Fedizen connection). */
 export const getMemberships = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => z.object({ ids: z.array(groupId).min(1).max(40) }).parse(d))
-  .handler(async ({ data, context }): Promise<{ ok: true; memberships: Record<string, Membership> } | { ok: false; reason: MembershipProblem }> =>
-    (await server()).memberships(context.userId, data.ids));
+  .inputValidator(d => z.object({ ids: z.array(groupId).min(1).max(40), expectedAtlasUserId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; memberships: Record<string, Membership> } | { ok: false; reason: MembershipProblem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    return (await server()).memberships(context.userId, data.ids);
+  });
 
 /** Join or leave a group (follow or unfollow, for an announcement channel) as you, on Fedizen. */
 export const setGroupMembership = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => z.object({ id: groupId, action: z.enum(['join', 'follow']), on: z.boolean() }).parse(d))
-  .handler(async ({ data, context }): Promise<{ ok: true; membership: Membership } | { ok: false; reason: MembershipProblem }> =>
-    (await server()).setMembership(context.userId, data.id, data.action, data.on));
+  .inputValidator(d => z.object({ id: groupId, action: z.enum(['join', 'follow']), on: z.boolean(), expectedAtlasUserId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; membership: Membership } | { ok: false; reason: MembershipProblem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    return (await server()).setMembership(context.userId, data.id, data.action, data.on);
+  });
