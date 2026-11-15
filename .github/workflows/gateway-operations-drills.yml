@@ -1,0 +1,95 @@
+name: Gateway isolated performance and logical restore drills
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-operations-drills.yml'
+      - 'discovery-gateway/scripts/perf-baseline.ts'
+      - 'discovery-gateway/restore-drill/**'
+
+permissions:
+  contents: read
+
+jobs:
+  disposable-postgres-drills:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      source:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: gateway_ci
+          POSTGRES_PASSWORD: gateway_ci_only
+          POSTGRES_DB: gateway_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gateway_ci -d gateway_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      restore:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: restore_ci
+          POSTGRES_PASSWORD: restore_ci_only
+          POSTGRES_DB: restore_ci
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U restore_ci -d restore_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      SOURCE_DATABASE_URL: postgres://gateway_ci:gateway_ci_only@127.0.0.1:5432/gateway_ci
+      RESTORE_DATABASE_URL: postgres://restore_ci:restore_ci_only@127.0.0.1:5433/restore_ci
+      GATEWAY_TEST_DATABASE_URL: postgres://gateway_ci:gateway_ci_only@127.0.0.1:5432/gateway_ci
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - name: Test actual discovery SQL and retention with 10k synthetic rows
+        working-directory: discovery-gateway
+        run: |
+          bun install --frozen-lockfile
+          bun scripts/perf-baseline.ts
+      - name: Seed source with synthetic keys and provenance without external accounts
+        run: |
+          set -euo pipefail
+          docker run --rm --interactive --network host \
+            -e PGCONNECT_TIMEOUT=5 \
+            postgres:18-alpine psql "${SOURCE_DATABASE_URL}" -X -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE gateway_keys (
+            actor_identifier text PRIMARY KEY,
+            private_key jsonb NOT NULL,
+            public_key jsonb NOT NULL
+          );
+          INSERT INTO gateway_keys VALUES (
+            'gateway',
+            '{"kty":"RSA","test":"synthetic-private-only"}'::jsonb,
+            '{"kty":"RSA","test":"synthetic-public-only"}'::jsonb
+          );
+          CREATE TABLE gateway_subscriptions(actor_url text PRIMARY KEY);
+          CREATE TABLE gateway_items(id text PRIMARY KEY);
+          CREATE TABLE gateway_seen(activity_id text PRIMARY KEY);
+          INSERT INTO gateway_subscriptions VALUES ('https://synthetic.example/actor');
+          INSERT INTO gateway_items VALUES ('https://synthetic.example/post');
+          INSERT INTO gateway_seen VALUES ('https://synthetic.example/activity');
+          SQL
+      - name: Build isolated PG18 client and complete actual dump/restore
+        run: |
+          set -euo pipefail
+          docker build -f discovery-gateway/restore-drill/Dockerfile \
+            -t atlas-restore-drill-ci discovery-gateway/restore-drill
+          docker run --rm --network host \
+            -e SOURCE_DATABASE_URL -e RESTORE_DATABASE_URL \
+            -e DRILL_KEEP_ALIVE=0 \
+            atlas-restore-drill-ci | tee /tmp/restore-drill-results.log
+          grep -qx 'drill.passed' /tmp/restore-drill-results.log
+          grep -qx 'drill.actor_keys_identical' /tmp/restore-drill-results.log
+      - name: Verify restored synthetic data stayed isolated
+        run: |
+          set -euo pipefail
+          actual="$(docker run --rm --network host postgres:18-alpine \
+            psql "${RESTORE_DATABASE_URL}" -XAt -v ON_ERROR_STOP=1 \
+            -c 'SELECT count(*) FROM gateway_items')"
+          test "$actual" = "1"

@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { ArrowUpRight, Bell, Bookmark, Check, CircleUserRound, Compass, Copy, Layers, Menu, PenLine, Plus, Rss, Search, Settings, Sparkles, Users, X } from 'lucide-react';
+import { ArrowUpRight, Bell, Bookmark, Check, CircleUserRound, Compass, Layers, Menu, MessagesSquare, Plus, Rss, Search, Settings, Sparkles, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { creators, fullHandle, matchesCreator, networks, podcastFeatureLabels, posts, topics, type Creator } from '@/lib/social-catalogue';
 import { NetworkBadge, networkBrands } from '@/lib/networks';
@@ -8,6 +8,7 @@ import { useSocial } from './SocialState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { linkifyHashtagsWith, hashtagUrl } from '@/lib/hashtags';
 import { Composer } from './Composer';
+import { MessagesPage } from './MessagesPage';
 import { Preferences } from './Preferences';
 import { AccountButton } from './AccountButton';
 import { CreatorTag } from './CreatorTag';
@@ -23,7 +24,7 @@ import { GroupsPage } from './GroupsPage';
 import { useAtlasAuth } from './AuthState';
 import { defaultAvatarKey } from '@/lib/atlas-avatars';
 
-export type DiscoveryView = 'feeds' | 'discover' | 'groups' | 'activity' | 'profile' | 'settings' | 'intelligence' | 'appearance';
+export type DiscoveryView = 'feeds' | 'discover' | 'groups' | 'activity' | 'messages' | 'profile' | 'settings' | 'intelligence' | 'appearance';
 
 /** The desktop page. Its navigation matches the phone app's dock: Feeds, Discover, Groups, Activity, your
  *  profile (Saved is a tab there; follows open from its Following count), then Settings. */
@@ -37,9 +38,6 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
   const [mobileOpen, setMobileOpen] = useState(false);
   const [creatorDialog, setCreatorDialog] = useState<Creator | null>(null);
   const [tagFilter, setTagFilter] = useState<{ creatorId: string; tag: string } | null>(null);
-  const [headerCompose, setHeaderCompose] = useState(false);
-  const [headerDraft, setHeaderDraft] = useState('');
-  const [headerCopied, setHeaderCopied] = useState(false);
   const matching = creators.filter(c => matchesCreator(c, submitted, network, topic));
   const feed = posts.filter(p => matching.some(c => c.id === p.creatorId) && (view !== 'feeds' || state.followed.includes(p.creatorId)) && (!tagFilter || (p.creatorId === tagFilter.creatorId && p.tags.includes(tagFilter.tag))));
   const tagFilterCreator = tagFilter ? creators.find(c => c.id === tagFilter.creatorId) : null;
@@ -54,8 +52,8 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
     { to: '/settings' as const, label: 'Settings', icon: Settings, key: 'settings' },
   ];
   const me = auth.user ? avatarPreset(auth.profile?.avatar_key ?? defaultAvatarKey(auth.user.id)) : null;
-  const pageView = view === 'groups' || view === 'activity' || view === 'profile';
-  const pageTitles = { groups: ['Communities on Fedizen and beyond', 'Groups'], activity: ['What’s new for you', 'Activity'], profile: ['', ''] } as const;
+  const pageView = view === 'groups' || view === 'activity' || view === 'messages' || view === 'profile';
+  const pageTitles = { groups: ['Communities on Fedizen and beyond', 'Groups'], activity: ['What’s new for you', 'Activity'], messages: ['Direct conversations', 'Messages'], profile: ['', ''] } as const;
   const settingsView = view === 'settings' || view === 'intelligence' || view === 'appearance';
   const toggleTopic = (value: string) => { setTopic(value); setMobileOpen(false); };
   return <div className={state.dark ? 'dark' : ''}><div className="social-app min-h-screen bg-background text-foreground">
@@ -76,21 +74,14 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
           {(query || submitted) && <Button type="button" variant="ghost" size="icon" className="size-6" aria-label="Clear search" onClick={() => { setQuery(''); setSubmitted(''); }}><X /></Button>}
           <Button variant="ghost" type="submit" size="icon" className="size-6" aria-label="Search"><ArrowUpRight /></Button>
         </form>
-        <div className="relative hidden sm:block">
-          <Button variant="ghost" size="icon" className="liquid-glass specular rounded-full" aria-label="Open composer" aria-expanded={headerCompose} title="Compose" onClick={() => setHeaderCompose(v => !v)}><PenLine /></Button>
-          {headerCompose && <section role="dialog" aria-label="Compose" className="absolute right-0 top-12 z-50 w-80 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3"><h2 className="flex items-center gap-2 text-sm font-semibold"><PenLine className="size-4" />Compose</h2><Button variant="ghost" size="icon" aria-label="Close composer" onClick={() => setHeaderCompose(false)}><X /></Button></div>
-            <div className="p-4"><label htmlFor="header-compose-draft" className="sr-only">Your draft</label><textarea id="header-compose-draft" value={headerDraft} onChange={e => { setHeaderDraft(e.target.value); setHeaderCopied(false); }} placeholder="What’s on your mind?" className="h-32 w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-muted-foreground" /><p className="text-xs text-muted-foreground">Draft only · no social account connected</p></div>
-            <div className="flex items-center justify-end border-t border-border p-3"><Button size="sm" disabled={!headerDraft.trim()} onClick={async () => { try { await navigator.clipboard.writeText(headerDraft); setHeaderCopied(true); } catch { /* clipboard unavailable */ } }}>{headerCopied ? <Check /> : <Copy />}{headerCopied ? 'Copied' : 'Copy draft'}</Button></div>
-          </section>}
-        </div>
+        <Button asChild variant="ghost" size="icon" className={`liquid-glass specular shrink-0 rounded-full ${view === 'messages' ? 'text-accent' : ''}`} aria-label="Messages" title="Messages"><Link to="/messages" aria-current={view === 'messages' ? 'page' : undefined}><MessagesSquare /></Link></Button>
         <Button asChild variant="ghost" size="icon" className="liquid-glass specular shrink-0 rounded-full sm:hidden" aria-label="Activity and notifications" title="Activity"><Link to="/activity"><Bell /></Link></Button>
         <AccountButton />
       </header>
       <main className="mx-auto max-w-[1400px] px-5 pb-28 pt-7 sm:px-9">
         {settingsView ? <Preferences page={view === 'intelligence' ? 'intelligence' : view === 'appearance' ? 'appearance' : 'settings'} /> : view === 'profile' ? <div className="mx-auto max-w-4xl"><ProfilePage initialSection={profileSection} onOpenCreator={setCreatorDialog} /></div> : pageView ? <div className={`mx-auto ${view === 'groups' ? 'max-w-4xl' : 'max-w-3xl'}`}>
           {!(view === 'groups' && groupId) && <div className="mb-8 animate-float-up"><p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><span className="social-status-dot" />{pageTitles[view][0]}</p><h1 className="font-serif text-4xl leading-tight sm:text-5xl">{pageTitles[view][1]}</h1></div>}
-          {view === 'activity' ? <ActivityPage /> : <GroupsPage groupId={groupId} />}
+          {view === 'activity' ? <ActivityPage /> : view === 'messages' ? <MessagesPage /> : <GroupsPage groupId={groupId} />}
         </div> : <>
         <div className="mb-8 animate-float-up"><p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><span className="social-status-dot" />{view === 'discover' ? 'Discover the open social web' : 'A feed of your own'}</p><h1 className="font-serif text-4xl leading-tight sm:text-5xl">{title}</h1><p className="mt-3 text-sm text-muted-foreground">{view === 'discover' ? 'Find creators, fresh perspectives, and conversations beyond your usual circle.' : 'The latest from the voices you choose.'}</p></div>
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">

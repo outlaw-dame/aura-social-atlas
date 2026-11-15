@@ -11,6 +11,7 @@
  *    POST   /admin/subscriptions        { type: 'tag'|'instance'|'actor', value, kind? }
  *    DELETE /admin/subscriptions/:id
  *    POST   /admin/subscriptions/:id/retry
+ *    POST   /admin/moderation/suppress { id, reason }
  *
  *  Everything else (actor, inbox, webfinger) is delegated to Fedify.
  */
@@ -18,12 +19,13 @@
 import type { Sql } from 'postgres';
 import type { GatewayConfig } from './config.ts';
 import type { Gateway } from './federation.ts';
-import { listFacets, queryItems, type GatewayItem } from './db.ts';
+import { listFacets, queryItems, suppressItem, type GatewayItem } from './db.ts';
 import { listAll, retrySubscription, subscribe, unsubscribe, type SubscribeInput } from './subscribe.ts';
 import { readLimited } from './limits.ts';
+import { checkRemoteUrl } from './urlguard.ts';
 import { log } from './federation.ts';
 
-type HandlerDeps = { cfg: GatewayConfig; gateway: Gateway; sql: Sql };
+type HandlerDeps = { cfg: GatewayConfig; gateway: Gateway; sql: Sql; adminEnabled?: boolean };
 
 /** Timing-safe bearer check without leaking length through early exit. */
 export function tokenMatches(provided: string | null, expected: string): boolean {
@@ -93,7 +95,7 @@ function publicSubscription(s: { id: string; kind: string; actorUrl: string; act
 }
 
 export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Response> {
-  const { cfg, gateway, sql } = deps;
+  const { cfg, gateway, sql, adminEnabled = false } = deps;
   const readLimiter = new RateLimiter(cfg.readRateLimitPerMinute);
   const adminLimiter = new RateLimiter(cfg.adminRateLimitPerMinute);
   // One bounded, conservative bucket because the application does not have
@@ -103,6 +105,23 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
   return async function handle(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
+
+    // Minimal unauthenticated Railway liveness probe. It exposes no DB,
+    // actor identity, or application data; /healthz remains edge-protected.
+    if (path === '/livez' && req.method === 'GET') {
+      return new Response('ok', { status: 200, headers: { 'cache-control': 'no-store' } });
+    }
+
+    // Origin isolation is independent of DNS, forged Host, X-Forwarded-For,
+    // or Cloudflare IP lists. A zone-level header rewrite *overwrites* client
+    // values before requests are forwarded to Railway. The private admin
+    // listener intentionally has its own bearer authentication boundary.
+    if (!adminEnabled && cfg.edgeSecret &&
+        !tokenMatches(req.headers.get('x-atlas-edge-auth'), cfg.edgeSecret)) {
+      return new Response('Forbidden', {
+        status: 403, headers: { 'cache-control': 'no-store' },
+      });
+    }
 
     if (path === '/healthz') {
       try { await sql`select 1`; return json({ ok: true }); } catch { return json({ ok: false }, { status: 503 }); }
@@ -145,7 +164,10 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
       return json({ error: 'not found' }, { status: 404 }, cors);
     }
 
-    if (path.startsWith('/admin/')) {
+    if (path === '/admin' || path.startsWith('/admin/')) {
+      // The public listener must fail closed even when the Cloudflare WAF
+      // is bypassed through Railway's direct origin or an alternate domain.
+      if (!adminEnabled) return new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
       // Admin API: no CORS — it must never be callable from a browser page on
       // another origin, and the token must never ship in any frontend bundle.
       if (!adminLimiter.allow(clientKey(req))) return json({ error: 'rate limited' }, { status: 429 });
@@ -153,6 +175,32 @@ export function createHandler(deps: HandlerDeps): (req: Request) => Promise<Resp
       const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
       if (!tokenMatches(token, cfg.adminToken)) return json({ error: 'unauthorized' }, { status: 401 });
 
+      if (path === '/admin/moderation/suppress' && req.method === 'POST') {
+        const bytes = await readLimited(req, 4096);
+        if (!bytes) return json({ error: 'payload too large' }, { status: 413 });
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+        } catch {
+          return json({ error: 'invalid JSON' }, { status: 400 });
+        }
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          return json({ error: 'expected a JSON object' }, { status: 400 });
+        }
+        const body = parsed as Record<string, unknown>;
+        if (typeof body.id !== 'string' || body.id.length < 10 || body.id.length > 2048 ||
+            !checkRemoteUrl(body.id).ok) {
+          return json({ error: 'invalid canonical object ID' }, { status: 400 });
+        }
+        if (body.reason !== 'abuse' && body.reason !== 'privacy' && body.reason !== 'legal' &&
+            body.reason !== 'spam' && body.reason !== 'other') {
+          return json({ error: 'invalid moderation reason' }, { status: 400 });
+        }
+        const result = await suppressItem(sql, body.id, body.reason);
+        // Never log a removed post body, full URL, admin bearer or private actor identity.
+        log('moderation.suppressed', { reason: body.reason, newlySuppressed: result.suppressed, removed: result.removed });
+        return json({ suppressed: true, removed: result.removed, newlySuppressed: result.suppressed });
+      }
       if (path === '/admin/subscriptions' && req.method === 'GET') {
         return json({ subscriptions: (await listAll(sql)).map(publicSubscription) });
       }

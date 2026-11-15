@@ -1,0 +1,58 @@
+name: Gateway origin bypass acceptance
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-origin-bypass.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  origin-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify edge health and reject direct origin spoofed Host
+        run: |
+          python3 - <<'PY'
+          import json
+          import ssl
+          import urllib.error
+          import urllib.request
+
+          edge = 'https://staging-gateway.damonoutlaw.xyz'
+          direct = 'https://qb9rmgmw.up.railway.app'
+          opener = urllib.request.build_opener(
+              urllib.request.HTTPSHandler(context=ssl.create_default_context()),
+          )
+          def get(base, path, headers=None):
+              req = urllib.request.Request(base + path, headers={
+                  'Accept': 'application/activity+json' if path == '/actor' else 'application/json',
+                  'User-Agent': 'AtlasOriginBypassProbe/1.0',
+                  **(headers or {}),
+              })
+              try:
+                  with opener.open(req, timeout=12) as r:
+                      return r.status, r.headers, r.read(128_000)
+              except urllib.error.HTTPError as exc:
+                  return exc.code, exc.headers, exc.read(1024)
+
+          status, headers, body = get(edge, '/healthz')
+          assert status == 200, f'edge database-backed health: {status}'
+          assert headers.get('CF-Ray'), 'Expected Cloudflare edge'
+          assert json.loads(body) == {'ok': True}
+          print('PASS: public Cloudflare health endpoint healthy')
+
+          for path in ('/healthz', '/actor', '/api/v1/items?limit=1', '/actors/gateway/inbox'):
+              for supplied in ({}, {'Host': 'staging-gateway.damonoutlaw.xyz'}):
+                  status, _, _ = get(direct, path, supplied)
+                  assert status in (403, 404, 421), (
+                      f'Origin route {path} with forwarded Host allowed unexpected HTTP {status}'
+                  )
+                  print('PASS: origin bypass denied', path, 'status', status)
+
+          status, headers, _ = get(edge, '/admin/subscriptions')
+          assert status == 403 and headers.get('CF-Ray'), 'Expected Cloudflare WAF admin deny'
+          print('PASS: Cloudflare /admin WAF still denies external access')
+          PY

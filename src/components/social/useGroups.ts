@@ -48,9 +48,9 @@ export function useGroupMembership(g: Group | null | undefined) {
   const [error, setError] = useState<string | null>(null);
   const status = useQuery({ queryKey: ['fedizen-status', user?.id], queryFn: () => statusFn(), enabled: !!user, staleTime: 60_000 });
   const key = ['group-membership', user?.id, g?.id];
-  const m = useQuery({ queryKey: key, queryFn: () => getFn({ data: { ids: [g!.id] } }), enabled: !!user && !!g && !!status.data?.connected, staleTime: 30_000 });
+  const m = useQuery({ queryKey: key, queryFn: () => getFn({ data: { ids: [g!.id], expectedAtlasUserId: user!.id } }), enabled: !!user && !!g && !!status.data?.connected, staleTime: 30_000 });
   const toggle = useMutation({
-    mutationFn: (on: boolean) => setFn({ data: { id: g!.id, action: actionFor(g!), on } }),
+    mutationFn: (on: boolean) => setFn({ data: { id: g!.id, action: actionFor(g!), on, expectedAtlasUserId: user!.id } }),
     onMutate: () => setError(null),
     onSuccess: r => {
       if (r.ok) qc.setQueryData(key, { ok: true, memberships: { [g!.id]: r.membership } });
@@ -62,8 +62,11 @@ export function useGroupMembership(g: Group | null | undefined) {
     setError(null);
     if (isEmbeddedPreview()) { window.open(`${window.location.origin}/groups${g ? `?group=${g.id}` : ''}`, '_blank', 'noopener'); return; }
     try { sessionStorage.setItem(RETURN_KEY, window.location.pathname + window.location.search); } catch { /* storage unavailable */ }
-    const r = await startFn({ data: { origin: window.location.origin } });
-    if (r.url) window.location.assign(r.url); else setError(r.error);
+    if (!user) return;
+    try {
+      const r = await startFn({ data: { origin: window.location.origin, expectedAtlasUserId: user.id } });
+      if (r.url) window.location.assign(r.url); else setError(r.error);
+    } catch { setError('Could not connect to Fedizen. Please try again.'); }
   };
   const membership: Membership | undefined = m.data?.ok ? m.data.memberships[g?.id ?? ''] ?? 'none' : undefined;
   const state: MembershipProblem | Membership | 'loading' =
