@@ -13,6 +13,7 @@ import {
   attributedActors,
   isActor,
   isArticleObject,
+  isPodcastEpisode,
   isPublicHttpsUrl,
   isPublicIp,
   normalizeHost,
@@ -28,6 +29,8 @@ export type Lookup = (host: string) => Promise<string[] | null>;
 const AP_ACCEPT =
   'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
 const PAGE_ACCEPT = `${AP_ACCEPT};q=0.9, text/html;q=0.8`;
+/** Castopod (Podcast Index ActivityPub draft): the podcast actor, typed "Podcast", with its RSS feed. */
+export const PODCAST_ACCEPT = "application/podcast-activity+json";
 const MAX_BYTES = 512 * 1024;
 const TIMEOUT_MS = 3500;
 const MAX_REDIRECTS = 3;
@@ -171,7 +174,9 @@ async function fromActivityPubObject(
   fetchImpl: FetchLike,
   lookup: Lookup,
 ): Promise<FediAuthor[]> {
+  if (isActor(obj)) return fromOwnPage(obj, articleUrl, fetchImpl, lookup);
   if (!isArticleObject(obj)) return [];
+  const work = isPodcastEpisode(obj) ? ("episode" as const) : undefined;
   // Always the actor's own document, never the publisher's embedded copy (which could forge consent).
   const actors = await Promise.all(
     attributedActors(obj).map((id) => fetchActor(id, fetchImpl, lookup)),
@@ -179,7 +184,34 @@ async function fromActivityPubObject(
   return actors
     .filter((a): a is NonNullable<typeof a> => !!a && actorMayClaim(a, articleUrl))
     .map((a) => actorToAuthor(a, "activitypub"))
-    .filter((a): a is FediAuthor => !!a);
+    .filter((a): a is FediAuthor => !!a)
+    .map((a) => (work ? { ...a, work } : a));
+}
+
+/**
+ * A link to an account's own page (a podcast's page on Castopod, a profile): the account is what was linked.
+ * Credited only when the actor really lives at that address (re-fetched, same host). Castopod answers
+ * application/podcast-activity+json with the same actor typed "Podcast", which tells a podcast from a person.
+ */
+async function fromOwnPage(
+  embedded: Record<string, unknown>,
+  pageUrl: string,
+  fetchImpl: FetchLike,
+  lookup: Lookup,
+): Promise<FediAuthor[]> {
+  const id = String(embedded.id);
+  if (normalizeHost(new URL(id).hostname) !== normalizeHost(new URL(pageUrl).hostname)) return [];
+  const actor = await fetchActor(id, fetchImpl, lookup);
+  if (!actor) return [];
+  const pod = await safeFetch(id, PODCAST_ACCEPT, fetchImpl, lookup);
+  const asPodcast = pod && isJsonType(pod.type) ? parseJson(pod.text) : null;
+  const isPodcast =
+    !!asPodcast &&
+    typeof asPodcast === "object" &&
+    (asPodcast as { id?: unknown }).id === actor.id &&
+    [(asPodcast as { type?: unknown }).type].flat().includes("Podcast");
+  const a = actorToAuthor(actor, "activitypub");
+  return a ? [{ ...a, work: isPodcast ? "podcast" : "account" }] : [];
 }
 
 /** Path 2: fediverse:creator → WebFinger → actor, credited only if the actor allows the article's domain. */

@@ -33,7 +33,9 @@ export type FediProfile = {
   followers?: number;
   following?: number;
   postCount?: number;
-  kind: 'person' | 'group' | 'bot' | 'organization';
+  kind: 'person' | 'group' | 'bot' | 'organization' | 'podcast';
+  /** For a podcast (Castopod): its RSS feed and category. */
+  podcast?: { feed?: string; category?: string };
   /** Approves followers by hand (Mastodon "locked"). */
   locked: boolean;
   posts: FediProfilePost[];
@@ -43,6 +45,13 @@ export type FediProfile = {
 
 /** What a tag passes to open someone: their actor id when known, else their handle. */
 export type FediProfileTarget = { actor?: string; acct?: string; name?: string };
+
+/** Castopod's podcast view of an actor (application/podcast-activity+json): feed and category, if it's the same actor. */
+export function podcastDetails(doc: unknown, actorId: string): FediProfile['podcast'] | null {
+  if (!isObj(doc) || doc.id !== actorId || !list(doc.type).includes('Podcast')) return null;
+  const feed = str(doc.rssFeed);
+  return { feed: isPublicHttpsUrl(feed) ? feed : undefined, category: cleanText(str(doc.category) ?? '', 100) || undefined };
+}
 
 type Json = Record<string, unknown>;
 const isObj = (v: unknown): v is Json => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -96,7 +105,7 @@ export function profileFromActor(actor: Json): Omit<FediProfile, 'posts' | 'acct
     bio: htmlToParagraphs(str(actor.summary) ?? '').map(p => cleanText(p, 600)).filter(Boolean).slice(0, 8),
     fields, joined: published && !Number.isNaN(Date.parse(published)) ? published : undefined,
     followers: count(actor.followers), following: count(actor.following), postCount: count(actor.outbox),
-    kind: types.includes('Group') ? 'group' : types.includes('Service') || types.includes('Application') ? 'bot' : types.includes('Organization') ? 'organization' : 'person',
+    kind: types.includes('Podcast') ? 'podcast' : types.includes('Group') ? 'group' : types.includes('Service') || types.includes('Application') ? 'bot' : types.includes('Organization') ? 'organization' : 'person',
     locked: actor.manuallyApprovesFollowers === true,
   };
 }

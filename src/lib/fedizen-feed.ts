@@ -161,6 +161,12 @@ export function lookupAcct(handle: string): string | null {
  * The article a post links to: Bonfire's link preview when it has one, else the first ordinary link in the text.
  * Mentions, hashtags and Mastodon collection links are not articles. Only public https URLs.
  */
+/** Credits worth showing on a post: not the post's own author (a podcast sharing its own episode, say). */
+export function creditsBesidesAuthor(post: Pick<FedizenPost, 'handle'>, authors: FediAuthor[]): FediAuthor[] {
+  const own = post.handle.toLowerCase();
+  return own.includes('@', 1) ? authors.filter(a => a.acct.toLowerCase() !== own) : authors;
+}
+
 export function articleLinkIn(html: string): string | undefined {
   for (const m of html.matchAll(/<a\s([^>]{0,1000})>/gi)) {
     const attrs = m[1];

@@ -43,7 +43,27 @@ export type FediAuthor = {
   avatar?: string;
   /** How the authorship was established — shown to readers. */
   verifiedBy: AttributionSource;
+  /** What was linked, when it isn't an ordinary article: a podcast episode (credited to its podcast), a podcast
+   *  itself, or an account's own page. */
+  work?: CreditedWork;
 };
+export type CreditedWork = "episode" | "podcast" | "account";
+
+/** The eyebrow on a creator tag. */
+export const CREDIT_LABEL: Record<CreditedWork | "article", string> = {
+  article: "More from",
+  episode: "More from the podcast",
+  podcast: "Podcast",
+  account: "Account",
+};
+
+/** How a credit was verified, worded for what was linked. */
+export function attributionNote(a: Pick<FediAuthor, "verifiedBy" | "work">): string {
+  if (a.verifiedBy === "activitypub" && a.work === "episode") return "From the episode’s own ActivityPub record";
+  if (a.verifiedBy === "activitypub" && (a.work === "podcast" || a.work === "account"))
+    return "The link is this account’s own page";
+  return ATTRIBUTION_NOTE[a.verifiedBy];
+}
 
 export const MAX_AUTHORS = 3;
 
@@ -128,9 +148,25 @@ const isObj = (v: unknown): v is Json => !!v && typeof v === "object" && !Array.
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : v == null ? [] : [v]);
 
-const ARTICLE_TYPES = new Set(["Article", "Note", "Page", "Document", "Video", "Audio", "Event"]);
-const ACTOR_TYPES = new Set(["Person", "Organization", "Service", "Group", "Application"]);
+// PodcastEpisode: Castopod serves each episode as this type (Podcast Index ActivityPub draft), attributed to the
+// podcast's actor.
+const ARTICLE_TYPES = new Set([
+  "Article",
+  "Note",
+  "Page",
+  "Document",
+  "Video",
+  "Audio",
+  "Event",
+  "PodcastEpisode",
+]);
+// "Podcast": what Castopod answers to application/podcast-activity+json (its plain ActivityPub actor is a Person).
+const ACTOR_TYPES = new Set(["Person", "Organization", "Service", "Group", "Application", "Podcast"]);
 const typesOf = (o: Json) => list(o.type).filter((t): t is string => typeof t === "string");
+
+export function isPodcastEpisode(o: unknown): boolean {
+  return isObj(o) && typesOf(o).includes("PodcastEpisode");
+}
 
 export function isArticleObject(o: unknown): o is Json {
   return isObj(o) && typesOf(o).some((t) => ARTICLE_TYPES.has(t)) && o.attributedTo != null;

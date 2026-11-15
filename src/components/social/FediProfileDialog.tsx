@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowUpRight, BadgeCheck, Bot, Lock, UserCheck, UserPlus, Users } from 'lucide-react';
+import { ArrowUpRight, BadgeCheck, Bot, Lock, Mic, Rss, UserCheck, UserPlus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
@@ -50,6 +50,7 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
             <DialogTitle className="flex flex-wrap items-center gap-2 font-serif text-3xl font-normal [overflow-wrap:anywhere]">
               {p.name}
               {p.kind === 'bot' && <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-sans text-[11px]"><Bot className="size-3" />Automated</span>}
+              {p.kind === 'podcast' && <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-sans text-[11px]"><Mic className="size-3" />Podcast</span>}
               {p.kind === 'group' && <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-sans text-[11px]"><Users className="size-3" />Group</span>}
               {p.locked && <Lock className="size-4 text-muted-foreground" aria-label="Approves followers" />}
             </DialogTitle>
@@ -58,6 +59,10 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
               {p.joined && <span>· Joined {day(p.joined)}</span>}
             </DialogDescription>
           </DialogHeader>
+          {p.podcast && (p.podcast.category || p.podcast.feed) && <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {p.podcast.category && <span>{p.podcast.category}</span>}
+            {p.podcast.feed && <a href={p.podcast.feed} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground"><Rss className="size-3" />RSS feed</a>}
+          </p>}
           {p.bio.length > 0 && <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.bio.map((t, i) => <p key={i}>{t}</p>)}</div>}
           {p.fields.length > 0 && <dl className="mt-4 divide-y divide-border rounded-2xl border border-border text-sm">
             {p.fields.map(f => <div key={f.name} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2"><dt className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">{f.name}</dt><dd className="[overflow-wrap:anywhere]">{f.value}</dd></div>)}
@@ -68,6 +73,7 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
             {n(p.followers) && <span><b>{n(p.followers)}</b> <span className="text-muted-foreground">followers</span></span>}
           </p>
           <section className="mt-6 space-y-5" aria-label={`Recent posts by ${p.name}`}>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{p.kind === 'podcast' ? 'Episodes and posts' : 'Recent posts'}</h3>
             {p.posts.map(post => <article key={post.id} className="border-t border-border pt-4">
               {post.title && <h3 className="font-serif text-xl">{post.title}</h3>}
               {post.cw ? <details className="mt-1 text-sm"><summary className="cursor-pointer text-muted-foreground">Content warning: {post.cw}</summary><div className="mt-2 space-y-2 leading-relaxed">{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div></details>
