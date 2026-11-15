@@ -31,7 +31,8 @@ import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileActivity, MessagesPopup } from './FedizenMobile';
 import { MobileFeeds } from './MobileFeeds';
-import { TagFeedPopup } from './TagFeed';
+import { TagFeedPage } from './TagFeed';
+import { bindStack, popToRoot, pushPage, tagPageUrl } from './navigation';
 import { ModerationPopup } from './Moderation';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
@@ -123,10 +124,15 @@ export default function AtlasMobileApp() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [collectionOpen, setCollectionOpen] = useState<{ collection?: Collection; id?: string; link?: string } | null>(null);
   const [groupOpen, setGroupOpen] = useState<Group | null>(null);
-  // A hashtag in a post (or a followed-tag line) opens its feed here.
-  const [tagOpen, setTagOpen] = useState<string | null>(null);
+  // Pushed pages (a hashtag's feed) live in the stack view laid over the tabs; see navigation.ts.
   useEffect(() => {
-    const on = (e: Event) => { const t = (e as CustomEvent<{ tag?: string }>).detail?.tag; if (t) setTagOpen(t); };
+    let off = () => {};
+    f7ready(() => { off = bindStack(); });
+    return () => off();
+  }, []);
+  // A hashtag in a post (or a followed-tag line) pushes its feed onto the main view, like any feed.
+  useEffect(() => {
+    const on = (e: Event) => { const t = (e as CustomEvent<{ tag?: string }>).detail?.tag; if (t) pushPage(tagPageUrl(t)); };
     window.addEventListener(OPEN_TAG_EVENT, on);
     return () => window.removeEventListener(OPEN_TAG_EVENT, on);
   }, []);
@@ -151,7 +157,6 @@ export default function AtlasMobileApp() {
   }, []);
   const [chatOpen, setChatOpen] = useState(false);
   const [creatorOpen, setCreatorOpen] = useState<Creator | null>(null);
-  const [tagFeed, setTagFeed] = useState<{ creatorId: string; tag: string } | null>(null);
   const [fabHidden, setFabHidden] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [moderationOpen, setModerationOpen] = useState(false);
@@ -195,8 +200,16 @@ export default function AtlasMobileApp() {
 
   const results = creators.filter(c => matchesCreator(c, query, network, 'All topics'));
   const creatorOf = (id: string) => creators.find(c => c.id === id);
-  const tagFeedCreator = tagFeed ? creatorOf(tagFeed.creatorId) : null;
-  const tagFeedPosts = tagFeed ? postsByTag(tagFeed.creatorId, tagFeed.tag) : [];
+  // A sample creator's stories under one of their tags: pushed like any feed, titled by the tag.
+  const openCreatorTag = (creatorId: string, tag: string) => {
+    const c = creatorOf(creatorId);
+    if (!c) return;
+    const list = postsByTag(creatorId, tag);
+    pushPage(`/creator-tag/${encodeURIComponent(creatorId)}/${encodeURIComponent(tag)}/`, {
+      title: tag, subtitle: c.name,
+      render: () => list.length ? list.map(postCard) : <Block strong inset>No stories with this tag yet.</Block>,
+    });
+  };
   const followingPosts = posts.filter(p => followed.includes(p.creatorId));
 
   /* The dock (tab bar, side tab bar, rail and sidebar all share it): Feeds, Discover, Groups, Activity, and the
@@ -218,7 +231,7 @@ export default function AtlasMobileApp() {
         {results.map(c => (
           <ListItem key={c.id} title={c.name}
             onClick={() => setCreatorOpen(c)} style={{ cursor: 'pointer' }}>
-            <span slot="text">{linkifyHashtagsWith(c.bio, tag => setTagFeed({ creatorId: c.id, tag }))}</span>
+            <span slot="text">{linkifyHashtagsWith(c.bio, tag => openCreatorTag(c.id, tag))}</span>
             <span slot="subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               {c.handle} · <NetworkBadge network={c.network} />
             </span>
@@ -243,7 +256,7 @@ export default function AtlasMobileApp() {
         <CardContent>
           <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 24, lineHeight: 1.15, margin: '6px 0' }}>{p.title}</div>
           <div style={{ opacity: 0.75 }}>{p.excerpt}</div>
-          <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => setTagFeed({ creatorId: c.id, tag })} aria-label={hashtagLabel(tag)}><TagText tag={tag} /></Link>)}</div>
+          <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => openCreatorTag(c.id, tag)} aria-label={hashtagLabel(tag)}><TagText tag={tag} /></Link>)}</div>
           <CreatorTag creator={c} onOpen={() => setCreatorOpen(c)} />
         </CardContent>
         <CardFooter>
@@ -274,7 +287,19 @@ export default function AtlasMobileApp() {
           <Block className="atlas-hide-in-rail" style={{ fontSize: 12, opacity: 0.6 }}>Sample profiles, not live accounts.</Block>
         </Page>
       </Panel>
+      {/* The tab bar sits at view level so it stays on screen over pushed pages, as in other social apps. Pushed pages
+          (a hashtag's feed) go in the stack view laid over the tabs: back with the chevron or a swipe from the left
+          edge, on both themes (navigation.ts explains why it is a view of its own). */}
       <View main>
+        <Toolbar tabbar icons bottom className="atlas-tabbar">
+          {dock.map(d => (
+            <Link key={d.id} tabLink={`#${d.id}`} tabLinkActive={d.id === 'tab-discover'} onClick={popToRoot} aria-label={d.avatar ? 'Your profile' : undefined}>
+              {d.avatar ? <img className="icon atlas-dock-avatar" src={d.avatar} alt="" width={28} height={28} /> : <Icon ios={d.ios} md={d.md} />}
+              <span className="tabbar-label">{d.label}</span>
+            </Link>
+          ))}
+        </Toolbar>
+        <View className="atlas-stack" url="/" routes={STACK_ROUTES} iosSwipeBack mdSwipeBack />
         <Page pageContent={false}>
           <Navbar title={title}>
             <NavLeft className="atlas-nav-menu">
@@ -305,14 +330,6 @@ export default function AtlasMobileApp() {
               <Icon ios="f7:sparkles" md="material:auto_awesome" />
             </Fab>
           )}
-          <Toolbar tabbar icons bottom className="atlas-tabbar">
-            {dock.map(d => (
-              <Link key={d.id} tabLink={`#${d.id}`} tabLinkActive={d.id === 'tab-discover'} aria-label={d.avatar ? 'Your profile' : undefined}>
-                {d.avatar ? <img className="icon atlas-dock-avatar" src={d.avatar} alt="" width={28} height={28} /> : <Icon ios={d.ios} md={d.md} />}
-                <span className="tabbar-label">{d.label}</span>
-              </Link>
-            ))}
-          </Toolbar>
           <Tabs>
             <Tab id="tab-discover" className="page-content atlas-discover" onTabShow={() => setTitle('Discover')} tabActive>
               {/* Phones: one column. Wide windows mirror the desktop Discover page (main feed + "Voices to know"
@@ -404,26 +421,9 @@ export default function AtlasMobileApp() {
           </Tabs>
         </Page>
       </View>
-      <CreatorPopup creator={creatorOpen} onClose={() => setCreatorOpen(null)} onOpenTag={(c, tag) => { setCreatorOpen(null); setTagFeed({ creatorId: c.id, tag }); }} />
-      <Popup opened={!!tagFeed} onPopupClosed={() => setTagFeed(null)}>
-        {tagFeed && tagFeedCreator && (
-          <Page>
-            <Navbar title={tagFeed.tag} subtitle={tagFeedCreator.name}>
-              <NavRight>
-                <Link iconOnly popupClose aria-label="Close tag feed">
-                  <Icon ios="f7:xmark" md="material:close" />
-                </Link>
-              </NavRight>
-            </Navbar>
-            {tagFeedPosts.length ? tagFeedPosts.map(postCard) : (
-              <Block strong inset>No stories with this tag yet.</Block>
-            )}
-          </Page>
-        )}
-      </Popup>
+      <CreatorPopup creator={creatorOpen} onClose={() => setCreatorOpen(null)} onOpenTag={(c, tag) => openCreatorTag(c.id, tag)} />
       <EditProfileSheet opened={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
       <GroupPopup group={groupOpen} onClose={() => setGroupOpen(null)} onOpen={setGroupOpen} />
-      <TagFeedPopup tag={tagOpen} onClose={() => setTagOpen(null)} />
       <CollectionPopup opened={!!collectionOpen} onClose={() => setCollectionOpen(null)} collection={collectionOpen?.collection} id={collectionOpen?.id} link={collectionOpen?.link} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       <MessagesPopup opened={messagesOpen} onClose={() => setMessagesOpen(false)} />
@@ -435,3 +435,22 @@ export default function AtlasMobileApp() {
     </App>
   );
 }
+
+/** A sample creator's stories under one tag, pushed onto the main view. */
+function SampleTagPage({ title, subtitle, render }: { title?: string; subtitle?: string; render?: () => React.ReactNode }) {
+  return <Page>
+    <Navbar title={title} subtitle={subtitle} backLink backLinkShowText={false} />
+    {render?.()}
+  </Page>;
+}
+
+/** The stack's empty root: transparent, so the tabs show through when nothing is pushed. */
+function StackRoot() {
+  return <Page className="atlas-stack-root" />;
+}
+
+const STACK_ROUTES = [
+  { path: '/', component: StackRoot },
+  { path: '/tag/:tag/', component: TagFeedPage },
+  { path: '/creator-tag/:creator/:tag/', component: SampleTagPage },
+];
