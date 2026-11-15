@@ -7,6 +7,7 @@ import { useFedizen, useFedizenMessages } from '@/components/social/useFedizen';
 import { openCollection } from '@/lib/collections';
 import { useSaveToggle } from '@/components/social/useFedizenLibrary';
 import { SaveLink } from './SavedAndCircles';
+import { ArticleCard } from './ArticleAuthors';
 import { Icon } from './F7Extras';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
@@ -69,6 +70,7 @@ export function MobileFedizenFeed() {
           {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
             <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />
           </button>)}
+          <ArticleCard article={p.article} />
         </CardContent>
         <CardFooter><span style={{ fontSize: 12, opacity: .6 }}>{when(p.date)}</span><span style={{ display: 'flex', gap: 12 }}><SaveLink post={p} save={save} /><Link external target="_blank" href={p.url}>Open</Link></span></CardFooter>
       </Card>)}

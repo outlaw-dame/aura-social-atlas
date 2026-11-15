@@ -1,6 +1,7 @@
 /** Browser-safe Fedizen (Mastodon-compatible) feed types, normalizers and redirect allowlist. */
 import { htmlToParagraphs } from './spotlight';
-import { collectionLinksIn } from './collections';
+import { collectionLinksIn, mastodonCollectionApi } from './collections';
+import { isPublicHttpsUrl, type FediAuthor } from './article-author';
 
 export const FEDIZEN = 'https://fedizen.net';
 /** Fedizen's own pages for what its API doesn't offer yet (Bonfire v1.1.0-rc.1: bonfire_ui_me SafetyLive, bonfire_ui_boundaries BoundariesLive). */
@@ -22,13 +23,15 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
   return have.has(needed) || (needed.includes(':') && have.has(needed.split(':')[0]));
 }
 
-export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[] };
+export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[];
+  /** The article the post links to, and who wrote it as far as Atlas can verify ("More from"). */ article?: PostArticle };
+export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; authors?: FediAuthor[] };
 export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string };
 /** A direct conversation (Mastodon `Conversation`): the other people in it and its latest message, as plain text. */
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string };
-type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string }[]; bookmarked?: boolean | null };
+type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string }[]; bookmarked?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null } | null };
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
 const http = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
@@ -43,6 +46,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
       boostedBy: s.reblog ? name(s.account) : undefined,
       ...(() => { const c = collectionLinksIn(o.content ?? ''); return c.length ? { collections: c } : {}; })(),
+      ...(() => { const a = articleOf(o); return a ? { article: a } : {}; })(),
     };
   });
 }
@@ -151,4 +155,26 @@ export function fromAccounts(list: Acct[]): FedizenPerson[] {
 export function lookupAcct(handle: string): string | null {
   const h = handle.trim().replace(/^@/, '');
   return /^[A-Za-z0-9_.-]{1,64}(@[A-Za-z0-9.-]{1,253})?$/.test(h) ? h : null;
+}
+
+/**
+ * The article a post links to: Bonfire's link preview when it has one, else the first ordinary link in the text.
+ * Mentions, hashtags and Mastodon collection links are not articles. Only public https URLs.
+ */
+export function articleLinkIn(html: string): string | undefined {
+  for (const m of html.matchAll(/<a\s([^>]{0,1000})>/gi)) {
+    const attrs = m[1];
+    const href = /href\s*=\s*"([^"]{1,2048})"/i.exec(attrs)?.[1]?.replace(/&amp;/g, '&');
+    if (!href || /class\s*=\s*"[^"]*\b(mention|hashtag|u-url)\b/i.test(attrs) || /rel\s*=\s*"[^"]*\btag\b/i.test(attrs)) continue;
+    if (isPublicHttpsUrl(href) && !mastodonCollectionApi(href)) return href;
+  }
+  return undefined;
+}
+function articleOf(o: Status): PostArticle | undefined {
+  const card = o.card;
+  const url = card?.url && isPublicHttpsUrl(card.url) && !mastodonCollectionApi(card.url) ? card.url : articleLinkIn(o.content ?? '');
+  if (!url) return undefined;
+  const fromCard = card?.url === url;
+  const clip = (v?: string | null, n = 200) => (v && v.trim() ? v.trim().slice(0, n) : undefined);
+  return { url, title: fromCard ? clip(card?.title, 300) : undefined, provider: fromCard ? clip(card?.provider_name, 100) : undefined, byline: fromCard ? clip(card?.author_name, 100) : undefined };
 }
