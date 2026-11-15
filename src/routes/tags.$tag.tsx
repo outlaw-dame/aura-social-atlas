@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowUpRight, Hash, Link2, MessageCircle, Repeat2, Star, Tag } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Link2, MessageCircle, Repeat2, Star, Tag } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { FEED_PROBLEM, useFollowedTags, useTagFeed } from '@/components/social/useFeeds';
@@ -14,8 +14,8 @@ import { NetworkBadge } from '@/lib/networks';
 
 export const Route = createFileRoute('/tags/$tag')({
   head: ({ params }) => {
-    const t = `#${params.tag} — Hashtag feed on Atlas`;
-    const d = `Public fediverse posts that used #${params.tag}, gathered on Atlas.`;
+    const t = `${params.tag} — Hashtag on Atlas`;
+    const d = `Public fediverse posts tagged ${params.tag}, gathered on Atlas.`;
     return { meta: [
       { title: t }, { name: 'description', content: d },
       { property: 'og:title', content: t }, { property: 'og:description', content: d },
@@ -41,7 +41,7 @@ function TagBody({ tag }: { tag: string }) {
   // signed-out reader, or one who hasn't connected Fedizen, gets the public posts below, from mastodon.social.
   const personal = !!user && fedizen.data?.error !== 'not-connected';
   if (loading || (user && fedizen.isLoading)) return <TagShell tag={tag}><p className="text-sm text-muted-foreground">Loading posts…</p></TagShell>;
-  if (personal) return <TagShell tag={tag} note={<>{followed.has(norm) && <><Tag className="size-3.5" aria-hidden="true" />You follow this hashtag · </>}Posts on Fedizen that use #{tag} and that you can see</>}>
+  if (personal) return <TagShell tag={tag} note={<>{followed.has(norm) && <><Tag className="size-3.5" aria-hidden="true" />You follow this hashtag · </>}Posts on Fedizen tagged {tag} that you can see</>}>
     <FedizenTagPosts posts={fedizen.data?.posts ?? []} tag={tag} failed={fedizen.isError} problem={fedizen.data?.error} retry={() => void fedizen.refetch()} />
   </TagShell>;
   return <PublicTagPage tag={tag} />;
@@ -51,7 +51,8 @@ function TagShell({ tag, note, children }: { tag: string; note?: React.ReactNode
   return <main className="mx-auto min-h-dvh max-w-2xl px-4 py-6">
     <Link to="/feeds" className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />Feeds</Link>
     <header className="mb-6 border-b border-border pb-5">
-      <h1 className="flex items-center gap-1 font-serif text-4xl italic"><Hash className="size-8 text-accent" />{tag}</h1>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Hashtag</p>
+      <h1 className="font-serif text-4xl italic text-accent">{tag}</h1>
       {note && <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">{note}</p>}
     </header>
     {children}
@@ -65,7 +66,7 @@ function FedizenTagPosts({ posts, tag, failed, problem, retry }: { posts: Fedize
   return <>
     {actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}
     {posts.length ? <div className="space-y-6">{posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} inTag={tag.replace(/^#/, '').toLowerCase()} />)}</div>
-      : <p className="text-sm text-muted-foreground">No posts you can see use #{tag} yet.</p>}
+      : <p className="text-sm text-muted-foreground">No posts you can see are tagged {tag} yet.</p>}
     {actions.dialog}
   </>;
 }
@@ -85,12 +86,13 @@ function PublicTagPage({ tag }: { tag: string }) {
   return <main className="mx-auto min-h-dvh max-w-2xl px-4 py-6">
     <Link to="/" className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />Discover</Link>
     <header className="mb-6 border-b border-border pb-5">
-      <h1 className="flex items-center gap-1 font-serif text-4xl italic"><Hash className="size-8 text-accent" />{tag}</h1>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Hashtag</p>
+      <h1 className="font-serif text-4xl italic text-accent">{tag}</h1>
       <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">Public posts known to <NetworkBadge network="Mastodon" /> mastodon.social that used this hashtag</p>
     </header>
     {isLoading && <p className="text-sm text-muted-foreground">Loading posts…</p>}
     {error && <p className="text-sm text-muted-foreground">This hashtag feed couldn't be loaded. Please try again shortly.</p>}
-    {data && !data.length && <p className="text-sm text-muted-foreground">No public posts have used #{tag} yet.</p>}
+    {data && !data.length && <p className="text-sm text-muted-foreground">No public posts are tagged {tag} yet.</p>}
     <ol className="divide-y divide-border">{data?.map(p => <li key={p.id} className="py-5">
       <a href={p.author.url} target="_blank" rel="noopener noreferrer" className="mb-3 flex items-center gap-3">
         <img src={p.author.avatar} alt="" width={40} height={40} className="size-10 atlas-avatar object-cover ring-1 ring-border" loading="lazy" referrerPolicy="no-referrer" />

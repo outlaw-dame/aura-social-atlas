@@ -12,7 +12,7 @@ import { promptSignInToSave } from './save-prompt';
 import { Fab, NavRight, NavLeft, Panel, Popup, f7, f7ready } from 'framework7-react';
 import { creators, posts, networks, matchesCreator, fullHandle, postsByTag, type Creator } from '@/lib/social-catalogue';
 import { NetworkBadge } from '@/lib/networks';
-import { OPEN_TAG_EVENT, linkifyHashtagsWith } from '@/lib/hashtags';
+import { OPEN_TAG_EVENT, linkifyHashtagsWith, hashtagLabel, TagText } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
@@ -243,7 +243,7 @@ export default function AtlasMobileApp() {
         <CardContent>
           <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 24, lineHeight: 1.15, margin: '6px 0' }}>{p.title}</div>
           <div style={{ opacity: 0.75 }}>{p.excerpt}</div>
-          <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => setTagFeed({ creatorId: c.id, tag })}>#{tag}</Link>)}</div>
+          <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => setTagFeed({ creatorId: c.id, tag })} aria-label={hashtagLabel(tag)}><TagText tag={tag} /></Link>)}</div>
           <CreatorTag creator={c} onOpen={() => setCreatorOpen(c)} />
         </CardContent>
         <CardFooter>
@@ -408,7 +408,7 @@ export default function AtlasMobileApp() {
       <Popup opened={!!tagFeed} onPopupClosed={() => setTagFeed(null)}>
         {tagFeed && tagFeedCreator && (
           <Page>
-            <Navbar title={`#${tagFeed.tag}`} subtitle={tagFeedCreator.name}>
+            <Navbar title={tagFeed.tag} subtitle={`Hashtag · ${tagFeedCreator.name}`}>
               <NavRight>
                 <Link iconOnly popupClose aria-label="Close tag feed">
                   <Icon ios="f7:xmark" md="material:close" />
@@ -416,7 +416,7 @@ export default function AtlasMobileApp() {
               </NavRight>
             </Navbar>
             <Block strong inset style={{ fontSize: 13 }}>
-              Stories by {tagFeedCreator.name} tagged <span className="atlas-hashtag">#{tagFeed.tag}</span>
+              Stories by {tagFeedCreator.name} tagged <span className="atlas-hashtag"><TagText tag={tagFeed.tag} /></span>
             </Block>
             {tagFeedPosts.length ? tagFeedPosts.map(postCard) : (
               <Block strong inset>No stories with this tag yet.</Block>

@@ -6,7 +6,7 @@ import { useAtlasAuth } from './AuthState';
 import { useSocial } from './SocialState';
 import { avatarPreset, defaultAvatarKey } from '@/lib/atlas-avatars';
 import { creators, fullHandle, posts, type Creator } from '@/lib/social-catalogue';
-import { extractHashtags, hashtagUrl, linkifyHashtags } from '@/lib/hashtags';
+import { extractHashtags, hashtagLabel, hashtagUrl, linkifyHashtags, TagText } from '@/lib/hashtags';
 import { CreatorTag } from './CreatorTag';
 import { DesktopCollections } from './CollectionsDesktop';
 import { DesktopCircles, DesktopSaved } from './SavedAndCircles';
@@ -117,7 +117,7 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
       </div>}
       {section === 'Featured' && (featured.length > 0 ? <div className="space-y-8">
         <div><h2 className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Hashtags</h2>
-          <div className="flex flex-wrap gap-2" aria-label="Featured hashtags">{featured.map(t => <a key={t} className="atlas-profile-tag" href={hashtagUrl(t)}>#{t}</a>)}</div></div>
+          <div className="flex flex-wrap gap-2" aria-label="Featured hashtags">{featured.map(t => <a key={t} className="atlas-profile-tag" href={hashtagUrl(t)} aria-label={hashtagLabel(t)}><TagText tag={t} /></a>)}</div></div>
         <div><h2 className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Profiles</h2>
           <p className="text-sm text-muted-foreground">People you feature from their profiles on Fedizen will appear here.</p></div>
       </div> : <Empty icon={e.icon} title={e.title} detail={e.detail} />)}

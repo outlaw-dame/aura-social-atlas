@@ -16,17 +16,17 @@ export function TagFeedPopup({ tag, onClose }: { tag: string | null; onClose: ()
   const actions = useMobilePostActions();
   return <Popup opened={!!tag} onPopupClosed={onClose} swipeToClose className="atlas-tag-popup">
     <Page>
-      <Navbar title={tag ? `#${tag}` : ''}>
+      <Navbar title={tag ?? ''} subtitle="Hashtag">
         <NavRight><Link iconOnly popupClose aria-label="Close"><Icon ios="f7:xmark" md="material:close" /></Link></NavRight>
       </Navbar>
       {tag && <>
-        <BlockFooter>{followed.has(tag) ? <><Icon ios="f7:tag" md="material:sell" /> You follow this hashtag. </> : null}Posts on Fedizen that use #{tag} and that you can see.</BlockFooter>
+        <BlockFooter>{followed.has(tag) ? <><Icon ios="f7:tag" md="material:sell" /> You follow this hashtag. </> : null}Posts on Fedizen tagged {tag} that you can see.</BlockFooter>
         {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
-        {!user ? <Block strong inset>Sign in to Atlas and connect Fedizen to see posts using #{tag}.</Block>
-          : q.isLoading ? <Block strong inset>Loading posts with #{tag}…</Block>
+        {!user ? <Block strong inset>Sign in to Atlas and connect Fedizen to see posts tagged {tag}.</Block>
+          : q.isLoading ? <Block strong inset>Loading posts tagged {tag}…</Block>
           : q.isError || q.data?.error === 'unavailable' ? <Block strong inset>{FEED_PROBLEM.unavailable} <Link onClick={() => void q.refetch()}>Try again</Link></Block>
           : q.data?.error ? <Block strong inset><p style={{ marginTop: 0 }}>{FEED_PROBLEM[q.data.error]}</p><ConnectFedizen /></Block>
-          : !q.data?.posts.length ? <Block strong inset>No posts you can see use #{tag} yet.</Block>
+          : !q.data?.posts.length ? <Block strong inset>No posts you can see are tagged {tag} yet.</Block>
           : q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} inTag={tag} />)}
         {actions.sheet}
       </>}

@@ -70,3 +70,27 @@ describe("Avatar shape reaches every avatar", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("Posted hashtags read as the word, Threads-style", () => {
+  const { renderToStaticMarkup } = require("react-dom/server") as typeof import("react-dom/server");
+  const { createElement, Fragment } = require("react") as typeof import("react");
+  const { linkifyHashtags, linkifyHashtagsWith } = require("../src/lib/hashtags") as typeof import("../src/lib/hashtags");
+  const html = (nodes: unknown) => renderToStaticMarkup(createElement(Fragment, null, nodes as never));
+
+  test("the # is kept in the text but only as the hidden mark; the label names the hashtag", () => {
+    for (const out of [html(linkifyHashtags("Game night in #Houston!")), html(linkifyHashtagsWith("Game night in #Houston!", () => {}))]) {
+      expect(out).toContain('aria-label="Hashtag Houston"');
+      expect(out).toContain('<span class="atlas-hashtag-mark">#</span>Houston');
+      // Nothing outside the mark draws a # before the word.
+      expect(out.replace(/<span class="atlas-hashtag-mark">#<\/span>/g, "")).not.toMatch(/#Houston/);
+      expect(out).toContain("Game night in ");
+    }
+  });
+
+  test("the mark is visually hidden", () => {
+    const css = require("node:fs").readFileSync("src/styles.css", "utf8") as string;
+    const rule = css.match(/\.atlas-hashtag-mark\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(rule).toContain("clip-path: inset(50%)");
+    expect(rule).toContain("position: absolute");
+  });
+});

@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useAtlasAuth } from './AuthState';
 import { useMyCollections } from './useCollections';
+import { hashtagLabel, hashtagUrl, TagText } from '@/lib/hashtags';
 import { COLLECTIONS_MAX, DESCRIPTION_MAX, ITEMS_MAX, NAME_MAX, OPEN_COLLECTION_EVENT, collectionInput, mastodonCollectionApi, openCollection, type Collection } from '@/lib/collections';
 import { addToCollection, createCollection, deleteCollection, getCollection, removeFromCollection, updateCollection } from '@/lib/collections.functions';
 
@@ -152,7 +153,7 @@ export function CollectionDialog({ target, onClose }: { target: { collection?: C
             <DialogDescription className="flex flex-wrap items-center gap-x-1">
               By {c.curator.url ? <a className="underline" href={c.curator.url} target="_blank" rel="noopener noreferrer">{c.curator.name}</a> : c.curator.name}
               {c.source === 'mastodon' && c.curator.acct ? <span>· {c.curator.acct}</span> : null}
-              <span>· {count(c.itemCount)}</span>{c.tag && <span>· <a className="atlas-tag" href={`/tags/${encodeURIComponent(c.tag.toLowerCase())}`}>#{c.tag}</a></span>}{!c.discoverable && <span>· Unlisted</span>}
+              <span>· {count(c.itemCount)}</span>{c.tag && <span>· <a className="atlas-tag atlas-hashtag" href={hashtagUrl(c.tag.toLowerCase())} aria-label={hashtagLabel(c.tag)}><TagText tag={c.tag} /></a></span>}{!c.discoverable && <span>· Unlisted</span>}
             </DialogDescription>
           </DialogHeader>
           {c.source === 'atlas' && <p className="text-xs text-muted-foreground">{LOCAL_NOTE}</p>}

@@ -26,19 +26,29 @@ function splitHashtags(text: string): (string | { tag: string })[] {
   return out;
 }
 
+/**
+ * How a posted hashtag reads, as Threads shows topics: the word alone, linked in the accent colour. People still type
+ * the # in the composer and in text fields; once posted it isn't drawn. It stays in the text, visually hidden, so
+ * copying a post keeps its hashtags, and screen readers hear "Hashtag …" from the control's label instead.
+ */
+export function TagText({ tag }: { tag: string }) {
+  return <><span className="atlas-hashtag-mark">#</span>{tag}</>;
+}
+export const hashtagLabel = (tag: string) => `Hashtag ${tag}`;
+
 /** Splits text into plain runs and hashtag links, Mastodon-style. */
 export function linkifyHashtags(text: string): ReactNode[] {
   return splitHashtags(text).map((part, i) =>
     typeof part === 'string' ? part : (
-      <a key={i} href={hashtagUrl(part.tag)} className="atlas-hashtag" onClick={e => e.stopPropagation()}>
-        #{part.tag}
+      <a key={i} href={hashtagUrl(part.tag)} className="atlas-hashtag" aria-label={hashtagLabel(part.tag)} onClick={e => e.stopPropagation()}>
+        <TagText tag={part.tag} />
       </a>
     ),
   );
 }
 
 /**
- * Like linkifyHashtags, but tags are in-app buttons calling onTag with the
+ * Like linkifyHashtags (and drawn the same way, without the #), but tags are in-app buttons calling onTag with the
  * normalized tag name. Clicks stop propagation so they work inside rows and
  * cards that have their own onClick.
  */
@@ -49,9 +59,10 @@ export function linkifyHashtagsWith(text: string, onTag: (tag: string) => void):
         key={i}
         type="button"
         className="atlas-hashtag atlas-hashtag-btn"
+        aria-label={hashtagLabel(part.tag)}
         onClick={e => { e.stopPropagation(); onTag(part.tag.toLowerCase()); }}
       >
-        #{part.tag}
+        <TagText tag={part.tag} />
       </button>
     ),
   );
