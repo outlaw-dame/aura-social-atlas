@@ -36,12 +36,18 @@ const WEIGHT: Record<ForYouReason['kind'], number> = { following: 1, tag: 0.85, 
  * (they arrive most-replied first) and for posts with more than one reason.
  */
 export function rankForYou(sources: { following: FedizenPost[]; tags: { tag: string; posts: FedizenPost[] }[]; groups: (FedizenPost & { group?: string })[] }, now = Date.now(), max = 40): ForYouPost[] {
-  const byUrl = new Map<string, { post: FedizenPost; reasons: ForYouReason[]; boost: number }>();
+  // One entry per post: matched by its Fedizen status id when it has one (a group boost and the home timeline can give
+  // the same post different URLs), else by URL.
+  type Entry = { post: FedizenPost; reasons: ForYouReason[]; boost: number };
+  const entries: Entry[] = [];
+  const byId = new Map<string, Entry>(), byUrl = new Map<string, Entry>();
   const add = (p: FedizenPost, r: ForYouReason, boost = 0) => {
-    const key = p.url;
-    const e = byUrl.get(key);
+    const e = (p.statusId ? byId.get(p.statusId) : undefined) ?? byUrl.get(p.url);
     if (e) { if (!e.reasons.some(x => JSON.stringify(x) === JSON.stringify(r))) e.reasons.push(r); e.boost = Math.max(e.boost, boost); if (!e.post.statusId && p.statusId) e.post = p; }
-    else byUrl.set(key, { post: p, reasons: [r], boost });
+    const into = e ?? { post: p, reasons: [r], boost };
+    if (!e) entries.push(into);
+    if (p.statusId && !byId.has(p.statusId)) byId.set(p.statusId, into);
+    if (!byUrl.has(p.url)) byUrl.set(p.url, into);
   };
   for (const p of sources.following) add(p, { kind: 'following' });
   for (const t of sources.tags) for (const p of t.posts) add(p, { kind: 'tag', tag: t.tag });
@@ -53,7 +59,7 @@ export function rankForYou(sources: { following: FedizenPost[]; tags: { tag: str
     const weight = Math.max(...e.reasons.map(r => WEIGHT[r.kind]));
     return recency * weight + e.boost * Math.pow(0.5, age / 72) + 0.15 * (e.reasons.length - 1);
   };
-  return [...byUrl.values()].sort((a, b) => score(b) - score(a)).slice(0, max).map(e => ({ ...e.post, reasons: e.reasons }));
+  return entries.sort((a, b) => score(b) - score(a)).slice(0, max).map(e => ({ ...e.post, reasons: e.reasons }));
 }
 
 /* ── Circles pinned to Feeds, per Atlas account, in this browser ─────────────────────────────── */

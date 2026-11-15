@@ -138,3 +138,13 @@ describe("Popular in your groups", () => {
     expect(await joinedGroups("u")).toEqual({ groups: [expect.objectContaining({ id: "g0" })], complete: false });
   });
 });
+
+describe("For You dedupe", () => {
+  test("a group boost and the home timeline with different URLs for the same status are one card", () => {
+    const home = post("01S", 1, { url: "https://fedizen.net/post/01S" });
+    const group = { ...post("01S", 1, { url: "https://fedizen.net/post/activity-9" }), id: "g-activity-9", group: "Makers" };
+    const out = rankForYou({ following: [home], tags: [], groups: [group] }, NOW);
+    expect(out).toHaveLength(1);
+    expect(out[0].reasons).toEqual([{ kind: "following" }, { kind: "group", group: "Makers" }]);
+  });
+});

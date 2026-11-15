@@ -18,7 +18,8 @@ const recall = (): FeedKind | null => { try { return sessionStorage.getItem(KEY)
 /** Desktop Feeds page: Following, For You, Articles, Local, and the circles you've pinned, with a dot on any that has
  *  posts you haven't seen (as Particle does). */
 export function FeedsView() {
-  const { user } = useAtlasAuth();
+  // Pins belong to an account: until the session is restored, an empty list proves nothing.
+  const { user, loading: authLoading } = useAtlasAuth();
   const pinned = usePinnedCircles(user?.id);
   const [feed, setFeed] = useState<FeedKind>('following');
   const [restored, setRestored] = useState(false);
@@ -26,8 +27,8 @@ export function FeedsView() {
   const choose = (k: FeedKind) => { setFeed(k); remember(k); };
   const circleId = circleIdOf(feed);
   // A circle that was unpinned (here or on another page) falls back to Following.
-  useEffect(() => { if (circleId && !pinned.some(c => c.id === circleId)) choose('following'); }, [circleId, pinned]);
-  const tabs = useFeedTabs(restored ? feed : null);
+  useEffect(() => { if (!authLoading && circleId && !pinned.some(c => c.id === circleId)) choose('following'); }, [authLoading, circleId, pinned]);
+  const tabs = useFeedTabs(restored && !authLoading ? feed : null);
   return <div>
     <div role="tablist" aria-label="Feeds" className="mb-6 flex flex-wrap items-center gap-1">
       {tabs.map(t => <button key={t.id} type="button" role="tab" aria-selected={feed === t.id} title={t.circle ? `Posts from people in ${t.label}` : t.hint} onClick={() => choose(t.id)}

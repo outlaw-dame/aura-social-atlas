@@ -16,7 +16,8 @@ const KEY = 'atlas-feed';
  * `following` is the extra content Following shows under your Fedizen timeline (Atlas creators you follow).
  */
 export function MobileFeeds({ following, visible = true }: { following?: ReactNode; /** Whether the Feeds dock tab is on screen. */ visible?: boolean }) {
-  const { user } = useAtlasAuth();
+  // Pins belong to an account: until the session is restored, an empty list proves nothing.
+  const { user, loading: authLoading } = useAtlasAuth();
   const pinned = usePinnedCircles(user?.id);
   const [feed, setFeed] = useState<FeedKind>('following');
   const [pinning, setPinning] = useState(false);
@@ -24,8 +25,8 @@ export function MobileFeeds({ following, visible = true }: { following?: ReactNo
   useEffect(() => { try { const r = sessionStorage.getItem(KEY) as FeedKind | null; if (r) setFeed(r); } catch { /* fine */ } setRestored(true); }, []);
   const choose = (k: FeedKind) => { setFeed(k); try { sessionStorage.setItem(KEY, k); } catch { /* fine */ } };
   const circleId = circleIdOf(feed);
-  useEffect(() => { if (circleId && !pinned.some(c => c.id === circleId)) choose('following'); }, [circleId, pinned]);
-  const tabs = useFeedTabs(restored && visible ? feed : null);
+  useEffect(() => { if (!authLoading && circleId && !pinned.some(c => c.id === circleId)) choose('following'); }, [authLoading, circleId, pinned]);
+  const tabs = useFeedTabs(restored && visible && !authLoading ? feed : null);
   return <>
     <div className="atlas-feed-tabs" role="tablist" aria-label="Feeds">
       {tabs.map(t => <button key={t.id} type="button" role="tab" aria-selected={feed === t.id} onClick={e => { choose(t.id); e.currentTarget.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' }); }}
