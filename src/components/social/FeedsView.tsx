@@ -28,7 +28,7 @@ export function FeedsView() {
   const circleId = circleIdOf(feed);
   // A circle that was unpinned (here or on another page) falls back to Following.
   useEffect(() => { if (!authLoading && circleId && !pinned.some(c => c.id === circleId)) choose('following'); }, [authLoading, circleId, pinned]);
-  const tabs = useFeedTabs(restored && !authLoading ? feed : null);
+  const tabs = useFeedTabs(restored && !authLoading ? feed : null, { nativeFollowing: true });
   return <div>
     <div role="tablist" aria-label="Feeds" className="mb-6 flex flex-wrap items-center gap-1">
       {tabs.map(t => <button key={t.id} type="button" role="tab" aria-selected={feed === t.id} title={t.circle ? `Posts from people in ${t.label}` : t.hint} onClick={() => choose(t.id)}

@@ -1,7 +1,9 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery, type InfiniteData } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { getCircleFeed, getFedizenHome, getForYou } from '@/lib/fedizen.functions';
+import type { NativeBonfireSnapshot } from '@/lib/bonfire-private.functions';
+import { mergeNativeBonfirePages, selectBonfireHome } from '@/lib/bonfire-native-presentation';
 import { getFedizenPublic, getRecentArticles } from '@/lib/bonfire.functions';
 import { BASE_FEEDS, circleFeed, hasNew, markFeedSeen, newestOf, useFeedsSeen, usePinnedCircles, type FeedKind } from '@/lib/feed-types';
 import { useAtlasAuth } from './AuthState';
@@ -47,8 +49,12 @@ export type FeedTab = { id: FeedKind; label: string; hint?: string; circle?: boo
  * than the person last saw there (as Particle marks its topics). Every feed is read through the same queries its view
  * uses, so the dots cost no extra requests once a view has loaded, and the open feed counts as seen as it updates.
  */
-/** `active` is null until the view has restored the feed it was on, so the default tab isn't counted as seen. */
-export function useFeedTabs(active: FeedKind | null): FeedTab[] {
+/**
+ * `active` is null until the view has restored the feed it was on, so the default tab isn't counted as seen.
+ * `nativeFollowing`: Following shows Bonfire's native home when that read is verified (desktop does, via
+ * selectBonfireHome); its dot then follows the same posts. It only observes the native query, never starts it.
+ */
+export function useFeedTabs(active: FeedKind | null, { nativeFollowing = false }: { nativeFollowing?: boolean } = {}): FeedTab[] {
   const { user } = useAtlasAuth();
   const uid = user?.id;
   const home = useServerFn(getFedizenHome), circle = useServerFn(getCircleFeed);
@@ -59,6 +65,10 @@ export function useFeedTabs(active: FeedKind | null): FeedTab[] {
     queryFn: () => { if (!uid) throw new Error('Atlas user is not signed in.'); return home({ data: { expectedAtlasUserId: uid } }); },
     enabled: !!uid, staleTime: 60_000,
   });
+  const native = useQuery<InfiniteData<NativeBonfireSnapshot>>({ queryKey: ['bonfire-native-home', uid], enabled: false });
+  const followingPosts = following.data
+    ? (nativeFollowing ? selectBonfireHome(following.data, mergeNativeBonfirePages(following.data, native.data?.pages)).posts : following.data.posts)
+    : undefined;
   const forYou = useForYou(!!uid);
   const articles = useQuery({ queryKey: ['bonfire-articles'], queryFn: () => getRecentArticles(), staleTime: 5 * 60_000 });
   const local = useQuery({ queryKey: ['fedizen-public'], queryFn: () => getFedizenPublic(), staleTime: 60_000 });
@@ -68,7 +78,7 @@ export function useFeedTabs(active: FeedKind | null): FeedTab[] {
     enabled: !!uid, staleTime: 60_000,
   })) });
   const newest: Record<string, string | undefined> = {
-    following: newestOf(following.data?.posts), foryou: newestOf(forYou.data?.posts),
+    following: newestOf(followingPosts), foryou: newestOf(forYou.data?.posts),
     articles: newestOf(articles.data?.articles), local: newestOf(local.data?.posts),
     ...Object.fromEntries(pinned.map((c, i) => [circleFeed(c.id), newestOf(circles[i]?.data?.posts)])),
   };
