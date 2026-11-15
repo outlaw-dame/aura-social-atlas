@@ -290,15 +290,16 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
       Promise.all(tags.map(async tag => {
         // One tag that can't be read leaves the others, and the rest of For You, untouched.
         const r = await fedizenGet(c.token, `/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=10`).catch(() => null);
-        return { tag, posts: r?.status === 200 ? fromStatuses(r.data as never) : [] };
+        return { tag, ok: r?.status === 200, posts: r?.status === 200 ? fromStatuses(r.data as never) : [] };
       })),
       joined ? popularInGroups(joined.groups.map(g => g.id)).catch(() => null) : Promise.resolve(null),
     ]);
-    if (!joined || !joined.complete || !popular) missing.push('groups');
+    if (tagFeeds.some(t => !t.ok) && !missing.includes('tags')) missing.push('tags');
+    if (!joined || !joined.complete || !popular || !popular.complete) missing.push('groups');
     const posts = rankForYou({
       following: home.status === 200 ? fromStatuses(home.data as never) : [],
-      tags: tagFeeds,
-      groups: (popular ?? []).map(p => ({ ...fromGroupPost(p), group: p.group })),
+      tags: tagFeeds.map(({ tag, posts }) => ({ tag, posts })),
+      groups: (popular?.posts ?? []).map(p => ({ ...fromGroupPost(p), group: p.group })),
     });
     // Credits and players for the links in them, as on Following.
     const withAuthors = await withArticleAuthors(posts);

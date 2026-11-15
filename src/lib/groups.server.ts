@@ -104,14 +104,31 @@ export async function getGroup(id: string): Promise<{ group: Group; topics: Grou
 // activities of the last day; For You asks the same of the groups you're in, over a week so quiet groups count too.
 const POPULAR = `query($subjects:[String]){feedActivities(first:20,filter:{feedName:"known_groups",subjects:$subjects,sortBy:REPLY_COUNT,sortOrder:DESC,timeLimit:7}){edges{node{id date canonicalUri verb{verb} objectPostContent{name summary htmlBody} subject{${ACTOR}} media{url mediaType} object{... on Post{id creator{${ACTOR}}}}}}}}`;
 
-/** The most-discussed posts of the past week in these groups, most replies first. */
-export async function popularInGroups(ids: string[]): Promise<GroupPost[] | null> {
-  if (!ids.length) return [];
-  const d = await gql<{ feedActivities?: { edges?: { node: BonfireActivityNode }[] } }>(POPULAR, { subjects: ids.slice(0, 50) });
-  return d?.feedActivities ? groupPosts((d.feedActivities.edges ?? []).map(e => e.node)) : null;
+/**
+ * The most-discussed posts of the past week in these groups, most replies first. Groups are asked about 50 at a time
+ * (four queries at once); each batch's posts come back in reply order and are interleaved, so every batch's top post
+ * ranks above any batch's second. `complete` is false when a batch couldn't be read; null when none could.
+ */
+export async function popularInGroups(ids: string[]): Promise<{ posts: GroupPost[]; complete: boolean } | null> {
+  if (!ids.length) return { posts: [], complete: true };
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += 50) batches.push(ids.slice(i, i + 50));
+  const lists: GroupPost[][] = [];
+  let failed = 0;
+  for (let i = 0; i < batches.length; i += 4) {
+    const results = await Promise.all(batches.slice(i, i + 4).map(b =>
+      gql<{ feedActivities?: { edges?: { node: BonfireActivityNode }[] } }>(POPULAR, { subjects: b }).catch(() => null)));
+    for (const d of results) {
+      if (!d?.feedActivities) { failed++; continue; }
+      lists.push(groupPosts((d.feedActivities.edges ?? []).map(e => e.node)));
+    }
+  }
+  if (failed === batches.length) return null;
+  const posts: GroupPost[] = [];
+  for (let k = 0; lists.some(l => k < l.length); k++) for (const l of lists) if (k < l.length) posts.push(l[k]);
+  return { posts, complete: !failed };
 }
 
-/** The groups you're a member of, among the first ones Fedizen lists (relationships are read 40 at a time). */
 /* Every group in the directory (public, the same for everyone), read page by page and kept briefly. */
 let directory: { at: number; groups: Group[]; complete: boolean } | null = null;
 const DIRECTORY_TTL = 10 * 60_000;

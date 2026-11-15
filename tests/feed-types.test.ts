@@ -71,12 +71,18 @@ describe("Popular in your groups", () => {
   test("asks Bonfire for the week's most-replied posts in exactly those groups", async () => {
     let body: { query: string; variables: { subjects: string[] } } | undefined;
     net.fetch = (async (_u: string, init?: RequestInit) => { body = JSON.parse(String(init?.body)); return new Response(JSON.stringify({ data: { feedActivities: { edges: [] } } })); }) as unknown as typeof fetch;
-    expect(await popularInGroups(["g1", "g2"])).toEqual([]);
+    expect(await popularInGroups(["g1", "g2"])).toEqual({ posts: [], complete: true });
     expect(body?.query).toContain("sortBy:REPLY_COUNT");
     expect(body?.query).toContain("sortOrder:DESC");
     expect(body?.query).toContain("timeLimit:7");
     expect(body?.variables.subjects).toEqual(["g1", "g2"]);
-    expect(await popularInGroups([])).toEqual([]);
+    expect(await popularInGroups([])).toEqual({ posts: [], complete: true });
+    const sent: string[][] = [];
+    net.fetch = (async (_u: string, init: RequestInit) => { const v = JSON.parse(String(init.body)).variables; sent.push(v.subjects); return sent.length === 2 ? new Response("{}", { status: 500 }) : new Response(JSON.stringify({ data: { feedActivities: { edges: [] } } })); }) as unknown as typeof fetch;
+    const ids = Array.from({ length: 120 }, (_, i) => `g${i}`);
+    expect(await popularInGroups(ids)).toEqual({ posts: [], complete: false });
+    expect(sent.flat().sort()).toEqual([...ids].sort());
+    expect(sent.every(b => b.length <= 50)).toBe(true);
   });
 
   test("joined groups are the ones whose relationship says you follow (are a member of) them", async () => {
