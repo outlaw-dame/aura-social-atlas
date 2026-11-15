@@ -100,6 +100,32 @@ export async function getGroup(id: string): Promise<{ group: Group; topics: Grou
   };
 }
 
+// Bonfire's "Top discussions" preset (bonfire_social runtime_config, :trending_discussions) is the most-replied
+// activities of the last day; For You asks the same of the groups you're in, over a week so quiet groups count too.
+const POPULAR = `query($subjects:[String]){feedActivities(first:20,filter:{feedName:"known_groups",subjects:$subjects,sortBy:REPLY_COUNT,sortOrder:DESC,timeLimit:7}){edges{node{id date canonicalUri verb{verb} objectPostContent{name summary htmlBody} subject{${ACTOR}} media{url mediaType} object{... on Post{id creator{${ACTOR}}}}}}}}`;
+
+/** The most-discussed posts of the past week in these groups, most replies first. */
+export async function popularInGroups(ids: string[]): Promise<GroupPost[] | null> {
+  if (!ids.length) return [];
+  const d = await gql<{ feedActivities?: { edges?: { node: BonfireActivityNode }[] } }>(POPULAR, { subjects: ids.slice(0, 50) });
+  return d?.feedActivities ? groupPosts((d.feedActivities.edges ?? []).map(e => e.node)) : null;
+}
+
+/** The groups you're a member of, among the first ones Fedizen lists (relationships are read 40 at a time). */
+export async function joinedGroups(userId: string): Promise<Group[] | null> {
+  const page = await listGroups();
+  if (!page) return null;
+  const groups = page.groups.filter(g => g.type === 'group').slice(0, 80);
+  const joined: Group[] = [];
+  for (let i = 0; i < groups.length; i += 40) {
+    const batch = groups.slice(i, i + 40);
+    const m = await memberships(userId, batch.map(g => g.id));
+    if (!m.ok) return i ? joined : null;
+    joined.push(...batch.filter(g => m.memberships[g.id] === 'member'));
+  }
+  return joined;
+}
+
 /** The latest posts across every group Fedizen knows (Bonfire's "All known groups" feed). */
 export async function latestInGroups(): Promise<GroupPost[] | null> {
   const d = await gql<{ feedActivities?: { edges?: { node: BonfireActivityNode }[] } }>(FEED, { subjects: null });

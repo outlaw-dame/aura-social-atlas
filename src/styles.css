@@ -384,6 +384,11 @@ html[data-nav="tabbar-side"] .atlas-tabbar::before { display: none; }
 html[data-nav="tabbar-side"] .atlas-tabbar .toolbar-inner { position: static; flex-direction: column; justify-content: center; gap: 6px; height: 100%; padding: 0; }
 html[data-nav="tabbar-side"] .atlas-tabbar .tab-link { flex: 0 0 auto; width: 100%; min-width: 0; padding: 0 4px; height: 58px; }
 html[data-nav="tabbar-side"] .view-main .page-content { padding-bottom: calc(16px + var(--atlas-sa-bottom)); }
+/* Phones with a bottom tab bar: Compose floats at the bottom right, so the actions in a post's footer move to the
+   left (the date, which nothing taps, takes the right), and every tab ends with room to scroll its last post clear. */
+html[data-nav="tabbar"] .page-content .card .card-footer { flex-direction: row-reverse; }
+html[data-nav="tabbar"] .page-content .card .card-footer > :only-child { margin-right: auto; }
+html[data-nav="tabbar"] .tabs > .tab.page-content::after { content: ''; display: block; height: 76px; }
 html[data-nav="tabbar-side"] .atlas-fab, html[data-nav="rail"] .atlas-fab, html[data-nav="sidebar"] .atlas-fab { margin-bottom: var(--atlas-sa-bottom) !important; }
 
 /* Wide windows mirror the desktop Discover page: hero, then the feed with a "Voices to know" column
@@ -576,6 +581,15 @@ html.atlas-has-tabbar .atlas-pip { --pip-bottom: calc(var(--pip-gap) + var(--f7-
 .atlas-pip[data-corner$="l"] .atlas-pip-resize { right: 0; cursor: nesw-resize; }
 .atlas-pip[data-corner^="t"] .atlas-pip-resize { top: auto; bottom: 0; }
 
+.atlas-feed-chips { display: flex; gap: 8px; overflow-x: auto; padding: 12px 16px 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.atlas-feed-chips::-webkit-scrollbar { display: none; }
+.atlas-feed-chips button { flex: none; width: auto; display: inline-flex; white-space: nowrap; align-items: center; gap: 5px; height: 34px; padding: 0 14px; border-radius: 17px; border: .5px solid var(--border); background: var(--f7-card-bg-color, var(--card)); color: inherit; font: inherit; font-size: 14px; cursor: pointer; }
+.atlas-feed-chips button.active { background: var(--accent); color: var(--accent-foreground, #fff); border-color: transparent; font-weight: 600; }
+.atlas-feed-chips button .icon { font-size: 16px; }
+.atlas-feed-chip-add { opacity: .75; border-style: dashed !important; }
+.atlas-reasons { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.atlas-reasons span { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; background: color-mix(in oklab, var(--muted) 70%, transparent); font-size: 11px; opacity: .8; }
+.atlas-reasons .icon { font-size: 12px; }
 .atlas-mini { position: fixed; z-index: 5500; left: 8px; right: 8px; bottom: calc(var(--f7-toolbar-height, 50px) + var(--f7-safe-area-bottom, 0px) + 8px); height: 56px; display: flex; align-items: center; gap: 2px; padding: 0 6px 0 8px; border-radius: 16px; overflow: hidden; background: color-mix(in oklab, var(--f7-bars-bg-color, var(--card)) 82%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border: .5px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.18); color: var(--f7-text-color, inherit); }
 /* Without a tab bar (rail or sidebar on wide and unfolded screens) the podcast bar sits at the bottom, clear of the rail. */
 html:not(.atlas-has-tabbar) .atlas-mini { bottom: calc(var(--f7-safe-area-bottom, 0px) + 8px); }

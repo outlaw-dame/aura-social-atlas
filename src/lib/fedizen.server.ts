@@ -335,6 +335,9 @@ const listsSchema = z.array(list).max(200);
 const accountsSchema = z.array(account.extend({ id: z.string().min(1).max(64) })).max(80);
 
 const ID = '[A-Za-z0-9_-]{1,64}';
+/** A hashtag, percent-encoded (letters in any script arrive as %XX). */
+const TAG = '[A-Za-z0-9_%]{1,300}';
+const followedTagsSchema = z.array(z.object({ name: z.string().min(1).max(100) })).max(20);
 /** Every private read Atlas makes, each with the schema its answer must match. Anything else is refused. */
 const ACCT = '[A-Za-z0-9_.%-]{1,64}(%40[A-Za-z0-9.-]{1,253})?';
 const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
@@ -349,6 +352,11 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: new RegExp(`^/api/v1/lists/${ID}/accounts\\?limit=80$`), schema: accountsSchema },
   // One account by handle, to add someone to a circle. Answers a single Account, returned here as a one-item list.
   { match: new RegExp(`^/api/v1/accounts/lookup\\?acct=${ACCT}$`), schema: account.extend({ id: z.string().min(1).max(64) }), single: true },
+  // For You: the hashtags you follow (Bonfire: MastoTagController.followed), and each one's timeline.
+  { match: /^\/api\/v1\/followed_tags\?limit=20$/, schema: followedTagsSchema },
+  { match: new RegExp(`^/api/v1/timelines/tag/${TAG}\\?limit=10$`), schema: homeSchema },
+  // A circle's timeline (Bonfire: MastoListController.list_timeline over Circles), for circles pinned to Feeds.
+  { match: new RegExp(`^/api/v1/timelines/list/${ID}\\?limit=20$`), schema: homeSchema },
 ];
 
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;

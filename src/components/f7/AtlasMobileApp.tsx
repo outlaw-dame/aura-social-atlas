@@ -27,7 +27,8 @@ import { GroupPopup, MobileGroups } from './Groups';
 import type { Group } from '@/lib/groups';
 import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
-import { MobileRecentArticles, MobileFedizenFeed, MobileActivity, MessagesPopup } from './FedizenMobile';
+import { MobileRecentArticles, MobileActivity, MessagesPopup } from './FedizenMobile';
+import { MobileFeeds } from './MobileFeeds';
 import { ModerationPopup } from './Moderation';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
@@ -328,11 +329,12 @@ export default function AtlasMobileApp() {
             </Tab>
 
             <Tab id="tab-feeds" className="page-content" onTabShow={() => setTitle('Feeds')}>
-              <MobileFedizenFeed />
-              <BlockTitle>Atlas creators you follow</BlockTitle>
-              {followingPosts.length ? followingPosts.map(postCard) : (
-                <Block strong inset>Follow creators in Discover and their stories will show up here.</Block>
-              )}
+              <MobileFeeds following={<>
+                <BlockTitle>Atlas creators you follow</BlockTitle>
+                {followingPosts.length ? followingPosts.map(postCard) : (
+                  <Block strong inset>Follow creators in Discover and their stories will show up here.</Block>
+                )}
+              </>} />
             </Tab>
 
             <Tab id="tab-groups" className="page-content" onTabShow={() => setTitle('Groups')}>

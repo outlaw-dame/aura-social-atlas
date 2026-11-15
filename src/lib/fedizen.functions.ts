@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
+import type { ForYouPost } from './feed-types';
 import { allowedCallback, assertFedizenSessionIntent, creditsBesidesAuthor, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
 
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
@@ -259,4 +260,60 @@ export const changeFedizenBlock = createServerFn({ method: 'POST' }).middleware(
     const r = await fedizenSend(c.token, 'POST', `/api/v1/accounts/${accountId}/${data.block ? 'block' : 'unblock'}`);
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
     return { ok: true, person };
+  });
+
+/* ── Feeds: For You and pinned circles ──────────────────────────────────────────────────────── */
+
+/**
+ * For You: your home timeline (people you follow), the timelines of up to four hashtags you follow, and the
+ * most-discussed posts of the past week in the groups you're in, merged and ranked (rankForYou). A source that
+ * fails is left out and named in `missing`, so the rest still shows.
+ */
+export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: ForYouPost[]; tags: string[]; groups: string[]; missing: ('following' | 'tags' | 'groups')[]; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { posts: [], tags: [], groups: [], missing: [], error: c.error };
+    const [{ fedizenGet }, { joinedGroups, popularInGroups }, { rankForYou, fromGroupPost }] = await Promise.all([import('./fedizen.server'), import('./groups.server'), import('./feed-types')]);
+    const missing: ('following' | 'tags' | 'groups')[] = [];
+    const [home, followed, joined] = await Promise.all([
+      fedizenGet(c.token, '/api/v1/timelines/home?limit=20'),
+      fedizenGet(c.token, '/api/v1/followed_tags?limit=20'),
+      joinedGroups(context.userId).catch(() => null),
+    ]);
+    if (home.status === 401) return { posts: [], tags: [], groups: [], missing: [], error: 'expired' };
+    if (home.status !== 200) missing.push('following');
+    const tags = followed.status === 200 ? (followed.data as { name: string }[]).map(t => t.name.replace(/^#/, '')).slice(0, 4) : [];
+    if (followed.status !== 200) missing.push('tags');
+    const [tagFeeds, popular] = await Promise.all([
+      Promise.all(tags.map(async tag => {
+        const r = await fedizenGet(c.token, `/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=10`);
+        return { tag, posts: r.status === 200 ? fromStatuses(r.data as never) : [] };
+      })),
+      joined ? popularInGroups(joined.map(g => g.id)).catch(() => null) : Promise.resolve(null),
+    ]);
+    if (!joined || !popular) missing.push('groups');
+    const posts = rankForYou({
+      following: home.status === 200 ? fromStatuses(home.data as never) : [],
+      tags: tagFeeds,
+      groups: (popular ?? []).map(p => ({ ...fromGroupPost(p), group: p.group })),
+    });
+    // Credits and players for the links in them, as on Following.
+    const withAuthors = await withArticleAuthors(posts);
+    return { posts: withAuthors as ForYouPost[], tags, groups: (joined ?? []).map(g => g.name), missing };
+  });
+
+/** A circle's feed: posts from the people in it (Bonfire serves circles as Mastodon lists). */
+export const getCircleFeed = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ id: ulid }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; error?: Problem | 'not-found' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { posts: [], error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const r = await fedizenGet(c.token, `/api/v1/timelines/list/${data.id}?limit=20`);
+    if (r.status === 404) return { posts: [], error: 'not-found' };
+    if (r.status !== 200) return { posts: [], error: problem(r.status) };
+    return { posts: await withArticleAuthors(fromStatuses(r.data as never)) };
   });

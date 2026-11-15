@@ -9,6 +9,7 @@ import { SaveButton } from './SavedAndCircles';
 import { PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
 import { useSaveToggle } from './useFedizenLibrary';
+import { FeedPostCard } from './FeedPostCard';
 
 const when = (d?: string) => d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
@@ -48,18 +49,7 @@ export function FedizenFeed() {
     {save.error && <p role="alert" className="mb-4 text-sm text-destructive">{save.error}</p>}
     {error && displayed.source !== 'native' && <p className="mb-4 text-sm text-muted-foreground">Fedizen couldn’t send your timeline right now. <Button variant="link" size="sm" className="px-1" onClick={f.retry}>Try again</Button></p>}
     <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_240px]">
-      <div className="space-y-6">{posts.length ? posts.map(p => <article key={p.id} className="border-b border-border pb-5">
-        {p.boostedBy && <p className="mb-2 flex items-center gap-1 text-[11px] text-muted-foreground"><Repeat2 className="size-3" />{p.boostedBy} boosted</p>}
-        <p className="flex items-center gap-2 text-xs">{p.avatar && <img src={p.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-8 rounded-full object-cover" />}<span><span className="font-semibold">{p.author}</span> <span className="text-muted-foreground">{p.handle} · {when(p.date)}</span></span></p>
-        <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div>
-        {'video' in p && p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
-        <CollectionLinks links={"collections" in p ? p.collections : undefined} />
-        <PostArticleCard article={'article' in p ? p.article : undefined} />
-        <div className="mt-2 flex items-center gap-2">
-          {'statusId' in p && <SaveButton post={p} save={save} />}
-          <a href={p.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Open on Fedizen<ArrowUpRight className="size-3" /></a>
-        </div>
-      </article>) : error && displayed.source !== 'native' ? null : <p className="text-sm text-muted-foreground">Your Fedizen timeline is empty. Follow people on Fedizen and their posts will appear here.</p>}
+      <div className="space-y-6">{posts.length ? posts.map(p => <FeedPostCard key={p.id} post={p} save={save} />) : error && displayed.source !== 'native' ? null : <p className="text-sm text-muted-foreground">Your Fedizen timeline is empty. Follow people on Fedizen and their posts will appear here.</p>}
         {displayed.source === 'native' && (
           <div className="space-y-2">
             {f.moreNativeError && <p role="status" className="text-xs text-muted-foreground">
