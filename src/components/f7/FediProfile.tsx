@@ -1,5 +1,6 @@
 import { Block, BlockTitle, Button, Icon, Link, List, ListItem, Navbar, NavRight, Page, Popup } from 'framework7-react';
 import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
+import { followLabels } from '@/lib/follow-labels';
 import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from '@/components/social/useFediProfile';
 
 /**
@@ -12,13 +13,13 @@ const day = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { yea
 
 function Follow({ p }: { p: FediProfile }) {
   const f = useFediFollow(p.acctVerified ? p.acct : undefined, p.actor);
-  const locked = p.locked;
+  const words = followLabels(p.kind, p.locked);
   if (!f.signedIn) return null;
   const on = f.state === 'following', asked = f.state === 'requested';
   if (!p.acctVerified) return <p className="atlas-fedi-note">{FOLLOW_PROBLEM.unverified}</p>;
   return <>
     {f.canFollow && <Button round fill={!on && !asked} tonal={on || asked} disabled={f.busy} onClick={f.toggle} aria-pressed={on}>
-      {on ? 'Following' : asked ? 'Requested' : locked ? 'Request to follow' : 'Follow'}
+      {on ? words.on : asked ? words.asked : words.off}
     </Button>}
     {f.error && <p role="alert" className="atlas-fedi-note">{f.error}</p>}
   </>;

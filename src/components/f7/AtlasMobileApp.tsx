@@ -18,7 +18,10 @@ import { useAtlasAuth } from '@/components/social/AuthState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { ProfileView, EditProfileSheet } from './ProfileView';
 import { CollectionPopup } from './Collections';
+import { AccentPicker } from '@/components/social/AccentPicker';
+import { accentHex, useAccent } from '@/lib/accent';
 import { FediProfilePopup } from './FediProfile';
+import { MiniPlayer } from './MiniPlayer';
 import { useFediProfileOpener } from '@/components/social/useFediProfile';
 import { GroupPopup, MobileGroups } from './Groups';
 import type { Group } from '@/lib/groups';
@@ -132,6 +135,9 @@ export default function AtlasMobileApp() {
   const [fabHidden, setFabHidden] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [moderationOpen, setModerationOpen] = useState(false);
+  const accent = useAccent();
+  // Framework7 derives its theme palette from the primary color; recompute it when the reader picks another accent.
+  useEffect(() => { f7ready(() => f7.setColorTheme(accentHex(accent))); }, [accent]);
   const fediProfile = useFediProfileOpener();
   /* Search lives on Discover: go there and put the cursor in the field. */
   const openSearch = () => {
@@ -226,7 +232,7 @@ export default function AtlasMobileApp() {
   };
 
   return (
-    <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: '#FA243C' }}>
+    <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: accentHex(accent) }}>
       <Panel left cover swipe resizable={false} visibleBreakpoint={panelHeldAtStart ? 1 : undefined} className="atlas-panel">
         <Page>
           <Block className="atlas-brand" style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', fontSize: 32, marginTop: 24 }}>Atlas</Block>
@@ -267,12 +273,12 @@ export default function AtlasMobileApp() {
             )}
           </Navbar>
           <Fab position="right-bottom" slot="fixed" className="atlas-fab" aria-label="Compose" onClick={() => setComposeOpen(true)}
-            style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
+            style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom) + var(--atlas-player-offset, 0px))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
             <Icon ios="f7:square_pencil" md="material:edit" />
           </Fab>
           {assistantEnabled && (
             <Fab position="left-bottom" slot="fixed" color="white" className="atlas-fab" aria-label="Open assistant" onClick={() => setChatOpen(true)}
-              style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
+              style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom) + var(--atlas-player-offset, 0px))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
               <Icon ios="f7:sparkles" md="material:auto_awesome" />
             </Fab>
           )}
@@ -345,6 +351,8 @@ export default function AtlasMobileApp() {
                 <ListItem title="Dark" radio radioIcon="end" name="mode" checked={mode === 'dark'} onChange={() => setMode('dark')} />
                 <ListItem title="Match device" radio radioIcon="end" name="mode" checked={mode === 'system'} onChange={() => setMode('system')} />
               </List>
+              <BlockTitle>Accent color</BlockTitle>
+              <Block strong inset><AccentPicker /></Block>
               <BlockTitle>Safety</BlockTitle>
               <List strong inset dividers>
                 <ListItem link="#" title="Moderation" footer="Keyword filters, blocked people and blocked instances" onClick={() => setModerationOpen(true)}>
@@ -397,6 +405,7 @@ export default function AtlasMobileApp() {
       <MessagesPopup opened={messagesOpen} onClose={() => setMessagesOpen(false)} />
       <ModerationPopup opened={moderationOpen} onClose={() => setModerationOpen(false)} />
       <FediProfilePopup target={fediProfile.target} onClose={fediProfile.close} />
+      <MiniPlayer />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
   );

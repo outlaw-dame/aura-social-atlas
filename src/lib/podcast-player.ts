@@ -13,6 +13,8 @@ export const SKIP_FORWARD = 30;
 export type PlayerState = {
   /** The episode loaded into the player (its page URL), if any. */
   current?: string;
+  /** That episode, for the mini player. */
+  episode?: FediEpisode;
   playing: boolean;
   /** Waiting for audio to arrive. */
   loading: boolean;
@@ -73,7 +75,7 @@ export function toggle(ep: FediEpisode) {
     a.pause();
     episode = ep;
     a.src = ep.audio.src;
-    set({ current: ep.url, playing: false, loading: true, time: 0, duration: ep.duration, error: false });
+    set({ current: ep.url, episode: ep, playing: false, loading: true, time: 0, duration: ep.duration, error: false });
     mediaSession(ep);
     start(a, ep.url);
     return;
@@ -91,6 +93,14 @@ export function seek(seconds: number) {
 }
 export const skip = (by: number) => { if (audio) seek(audio.currentTime + by); };
 
+/** Close the player: stop, unload, and clear the lock-screen controls. */
+export function stop() {
+  if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
+  episode = null;
+  if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) navigator.mediaSession.metadata = null;
+  set({ current: undefined, episode: undefined, playing: false, loading: false, time: 0, duration: undefined, error: false });
+}
+
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 const IDLE: PlayerState = { playing: false, loading: false, time: 0 };
 
@@ -106,4 +116,9 @@ export function useEpisodePlayback(ep: FediEpisode) {
     time: mine ? s.time : 0,
     duration: (mine ? s.duration : undefined) ?? ep.duration,
   };
+}
+
+/** Everything the mini player needs: whatever is loaded, wherever its card is. */
+export function useNowPlaying(): PlayerState {
+  return useSyncExternalStore(subscribe, () => state, () => IDLE);
 }

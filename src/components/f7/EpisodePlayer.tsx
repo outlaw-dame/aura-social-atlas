@@ -7,13 +7,14 @@ import { SKIP_BACK, SKIP_FORWARD, seek, skip, toggle, useEpisodePlayback } from 
  * Phone: a podcast episode played in place — artwork, title, the podcast with its handle stacked under its name
  * (opens its profile in Atlas), play/pause, scrubber, skip back 15 s / forward 30 s. Shares one player with desktop.
  */
-export function EpisodePlayer({ episode: ep }: { episode: FediEpisode }) {
+/** `bare`: no artwork or card frame (Now Playing shows the artwork large above it). */
+export function EpisodePlayer({ episode: ep, bare = false }: { episode: FediEpisode; bare?: boolean }) {
   const p = useEpisodePlayback(ep);
   const total = p.duration;
   const art = ep.image ?? ep.podcast.avatar;
-  return <section className="atlas-episode" aria-label={`Podcast episode: ${ep.title}`}>
+  return <section className={`atlas-episode${bare ? ' atlas-episode-bare' : ''}`} aria-label={`Podcast episode: ${ep.title}`}>
     <div className="atlas-episode-top">
-      {art ? <img className="atlas-episode-art" src={art} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="atlas-episode-art atlas-episode-initial" aria-hidden="true">{ep.podcast.name.charAt(0)}</span>}
+      {bare ? null : art ? <img className="atlas-episode-art" src={art} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="atlas-episode-art atlas-episode-initial" aria-hidden="true">{ep.podcast.name.charAt(0)}</span>}
       <div className="atlas-episode-copy">
         <Link external target="_blank" href={ep.url} className="atlas-episode-title">{ep.title}</Link>
         <Link onClick={() => openFediProfile(ep.podcast)} className="atlas-episode-show" aria-label={`Podcast: ${ep.podcast.name} (${ep.podcast.acct})`}>
