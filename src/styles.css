@@ -529,6 +529,53 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-fedi-post h2 { margin: 0 0 4px; font: 400 22px/1.2 'Instrument Serif', serif; }
 .atlas-fedi-post img { width: 100%; border-radius: 12px; margin-top: 8px; }
 .atlas-fedi-post summary { cursor: pointer; opacity: .7; }
+/* Video in posts, and the floating mini player (after Arc's Mini Player). */
+.atlas-video { margin-top: 12px; }
+.atlas-video-frame { position: relative; width: 100%; max-height: 70vh; overflow: hidden; border-radius: 18px; background: #000; }
+.atlas-video-slot, .atlas-video-poster, .atlas-video-iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.atlas-video-slot { display: flex; align-items: center; justify-content: center; }
+.atlas-video-slot .atlas-video-el, .atlas-pip-slot .atlas-video-el { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+.atlas-video-away { display: flex; align-items: center; gap: 8px; margin: 0; color: rgba(255,255,255,.75); font-size: 13px; }
+.atlas-video-away svg { width: 18px; height: 18px; }
+.atlas-video-poster { padding: 0; cursor: pointer; background: #000; }
+.atlas-video-poster img { width: 100%; height: 100%; object-fit: cover; opacity: .92; }
+.atlas-video-play { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: var(--accent-foreground, #fff); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(0,0,0,.35); transition: scale .15s; }
+.atlas-video-play svg { width: 28px; height: 28px; margin-left: 3px; fill: currentColor; }
+.atlas-video-poster:hover .atlas-video-play { scale: 1.06; }
+.atlas-video-badge { position: absolute; right: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 8px; background: rgba(0,0,0,.72); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; }
+.atlas-video-live { background: #E5243B; font-weight: 700; } .atlas-video-badge svg { width: 12px; height: 12px; }
+.atlas-video-meta { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.atlas-video-title { font-size: 15px; font-weight: 600; line-height: 1.3; color: inherit !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.atlas-video-title:hover { text-decoration: underline; }
+.atlas-video-creator { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 0; color: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.atlas-video-creator img, .atlas-video-creator .atlas-episode-initial { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: none; font-size: 14px; }
+.atlas-video-creator span { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.atlas-video-creator b { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-video-creator small, .atlas-video-host { font-size: 11px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.atlas-pip { --pip-gap: 16px; --pip-bottom: calc(var(--pip-gap) + var(--atlas-player-offset, 0px)); position: fixed; z-index: 6000; width: var(--pip-w, 320px); max-width: calc(100vw - 2 * var(--pip-gap)); aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #000; box-shadow: 0 18px 50px rgba(0,0,0,.45), 0 0 0 .5px rgba(255,255,255,.12); touch-action: none; transition: inset .25s ease, width .1s; }
+.atlas-pip[hidden] { display: none; }
+.atlas-pip[data-corner="br"] { right: var(--pip-gap); bottom: var(--pip-bottom); }
+.atlas-pip[data-corner="bl"] { left: var(--pip-gap); bottom: var(--pip-bottom); }
+.atlas-pip[data-corner="tr"] { right: var(--pip-gap); top: calc(var(--pip-gap) + env(safe-area-inset-top, 0px) + 56px); }
+.atlas-pip[data-corner="tl"] { left: var(--pip-gap); top: calc(var(--pip-gap) + env(safe-area-inset-top, 0px) + 56px); }
+html.atlas-has-tabbar .atlas-pip { --pip-bottom: calc(var(--pip-gap) + var(--f7-toolbar-height, 50px) + var(--f7-safe-area-bottom, 0px) + var(--atlas-player-offset, 0px)); }
+.atlas-pip-slot { position: absolute; inset: 0; }
+.atlas-pip-ui { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; color: #fff; opacity: 0; transition: opacity .2s; background: linear-gradient(rgba(0,0,0,.55), transparent 35%, transparent 60%, rgba(0,0,0,.6)); cursor: grab; }
+.atlas-pip:hover .atlas-pip-ui, .atlas-pip:focus-within .atlas-pip-ui, .atlas-pip-ui:active { opacity: 1; }
+@media (hover: none) { .atlas-pip-ui { opacity: 1; background: linear-gradient(rgba(0,0,0,.45), transparent 30%, transparent 65%, rgba(0,0,0,.5)); } }
+.atlas-pip-ui button { border: 0; background: rgba(0,0,0,.35); color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+.atlas-pip-ui button svg { width: 16px; height: 16px; }
+.atlas-pip-top, .atlas-pip-bottom { display: flex; align-items: center; gap: 6px; padding: 6px; }
+.atlas-pip-title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.atlas-pip-center { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 48px !important; height: 48px !important; background: rgba(0,0,0,.45) !important; }
+.atlas-pip-center svg { width: 22px !important; height: 22px !important; fill: currentColor; }
+.atlas-pip-bottom input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.atlas-pip-resize { position: absolute; top: 0; width: 18px; height: 18px; cursor: nwse-resize; }
+.atlas-pip[data-corner$="r"] .atlas-pip-resize { left: 0; cursor: nwse-resize; }
+.atlas-pip[data-corner$="l"] .atlas-pip-resize { right: 0; cursor: nesw-resize; }
+.atlas-pip[data-corner^="t"] .atlas-pip-resize { top: auto; bottom: 0; }
+
 .atlas-mini { position: fixed; z-index: 5500; left: 8px; right: 8px; bottom: calc(var(--f7-toolbar-height, 50px) + var(--f7-safe-area-bottom, 0px) + 8px); height: 56px; display: flex; align-items: center; gap: 2px; padding: 0 6px 0 8px; border-radius: 16px; overflow: hidden; background: color-mix(in oklab, var(--f7-bars-bg-color, var(--card)) 82%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border: .5px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.18); color: var(--f7-text-color, inherit); }
 .atlas-mini-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; border: 0; background: none; color: inherit; text-align: left; padding: 0; cursor: pointer; }
 .atlas-mini-open img, .atlas-mini-open .atlas-episode-initial { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex: none; font-size: 16px; }

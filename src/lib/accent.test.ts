@@ -6,7 +6,8 @@ import { followLabels } from './follow-labels';
 describe('Accent color', () => {
   test('text on the accent is white when it reaches 3:1, else near-black', () => {
     strictEqual(foregroundFor('#FA243C'), '#FFFFFF');
-    strictEqual(foregroundFor('#007AFF'), '#FFFFFF');
+    strictEqual(foregroundFor('#5865F2'), '#FFFFFF');
+    strictEqual(foregroundFor('#57F287'), '#1C1C1E');
     strictEqual(foregroundFor('#FFCC00'), '#1C1C1E');
     strictEqual(foregroundFor('#00C7BE'), '#1C1C1E');
   });

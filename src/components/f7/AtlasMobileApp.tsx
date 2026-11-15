@@ -35,6 +35,7 @@ import { Spotlight } from '@/components/social/Spotlight';
 import { VoicesToKnow } from '@/components/social/VoicesToKnow';
 import { describeProfile, type DeviceProfile } from '@/lib/device-profile';
 import { useDeviceProfile } from '@/lib/use-device-profile';
+import { VideoDock } from '@/components/social/VideoDock';
 import { registerAppServiceWorker } from '@/lib/register-sw';
 
 Framework7.use(Framework7React);
@@ -136,6 +137,8 @@ export default function AtlasMobileApp() {
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [moderationOpen, setModerationOpen] = useState(false);
   const accent = useAccent();
+  // The floating video player sits above the tab bar on the phone.
+  useEffect(() => { document.documentElement.classList.add('atlas-has-tabbar'); return () => document.documentElement.classList.remove('atlas-has-tabbar'); }, []);
   // Framework7 derives its theme palette from the primary color; recompute it when the reader picks another accent.
   useEffect(() => { f7ready(() => f7.setColorTheme(accentHex(accent))); }, [accent]);
   const fediProfile = useFediProfileOpener();
@@ -406,6 +409,7 @@ export default function AtlasMobileApp() {
       <ModerationPopup opened={moderationOpen} onClose={() => setModerationOpen(false)} />
       <FediProfilePopup target={fediProfile.target} onClose={fediProfile.close} />
       <MiniPlayer />
+      <VideoDock />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
   );

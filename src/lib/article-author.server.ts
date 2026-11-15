@@ -6,6 +6,10 @@
  * credentials or cookies, and only the expected content types are parsed. Results are cached per isolate.
  */
 import { episodeFromObject, type FediEpisode } from "./podcast-episode";
+import { episodeVideo, videoFromObject, type FediVideo } from "./fedi-video";
+
+/** Something playable found while resolving a link: a podcast episode or a video. */
+export type FoundMedia = { episode?: FediEpisode; video?: FediVideo };
 import {
   MAX_AUTHORS,
   actorFromWebfinger,
@@ -174,7 +178,7 @@ async function fromActivityPubObject(
   articleUrl: string,
   fetchImpl: FetchLike,
   lookup: Lookup,
-  onEpisode?: (e: FediEpisode) => void,
+  onMedia?: (m: FoundMedia) => void,
 ): Promise<FediAuthor[]> {
   if (isActor(obj)) return fromOwnPage(obj, articleUrl, fetchImpl, lookup);
   if (!isArticleObject(obj)) return [];
@@ -183,15 +187,25 @@ async function fromActivityPubObject(
   const actors = await Promise.all(
     attributedActors(obj).map((id) => fetchActor(id, fetchImpl, lookup)),
   );
-  const authors = actors
-    .filter((a): a is NonNullable<typeof a> => !!a && actorMayClaim(a, articleUrl))
+  const verified = actors.filter(
+    (a): a is NonNullable<typeof a> => !!a && actorMayClaim(a, articleUrl),
+  );
+  const authors = verified
     .map((a) => actorToAuthor(a, "activitypub"))
     .filter((a): a is FediAuthor => !!a)
     .map((a) => (work ? { ...a, work } : a));
-  // A playable episode only with a verified podcast behind it.
-  if (work && authors[0] && onEpisode) {
-    const ep = episodeFromObject(obj, authors[0]);
-    if (ep) onEpisode(ep);
+  // Something playable only with a verified creator behind it.
+  if (onMedia && authors[0]) {
+    if (work) {
+      const episode = episodeFromObject(obj, authors[0]);
+      const video = episode ? undefined : episodeVideo(obj, authors[0]);
+      if (episode || video) onMedia({ episode: episode ?? undefined, video: video ?? undefined });
+    } else {
+      // PeerTube credits the account and its channel; the channel is what people follow and watch.
+      const channel = verified.findIndex((a) => [a.type].flat().includes("Group"));
+      const video = videoFromObject(obj, authors[channel >= 0 ? channel : 0] ?? authors[0]);
+      if (video) onMedia({ video });
+    }
   }
   return authors;
 }
@@ -277,7 +291,7 @@ export async function resolveArticleAuthors(
   fetchImpl: FetchLike = fetch,
   lookup: Lookup = dohLookup,
   hints: ArticleHints = {},
-  onEpisode?: (e: FediEpisode) => void,
+  onMedia?: (m: FoundMedia) => void,
 ): Promise<FediAuthor[]> {
   if (!isPublicHttpsUrl(url)) return [];
   const page = await safeFetch(url, PAGE_ACCEPT, fetchImpl, lookup);
@@ -286,7 +300,7 @@ export async function resolveArticleAuthors(
   const articleUrl = page.url;
   const hinted = isPublicHttpsUrl(hints.authorUrl) ? [hints.authorUrl] : [];
   if (isJsonType(page.type)) {
-    const authors = await fromActivityPubObject(parseJson(page.text), articleUrl, fetchImpl, lookup, onEpisode);
+    const authors = await fromActivityPubObject(parseJson(page.text), articleUrl, fetchImpl, lookup, onMedia);
     return (authors.length ? authors : await fromAuthorLinks(hinted, articleUrl, fetchImpl, lookup)).slice(0, MAX_AUTHORS);
   }
   if (!page.type.includes("html"))
@@ -300,7 +314,7 @@ export async function resolveArticleAuthors(
         articleUrl,
         fetchImpl,
         lookup,
-        onEpisode,
+        onMedia,
       );
       if (authors.length) return authors.slice(0, MAX_AUTHORS);
     }
@@ -352,7 +366,7 @@ export async function resolveAuthorsFor(
       continue;
     }
     pending.push(
-      resolveArticleAuthors(url, fetchImpl, lookup, hints[url], (e) => rememberEpisode(url, e))
+      resolveArticleAuthors(url, fetchImpl, lookup, hints[url], (m) => rememberMedia(url, m))
         .catch(() => [])
         .then((a) => {
           remember(url, a);
@@ -365,21 +379,22 @@ export async function resolveAuthorsFor(
 }
 
 /** For tests. */
-/** Episodes found while resolving authors, keyed by the link that was resolved (same lifetime as credits). */
-const episodes = new Map<string, { at: number; episode: FediEpisode }>();
-function rememberEpisode(url: string, episode: FediEpisode) {
-  if (episodes.size >= MAX_ENTRIES) episodes.delete(episodes.keys().next().value as string);
-  episodes.set(url, { at: Date.now(), episode });
+/** Episodes and videos found while resolving authors, keyed by the link that was resolved (same lifetime as credits). */
+const media = new Map<string, { at: number; found: FoundMedia }>();
+function rememberMedia(url: string, found: FoundMedia) {
+  if (media.size >= MAX_ENTRIES) media.delete(media.keys().next().value as string);
+  media.set(url, { at: Date.now(), found });
 }
-export function episodeFor(url: string): FediEpisode | undefined {
-  const e = episodes.get(url);
+export function mediaFor(url: string): FoundMedia | undefined {
+  const e = media.get(url);
   if (!e) return undefined;
-  if (Date.now() - e.at > POSITIVE_TTL) { episodes.delete(url); return undefined; }
-  return e.episode;
+  if (Date.now() - e.at > POSITIVE_TTL) { media.delete(url); return undefined; }
+  return e.found;
 }
+export const episodeFor = (url: string): FediEpisode | undefined => mediaFor(url)?.episode;
 
 export function clearAuthorCache() {
-  episodes.clear();
+  media.clear();
   cache.clear();
   dnsCache.clear();
 }

@@ -1,6 +1,7 @@
 import { Block, BlockTitle, Button, Icon, Link, List, ListItem, Navbar, NavRight, Page, Popup } from 'framework7-react';
 import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
 import { followLabels } from '@/lib/follow-labels';
+import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from '@/components/social/useFediProfile';
 
 /**
@@ -35,7 +36,7 @@ export function FediProfilePopup({ target, onClose }: { target: FediProfileTarge
         <div className="atlas-fedi-header" style={p.header ? { backgroundImage: `url("${p.header.replace(/"/g, '%22')}")` } : undefined} aria-hidden="true" />
         <header className="atlas-fedi-head">
           {p.avatar ? <img src={p.avatar} alt="" width={80} height={80} referrerPolicy="no-referrer" /> : <span className="atlas-fedi-initial" aria-hidden="true">{p.name.charAt(0)}</span>}
-          <h1>{p.name}{p.kind === 'bot' && <small> · Automated</small>}{p.kind === 'group' && <small> · Group</small>}{p.kind === 'podcast' && <small> · Podcast</small>}{p.locked && <Icon ios="f7:lock_fill" md="material:lock" aria-label="Approves followers" />}</h1>
+          <h1>{p.name}{p.kind === 'bot' && <small> · Automated</small>}{p.kind === 'group' && <small> · Group</small>}{p.kind === 'podcast' && <small> · Podcast</small>}{p.kind === 'channel' && <small> · Video channel</small>}{p.locked && <Icon ios="f7:lock_fill" md="material:lock" aria-label="Approves followers" />}</h1>
           <p className="atlas-fedi-acct">{p.acct}{p.acctVerified && <Icon ios="f7:checkmark_seal_fill" md="material:verified" aria-label="Handle confirmed by their server" />}</p>
           {p.joined && <p className="atlas-fedi-note">Joined {day(p.joined)}</p>}
           <div className="atlas-fedi-stats">
@@ -51,12 +52,12 @@ export function FediProfilePopup({ target, onClose }: { target: FediProfileTarge
         </List>}
         {p.bio.length > 0 && <Block className="atlas-fedi-bio">{p.bio.map((t, i) => <p key={i}>{t}</p>)}</Block>}
         {p.fields.length > 0 && <List strong inset dividers>{p.fields.map(f => <ListItem key={f.name} header={f.name} title={f.value} />)}</List>}
-        <BlockTitle>{p.kind === 'podcast' ? 'Episodes and posts' : 'Recent posts'}</BlockTitle>
+        <BlockTitle>{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</BlockTitle>
         {p.posts.map(post => <Block key={post.id} strong inset className="atlas-fedi-post">
           {post.title && <h2>{post.title}</h2>}
           {post.cw ? <details><summary>Content warning: {post.cw}</summary>{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</details>
             : post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}
-          {post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+          {post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}
           <p className="atlas-fedi-note">{day(post.date)} · <Link external target="_blank" href={post.url}>Original</Link></p>
         </Block>)}
         {!p.posts.length && <Block>{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</Block>}

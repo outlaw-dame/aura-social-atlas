@@ -2,6 +2,7 @@ import { Icon, Link } from 'framework7-react';
 import { CREDIT_LABEL, attributionNote } from '@/lib/article-author';
 import type { PostArticle } from '@/lib/fedizen-feed';
 import { openFediProfile } from '@/lib/fedi-profile';
+import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { EpisodePlayer } from './EpisodePlayer';
 
 /**
@@ -10,6 +11,7 @@ import { EpisodePlayer } from './EpisodePlayer';
  */
 export function ArticleCard({ article }: { article?: PostArticle }) {
   if (article?.episode) return <EpisodePlayer episode={article.episode} />;
+  if (article?.video) return <VideoPlayer video={article.video} />;
   if (!article || !(article.title || article.authors?.length || article.byline)) return null;
   const host = (() => { try { return new URL(article.url).hostname.replace(/^www\./, ''); } catch { return ''; } })();
   const authors = article.authors ?? [];

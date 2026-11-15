@@ -9,6 +9,7 @@ import { openFediProfile } from '@/lib/fedi-profile';
 import { useSaveToggle } from '@/components/social/useFedizenLibrary';
 import { SaveLink } from './SavedAndCircles';
 import { ArticleCard } from './ArticleAuthors';
+import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { Icon } from './F7Extras';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
@@ -67,7 +68,7 @@ export function MobileFedizenFeed() {
           {p.boostedBy && <p style={{ fontSize: 11, opacity: .6, marginTop: 0 }}>↻ {p.boostedBy} boosted</p>}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} style={{ borderRadius: 16 }} />}<span><b>{p.author}</b> <span style={{ opacity: .6 }}>{p.handle}</span></span></div>
           {p.paragraphs.map((t, i) => <p key={i} style={{ lineHeight: 1.5 }}>{t}</p>)}
-          {p.image && <img src={p.image} alt="" loading="lazy" style={{ width: '100%', borderRadius: 12 }} />}
+          {p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" style={{ width: '100%', borderRadius: 12 }} />}
           {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
             <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />
           </button>)}
