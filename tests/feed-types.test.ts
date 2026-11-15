@@ -85,6 +85,17 @@ describe("Popular in your groups", () => {
     expect(sent.every(b => b.length <= 50)).toBe(true);
   });
 
+  test("a post boosted into two of your groups keeps both groups", async () => {
+    const node = (id: string, group: string) => ({ id, date: "2026-11-15T12:00:00Z", canonicalUri: "https://x.org/p/1", verb: { verb: "Boost" },
+      objectPostContent: { htmlBody: "<p>Repair night</p>" }, subject: { profile: { name: group } }, object: { id: "obj1", creator: { profile: { name: "Rosa" }, character: { username: "rosa" } } } });
+    net.fetch = (async () => new Response(JSON.stringify({ data: { feedActivities: { edges: [{ node: node("a1", "Makers") }, { node: node("a2", "Readers") }] } } }))) as unknown as typeof fetch;
+    const r = await popularInGroups(["g1", "g2"]);
+    expect(r?.posts).toHaveLength(1);
+    expect(r?.posts[0].groups).toEqual(["Makers", "Readers"]);
+    const ranked = rankForYou({ following: [], tags: [], groups: r!.posts.flatMap(p => p.groups!.map(group => ({ ...fromGroupPost(p), group }))) }, NOW);
+    expect(ranked[0].reasons).toEqual([{ kind: "group", group: "Makers" }, { kind: "group", group: "Readers" }]);
+  });
+
   test("joined groups are the ones whose relationship says you follow (are a member of) them", async () => {
     net.fetch = (async () => new Response(JSON.stringify({ data: { categories: { pageInfo: { hasNextPage: false }, edges: [
       { id: "g1", name: "Makers", type: "group", profile: { name: "Makers" } },

@@ -299,7 +299,8 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
     const posts = rankForYou({
       following: home.status === 200 ? fromStatuses(home.data as never) : [],
       tags: tagFeeds.map(({ tag, posts }) => ({ tag, posts })),
-      groups: (popular?.posts ?? []).map(p => ({ ...fromGroupPost(p), group: p.group })),
+      // A post shared into several of your groups counts once for each of them.
+      groups: (popular?.posts ?? []).flatMap(p => (p.groups?.length ? p.groups : [p.group]).map(group => ({ ...fromGroupPost(p), group }))),
     });
     // Credits and players for the links in them, as on Following.
     const withAuthors = await withArticleAuthors(posts);

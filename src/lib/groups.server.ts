@@ -51,6 +51,24 @@ async function gql<T>(query: string, variables: Record<string, unknown> = {}): P
 const groupPosts = (nodes: BonfireActivityNode[]): GroupPost[] =>
   fromBonfirePosts(nodes).map(({ boostedBy, ...p }) => ({ ...p, group: boostedBy }));
 
+/** Group posts that keep every group a post was boosted into: the shared mapping shows each post once, under its
+ *  first booster, so the others are gathered here first. */
+function withEveryGroup(nodes: BonfireActivityNode[]): GroupPost[] {
+  const groupsOf = new Map<string, string[]>(), keyOfFirst = new Map<string, string>();
+  for (const raw of nodes) {
+    const key = raw.object?.id ?? raw.id;
+    if (!groupsOf.has(key)) { groupsOf.set(key, []); keyOfFirst.set(raw.id, key); }
+    const boost = raw.verb?.verb === 'Boost' || raw.verb?.verb === 'Announce';
+    const name = boost ? (raw.subject?.profile?.name || raw.subject?.character?.username) : undefined;
+    const list = groupsOf.get(key)!;
+    if (name && !list.includes(name)) list.push(name);
+  }
+  return groupPosts(nodes).map(p => {
+    const all = groupsOf.get(keyOfFirst.get(p.id) ?? '') ?? [];
+    return all.length ? { ...p, groups: all } : p;
+  });
+}
+
 type Page = { categories?: { pageInfo?: { endCursor?: string | null; hasNextPage?: boolean }; edges?: unknown[] } };
 const PAGE_QUERY = (fields: string) => `query($after:[Cursor!]){categories(limit:${PAGE},after:$after){pageInfo{endCursor hasNextPage} edges{${fields}}}}`;
 const cursorOk = (c: unknown): c is string => typeof c === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(c);
@@ -120,12 +138,19 @@ export async function popularInGroups(ids: string[]): Promise<{ posts: GroupPost
       gql<{ feedActivities?: { edges?: { node: BonfireActivityNode }[] } }>(POPULAR, { subjects: b }).catch(() => null)));
     for (const d of results) {
       if (!d?.feedActivities) { failed++; continue; }
-      lists.push(groupPosts((d.feedActivities.edges ?? []).map(e => e.node)));
+      lists.push(withEveryGroup((d.feedActivities.edges ?? []).map(e => e.node)));
     }
   }
   if (failed === batches.length) return null;
+  // Interleave, and when one post reached groups in different batches keep it once with all of them.
   const posts: GroupPost[] = [];
-  for (let k = 0; lists.some(l => k < l.length); k++) for (const l of lists) if (k < l.length) posts.push(l[k]);
+  const byUrl = new Map<string, GroupPost>();
+  for (let k = 0; lists.some(l => k < l.length); k++) for (const l of lists) {
+    if (k >= l.length) continue;
+    const p = l[k], had = byUrl.get(p.url);
+    if (had) { had.groups = [...new Set([...(had.groups ?? []), ...(p.groups ?? [])])]; continue; }
+    byUrl.set(p.url, p); posts.push(p);
+  }
   return { posts, complete: !failed };
 }
 
