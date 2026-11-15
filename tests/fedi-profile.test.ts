@@ -4,7 +4,7 @@ import { clearAuthorCache, resolveArticleAuthors, resolveAuthorsFor, type Lookup
 import { claimedAcct, postsFromOutbox, profileFromActor } from "../src/lib/fedi-profile";
 import { _clearFediProfileCache, loadFediProfile } from "../src/lib/fedi-profile.server";
 
-type Fake = { status?: number; type?: string; body?: unknown };
+type Fake = { status?: number; type?: string; body?: unknown; delayMs?: number };
 function net(routes: Record<string, Fake>) {
   const seen: string[] = [];
   const fetchImpl = async (url: string, init?: RequestInit) => {
@@ -12,6 +12,7 @@ function net(routes: Record<string, Fake>) {
     expect(init?.redirect).toBe("manual");
     const r = routes[url];
     if (!r) return new Response("not found", { status: 404 });
+    if (r.delayMs) await new Promise((res) => setTimeout(res, r.delayMs));
     return new Response(typeof r.body === "string" ? r.body : JSON.stringify(r.body), {
       status: r.status ?? 200, headers: { "content-type": r.type ?? "application/activity+json" },
     });
@@ -143,6 +144,15 @@ describe("Profiles shown inside Atlas", () => {
     });
     const p = await loadFediProfile({ actor: "https://blog.example.org/@jane", acct: "@jane@blog.example.org" }, 2000, fetchImpl, dns);
     expect(p?.actor).toBe(JANE);
+  });
+
+  test("the budget covers discovery; a slow server's profile is cached for the next open", async () => {
+    const { fetchImpl } = net({ [JANE]: { body: jane(), delayMs: 150 } });
+    const t0 = Date.now();
+    expect(await loadFediProfile({ actor: JANE }, 40, fetchImpl, dns)).toBeNull();
+    expect(Date.now() - t0).toBeLessThan(120);
+    await new Promise((r) => setTimeout(r, 250));
+    expect((await loadFediProfile({ actor: JANE }, 40, fetchImpl, dns))?.name).toBe("Jane Writer");
   });
 
   test("refuses private addresses", async () => {

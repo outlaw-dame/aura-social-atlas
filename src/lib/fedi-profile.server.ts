@@ -31,7 +31,20 @@ export async function webfingerActor(acct: string, f: FetchLike = fetch, l: Look
 const cache = new Map<string, { at: number; profile: FediProfile | null }>();
 const TTL = 10 * 60_000, MISS_TTL = 60_000, MAX = 300;
 
+/**
+ * The budget covers the whole load, discovery included: past it the dialog gets null (it says the profile couldn't
+ * load) while the load carries on and caches its result, so opening it again is instant.
+ */
 export async function loadFediProfile(target: FediProfileTarget, budgetMs = 4000, f: FetchLike = fetch, l: Lookup = dohLookup): Promise<FediProfile | null> {
+  const started = Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<null>(r => { timer = setTimeout(() => r(null), budgetMs); });
+  try {
+    return await Promise.race([build(target, () => Math.max(0, budgetMs - (Date.now() - started)), f, l).catch(() => null), deadline]);
+  } finally { clearTimeout(timer); }
+}
+
+async function build(target: FediProfileTarget, remaining: () => number, f: FetchLike, l: Lookup): Promise<FediProfile | null> {
   // A profile link that isn't an actor document (some servers only serve HTML there) falls back to the handle.
   const candidates = [isPublicHttpsUrl(target.actor) ? target.actor : null, target.acct ? 'acct' : null].filter(Boolean) as string[];
   let actorId: string | null = null;
@@ -72,7 +85,7 @@ export async function loadFediProfile(target: FediProfileTarget, budgetMs = 4000
   ].map(p => p.catch(() => undefined)));
   // Whatever misses the budget still lands in the cache when it finishes, for the next open.
   void work.then(() => { const full = { ...profile, posts: [...profile.posts] }; remember(id, full); if (id !== actorId) remember(actorId, full); });
-  await Promise.race([work, new Promise(r => setTimeout(r, budgetMs))]);
+  await Promise.race([work, new Promise(r => setTimeout(r, remaining()))]);
   const done = { ...profile, posts: [...profile.posts] };
   remember(id, done);
   if (id !== actorId) remember(actorId, done);

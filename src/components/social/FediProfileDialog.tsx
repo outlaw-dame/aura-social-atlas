@@ -3,7 +3,7 @@ import { ArrowUpRight, BadgeCheck, Bot, Lock, UserCheck, UserPlus, Users } from 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
-import { useFediFollow, useFediProfile } from './useFediProfile';
+import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from './useFediProfile';
 
 /**
  * Desktop: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -19,10 +19,12 @@ function Avatar({ p }: { p: FediProfile }) {
   return <span aria-hidden="true" className="flex size-20 items-center justify-center rounded-2xl bg-muted font-serif text-3xl ring-4 ring-background">{p.name.charAt(0)}</span>;
 }
 
-function Follow({ acct, locked }: { acct: string; locked: boolean }) {
-  const f = useFediFollow(acct);
+function Follow({ p }: { p: FediProfile }) {
+  const f = useFediFollow(p.acctVerified ? p.acct : undefined, p.actor);
+  const locked = p.locked;
   if (!f.signedIn) return null;
   const on = f.state === 'following', asked = f.state === 'requested';
+  if (!p.acctVerified) return <p className="max-w-56 text-right text-xs text-muted-foreground">{FOLLOW_PROBLEM.unverified}</p>;
   return <div className="flex flex-col items-end gap-1">
     {f.canFollow && <Button size="sm" variant={on || asked ? 'outline' : 'default'} className="rounded-full" disabled={f.busy} aria-pressed={on} onClick={f.toggle}>
       {on ? <><UserCheck />Following</> : asked ? 'Requested' : <><UserPlus />{locked ? 'Request to follow' : 'Follow'}</>}
@@ -43,7 +45,7 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
       : <>
         <div className="h-28 w-full bg-muted bg-cover bg-center" style={p.header ? { backgroundImage: `url("${p.header.replace(/"/g, '%22')}")` } : undefined} aria-hidden="true" />
         <div className="px-6 pb-6">
-          <div className="-mt-10 flex items-end justify-between gap-3"><Avatar p={p} /><Follow acct={p.acct} locked={p.locked} /></div>
+          <div className="-mt-10 flex items-end justify-between gap-3"><Avatar p={p} /><Follow p={p} /></div>
           <DialogHeader className="mt-3 text-left">
             <DialogTitle className="flex flex-wrap items-center gap-2 font-serif text-3xl font-normal [overflow-wrap:anywhere]">
               {p.name}

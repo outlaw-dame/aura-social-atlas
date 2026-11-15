@@ -22,14 +22,20 @@ export const getFediProfile = createServerFn({ method: 'GET' })
     return { profile: await loadFediProfile(data).catch(() => null) };
   });
 
-type Problem = 'not-connected' | 'needs-permission' | 'expired' | 'unavailable' | 'not-found';
+type Problem = 'not-connected' | 'needs-permission' | 'expired' | 'unavailable' | 'not-found' | 'unverified';
 const problem = (status: number): Problem => (status === 401 ? 'expired' : status === 403 ? 'needs-permission' : status === 404 ? 'not-found' : 'unavailable');
 const me = z.object({ expectedAtlasUserId: z.string().uuid() });
 const acctInput = z.string().trim().min(3).max(320);
+const actorInput = z.string().url().max(2048).startsWith('https://');
 export type FollowState = 'following' | 'requested' | 'none';
 
-async function findOnFedizen(token: string, acct: string): Promise<{ id: string } | { error: Problem }> {
-  const { fedizenGet } = await import('./fedizen.server');
+/**
+ * Fedizen follows a handle, so the handle must belong to the profile on screen: its server's WebFinger has to name
+ * this same actor. Otherwise a profile claiming someone else's handle would follow (or show) the wrong person.
+ */
+async function findOnFedizen(token: string, acct: string, actor: string): Promise<{ id: string } | { error: Problem }> {
+  const [{ fedizenGet }, { webfingerActor }] = await Promise.all([import('./fedizen.server'), import('./fedi-profile.server')]);
+  if ((await webfingerActor(acct).catch(() => null)) !== actor) return { error: 'unverified' };
   const a = lookupAcct(acct);
   if (!a || !a.includes('@')) return { error: 'not-found' };
   const r = await fedizenGet(token, `/api/v1/accounts/lookup?acct=${encodeURIComponent(a)}`);
@@ -39,14 +45,14 @@ async function findOnFedizen(token: string, acct: string): Promise<{ id: string 
 
 /** Whether you follow them on Fedizen. */
 export const getFediFollow = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => me.extend({ acct: acctInput }).parse(d))
+  .inputValidator(d => me.extend({ acct: acctInput, actor: actorInput }).parse(d))
   .handler(async ({ data, context }): Promise<{ state?: FollowState; canWrite: boolean; error?: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const { tokenFor, fedizenGet } = await import('./fedizen.server');
     const t = await tokenFor(context.userId);
     if (!t) return { canWrite: false, error: 'not-connected' };
     const canWrite = hasScope(t.scope, 'write');
-    const who = await findOnFedizen(t.access_token, data.acct);
+    const who = await findOnFedizen(t.access_token, data.acct, data.actor);
     if ('error' in who) return { canWrite, error: who.error };
     const r = await fedizenGet(t.access_token, `/api/v1/accounts/relationships?id%5B%5D=${encodeURIComponent(who.id)}`);
     const rel = r.status === 200 ? (r.data as { id: string; following?: boolean | null; requested?: boolean | null }[]).find(x => x.id === who.id) : undefined;
@@ -56,14 +62,14 @@ export const getFediFollow = createServerFn({ method: 'GET' }).middleware([requi
 
 /** Follow or unfollow them from your Fedizen account. */
 export const setFediFollow = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => me.extend({ acct: acctInput, on: z.boolean() }).parse(d))
+  .inputValidator(d => me.extend({ acct: acctInput, actor: actorInput, on: z.boolean() }).parse(d))
   .handler(async ({ data, context }): Promise<{ ok: true; state: FollowState } | { ok: false; error: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const { tokenFor, fedizenSend } = await import('./fedizen.server');
     const t = await tokenFor(context.userId);
     if (!t) return { ok: false, error: 'not-connected' };
     if (!hasScope(t.scope, 'write')) return { ok: false, error: 'needs-permission' };
-    const who = await findOnFedizen(t.access_token, data.acct);
+    const who = await findOnFedizen(t.access_token, data.acct, data.actor);
     if ('error' in who) return { ok: false, error: who.error };
     const r = await fedizenSend(t.access_token, 'POST', `/api/v1/accounts/${who.id}/${data.on ? 'follow' : 'unfollow'}`);
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };

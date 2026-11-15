@@ -31,26 +31,27 @@ export const FOLLOW_PROBLEM = {
   expired: 'Fedizen ended Atlas’s access. Connect again to follow.',
   unavailable: 'Fedizen couldn’t do that right now. Try again.',
   'not-found': 'Fedizen couldn’t find this account yet.',
+  unverified: 'Their server didn’t confirm this handle, so Atlas won’t follow it for you.',
 } as const;
 
-/** Follow state on the reader's Fedizen account, and the toggle. */
-export function useFediFollow(acct: string | undefined) {
+/** Follow state on the reader's Fedizen account, and the toggle. Only for a handle confirmed to be this actor's. */
+export function useFediFollow(acct: string | undefined, actor: string | undefined) {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();
   const read = useServerFn(getFediFollow), write = useServerFn(setFediFollow);
   const id = user?.id;
   const q = useQuery({
-    queryKey: ['fedi-follow', id, acct],
-    queryFn: () => { if (!id || !acct) throw new Error('Nothing to read.'); return read({ data: { expectedAtlasUserId: id, acct } }); },
-    enabled: !!id && !!acct, staleTime: 30_000,
+    queryKey: ['fedi-follow', id, acct, actor],
+    queryFn: () => { if (!id || !acct || !actor) throw new Error('Nothing to read.'); return read({ data: { expectedAtlasUserId: id, acct, actor } }); },
+    enabled: !!id && !!acct && !!actor, staleTime: 30_000,
   });
   const m = useMutation({
     mutationFn: async (on: boolean) => {
-      if (!id || !acct) return { ok: false as const, error: 'not-connected' as const };
-      return write({ data: { expectedAtlasUserId: id, acct, on } });
+      if (!id || !acct || !actor) return { ok: false as const, error: 'not-connected' as const };
+      return write({ data: { expectedAtlasUserId: id, acct, actor, on } });
     },
     onSuccess: r => {
-      if (r.ok) qc.setQueryData(['fedi-follow', id, acct], (old: { canWrite: boolean } | undefined) => ({ canWrite: old?.canWrite ?? true, state: r.state }));
+      if (r.ok) qc.setQueryData(['fedi-follow', id, acct, actor], (old: { canWrite: boolean } | undefined) => ({ canWrite: old?.canWrite ?? true, state: r.state }));
       void qc.invalidateQueries({ queryKey: ['fedizen-home'] });
     },
   });

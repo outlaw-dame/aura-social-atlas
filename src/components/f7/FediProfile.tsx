@@ -1,6 +1,6 @@
 import { Block, BlockTitle, Button, Icon, Link, List, ListItem, Navbar, NavRight, Page, Popup } from 'framework7-react';
-import type { FediProfileTarget } from '@/lib/fedi-profile';
-import { useFediFollow, useFediProfile } from '@/components/social/useFediProfile';
+import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
+import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from '@/components/social/useFediProfile';
 
 /**
  * Phone: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -10,10 +10,12 @@ import { useFediFollow, useFediProfile } from '@/components/social/useFediProfil
 const n = (v?: number) => (v == null ? null : new Intl.NumberFormat(undefined, { notation: 'compact' }).format(v));
 const day = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '');
 
-function Follow({ acct, locked }: { acct: string; locked: boolean }) {
-  const f = useFediFollow(acct);
+function Follow({ p }: { p: FediProfile }) {
+  const f = useFediFollow(p.acctVerified ? p.acct : undefined, p.actor);
+  const locked = p.locked;
   if (!f.signedIn) return null;
   const on = f.state === 'following', asked = f.state === 'requested';
+  if (!p.acctVerified) return <p className="atlas-fedi-note">{FOLLOW_PROBLEM.unverified}</p>;
   return <>
     {f.canFollow && <Button round fill={!on && !asked} tonal={on || asked} disabled={f.busy} onClick={f.toggle} aria-pressed={on}>
       {on ? 'Following' : asked ? 'Requested' : locked ? 'Request to follow' : 'Follow'}
@@ -40,7 +42,7 @@ export function FediProfilePopup({ target, onClose }: { target: FediProfileTarge
             {n(p.following) && <span><b>{n(p.following)}</b> following</span>}
             {n(p.followers) && <span><b>{n(p.followers)}</b> followers</span>}
           </div>
-          <Follow acct={p.acct} locked={p.locked} />
+          <Follow p={p} />
         </header>
         {p.bio.length > 0 && <Block className="atlas-fedi-bio">{p.bio.map((t, i) => <p key={i}>{t}</p>)}</Block>}
         {p.fields.length > 0 && <List strong inset dividers>{p.fields.map(f => <ListItem key={f.name} header={f.name} title={f.value} />)}</List>}
