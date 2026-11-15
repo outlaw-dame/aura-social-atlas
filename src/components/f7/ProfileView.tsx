@@ -13,9 +13,9 @@ import { activityLabel, DEFAULT_ACTIVITY_FILTER, type ActivityFilter } from '@/c
 
 /* Profile tabs after Mastodon's 2026 redesign: Activity (posts, quote posts, replies and boosts, filtered like
    Mastodon's Activity menu), Featured (Mastodon 4.4: featured hashtags and profiles), Media, Collections (Mastodon
-   4.6), the owner-only Saved tab, then Circles (Bonfire's circles of people) and Lists. Follows are not a tab:
+   4.6), Saved (your Fedizen bookmarks), then Circles (Bonfire's circles of people); no Lists tab, since on Fedizen lists are circles. Follows are not a tab:
    they open from the Following count. */
-const sections = ['Activity', 'Featured', 'Media', 'Collections', 'Saved', 'Circles', 'Lists'] as const;
+const sections = ['Activity', 'Featured', 'Media', 'Collections', 'Saved', 'Circles'] as const;
 type Section = (typeof sections)[number];
 const emptySections: Record<Section, { ios: string; md: string; title: string; detail: string }> = {
   Activity: { ios: 'f7:square_pencil', md: 'material:edit_note', title: 'No activity yet', detail: 'Your public posts, quote posts, replies and boosts on Fedizen will appear here.' },
@@ -24,7 +24,6 @@ const emptySections: Record<Section, { ios: string; md: string; title: string; d
   Collections: { ios: 'f7:square_stack_3d_up', md: 'material:collections_bookmark', title: 'No collections yet', detail: '' },
   Saved: { ios: 'f7:bookmark', md: 'material:bookmark_border', title: 'Nothing saved yet', detail: 'Posts you save on Fedizen. Each keeps the audience its author chose.' },
   Circles: { ios: 'f7:circle_grid_hex', md: 'material:bubble_chart', title: 'No circles yet', detail: 'Circles group the people you know, like colleagues, friends or locals, so you choose who sees and replies to each post. Circles you make on Fedizen will appear here.' },
-  Lists: { ios: 'f7:list_bullet', md: 'material:format_list_bulleted', title: 'No lists yet', detail: 'Your creator lists will appear here when lists are available.' },
 };
 
 /** Edit sheet for the bio and Mastodon-style featured hashtags. Rendered at app level:

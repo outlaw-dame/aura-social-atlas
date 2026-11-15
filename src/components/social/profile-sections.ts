@@ -1,13 +1,13 @@
 /**
  * Profile tabs, after Mastodon's 2026 profile redesign and Bluesky: Activity (one tab for posts, quote posts,
  * replies and boosts, filtered like Mastodon's Activity dropdown), Featured (Mastodon 4.4: featured hashtags and
- * featured profiles), Media, Collections (Mastodon 4.6), the owner-only Saved tab, then Circles (Bonfire's circles of people) and Lists.
+ * featured profiles), Media, Collections (Mastodon 4.6), Saved (your Fedizen bookmarks), then Circles (Bonfire's circles of people). No Lists tab: on Fedizen, lists are circles.
  */
-export const profileSections = ['Activity', 'Featured', 'Media', 'Collections', 'Saved', 'Circles', 'Lists'] as const;
+export const profileSections = ['Activity', 'Featured', 'Media', 'Collections', 'Saved', 'Circles'] as const;
 export type ProfileSection = (typeof profileSections)[number];
 
-/** Old tab names still open the right tab (?tab=posts, ?tab=replies, ?tab=feeds). */
-const aliases: Record<string, ProfileSection> = { posts: 'Activity', replies: 'Activity', feeds: 'Circles' };
+/** Old tab names still open the right tab (?tab=posts, ?tab=replies, ?tab=feeds, ?tab=lists). */
+const aliases: Record<string, ProfileSection> = { posts: 'Activity', replies: 'Activity', feeds: 'Circles', lists: 'Circles' };
 export function sectionFromTab<T extends string>(tab: string | undefined, sections: readonly T[]): T | undefined {
   const t = tab?.trim().toLowerCase();
   if (!t) return undefined;

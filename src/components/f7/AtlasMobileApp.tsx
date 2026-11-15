@@ -23,6 +23,7 @@ import type { Group } from '@/lib/groups';
 import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileFedizenFeed, MobileActivity, MessagesPopup } from './FedizenMobile';
+import { ModerationPopup } from './Moderation';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
 import { Spotlight } from '@/components/social/Spotlight';
@@ -128,6 +129,7 @@ export default function AtlasMobileApp() {
   const [tagFeed, setTagFeed] = useState<{ creatorId: string; tag: string } | null>(null);
   const [fabHidden, setFabHidden] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
+  const [moderationOpen, setModerationOpen] = useState(false);
   /* Search lives on Discover: go there and put the cursor in the field. */
   const openSearch = () => {
     f7.tab.show('#tab-discover');
@@ -340,6 +342,12 @@ export default function AtlasMobileApp() {
                 <ListItem title="Dark" radio radioIcon="end" name="mode" checked={mode === 'dark'} onChange={() => setMode('dark')} />
                 <ListItem title="Match device" radio radioIcon="end" name="mode" checked={mode === 'system'} onChange={() => setMode('system')} />
               </List>
+              <BlockTitle>Safety</BlockTitle>
+              <List strong inset dividers>
+                <ListItem link="#" title="Moderation" footer="Keyword filters, blocked people and blocked instances" onClick={() => setModerationOpen(true)}>
+                  <Icon slot="media" ios="f7:shield_lefthalf_fill" md="material:shield" />
+                </ListItem>
+              </List>
               <BlockTitle>Intelligence</BlockTitle>
               <List strong inset dividers>
                 <ListItem title="AI assistant" footer="Off by default. When on, a sparkle button opens chat.">
@@ -384,6 +392,7 @@ export default function AtlasMobileApp() {
       <CollectionPopup opened={!!collectionOpen} onClose={() => setCollectionOpen(null)} collection={collectionOpen?.collection} id={collectionOpen?.id} link={collectionOpen?.link} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       <MessagesPopup opened={messagesOpen} onClose={() => setMessagesOpen(false)} />
+      <ModerationPopup opened={moderationOpen} onClose={() => setModerationOpen(false)} />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
   );

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Bookmark, CalendarDays, Check, CircleDashed, CircleUserRound, Image, List, PenLine, Star, Users, X } from 'lucide-react';
+import { Bookmark, CalendarDays, Check, CircleDashed, CircleUserRound, Image, PenLine, Star, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAtlasAuth } from './AuthState';
 import { useSocial } from './SocialState';
@@ -23,7 +23,6 @@ const empty: Record<ProfileSection, { icon: typeof PenLine; title: string; detai
   Collections: { icon: Image, title: 'No collections yet', detail: '' },
   Saved: { icon: Bookmark, title: 'Nothing saved yet', detail: 'Posts you save on Fedizen. Each keeps the audience its author chose.' },
   Circles: { icon: CircleDashed, title: 'No circles yet', detail: 'Circles group the people you know, like colleagues, friends or locals, so you choose who sees and replies to each post. Circles you make on Fedizen will appear here.' },
-  Lists: { icon: List, title: 'No lists yet', detail: 'Your creator lists will appear here when lists are available.' },
 };
 
 function Empty({ icon: Icon, title, detail, children }: { icon: typeof PenLine; title: string; detail: string; children?: React.ReactNode }) {
