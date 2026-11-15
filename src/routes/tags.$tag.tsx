@@ -4,8 +4,7 @@ import { ArrowLeft, ArrowUpRight, Hash, Link2, MessageCircle, Repeat2, Star, Tag
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { FEED_PROBLEM, useFollowedTags, useTagFeed } from '@/components/social/useFeeds';
-import { useFediProfileOpener } from '@/components/social/useFediProfile';
-import { FediProfileDialog } from '@/components/social/FediProfileDialog';
+import { DesktopHosts } from '@/components/social/DesktopHosts';
 import { useFedizen } from '@/components/social/useFedizen';
 import { Button } from '@/components/ui/button';
 import { FeedPostCard, useFeedPostActions } from '@/components/social/FeedPostCard';
@@ -28,6 +27,11 @@ export const Route = createFileRoute('/tags/$tag')({
 
 function TagPage() {
   const { tag } = Route.useParams();
+  // This page renders outside Discovery, so it mounts the profile dialog, mini player and VideoDock itself.
+  return <><TagBody tag={tag} /><DesktopHosts /></>;
+}
+
+function TagBody({ tag }: { tag: string }) {
   const { user, loading } = useAtlasAuth();
   const norm = tag.replace(/^#/, '').toLowerCase();
   const fedizen = useTagFeed(user && /^[\p{L}\p{N}_]{1,100}$/u.test(norm) ? norm : null);
@@ -56,9 +60,6 @@ function TagShell({ tag, note, children }: { tag: string; note?: React.ReactNode
 
 function FedizenTagPosts({ posts, tag, failed, problem, retry }: { posts: FedizenPost[]; tag: string; failed: boolean; problem?: keyof typeof FEED_PROBLEM; retry: () => void }) {
   const actions = useFeedPostActions();
-  // Creators in link previews open their profile here too: this page sits outside Discovery, which hosts it elsewhere.
-  const profile = useFediProfileOpener();
-  const dialog = <FediProfileDialog target={profile.target} onClose={profile.close} />;
   if (failed || problem === 'unavailable') return <p className="text-sm text-muted-foreground">{FEED_PROBLEM.unavailable} <button type="button" className="underline" onClick={retry}>Try again</button></p>;
   if (problem) return <Reconnect message={FEED_PROBLEM[problem]} tag={tag} />;
   return <>
@@ -66,7 +67,6 @@ function FedizenTagPosts({ posts, tag, failed, problem, retry }: { posts: Fedize
     {posts.length ? <div className="space-y-6">{posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} inTag={tag.replace(/^#/, '').toLowerCase()} />)}</div>
       : <p className="text-sm text-muted-foreground">No posts you can see use #{tag} yet.</p>}
     {actions.dialog}
-    {dialog}
   </>;
 }
 
