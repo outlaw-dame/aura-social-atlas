@@ -1,6 +1,6 @@
 import { actorFromWebfinger, isPublicHttpsUrl, normalizeHost, parseHandle } from './article-author';
-import { dohLookup, fetchActor, safeFetch, type Lookup } from './article-author.server';
-import { claimedAcct, postsFromOutbox, profileFromActor, type FediProfile, type FediProfileTarget } from './fedi-profile';
+import { PODCAST_ACCEPT, dohLookup, fetchActor, safeFetch, type Lookup } from './article-author.server';
+import { claimedAcct, podcastDetails, postsFromOutbox, profileFromActor, type FediProfile, type FediProfileTarget } from './fedi-profile';
 
 /**
  * Reads a fediverse account for Atlas's own profile view: the actor from its server (never a copy someone else
@@ -67,6 +67,11 @@ async function build(target: FediProfileTarget, remaining: () => number, f: Fetc
   const work = Promise.all([
     // The handle is theirs only if their handle's server points WebFinger back at this actor.
     (async () => { const a = claimedAcct(actor); profile.acctVerified = !!a && (await webfingerActor(a, f, l)) === id; })(),
+    // Castopod tells a podcast from a person only when asked for its podcast view.
+    (async () => {
+      const pod = podcastDetails(await getJson(id, PODCAST_ACCEPT, f, l), id);
+      if (pod) { profile.kind = 'podcast'; profile.podcast = pod; }
+    })(),
     ...(['followers', 'following'] as const).map(async k => {
       const u = link(k); if (!u) return;
       const c = await getJson(u, AP, f, l);
