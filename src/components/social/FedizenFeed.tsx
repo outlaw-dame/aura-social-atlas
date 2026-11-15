@@ -7,6 +7,7 @@ import { selectBonfireHome } from '@/lib/bonfire-native-presentation';
 import { CollectionLinks } from './CollectionsDesktop';
 import { SaveButton } from './SavedAndCircles';
 import { PostArticleCard } from './ArticleAuthors';
+import { VideoPlayer } from './VideoPlayer';
 import { useSaveToggle } from './useFedizenLibrary';
 
 const when = (d?: string) => d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
@@ -51,7 +52,7 @@ export function FedizenFeed() {
         {p.boostedBy && <p className="mb-2 flex items-center gap-1 text-[11px] text-muted-foreground"><Repeat2 className="size-3" />{p.boostedBy} boosted</p>}
         <p className="flex items-center gap-2 text-xs">{p.avatar && <img src={p.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-8 rounded-full object-cover" />}<span><span className="font-semibold">{p.author}</span> <span className="text-muted-foreground">{p.handle} · {when(p.date)}</span></span></p>
         <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div>
-        {p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
+        {'video' in p && p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
         <CollectionLinks links={"collections" in p ? p.collections : undefined} />
         <PostArticleCard article={'article' in p ? p.article : undefined} />
         <div className="mt-2 flex items-center gap-2">

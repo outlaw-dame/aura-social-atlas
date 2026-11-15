@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { ArrowUpRight, BadgeCheck, Bot, Lock, Mic, Rss, UserCheck, UserPlus, Users } from 'lucide-react';
+import { ArrowUpRight, BadgeCheck, Bot, Clapperboard, Lock, Mic, Rss, UserCheck, UserPlus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
 import { followLabels } from '@/lib/follow-labels';
+import { VideoPlayer } from './VideoPlayer';
 import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from './useFediProfile';
 
 /**
@@ -51,6 +52,7 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
             <DialogTitle className="flex flex-wrap items-center gap-2 font-serif text-3xl font-normal [overflow-wrap:anywhere]">
               {p.name}
               {p.kind === 'bot' && <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-sans text-[11px]"><Bot className="size-3" />Automated</span>}
+              {p.kind === 'channel' && <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-sans text-[11px]"><Clapperboard className="size-3" />Video channel</span>}
               {p.kind === 'podcast' && <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-sans text-[11px]"><Mic className="size-3" />Podcast</span>}
               {p.kind === 'group' && <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-sans text-[11px]"><Users className="size-3" />Group</span>}
               {p.locked && <Lock className="size-4 text-muted-foreground" aria-label="Approves followers" />}
@@ -74,12 +76,12 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
             {n(p.followers) && <span><b>{n(p.followers)}</b> <span className="text-muted-foreground">followers</span></span>}
           </p>
           <section className="mt-6 space-y-5" aria-label={`Recent posts by ${p.name}`}>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{p.kind === 'podcast' ? 'Episodes and posts' : 'Recent posts'}</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</h3>
             {p.posts.map(post => <article key={post.id} className="border-t border-border pt-4">
               {post.title && <h3 className="font-serif text-xl">{post.title}</h3>}
               {post.cw ? <details className="mt-1 text-sm"><summary className="cursor-pointer text-muted-foreground">Content warning: {post.cw}</summary><div className="mt-2 space-y-2 leading-relaxed">{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div></details>
                 : <div className="mt-1 space-y-2 text-sm leading-relaxed">{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div>}
-              {post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-72 w-full rounded-2xl object-cover" />}
+              {post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-72 w-full rounded-2xl object-cover" />}
               <p className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">{day(post.date)}<a href={post.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">Original<ArrowUpRight className="size-3" /></a></p>
             </article>)}
             {!p.posts.length && <p className="border-t border-border pt-4 text-sm text-muted-foreground">{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</p>}

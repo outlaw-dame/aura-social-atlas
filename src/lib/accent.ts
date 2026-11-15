@@ -3,18 +3,19 @@ import { useSyncExternalStore } from 'react';
 /**
  * The accent the reader chooses (Settings → Appearance), applied app-wide through --accent (Tailwind `accent`),
  * --accent-foreground (text on accent, picked for contrast) and Framework7's theme color on the phone.
- * Choices are Apple's system colors (iOS, light appearance); Atlas Red is the default.
+ * Choices are Apple's system colors (iOS, light appearance) except Blue (Twitter blue #1DA1F2), Purple (Discord
+ * Blurple #5865F2) and Green (Discord green #57F287); Atlas Red is the default.
  */
 export const ACCENTS = [
   { id: 'atlas', name: 'Atlas Red', hex: '#FA243C' },
   { id: 'orange', name: 'Orange', hex: '#FF9500' },
   { id: 'yellow', name: 'Yellow', hex: '#FFCC00' },
-  { id: 'green', name: 'Green', hex: '#34C759' },
+  { id: 'green', name: 'Green', hex: '#57F287' },
   { id: 'mint', name: 'Mint', hex: '#00C7BE' },
   { id: 'teal', name: 'Teal', hex: '#30B0C7' },
-  { id: 'blue', name: 'Blue', hex: '#007AFF' },
+  { id: 'blue', name: 'Blue', hex: '#1DA1F2' },
   { id: 'indigo', name: 'Indigo', hex: '#5856D6' },
-  { id: 'purple', name: 'Purple', hex: '#AF52DE' },
+  { id: 'purple', name: 'Purple', hex: '#5865F2' },
   { id: 'pink', name: 'Pink', hex: '#FF2D55' },
   { id: 'graphite', name: 'Graphite', hex: '#8E8E93' },
 ] as const;

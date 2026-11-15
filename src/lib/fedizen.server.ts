@@ -274,6 +274,13 @@ const media = z.object({
   type: z.string().nullish(),
   url: z.string().nullish(),
   preview_url: z.string().nullish(),
+  // For videos: Bonfire's copy may be a remote file, with its duration and frame size in meta.
+  remote_url: z.string().max(2048).nullish().catch(null),
+  description: z.string().max(1500).nullish().catch(null),
+  meta: z.object({
+    duration: z.union([z.number(), z.string().max(40)]).nullish().catch(null),
+    original: z.object({ width: z.number().nullish(), height: z.number().nullish() }).partial().nullish().catch(null),
+  }).partial().nullish().catch(null),
 });
 const status = z.object({
   id: z.string().min(1),

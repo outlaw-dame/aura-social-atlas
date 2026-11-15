@@ -1,5 +1,6 @@
 import { htmlToParagraphs } from './spotlight';
 import { isPublicHttpsUrl, normalizeHost, parseHandle, type FediAuthor } from './article-author';
+import { videoFromObject, type FediVideo } from './fedi-video';
 
 /**
  * A fediverse account shown inside Atlas, read from its own ActivityPub actor and public outbox, so an author tag
@@ -16,6 +17,8 @@ export type FediProfilePost = {
   /** The author's content warning; the post body stays folded behind it. */
   cw?: string;
   image?: string;
+  /** A video post (PeerTube), playable in place. */
+  video?: FediVideo;
 };
 export type FediProfile = {
   actor: string;
@@ -33,7 +36,7 @@ export type FediProfile = {
   followers?: number;
   following?: number;
   postCount?: number;
-  kind: 'person' | 'group' | 'bot' | 'organization' | 'podcast';
+  kind: 'person' | 'group' | 'bot' | 'organization' | 'podcast' | 'channel';
   /** For a podcast (Castopod): its RSS feed and category. */
   podcast?: { feed?: string; category?: string };
   /** Approves followers by hand (Mastodon "locked"). */
@@ -85,6 +88,12 @@ export function claimedAcct(actor: Json): string | null {
   return parseHandle(`${user}@${new URL(id).hostname}`);
 }
 
+/** A PeerTube video channel: a Group that only its owners post to (PeerTube sends postingRestrictedToMods) and that
+ *  has playlists. Bonfire's own interop notes key on the same flag. */
+export function isVideoChannel(actor: Json): boolean {
+  return list(actor.type).includes('Group') && actor.postingRestrictedToMods === true && typeof actor.playlists === 'string';
+}
+
 /** Actor document → profile (without posts or counts that need more requests). */
 export function profileFromActor(actor: Json): Omit<FediProfile, 'posts' | 'acctVerified'> | null {
   const id = str(actor.id);
@@ -105,7 +114,7 @@ export function profileFromActor(actor: Json): Omit<FediProfile, 'posts' | 'acct
     bio: htmlToParagraphs(str(actor.summary) ?? '').map(p => cleanText(p, 600)).filter(Boolean).slice(0, 8),
     fields, joined: published && !Number.isNaN(Date.parse(published)) ? published : undefined,
     followers: count(actor.followers), following: count(actor.following), postCount: count(actor.outbox),
-    kind: types.includes('Podcast') ? 'podcast' : types.includes('Group') ? 'group' : types.includes('Service') || types.includes('Application') ? 'bot' : types.includes('Organization') ? 'organization' : 'person',
+    kind: types.includes('Podcast') ? 'podcast' : isVideoChannel(actor) ? 'channel' : types.includes('Group') ? 'group' : types.includes('Service') || types.includes('Application') ? 'bot' : types.includes('Organization') ? 'organization' : 'person',
     locked: actor.manuallyApprovesFollowers === true,
   };
 }
@@ -128,7 +137,8 @@ export function postsFromOutbox(page: unknown, actorId: string, max = 10): FediP
     const by = list(o.attributedTo).map(a => (isObj(a) ? str(a.id) : str(a)));
     if (!by.includes(actorId)) continue;
     const isArticle = list(o.type).includes('Article');
-    const title = isArticle ? cleanText(str(o.name) ?? '', 200) || undefined : undefined;
+    const titled = isArticle || list(o.type).includes('Video');
+    const title = titled ? cleanText(str(o.name) ?? '', 200) || undefined : undefined;
     const body = htmlToParagraphs(str(o.content) ?? '').map(p => cleanText(p, 1200)).filter(Boolean);
     const summary = cleanText(htmlToParagraphs(str(o.summary) ?? '').join(' '), 300);
     // On notes, `summary` is the content warning; on articles it's the standfirst.
@@ -140,6 +150,7 @@ export function postsFromOutbox(page: unknown, actorId: string, max = 10): FediP
     out.push({
       id, url: href(o.url) ?? id, date: published && !Number.isNaN(Date.parse(published)) ? published : undefined,
       title, paragraphs, cw, image: img && o.sensitive !== true ? href(img.url) : undefined,
+      ...(() => { const v = list(o.type).includes('Video') && o.sensitive !== true ? videoFromObject(o) : null; return v ? { video: v } : {}; })(),
     });
   }
   return out;

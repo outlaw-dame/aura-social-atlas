@@ -84,6 +84,9 @@ async function build(target: FediProfileTarget, remaining: () => number, f: Fetc
       if (typeof box.totalItems === 'number' && box.totalItems >= 0) profile.postCount = Math.floor(box.totalItems);
       let page: unknown = box.orderedItems || box.items ? box : box.first;
       if (typeof page === 'string') page = isPublicHttpsUrl(page) && sameHost(page, id) ? await getJson(page, AP, f, l) : null;
+      // PeerTube's outbox refers to its videos by URL (a Create of its own, an Announce of a channel's), so fetch the
+      // newest few from this same server and read them as if they were embedded.
+      if (isObj(page)) page = await withReferencedObjects(page, id, f, l);
       profile.posts = postsFromOutbox(page, id);
       if (!profile.posts.length && !isObj(page)) profile.postsHidden = true;
     })(),
@@ -95,6 +98,17 @@ async function build(target: FediProfileTarget, remaining: () => number, f: Fetc
   remember(id, done);
   if (id !== actorId) remember(actorId, done);
   return done;
+}
+
+async function withReferencedObjects(page: Record<string, unknown>, actorId: string, f: FetchLike, l: Lookup): Promise<Record<string, unknown>> {
+  const items = (Array.isArray(page.orderedItems) ? page.orderedItems : Array.isArray(page.items) ? page.items : []) as unknown[];
+  const refs = items.slice(0, 8).filter(isObj).filter(i => ['Create', 'Announce'].includes(String(i.type)) && typeof i.object === 'string' && isPublicHttpsUrl(i.object) && sameHost(i.object, actorId));
+  if (!refs.length) return page;
+  const objects = await Promise.all(refs.slice(0, 6).map(i => getJson(i.object as string, AP, f, l)));
+  const resolved = objects
+    .map((o, k) => (isObj(o) && o.id === refs[k].object ? { type: 'Create', to: o.to, cc: o.cc, object: o } : null))
+    .filter(Boolean);
+  return { ...page, orderedItems: [...resolved, ...items.filter(i => !refs.includes(i as never))] };
 }
 
 function remember(key: string, profile: FediProfile | null) {

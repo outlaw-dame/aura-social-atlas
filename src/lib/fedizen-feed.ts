@@ -3,6 +3,7 @@ import { htmlToParagraphs } from './spotlight';
 import { collectionLinksIn, mastodonCollectionApi } from './collections';
 import { isPublicHttpsUrl, type FediAuthor } from './article-author';
 import type { FediEpisode } from './podcast-episode';
+import { videoFromAttachment, watchUrlFor, type FediVideo } from './fedi-video';
 
 export const FEDIZEN = 'https://fedizen.net';
 /** Fedizen's own pages for what its API doesn't offer yet (Bonfire v1.1.0-rc.1: bonfire_ui_me SafetyLive, bonfire_ui_boundaries BoundariesLive). */
@@ -25,14 +26,15 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
 }
 
 export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[];
+  /** A video attached to the post (a federated PeerTube video arrives this way). */ video?: FediVideo;
   /** The article the post links to, and who wrote it as far as Atlas can verify ("More from"). */ article?: PostArticle };
-export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; /** The preview's author link: checked for an ActivityPub account, never shown as-is. */ authorUrl?: string; authors?: FediAuthor[]; /** A podcast episode Atlas can play in place. */ episode?: FediEpisode };
+export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; /** The preview's author link: checked for an ActivityPub account, never shown as-is. */ authorUrl?: string; authors?: FediAuthor[]; /** A podcast episode Atlas can play in place. */ episode?: FediEpisode; /** A video (PeerTube) Atlas can play in place. */ video?: FediVideo };
 export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string };
 /** A direct conversation (Mastodon `Conversation`): the other people in it and its latest message, as plain text. */
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string };
-type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string }[]; bookmarked?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null } | null };
+type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null } | null };
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
 const http = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
@@ -46,6 +48,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
       paragraphs: htmlToParagraphs(o.content ?? ''), url: http(o.url) ?? http(o.uri) ?? FEDIZEN, date: o.created_at,
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
       boostedBy: s.reblog ? name(s.account) : undefined,
+      ...(() => { for (const m of o.media_attachments ?? []) { const v = videoFromAttachment(m, http(o.url) ?? http(o.uri) ?? FEDIZEN); if (v) return { video: v }; } return {}; })(),
       ...(() => { const c = collectionLinksIn(o.content ?? ''); return c.length ? { collections: c } : {}; })(),
       ...(() => { const a = articleOf(o); return a ? { article: a } : {}; })(),
     };
@@ -179,9 +182,11 @@ export function articleLinkIn(html: string): string | undefined {
 }
 function articleOf(o: Status): PostArticle | undefined {
   const card = o.card;
-  const url = card?.url && isPublicHttpsUrl(card.url) && !mastodonCollectionApi(card.url) ? card.url : articleLinkIn(o.content ?? '');
-  if (!url) return undefined;
-  const fromCard = card?.url === url;
+  const linked = card?.url && isPublicHttpsUrl(card.url) && !mastodonCollectionApi(card.url) ? card.url : articleLinkIn(o.content ?? '');
+  if (!linked) return undefined;
+  // A PeerTube embed link resolves through its watch page.
+  const url = watchUrlFor(linked);
+  const fromCard = card?.url === linked;
   const clip = (v?: string | null, n = 200) => (v && v.trim() ? v.trim().slice(0, n) : undefined);
   const authorUrl = fromCard && isPublicHttpsUrl(card?.author_url) ? card!.author_url! : undefined;
   return { url, title: fromCard ? clip(card?.title, 300) : undefined, provider: fromCard ? clip(card?.provider_name, 100) : undefined, byline: fromCard ? clip(card?.author_name, 100) : undefined, ...(authorUrl ? { authorUrl } : {}) };

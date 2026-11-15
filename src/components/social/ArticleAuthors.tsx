@@ -3,6 +3,7 @@ import { ArrowUpRight, BadgeCheck, ChevronRight, Globe2 } from 'lucide-react';
 import { CREDIT_LABEL, attributionNote, type FediAuthor } from '@/lib/article-author';
 import type { PostArticle } from '@/lib/fedizen-feed';
 import { openFediProfile } from '@/lib/fedi-profile';
+import { VideoPlayer } from './VideoPlayer';
 import { EpisodePlayer } from './EpisodePlayer';
 
 function AuthorAvatar({ a }: { a: FediAuthor }) {
@@ -38,6 +39,8 @@ export function PostArticleCard({ article }: { article?: PostArticle }) {
   if (!article) return null;
   // An episode plays in place; its podcast row is the creator tag.
   if (article.episode) return <EpisodePlayer episode={article.episode} />;
+  // A video (PeerTube, a video episode) plays in place; its channel row is the creator tag.
+  if (article.video) return <VideoPlayer video={article.video} />;
   const host = (() => { try { return new URL(article.url).hostname.replace(/^www\./, ''); } catch { return ''; } })();
   const showLink = !!(article.title || article.authors?.length || article.byline);
   if (!showLink) return null;

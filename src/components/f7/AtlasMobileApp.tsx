@@ -35,6 +35,7 @@ import { Spotlight } from '@/components/social/Spotlight';
 import { VoicesToKnow } from '@/components/social/VoicesToKnow';
 import { describeProfile, type DeviceProfile } from '@/lib/device-profile';
 import { useDeviceProfile } from '@/lib/use-device-profile';
+import { VideoDock } from '@/components/social/VideoDock';
 import { registerAppServiceWorker } from '@/lib/register-sw';
 
 Framework7.use(Framework7React);
@@ -91,6 +92,8 @@ function useAdaptiveLayout(profile: DeviceProfile) {
       }
       const tabbar = profile.nav === 'tabbar' || profile.nav === 'tabbar-side' || profile.nav === 'deck';
       if (tabbar) f7.toolbar.show('.atlas-tabbar', false); else f7.toolbar.hide('.atlas-tabbar', false);
+      // Floating players (video, podcast) sit above the tab bar only when there is one (not with a rail or sidebar).
+      html.classList.toggle('atlas-has-tabbar', tabbar);
     });
   }, [profile]);
   // The <html> element is shared with the classic site: clear everything when /app unmounts.
@@ -98,7 +101,7 @@ function useAdaptiveLayout(profile: DeviceProfile) {
     const html = document.documentElement;
     for (const k of LAYOUT_KEYS) delete html.dataset[k];
     for (const v of LAYOUT_VARS) html.style.removeProperty(v);
-    html.classList.remove('atlas-rail');
+    html.classList.remove('atlas-rail', 'atlas-has-tabbar');
   }, []);
 }
 
@@ -406,6 +409,7 @@ export default function AtlasMobileApp() {
       <ModerationPopup opened={moderationOpen} onClose={() => setModerationOpen(false)} />
       <FediProfilePopup target={fediProfile.target} onClose={fediProfile.close} />
       <MiniPlayer />
+      <VideoDock />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
   );

@@ -57,6 +57,7 @@
     "framework7": "9.2.0",
     "framework7-icons": "^5.0.5",
     "framework7-react": "9.2.0",
+    "hls.js": "^1.6.15",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.575.0",
     "material-icons": "^1.13.14",

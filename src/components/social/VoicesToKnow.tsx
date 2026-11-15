@@ -1,36 +1,68 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowUpRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NetworkBadge } from '@/lib/networks';
 import { useQuery } from '@tanstack/react-query';
 import { linkifyHashtags } from '@/lib/hashtags';
-import { getVoiceAvatars } from '@/lib/voices.functions';
-import { voices, voicesPage, VOICES_PER_PAGE } from '@/lib/voices';
+import { getVoiceAvatars, getVoices } from '@/lib/voices.functions';
+import { categoryOf, podcastVoices, VOICE_CATEGORIES, videoVoices, voices as writers, voicesPage, VOICES_PER_PAGE, type Voice, type VoiceCategory } from '@/lib/voices';
+import { parseHandle } from '@/lib/article-author';
+import { openFediProfile } from '@/lib/fedi-profile';
 
-/** Rotating list of real open-web writers; six at a time, advancing on its own or on request. */
+const compact = (n?: number) => (n == null ? null : new Intl.NumberFormat(undefined, { notation: 'compact' }).format(n));
+const BLURB: Record<VoiceCategory | 'all', string> = {
+  all: 'Writers, podcasters, video channels and the fediverse’s most-followed accounts',
+  popular: 'The most-followed accounts across the fediverse, from FediDB',
+  writer: 'Writers across Mastodon, Micro.blog and Write.as',
+  podcast: 'Podcasts on Castopod, including the Castopod Index’s most popular',
+  video: 'Video channels on PeerTube',
+};
+
+/** Rotating list of real open-web voices, six at a time; filter by kind. Each opens its profile in Atlas. */
 export function VoicesToKnow() {
   const [page, setPage] = useState(0);
+  const [kind, setKind] = useState<VoiceCategory | 'all'>('all');
   const { data: avatars } = useQuery({ queryKey: ['voice-avatars'], queryFn: () => getVoiceAvatars(), staleTime: 3600_000 });
-  const pages = Math.ceil(voices.length / VOICES_PER_PAGE);
-  useEffect(() => {
-    const t = setInterval(() => setPage(p => p + 1), 20000);
-    return () => clearInterval(t);
-  }, [page]);
+  const { data } = useQuery({ queryKey: ['voices'], queryFn: () => getVoices(), staleTime: 3600_000 });
+  const all: Voice[] = data?.voices ?? [...writers, ...podcastVoices, ...videoVoices];
+  // "All" interleaves the kinds so each page mixes them.
+  const list = useMemo(() => {
+    if (kind !== 'all') return all.filter(v => categoryOf(v) === kind);
+    const by = (['popular', 'writer', 'podcast', 'video'] as const).map(k => all.filter(v => categoryOf(v) === k));
+    const out: Voice[] = [];
+    for (let i = 0; by.some(l => i < l.length); i++) for (const l of by) if (l[i]) out.push(l[i]);
+    return out;
+  }, [all, kind]);
+  const pages = Math.max(1, Math.ceil(list.length / VOICES_PER_PAGE));
+  useEffect(() => { const t = setInterval(() => setPage(p => p + 1), 20000); return () => clearInterval(t); }, [page]);
+  useEffect(() => { setPage(0); }, [kind]);
+  const open = (v: Voice) => {
+    const h = parseHandle(v.handle);
+    if (h) openFediProfile({ acct: h, name: v.name }); else window.open(v.url, '_blank', 'noopener,noreferrer');
+  };
   return <div>
+    <div role="tablist" aria-label="Kinds of voices" className="mb-3 flex flex-wrap gap-1.5">
+      {VOICE_CATEGORIES.map(c => <button key={c.id} type="button" role="tab" aria-selected={kind === c.id} onClick={() => setKind(c.id)}
+        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${kind === c.id ? 'border-transparent bg-accent text-accent-foreground' : 'border-border text-muted-foreground hover:text-foreground'}`}>{c.label}</button>)}
+    </div>
     <div className="mb-5 flex items-center justify-between gap-2">
-      <p className="text-[11px] text-muted-foreground">Writers across Mastodon, Micro.blog and Write.as</p>
+      <p className="text-[11px] text-muted-foreground">{BLURB[kind]}</p>
       <Button variant="ghost" size="sm" className="h-7 shrink-0 gap-1 rounded-full px-2 text-[11px]" onClick={() => setPage(p => p + 1)} aria-label="Show more voices"><RefreshCw className="size-3" />{(page % pages) + 1}/{pages}</Button>
     </div>
-    <ul className="space-y-5">{voicesPage(page).map(v => <li key={v.id} className="border-b border-border pb-5 animate-in fade-in duration-500">
-      <a href={v.url} target="_blank" rel="noopener noreferrer" className="group flex items-start gap-3" aria-label={`${v.name} on ${v.network}`}>
-        {avatars?.[v.id] ? <img className="size-10 shrink-0 rounded-full object-cover ring-1 ring-border" src={avatars[v.id]!} alt="" width={40} height={40} loading="lazy" referrerPolicy="no-referrer" /> : <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted font-serif text-sm ring-1 ring-border" aria-hidden="true">{v.name.split(/\s+/).filter(w => /^[A-Z]/.test(w)).slice(0, 2).map(w => w[0]).join('')}</span>}
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1 text-xs font-semibold group-hover:underline">{v.name}<ArrowUpRight className="size-3 text-muted-foreground" /></span>
-          <span className="block truncate text-[10px] text-muted-foreground">{v.handle}</span>
-          <span className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground"><NetworkBadge network={v.network} /> · {v.topic}</span>
-        </span>
-      </a>
-      <p className="mt-2 pl-[52px] text-xs leading-relaxed text-muted-foreground">{linkifyHashtags(v.bio)}</p>
-    </li>)}</ul>
+    <ul className="space-y-5">{voicesPage(page, list).map(v => {
+      const avatar = v.avatar ?? avatars?.[v.id] ?? undefined;
+      return <li key={v.id} className="border-b border-border pb-5 animate-in fade-in duration-500">
+        <button type="button" onClick={() => open(v)} className="group flex w-full items-start gap-3 text-left" aria-label={`${v.name} on ${v.network}`}>
+          {avatar ? <img className="size-10 shrink-0 rounded-full object-cover ring-1 ring-border" src={avatar} alt="" width={40} height={40} loading="lazy" referrerPolicy="no-referrer" /> : <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted font-serif text-sm ring-1 ring-border" aria-hidden="true">{v.name.split(/\s+/).filter(w => /^[A-Z]/.test(w)).slice(0, 2).map(w => w[0]).join('') || v.name.charAt(0)}</span>}
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1 text-xs font-semibold group-hover:underline">{v.name}{!parseHandle(v.handle) && <ArrowUpRight className="size-3 text-muted-foreground" />}</span>
+            <span className="block truncate text-[10px] text-muted-foreground">{v.handle}</span>
+            <span className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground"><NetworkBadge network={v.network} /> · {compact(v.followers) ? `${compact(v.followers)} followers` : v.topic}</span>
+          </span>
+        </button>
+        {v.bio && <p className="mt-2 pl-[52px] text-xs leading-relaxed text-muted-foreground">{linkifyHashtags(v.bio)}</p>}
+      </li>;
+    })}</ul>
+    {data && kind === 'popular' && !data.sources.fedidb && <p className="text-[11px] text-muted-foreground">FediDB couldn’t be reached; try again later.</p>}
   </div>;
 }
