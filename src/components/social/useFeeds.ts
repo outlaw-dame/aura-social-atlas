@@ -30,7 +30,7 @@ export function useFollowedTags(): ReadonlySet<string> {
   const q = useQuery({
     queryKey: ['fedizen-followed-tags', id],
     queryFn: () => read({ data: { expectedAtlasUserId: id! } }),
-    enabled: !!id, staleTime: 5 * 60_000,
+    enabled: !!id, staleTime: q => (q.state.data?.error ? 0 : 5 * 60_000),
     select: d => new Set(d.tags),
   });
   return q.data ?? EMPTY_TAGS;

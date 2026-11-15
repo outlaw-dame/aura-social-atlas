@@ -31,7 +31,7 @@ import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileActivity, MessagesPopup } from './FedizenMobile';
 import { MobileFeeds } from './MobileFeeds';
-import { TagFeedPage } from './TagFeed';
+import { FollowedTagsPage, TagFeedPage } from './TagFeed';
 import { bindStack, popToRoot, pushPage, showTab, tagPageUrl } from './navigation';
 import { ModerationPopup } from './Moderation';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
@@ -395,6 +395,12 @@ export default function AtlasMobileApp() {
               <Block strong inset><AccentPicker /></Block>
               <BlockTitle>Avatars</BlockTitle>
               <Block strong inset><AvatarShapePicker /></Block>
+              <BlockTitle>Following</BlockTitle>
+              <List strong inset dividers>
+                <ListItem link="#" title="Followed hashtags" onClick={() => pushPage('/followed-tags/')}>
+                  <Icon slot="media" ios="f7:tag" md="material:sell" />
+                </ListItem>
+              </List>
               <BlockTitle>Safety</BlockTitle>
               <List strong inset dividers>
                 <ListItem link="#" title="Moderation" footer="Keyword filters, blocked people and blocked instances" onClick={() => setModerationOpen(true)}>
@@ -461,5 +467,6 @@ function StackRoot() {
 const STACK_ROUTES = [
   { path: '/', component: StackRoot },
   { path: '/tag/:tag/', component: TagFeedPage },
+  { path: '/followed-tags/', component: FollowedTagsPage },
   { path: '/creator-tag/:creator/:tag/', component: SampleTagPage },
 ];
