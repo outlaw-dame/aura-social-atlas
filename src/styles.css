@@ -529,6 +529,26 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-fedi-post h2 { margin: 0 0 4px; font: 400 22px/1.2 'Instrument Serif', serif; }
 .atlas-fedi-post img { width: 100%; border-radius: 12px; margin-top: 8px; }
 .atlas-fedi-post summary { cursor: pointer; opacity: .7; }
+.atlas-episode { margin-top: 10px; padding: 12px; border-radius: 22px; background: color-mix(in oklab, var(--muted) 55%, transparent); border: .5px solid var(--border); }
+.atlas-episode-top { display: flex; align-items: center; gap: 12px; }
+.atlas-episode-art { width: 72px; height: 72px; flex: none; border-radius: 16px; object-fit: cover; }
+.atlas-episode-initial { display: flex; align-items: center; justify-content: center; background: var(--muted); font: 22px 'Instrument Serif', serif; }
+.atlas-episode-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.atlas-episode-title { display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: inherit !important; font-size: 15px; font-weight: 600; line-height: 1.25; }
+.atlas-episode-show { display: flex !important; align-items: center; gap: 8px; color: inherit !important; min-width: 0; }
+.atlas-episode-show img, .atlas-episode-show .atlas-episode-initial { width: 28px; height: 28px; border-radius: 8px; flex: none; font-size: 14px; }
+.atlas-episode-show span { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.atlas-episode-show b { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-episode-show small { font-size: 11px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-episode-play { width: 48px; height: 48px; flex: none; border: 0; border-radius: 50%; background: var(--accent); color: var(--accent-foreground, #fff); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px color-mix(in oklab, var(--accent) 35%, transparent); cursor: pointer; }
+.atlas-episode-play .icon { font-size: 22px; }
+.atlas-episode-play:active { transform: scale(.94); }
+.atlas-episode-bar { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.atlas-episode-bar input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.atlas-episode-time { flex: none; width: 46px; font-size: 11px; font-variant-numeric: tabular-nums; opacity: .6; text-align: center; }
+.atlas-episode-skip { flex: none; width: 36px; height: 36px; border: 0; background: none; color: inherit; opacity: .75; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.atlas-episode-skip .icon { font-size: 22px; }
+.atlas-episode-skip:disabled { opacity: .3; cursor: default; }
 .atlas-article { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .atlas-article-link, .atlas-article-author { display: flex !important; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: .5px solid var(--border); border-radius: 14px; color: inherit !important; text-align: left; }
 .atlas-article-link > span, .atlas-article-author > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
