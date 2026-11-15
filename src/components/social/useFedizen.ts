@@ -113,7 +113,7 @@ export function useFedizen() {
         // an in-flight GET must not repopulate the cache after disconnect.
         // For You and pinned circles hold the same account's private posts; their views fall back to "Connect
         // Fedizen" when they read again.
-        const personal = [['fedizen-foryou', id], ['fedizen-circle-feed', id]] as const;
+        const personal = [['fedizen-foryou', id], ['fedizen-circle-feed', id], ['fedizen-tag-feed', id], ['fedizen-followed-tags', id]] as const;
         await Promise.all([
           qc.cancelQueries({ queryKey: key, exact: true }),
           qc.cancelQueries({ queryKey: nativeKey, exact: true }),

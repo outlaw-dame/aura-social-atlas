@@ -173,7 +173,7 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
             <List strong inset dividers mediaList>
               {followedCreators.map(c => (
                 <ListItem key={c.id} title={c.name} subtitle={fullHandle(c)} link="#" onClick={() => { setFollowsOpen(false); onOpenCreator(c); }}>
-                  <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={40} height={40} style={{ borderRadius: 20 }} />
+                  <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={40} height={40} className="atlas-avatar" style={{ objectFit: 'cover' }} />
                   <Button slot="after" small round tonal onClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); toggleFollow(c.id); }}>Following</Button>
                 </ListItem>
               ))}

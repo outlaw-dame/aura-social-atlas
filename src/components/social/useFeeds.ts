@@ -1,11 +1,13 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useQueries, useQuery, type InfiniteData } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { getCircleFeed, getFedizenHome, getForYou } from '@/lib/fedizen.functions';
+import { getCircleFeed, getFedizenHome, getFedizenTagFeed, getFollowedTags, getForYou } from '@/lib/fedizen.functions';
 import type { NativeBonfireSnapshot } from '@/lib/bonfire-private.functions';
 import { mergeNativeBonfirePages, selectBonfireHome } from '@/lib/bonfire-native-presentation';
 import { getFedizenPublic, getRecentArticles } from '@/lib/bonfire.functions';
-import { BASE_FEEDS, circleFeed, hasNew, markFeedSeen, newestOf, useFeedsSeen, usePinnedCircles, type FeedKind } from '@/lib/feed-types';
+import type { FedizenPost } from '@/lib/fedizen-feed';
+import { followedTagsIn } from '@/lib/hashtags';
+import { BASE_FEEDS, circleFeed, hasNew, markFeedSeen, newestOf, useFeedsSeen, usePinnedCircles, type FeedKind, type ForYouReason } from '@/lib/feed-types';
 import { useAtlasAuth } from './AuthState';
 
 /** For You, read through the person's Fedizen connection. */
@@ -17,6 +19,39 @@ export function useForYou(enabled: boolean) {
     queryKey: ['fedizen-foryou', id],
     queryFn: () => { if (!id) throw new Error('Atlas user is not signed in.'); return read({ data: { expectedAtlasUserId: id } }); },
     enabled: !!id && enabled, staleTime: 60_000,
+  });
+}
+
+/** The hashtags the person follows (lowercase), as a set for marking posts. Empty when signed out or not connected. */
+export function useFollowedTags(): ReadonlySet<string> {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getFollowedTags);
+  const id = user?.id;
+  const q = useQuery({
+    queryKey: ['fedizen-followed-tags', id],
+    queryFn: () => read({ data: { expectedAtlasUserId: id! } }),
+    enabled: !!id, staleTime: 5 * 60_000,
+    select: d => new Set(d.tags),
+  });
+  return q.data ?? EMPTY_TAGS;
+}
+const EMPTY_TAGS: ReadonlySet<string> = new Set();
+/** The hashtags a card names in its tag line: those its text uses that you follow, and any For You found it by. */
+export function useTagLine(p: Pick<FedizenPost, 'paragraphs'>, reasons?: ForYouReason[]): string[] {
+  const followed = useFollowedTags();
+  const fromReasons = (reasons ?? []).flatMap(r => (r.kind === 'tag' ? [r.tag.toLowerCase()] : []));
+  return [...new Set([...followedTagsIn(p.paragraphs, followed), ...fromReasons])];
+}
+
+/** A hashtag's feed through the person's Fedizen connection (only posts they may see). */
+export function useTagFeed(tag: string | null) {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getFedizenTagFeed);
+  const id = user?.id;
+  return useQuery({
+    queryKey: ['fedizen-tag-feed', id, tag],
+    queryFn: () => read({ data: { expectedAtlasUserId: id!, tag: tag! } }),
+    enabled: !!id && !!tag, staleTime: 60_000,
   });
 }
 

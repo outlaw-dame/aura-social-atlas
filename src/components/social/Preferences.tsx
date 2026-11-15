@@ -4,6 +4,7 @@ import { ModerationPage } from './ModerationPage';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { AccentPicker } from './AccentPicker';
+import { AvatarShapePicker } from './AvatarShapePicker';
 import { useSocial } from './SocialState';
 
 export function Preferences({ page }: { page: 'settings' | 'intelligence' | 'appearance' | 'moderation' }) {
@@ -19,6 +20,6 @@ export function Preferences({ page }: { page: 'settings' | 'intelligence' | 'app
     </nav> : page === 'moderation' ? <ModerationPage /> : page === 'intelligence' ? <>
       <p className="mt-3 text-sm text-muted-foreground">Atlas works fully without AI.</p>
       <div className="mt-8 flex items-start justify-between gap-6 border-y border-border py-6"><div><h2 className="text-base font-semibold">Atlas assistant</h2><p id="assistant-disclosure" className="mt-2 text-sm leading-relaxed text-muted-foreground">Available in Compose when enabled. Your messages are sent to an AI service to generate replies.</p></div><Switch aria-label="Atlas assistant" aria-describedby="assistant-disclosure" checked={state.assistantEnabled} onCheckedChange={state.setAssistantEnabled} /></div>
-    </> : <div className="mt-8 border-y border-border py-6"><h2 className="mb-4 text-base font-semibold">Color theme</h2><div className="flex flex-wrap gap-3">{[{ dark: false, label: 'Light', icon: Sun }, { dark: true, label: 'Dark', icon: Moon }].map(t => <Button key={t.label} variant={state.dark === t.dark ? 'secondary' : 'outline'} aria-pressed={state.dark === t.dark} className={state.dark === t.dark ? 'ring-1 ring-ring' : ''} onClick={() => { if (state.dark !== t.dark) state.toggleDark(); }}><t.icon />{t.label}</Button>)}</div><h2 className="mb-1 mt-8 text-base font-semibold">Accent color</h2><p className="mb-4 text-sm text-muted-foreground">Used for buttons, the podcast player and highlights.</p><AccentPicker /></div>}
+    </> : <div className="mt-8 border-y border-border py-6"><h2 className="mb-4 text-base font-semibold">Color theme</h2><div className="flex flex-wrap gap-3">{[{ dark: false, label: 'Light', icon: Sun }, { dark: true, label: 'Dark', icon: Moon }].map(t => <Button key={t.label} variant={state.dark === t.dark ? 'secondary' : 'outline'} aria-pressed={state.dark === t.dark} className={state.dark === t.dark ? 'ring-1 ring-ring' : ''} onClick={() => { if (state.dark !== t.dark) state.toggleDark(); }}><t.icon />{t.label}</Button>)}</div><h2 className="mb-1 mt-8 text-base font-semibold">Accent color</h2><p className="mb-4 text-sm text-muted-foreground">Used for buttons, the podcast player and highlights.</p><AccentPicker /><h2 className="mb-1 mt-8 text-base font-semibold">Avatars</h2><p className="mb-4 text-sm text-muted-foreground">How people, groups and podcasts are pictured across Atlas.</p><AvatarShapePicker /></div>}
   </section>;
 }

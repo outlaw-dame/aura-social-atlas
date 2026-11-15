@@ -17,8 +17,8 @@ const day = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { yea
 
 function Avatar({ p }: { p: FediProfile }) {
   const [broken, setBroken] = useState(false);
-  if (p.avatar && !broken) return <img src={p.avatar} alt="" width={80} height={80} referrerPolicy="no-referrer" onError={() => setBroken(true)} className="size-20 rounded-2xl object-cover ring-4 ring-background" />;
-  return <span aria-hidden="true" className="flex size-20 items-center justify-center rounded-2xl bg-muted font-serif text-3xl ring-4 ring-background">{p.name.charAt(0)}</span>;
+  if (p.avatar && !broken) return <img src={p.avatar} alt="" width={80} height={80} referrerPolicy="no-referrer" onError={() => setBroken(true)} className="size-20 atlas-avatar object-cover ring-4 ring-background" />;
+  return <span aria-hidden="true" className="atlas-avatar flex size-20 items-center justify-center bg-muted font-serif text-3xl ring-4 ring-background">{p.name.charAt(0)}</span>;
 }
 
 function Follow({ p }: { p: FediProfile }) {

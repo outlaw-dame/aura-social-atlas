@@ -53,7 +53,7 @@ export function VoicesToKnow() {
       const avatar = v.avatar ?? avatars?.[v.id] ?? undefined;
       return <li key={v.id} className="border-b border-border pb-5 animate-in fade-in duration-500">
         <button type="button" onClick={() => open(v)} className="group flex w-full items-start gap-3 text-left" aria-label={`${v.name} on ${v.network}`}>
-          {avatar ? <img className="size-10 shrink-0 rounded-full object-cover ring-1 ring-border" src={avatar} alt="" width={40} height={40} loading="lazy" referrerPolicy="no-referrer" /> : <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted font-serif text-sm ring-1 ring-border" aria-hidden="true">{v.name.split(/\s+/).filter(w => /^[A-Z]/.test(w)).slice(0, 2).map(w => w[0]).join('') || v.name.charAt(0)}</span>}
+          {avatar ? <img className="size-10 shrink-0 atlas-avatar object-cover ring-1 ring-border" src={avatar} alt="" width={40} height={40} loading="lazy" referrerPolicy="no-referrer" /> : <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted font-serif text-sm ring-1 ring-border" aria-hidden="true">{v.name.split(/\s+/).filter(w => /^[A-Z]/.test(w)).slice(0, 2).map(w => w[0]).join('') || v.name.charAt(0)}</span>}
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1 text-xs font-semibold group-hover:underline">{v.name}{!parseHandle(v.handle) && <ArrowUpRight className="size-3 text-muted-foreground" />}</span>
             <span className="block truncate text-[10px] text-muted-foreground">{v.handle}</span>

@@ -9,8 +9,8 @@ import { RichLink } from './RichLink';
 
 function AuthorAvatar({ a }: { a: FediAuthor }) {
   const [broken, setBroken] = useState(false);
-  if (a.avatar && !broken) return <img src={a.avatar} alt="" width={44} height={44} referrerPolicy="no-referrer" loading="lazy" onError={() => setBroken(true)} className="size-11 shrink-0 rounded-xl object-cover ring-1 ring-border" />;
-  return <span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-background font-serif text-lg ring-1 ring-border">{a.name.charAt(0)}</span>;
+  if (a.avatar && !broken) return <img src={a.avatar} alt="" width={44} height={44} referrerPolicy="no-referrer" loading="lazy" onError={() => setBroken(true)} className="size-11 shrink-0 atlas-avatar object-cover ring-1 ring-border" />;
+  return <span aria-hidden="true" className="atlas-avatar flex size-11 shrink-0 items-center justify-center bg-background font-serif text-lg ring-1 ring-border">{a.name.charAt(0)}</span>;
 }
 
 /**

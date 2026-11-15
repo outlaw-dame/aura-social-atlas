@@ -22,7 +22,7 @@ export function RecentArticles() {
           {a.image && <div className="mb-3 overflow-hidden rounded-2xl"><img src={a.image} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover transition-transform duration-700 group-hover:scale-[1.025]" /></div>}
           <h3 className="font-serif text-xl leading-snug group-hover:underline">{a.title}</h3>
           {a.summary && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{a.summary}</p>}
-          <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">{a.avatar && <img src={a.avatar} alt="" className="size-5 rounded-full object-cover" />}<span className="truncate">{a.author}</span><span>· {when(a.date)}</span></p>
+          <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">{a.avatar && <img src={a.avatar} alt="" className="size-5 atlas-avatar object-cover" />}<span className="truncate">{a.author}</span><span>· {when(a.date)}</span></p>
         </button>
       </article>)}</div>}
     {open && <div className="social-backdrop fixed inset-0 z-[60] grid place-items-center px-4 py-6" onClick={() => setOpen(null)}>

@@ -11,8 +11,8 @@ const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { mo
 function GroupAvatar({ g, className = 'size-12' }: { g: Group; className?: string }) {
   const [broken, setBroken] = useState(false);
   return g.avatar && !broken
-    ? <img onError={() => setBroken(true)} loading="lazy" src={g.avatar} alt="" referrerPolicy="no-referrer" className={`${className} shrink-0 rounded-[26%] bg-secondary object-cover`} />
-    : <span aria-hidden="true" className={`${className} social-avatar shrink-0 !rounded-[26%] font-serif text-xl`}>{g.name.charAt(0)}</span>;
+    ? <img onError={() => setBroken(true)} loading="lazy" src={g.avatar} alt="" referrerPolicy="no-referrer" className={`${className} shrink-0 atlas-avatar bg-secondary object-cover`} />
+    : <span aria-hidden="true" className={`${className} social-avatar shrink-0 font-serif text-xl`}>{g.name.charAt(0)}</span>;
 }
 
 const wash = 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 26%, var(--card)), color-mix(in oklab, var(--accent) 6%, var(--card)))';
@@ -32,7 +32,7 @@ function Access({ g }: { g: Group }) {
 function Post({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
   return <article className="border-b border-border py-5">
     <p className="flex items-center gap-2 text-xs">
-      {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" className="size-8 rounded-full object-cover" /> : <span aria-hidden="true" className="social-avatar size-8 font-serif">{p.author.charAt(0)}</span>}
+      {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" className="size-8 atlas-avatar object-cover" /> : <span aria-hidden="true" className="social-avatar size-8 font-serif">{p.author.charAt(0)}</span>}
       <span className="min-w-0"><span className="font-semibold">{p.author}</span>{showGroup && p.group && <span className="text-muted-foreground"> in {p.group}</span>}
         <span className="block truncate text-muted-foreground">{p.handle}{p.date ? ` · ${when(p.date)}` : ''}</span></span>
     </p>

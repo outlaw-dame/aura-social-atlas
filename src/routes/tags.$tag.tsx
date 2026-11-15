@@ -1,6 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Hash, MessageCircle, Repeat2, Star } from 'lucide-react';
+import { ArrowLeft, Hash, MessageCircle, Repeat2, Star, Tag } from 'lucide-react';
+import type { FedizenPost } from '@/lib/fedizen-feed';
+import { useAtlasAuth } from '@/components/social/AuthState';
+import { useFollowedTags, useTagFeed } from '@/components/social/useFeeds';
+import { FeedPostCard, useFeedPostActions } from '@/components/social/FeedPostCard';
 import { getTagFeed } from '@/lib/tag-feed.functions';
 import { linkifyHashtags } from '@/lib/hashtags';
 import { NetworkBadge } from '@/lib/networks';
@@ -20,6 +24,43 @@ export const Route = createFileRoute('/tags/$tag')({
 
 function TagPage() {
   const { tag } = Route.useParams();
+  const { user, loading } = useAtlasAuth();
+  const norm = tag.replace(/^#/, '').toLowerCase();
+  const fedizen = useTagFeed(user && /^[\p{L}\p{N}_]{1,100}$/u.test(norm) ? norm : null);
+  const followed = useFollowedTags();
+  // Signed in and connected: Fedizen's feed for the tag, as the person may see and act on it. Otherwise the public
+  // posts below, from mastodon.social.
+  const personal = !!user && !fedizen.data?.error;
+  if (loading || (user && fedizen.isLoading)) return <TagShell tag={tag}><p className="text-sm text-muted-foreground">Loading posts…</p></TagShell>;
+  if (personal) return <TagShell tag={tag} note={<>{followed.has(norm) && <><Tag className="size-3.5" aria-hidden="true" />You follow this hashtag · </>}Posts on Fedizen that use #{tag} and that you can see</>}>
+    <FedizenTagPosts posts={fedizen.data?.posts ?? []} tag={tag} failed={fedizen.isError} retry={() => void fedizen.refetch()} />
+  </TagShell>;
+  return <PublicTagPage tag={tag} />;
+}
+
+function TagShell({ tag, note, children }: { tag: string; note?: React.ReactNode; children: React.ReactNode }) {
+  return <main className="mx-auto min-h-dvh max-w-2xl px-4 py-6">
+    <Link to="/feeds" className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />Feeds</Link>
+    <header className="mb-6 border-b border-border pb-5">
+      <h1 className="flex items-center gap-1 font-serif text-4xl italic"><Hash className="size-8 text-accent" />{tag}</h1>
+      {note && <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">{note}</p>}
+    </header>
+    {children}
+  </main>;
+}
+
+function FedizenTagPosts({ posts, tag, failed, retry }: { posts: FedizenPost[]; tag: string; failed: boolean; retry: () => void }) {
+  const actions = useFeedPostActions();
+  if (failed) return <p className="text-sm text-muted-foreground">Fedizen couldn’t send this feed right now. <button type="button" className="underline" onClick={retry}>Try again</button></p>;
+  return <>
+    {actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}
+    {posts.length ? <div className="space-y-6">{posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} inTag={tag.replace(/^#/, '').toLowerCase()} />)}</div>
+      : <p className="text-sm text-muted-foreground">No posts you can see use #{tag} yet.</p>}
+    {actions.dialog}
+  </>;
+}
+
+function PublicTagPage({ tag }: { tag: string }) {
   const { data, isLoading, error } = useQuery({ queryKey: ['tag-feed', tag], queryFn: () => getTagFeed({ data: { tag } }), staleTime: 60_000 });
   return <main className="mx-auto min-h-dvh max-w-2xl px-4 py-6">
     <Link to="/" className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />Discover</Link>
@@ -32,7 +73,7 @@ function TagPage() {
     {data && !data.length && <p className="text-sm text-muted-foreground">No public posts have used #{tag} yet.</p>}
     <ol className="divide-y divide-border">{data?.map(p => <li key={p.id} className="py-5">
       <a href={p.author.url} target="_blank" rel="noopener noreferrer" className="mb-3 flex items-center gap-3">
-        <img src={p.author.avatar} alt="" width={40} height={40} className="size-10 rounded-full object-cover ring-1 ring-border" loading="lazy" referrerPolicy="no-referrer" />
+        <img src={p.author.avatar} alt="" width={40} height={40} className="size-10 atlas-avatar object-cover ring-1 ring-border" loading="lazy" referrerPolicy="no-referrer" />
         <span className="min-w-0"><span className="block truncate text-sm font-semibold">{p.author.name}</span><span className="block truncate text-xs text-muted-foreground">{p.author.acct}</span></span>
         <time className="ml-auto shrink-0 text-[11px] text-muted-foreground" dateTime={p.createdAt}>{new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time>
       </a>

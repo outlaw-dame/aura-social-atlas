@@ -66,3 +66,19 @@ export function extractHashtags(text: string): string[] {
   }
   return tags;
 }
+
+/* ── Opening a hashtag's feed from a post (phone) ──────────────────────────────────────────────────── */
+
+export const OPEN_TAG_EVENT = 'atlas:open-tag';
+/** Asks the phone app to open a hashtag's feed. Tags are Mastodon's word characters only. */
+export function openTag(tag: string): void {
+  const t = tag.replace(/^#/, '').toLowerCase();
+  if (typeof window === 'undefined' || !/^[\p{L}\p{N}_]{1,100}$/u.test(t)) return;
+  window.dispatchEvent(new CustomEvent<{ tag: string }>(OPEN_TAG_EVENT, { detail: { tag: t } }));
+}
+
+/** The followed hashtags a post uses, in the order it uses them (Ivory shows the first at the top of the post). */
+export function followedTagsIn(paragraphs: string[], followed: ReadonlySet<string>): string[] {
+  if (!followed.size) return [];
+  return extractHashtags(paragraphs.join('\n')).filter(t => followed.has(t));
+}

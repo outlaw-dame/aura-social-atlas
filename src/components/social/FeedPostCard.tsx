@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link } from '@tanstack/react-router';
-import { Bookmark, Globe2, Hash, Heart, Lock, MessageCircle, Repeat2, Share, UserCheck, AtSign } from 'lucide-react';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { Bookmark, Globe2, Heart, Lock, MessageCircle, Repeat2, Share, Tag, UserCheck, AtSign } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { shortAgo, type ForYouReason } from '@/lib/feed-types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MentionField } from './MentionField';
+import { linkifyHashtagsWith } from '@/lib/hashtags';
+import { useTagLine } from './useFeeds';
 import { CollectionLinks } from './CollectionsDesktop';
 import { PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
@@ -15,22 +17,31 @@ import { AUDIENCE_LABEL, compactCount, replyMention, replyVisibility, sharePost,
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
   const [broken, setBroken] = useState(false);
   return avatar && !broken
-    ? <img src={avatar} alt="" width={16} height={16} referrerPolicy="no-referrer" loading="lazy" onError={() => setBroken(true)} className="size-4 rounded-[4px] object-cover" />
-    : <span aria-hidden="true" className="inline-flex size-4 items-center justify-center rounded-[4px] bg-background text-[9px] font-semibold">{name.charAt(0)}</span>;
+    ? <img src={avatar} alt="" width={16} height={16} referrerPolicy="no-referrer" loading="lazy" onError={() => setBroken(true)} className="size-4 atlas-avatar object-cover" />
+    : <span aria-hidden="true" className="atlas-avatar inline-flex size-4 items-center justify-center bg-background text-[9px] font-semibold">{name.charAt(0)}</span>;
 }
 
 /** Why a post is in For You, in a few words. "Popular in" shows the group's avatar before its name; the name opens the
  *  group's page in Atlas. */
 export function ReasonChips({ reasons }: { reasons?: ForYouReason[] }) {
-  if (!reasons?.length) return null;
-  return <p className="mb-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">{reasons.map((r, i) =>
+  // A followed hashtag shows as the post's tag line instead (FollowedTagLine), as Ivory does.
+  const shown = (reasons ?? []).filter(r => r.kind !== 'tag');
+  if (!shown.length) return null;
+  return <p className="mb-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">{shown.map((r, i) =>
     <span key={i} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5">
-      {r.kind === 'tag' ? <><Hash className="size-3" />{r.tag}</>
-        : r.kind === 'group' ? <>Popular in {r.groupId
+      {r.kind === 'group' ? <>Popular in {r.groupId
           ? <Link to="/groups" search={{ group: r.groupId }} className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline"><ChipGroupFace name={r.group} avatar={r.avatar} />{r.group}</Link>
           : <span className="inline-flex items-center gap-1 font-semibold text-foreground"><ChipGroupFace name={r.group} />{r.group}</span>}</>
         : <><UserCheck className="size-3" />You follow</>}
     </span>)}</p>;
+}
+
+/** The followed hashtags a post uses, at its top left with a tag icon and no accent colour, after Ivory. Each opens its
+ *  feed. */
+export function FollowedTagLine({ tags }: { tags: string[] }) {
+  if (!tags.length) return null;
+  return <p className="mb-1.5 flex flex-wrap items-center gap-3 text-xs font-medium text-muted-foreground">{tags.slice(0, 3).map(t =>
+    <Link key={t} to="/tags/$tag" params={{ tag: t }} className="inline-flex items-center gap-1 hover:text-foreground" aria-label={`Open #${t}, a hashtag you follow`}><Tag className="size-3.5" aria-hidden="true" />{t}</Link>)}</p>;
 }
 
 /** Everything a desktop feed of post cards shares: Save, Like and Boost state, and the reply dialog (render `dialog` once). */
@@ -45,8 +56,8 @@ export type FeedActions = ReturnType<typeof useFeedPostActions>;
 function Avatar({ post: p }: { post: FedizenPost }) {
   const [broken, setBroken] = useState(false);
   return p.avatar && !broken
-    ? <img src={p.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="size-10 shrink-0 rounded-full object-cover ring-1 ring-border" />
-    : <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted font-serif text-base">{p.author.charAt(0)}</span>;
+    ? <img src={p.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="size-10 shrink-0 atlas-avatar bg-muted object-cover ring-1 ring-border" />
+    : <span aria-hidden="true" className="atlas-avatar flex size-10 shrink-0 items-center justify-center bg-muted font-serif text-base">{p.author.charAt(0)}</span>;
 }
 
 const actionClass = 'inline-flex min-h-9 min-w-9 items-center gap-1.5 rounded-full px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 aria-pressed:text-accent';
@@ -72,9 +83,12 @@ function Actions({ post: p, actions }: { post: FedizenPost; actions: FeedActions
 }
 
 /** Desktop: one post in a feed — author, text, media or link preview — with the standard post actions. */
-export function FeedPostCard({ post: p, actions, reasons }: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[] }) {
+export function FeedPostCard({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {
   const ago = shortAgo(p.date);
+  const tagLine = useTagLine(p, reasons).filter(t => t !== inTag);
+  const navigate = useNavigate();
   return <article className="border-b border-border pb-4">
+    <FollowedTagLine tags={tagLine} />
     <ReasonChips reasons={reasons} />
     {p.boostedBy && <p className="mb-2 flex items-center gap-1 text-[11px] text-muted-foreground"><Repeat2 className="size-3" />{p.boostedBy} boosted</p>}
     <div className="flex items-center gap-3">
@@ -82,7 +96,7 @@ export function FeedPostCard({ post: p, actions, reasons }: { post: FedizenPost;
       <p className="min-w-0 flex-1 text-sm leading-tight"><span className="block truncate font-semibold">{p.author}</span><span className="block truncate text-xs text-muted-foreground">{p.handle}</span></p>
       {ago && <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline" title={p.date ? new Date(p.date).toLocaleString() : undefined}>{ago}</a>}
     </div>
-    <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div>
+    <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{linkifyHashtagsWith(t, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
     {p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
     <CollectionLinks links={p.collections} />
     <PostArticleCard article={p.article} />

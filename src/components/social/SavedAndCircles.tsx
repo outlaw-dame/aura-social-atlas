@@ -28,7 +28,7 @@ export function SaveButton({ post, save }: { post: Pick<FedizenPost, 'statusId' 
 function PostRow({ p, save }: { p: FedizenPost; save: ReturnType<typeof useSaveToggle> }) {
   return <article className="border-b border-border pb-5">
     {p.boostedBy && <p className="mb-2 flex items-center gap-1 text-[11px] text-muted-foreground"><Repeat2 className="size-3" />{p.boostedBy} boosted</p>}
-    <p className="flex items-center gap-2 text-xs">{p.avatar && <img src={p.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-8 rounded-full object-cover" />}<span><span className="font-semibold">{p.author}</span> <span className="text-muted-foreground">{p.handle} · {when(p.date)}</span></span></p>
+    <p className="flex items-center gap-2 text-xs">{p.avatar && <img src={p.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-8 atlas-avatar object-cover" />}<span><span className="font-semibold">{p.author}</span> <span className="text-muted-foreground">{p.handle} · {when(p.date)}</span></span></p>
     <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div>
     {p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
     <PostArticleCard article={p.article} />
@@ -110,7 +110,7 @@ function CircleView({ circle, canWrite, onBack }: { circle: { id: string; title:
     {q.data?.error && <p role="alert" className="text-sm text-muted-foreground">{LIBRARY_PROBLEM[q.data.error]}</p>}
     <ul className="divide-y divide-border">
       {people.map(p => <li key={p.id} className="flex items-center gap-3 py-3">
-        {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" className="size-10 rounded-full object-cover" /> : <span className="social-avatar size-10 font-serif" aria-hidden="true">{p.name.charAt(0)}</span>}
+        {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" className="size-10 atlas-avatar object-cover" /> : <span className="social-avatar size-10 font-serif" aria-hidden="true">{p.name.charAt(0)}</span>}
         <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{p.name}</span><span className="block truncate text-xs text-muted-foreground">{p.handle}</span></span>
         {canWrite && <Button size="icon" variant="ghost" aria-label={`Remove ${p.name} from ${circle.title}`} onClick={async () => setNote(await act.removeMember(circle.id, p.id))}><Minus /></Button>}
       </li>)}

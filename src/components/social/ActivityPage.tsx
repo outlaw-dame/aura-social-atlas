@@ -36,7 +36,7 @@ export function ActivityPage() {
     const k = kinds[n.type ?? ''] ?? { icon: Bell, color: 'var(--accent)' };
     return <li key={n.id} className="flex gap-4 py-4">
       <span className="relative size-10 shrink-0">
-        {n.avatar ? <img src={n.avatar} alt="" referrerPolicy="no-referrer" className="size-10 rounded-full object-cover" /> : <span className="social-avatar size-10 font-serif text-lg" aria-hidden="true">{n.author.charAt(0)}</span>}
+        {n.avatar ? <img src={n.avatar} alt="" referrerPolicy="no-referrer" className="size-10 atlas-avatar object-cover" /> : <span className="social-avatar size-10 font-serif text-lg" aria-hidden="true">{n.author.charAt(0)}</span>}
         <span className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full text-white ring-2 ring-background" style={{ background: k.color }}><k.icon className="size-3" aria-hidden="true" /></span>
       </span>
       <div className="min-w-0 flex-1"><p className="flex items-baseline justify-between gap-3 text-sm"><span className="font-semibold">{n.author}</span><span className="shrink-0 text-xs text-muted-foreground">{when(n.date)}</span></p>

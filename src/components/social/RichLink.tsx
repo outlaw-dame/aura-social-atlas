@@ -10,11 +10,10 @@ const hostOf = (url: string) => { try { return new URL(url).hostname.replace(/^w
 
 function CreatorFace({ a }: { a: FediAuthor }) {
   const [broken, setBroken] = useState(false);
-  // People are circles; a podcast or other account shows its square artwork (as across Atlas).
-  const shape = a.work === 'podcast' || a.work === 'episode' ? 'is-square' : '';
+  // Every creator, person or podcast, follows the reader's avatar shape.
   return a.avatar && !broken
-    ? <img className={`atlas-rich-face ${shape}`} src={a.avatar} alt="" width={36} height={36} referrerPolicy="no-referrer" loading="lazy" onError={() => setBroken(true)} />
-    : <span className={`atlas-rich-face ${shape}`} aria-hidden="true">{a.name.charAt(0)}</span>;
+    ? <img className="atlas-rich-face" src={a.avatar} alt="" width={36} height={36} referrerPolicy="no-referrer" loading="lazy" onError={() => setBroken(true)} />
+    : <span className="atlas-rich-face" aria-hidden="true">{a.name.charAt(0)}</span>;
 }
 
 /**

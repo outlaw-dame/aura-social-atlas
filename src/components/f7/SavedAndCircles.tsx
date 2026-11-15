@@ -103,7 +103,7 @@ function CirclePopup({ circle, canWrite, onClose }: { circle: { id: string; titl
       <BlockTitle>People</BlockTitle>
       <List strong inset dividers mediaList>
         {people.map(p => <ListItem key={p.id} title={p.name} subtitle={p.handle}>
-          {p.avatar ? <img slot="media" src={p.avatar} alt="" width={40} height={40} style={{ borderRadius: 20 }} referrerPolicy="no-referrer" />
+          {p.avatar ? <img slot="media" src={p.avatar} alt="" width={40} height={40} className="atlas-avatar" style={{ objectFit: 'cover' }} referrerPolicy="no-referrer" />
             : <span slot="media" className="atlas-activity-initial" aria-hidden="true">{p.name.charAt(0)}</span>}
           {canWrite && <Link slot="after" iconOnly aria-label={`Remove ${p.name}`} onClick={async () => setNote(await act.removeMember(circle!.id, p.id))}><Icon ios="f7:minus_circle" md="material:remove_circle_outline" /></Link>}
         </ListItem>)}

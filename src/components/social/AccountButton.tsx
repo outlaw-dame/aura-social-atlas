@@ -25,7 +25,7 @@ export function AccountButton() {
         asChild
         size="sm"
         variant="ghost"
-        className="social-avatar h-8 shrink-0 rounded-full"
+        className="social-avatar h-8 shrink-0"
         aria-label="Sign in or create an account"
       >
         <Link to="/auth">
@@ -45,7 +45,7 @@ export function AccountButton() {
         <Button
           size="sm"
           variant="ghost"
-          className="social-avatar h-8 w-8 shrink-0 rounded-full p-0"
+          className="social-avatar h-8 w-8 shrink-0 p-0"
           aria-label={`Account menu for ${name}`}
         >
           <img
