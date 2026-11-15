@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Bookmark, CalendarDays, Check, CircleDashed, CircleUserRound, Image, List, Lock, PenLine, Star, Users, X } from 'lucide-react';
+import { Bookmark, CalendarDays, Check, CircleDashed, CircleUserRound, Image, List, PenLine, Star, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAtlasAuth } from './AuthState';
 import { useSocial } from './SocialState';
@@ -9,6 +9,7 @@ import { creators, fullHandle, posts, type Creator } from '@/lib/social-catalogu
 import { extractHashtags, hashtagUrl, linkifyHashtags } from '@/lib/hashtags';
 import { CreatorTag } from './CreatorTag';
 import { DesktopCollections } from './CollectionsDesktop';
+import { DesktopCircles, DesktopSaved } from './SavedAndCircles';
 import type { Collection } from '@/lib/collections';
 import { activityLabel, DEFAULT_ACTIVITY_FILTER, profileSections, type ActivityFilter, type ProfileSection } from './profile-sections';
 
@@ -20,7 +21,7 @@ const empty: Record<ProfileSection, { icon: typeof PenLine; title: string; detai
   Featured: { icon: Star, title: 'Nothing featured yet', detail: 'Feature hashtags from Edit profile, and people from their profiles, to show them here.' },
   Media: { icon: Image, title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
   Collections: { icon: Image, title: 'No collections yet', detail: '' },
-  Saved: { icon: Bookmark, title: 'Nothing saved yet', detail: 'Stories you save appear here. Only you can see this tab.' },
+  Saved: { icon: Bookmark, title: 'Nothing saved yet', detail: 'Posts you save on Fedizen. Each keeps the audience its author chose.' },
   Circles: { icon: CircleDashed, title: 'No circles yet', detail: 'Circles group the people you know, like colleagues, friends or locals, so you choose who sees and replies to each post. Circles you make on Fedizen will appear here.' },
   Lists: { icon: List, title: 'No lists yet', detail: 'Your creator lists will appear here when lists are available.' },
 };
@@ -105,7 +106,7 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
     <div role="tablist" aria-label="Profile sections" className="sticky top-16 z-10 mt-6 flex overflow-x-auto border-b border-border bg-background/80 backdrop-blur-xl [scrollbar-width:none]">
       {profileSections.map(s => <button key={s} type="button" role="tab" id={`profile-tab-${s.toLowerCase()}`} aria-selected={section === s} aria-controls="profile-panel" onClick={() => setSection(s)}
         className={`relative inline-flex min-h-11 shrink-0 items-center gap-1 px-4 text-sm font-semibold transition-colors ${section === s ? 'text-foreground after:absolute after:inset-x-4 after:bottom-0 after:h-[3px] after:rounded-full after:bg-accent' : 'text-muted-foreground hover:text-foreground'}`}>
-        {s === 'Saved' && <Lock className="size-3" aria-label="Private" />}{s}
+        {s}
       </button>)}
     </div>
 
@@ -122,7 +123,8 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
           <p className="text-sm text-muted-foreground">People you feature from their profiles on Fedizen will appear here.</p></div>
       </div> : <Empty icon={e.icon} title={e.title} detail={e.detail} />)}
       {section === 'Collections' && <DesktopCollections onOpen={onOpenCollection} />}
-      {section !== 'Featured' && section !== 'Collections' && (section === 'Saved' && savedPosts.length ? <div className="grid gap-x-6 gap-y-9 sm:grid-cols-2">{savedPosts.map(p => {
+      {section === 'Circles' && <DesktopCircles />}
+      {section === 'Saved' && <DesktopSaved stories={savedPosts.length ? <div className="grid gap-x-6 gap-y-9 border-t border-border pt-8 sm:grid-cols-2"><h3 className="text-[10px] font-semibold uppercase text-muted-foreground sm:col-span-2">Stories saved in Atlas</h3>{savedPosts.map(p => {
         const c = creators.find(x => x.id === p.creatorId);
         return <article key={p.id}>
           <a href={p.url} target="_blank" rel="noreferrer" className="group block overflow-hidden rounded-2xl"><img src={p.image} alt={p.alt} loading="lazy" className="aspect-[4/3] w-full object-cover transition-transform duration-700 group-hover:scale-[1.025]" /></a>
@@ -131,7 +133,8 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
           {c && <CreatorTag creator={c} onOpen={() => onOpenCreator(c)} />}
           <Button variant="ghost" size="sm" className="mt-2 px-0 text-muted-foreground" onClick={() => toggleSave(p.id)}><Bookmark className="fill-accent text-accent" />Remove from saved</Button>
         </article>;
-      })}</div> : <Empty icon={e.icon} title={e.title} detail={e.detail} />)}
+      })}</div> : undefined} />}
+      {!['Featured', 'Collections', 'Saved', 'Circles'].includes(section) && <Empty icon={e.icon} title={e.title} detail={e.detail} />}
     </section>
     <footer className="mt-10 border-t border-border pt-5"><Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { void signOut(); }}>Sign out</Button></footer>
 

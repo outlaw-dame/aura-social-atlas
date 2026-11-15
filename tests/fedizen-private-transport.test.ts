@@ -43,3 +43,40 @@ describe('Fedizen private reads and writes are allowlisted', () => {
     expect(await fedizenSend('t', 'POST', '/api/v1/accounts/abc/unfollow')).toEqual({ status: 403, data: null });
   });
 });
+
+describe('Saved (Bonfire bookmarks) and Circles (Bonfire circles as Mastodon Lists)', () => {
+  test('bookmarks, lists, list members and handle lookup are the only new reads', async () => {
+    let called = 0;
+    globalThis.fetch = (async () => { called++; return new Response('[]'); }) as unknown as typeof fetch;
+    await expect(fedizenGet('t', '/api/v1/bookmarks?limit=41')).rejects.toThrow('Unsupported Fedizen read path.');
+    await expect(fedizenGet('t', '/api/v1/lists/abc/accounts')).rejects.toThrow('Unsupported Fedizen read path.');
+    await expect(fedizenGet('t', '/api/v1/accounts/lookup?acct=a/b')).rejects.toThrow('Unsupported Fedizen read path.');
+    expect(called).toBe(0);
+    expect((await fedizenGet('t', '/api/v1/bookmarks?limit=40')).status).toBe(200);
+    expect((await fedizenGet('t', '/api/v1/lists')).status).toBe(200);
+  });
+
+  test('handle lookup answers one account, returned as a one-item list', async () => {
+    globalThis.fetch = (async () => new Response('{"id":"01ABC","acct":"ana@lemmy.ca","display_name":"Ana","secret":"x"}')) as unknown as typeof fetch;
+    const r = await fedizenGet('t', `/api/v1/accounts/lookup?acct=${encodeURIComponent('ana@lemmy.ca')}`);
+    expect(r).toEqual({ status: 200, data: [{ id: '01ABC', acct: 'ana@lemmy.ca', display_name: 'Ana' }] });
+  });
+
+  test('each circle write takes only its method and its body', async () => {
+    const seen: { method?: string; body?: string }[] = [];
+    globalThis.fetch = (async (_u: string, init?: RequestInit) => { seen.push({ method: init?.method, body: init?.body as string }); return new Response('{"id":"01L","title":"Close friends"}'); }) as unknown as typeof fetch;
+    expect((await fedizenSend('t', 'POST', '/api/v1/lists', { title: 'Close friends' })).data).toEqual({ id: '01L', title: 'Close friends' });
+    await fedizenSend('t', 'POST', '/api/v1/lists/01L/accounts', { account_ids: ['01A'] });
+    await fedizenSend('t', 'DELETE', '/api/v1/lists/01L');
+    await fedizenSend('t', 'POST', '/api/v1/statuses/01S/bookmark');
+    expect(seen.map(s => s.method)).toEqual(['POST', 'POST', 'DELETE', 'POST']);
+    expect(seen[1].body).toBe('{"account_ids":["01A"]}');
+    expect(seen[2].body).toBeUndefined();
+    await expect(fedizenSend('t', 'POST', '/api/v1/lists', { title: 'x', replies_policy: 'list' })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/lists')).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'DELETE', '/api/v1/lists/01L', { title: 'x' })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/lists/01L/accounts', { account_ids: ['../x'] })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'PUT', '/api/v1/statuses/01S/bookmark')).rejects.toThrow('Unsupported Fedizen write path.');
+    expect(seen.length).toBe(4);
+  });
+});

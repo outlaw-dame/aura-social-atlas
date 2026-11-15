@@ -44,3 +44,21 @@ describe('Fedizen messages', () => {
     strictEqual(c.text, '');
   });
 });
+
+describe('Saved and Circles mapping', () => {
+  test('a boost is saved as the boosted post, and its saved state is kept', async () => {
+    const { fromStatuses } = await import('./fedizen-feed');
+    const [p] = fromStatuses([{ id: 'b1', account: { display_name: 'Bo' }, reblog: { id: 'o1', bookmarked: true, content: '<p>hi</p>' } }] as never);
+    strictEqual(p.statusId, 'o1');
+    strictEqual(p.bookmarked, true);
+  });
+  test('circles and people map without unsafe avatars; handles are checked before lookup', async () => {
+    const { fromLists, fromAccounts, lookupAcct } = await import('./fedizen-feed');
+    deepStrictEqual(fromLists([{ id: '1', title: ' Close friends ' }, { id: '2', title: '' }]), [{ id: '1', title: 'Close friends' }, { id: '2', title: 'Untitled circle' }]);
+    deepStrictEqual(fromAccounts([{ id: 'a', acct: 'ana@lemmy.ca', avatar: 'javascript:x' }, { acct: 'no-id' }] as never), [{ id: 'a', name: 'ana@lemmy.ca', handle: '@ana@lemmy.ca', avatar: undefined }]);
+    strictEqual(lookupAcct('@ana@lemmy.ca'), 'ana@lemmy.ca');
+    strictEqual(lookupAcct('bo'), 'bo');
+    strictEqual(lookupAcct('a/b@x'), null);
+    strictEqual(lookupAcct('ana@lemmy.ca/../x'), null);
+  });
+});

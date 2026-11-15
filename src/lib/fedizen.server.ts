@@ -264,6 +264,7 @@ export async function disconnect(userId: string): Promise<void> {
  * Reject malformed nested objects instead of crashing the personal timeline,
  * and strip unknown fields before they reach UI normalizers. */
 const account = z.object({
+  id: z.string().max(64).nullish(),
   display_name: z.string().nullish(),
   username: z.string().nullish(),
   acct: z.string().nullish(),
@@ -282,6 +283,7 @@ const status = z.object({
   content: z.string().nullish(),
   account: account.nullish(),
   media_attachments: z.array(media).nullish(),
+  bookmarked: z.boolean().nullish(),
 });
 // The REST client only reads one reblog level. Avoid unbounded recursion.
 const timelineStatus = status.extend({ reblog: status.nullish() });
@@ -309,14 +311,26 @@ const conversation = z.object({
   last_status: status.nullish(),
 });
 const conversationsSchema = z.array(conversation).max(30);
+/** Bookmarks (Bonfire: MastoTimelineController.bookmarks, the "bookmarks" feed), newest first. */
+const bookmarksSchema = z.array(timelineStatus).max(40);
+/** Mastodon Lists, which Bonfire serves from Circles (bonfire_boundaries MastoListController). */
+const list = z.object({ id: z.string().min(1).max(64), title: z.string().max(200).nullish() });
+const listsSchema = z.array(list).max(200);
+const accountsSchema = z.array(account.extend({ id: z.string().min(1).max(64) })).max(80);
 
 const ID = '[A-Za-z0-9_-]{1,64}';
 /** Every private read Atlas makes, each with the schema its answer must match. Anything else is refused. */
-const READS: { match: RegExp; schema: z.ZodType<unknown[]> }[] = [
+const ACCT = '[A-Za-z0-9_.%-]{1,64}(%40[A-Za-z0-9.-]{1,253})?';
+const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v1\/timelines\/home\?limit=20$/, schema: homeSchema },
   { match: /^\/api\/v1\/notifications\?limit=20$/, schema: notificationsSchema },
   { match: /^\/api\/v1\/conversations\?limit=30$/, schema: conversationsSchema },
   { match: new RegExp(`^/api/v1/accounts/relationships\\?id%5B%5D=${ID}(&id%5B%5D=${ID}){0,39}$`), schema: relationshipsSchema },
+  { match: /^\/api\/v1\/bookmarks\?limit=40$/, schema: bookmarksSchema },
+  { match: /^\/api\/v1\/lists$/, schema: listsSchema },
+  { match: new RegExp(`^/api/v1/lists/${ID}/accounts\\?limit=80$`), schema: accountsSchema },
+  // One account by handle, to add someone to a circle. Answers a single Account, returned here as a one-item list.
+  { match: new RegExp(`^/api/v1/accounts/lookup\\?acct=${ACCT}$`), schema: account.extend({ id: z.string().min(1).max(64) }), single: true },
 ];
 
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;
@@ -352,32 +366,51 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
     return { status: 502, data: [] };
   }
   const parsed = read.schema.safeParse(payload);
-  return parsed.success ? { status: 200, data: parsed.data } : { status: 502, data: [] };
+  if (!parsed.success) return { status: 502, data: [] };
+  return { status: 200, data: read.single ? [parsed.data] : parsed.data as unknown[] };
 }
 
 /**
- * The writes Atlas makes as the person, and nothing else: join or leave a Bonfire group
- * (/api/v1-bonfire/groups/:id/join|leave), and follow or unfollow an account or announcement channel.
- * Same transport rules as reads: fixed host, no redirects, no caching, bounded reply, nothing logged.
+ * The writes Atlas makes as the person, and nothing else:
+ * - join or leave a Bonfire group (/api/v1-bonfire/groups/:id/join|leave); follow or unfollow an account;
+ * - bookmark or unbookmark a post (Saved);
+ * - create, rename and delete a circle, and add or remove its members (Mastodon Lists, served from Bonfire Circles).
+ * Each route names its method and the only body it may carry. Same transport rules as reads: fixed host,
+ * no redirects, no caching, bounded reply, nothing logged.
  */
-const WRITES = [
-  new RegExp(`^/api/v1-bonfire/groups/${ID}/(join|leave)$`),
-  new RegExp(`^/api/v1/accounts/${ID}/(follow|unfollow)$`),
+const title = z.object({ title: z.string().trim().min(1).max(100) }).strict();
+const members = z.object({ account_ids: z.array(z.string().regex(new RegExp(`^${ID}$`))).min(1).max(20) }).strict();
+const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTypeAny }[] = [
+  { method: 'POST', match: new RegExp(`^/api/v1-bonfire/groups/${ID}/(join|leave)$`) },
+  { method: 'POST', match: new RegExp(`^/api/v1/accounts/${ID}/(follow|unfollow)$`) },
+  { method: 'POST', match: new RegExp(`^/api/v1/statuses/${ID}/(bookmark|unbookmark)$`) },
+  { method: 'POST', match: /^\/api\/v1\/lists$/, body: title },
+  { method: 'PUT', match: new RegExp(`^/api/v1/lists/${ID}$`), body: title },
+  { method: 'DELETE', match: new RegExp(`^/api/v1/lists/${ID}$`) },
+  { method: 'POST', match: new RegExp(`^/api/v1/lists/${ID}/accounts$`), body: members },
+  { method: 'DELETE', match: new RegExp(`^/api/v1/lists/${ID}/accounts$`), body: members },
 ];
 const writeReply = z.object({
   id: z.string().max(64).nullish(),
+  title: z.string().max(200).nullish(),
   following: z.boolean().nullish(),
   requested: z.boolean().nullish(),
+  bookmarked: z.boolean().nullish(),
   group: z.object({ member: z.boolean().nullish() }).nullish(),
 });
 
-export async function fedizenSend(token: string, method: 'POST', path: string): Promise<{ status: number; data: Record<string, unknown> | null }> {
-  if (method !== 'POST' || !WRITES.some(w => w.test(path))) throw new Error('Unsupported Fedizen write path.');
+export async function fedizenSend(token: string, method: 'POST' | 'PUT' | 'DELETE', path: string, body?: Record<string, unknown>): Promise<{ status: number; data: Record<string, unknown> | null }> {
+  const route = WRITES.find(w => w.method === method && w.match.test(path));
+  if (!route) throw new Error('Unsupported Fedizen write path.');
+  if (!route.body !== !body) throw new Error('Unsupported Fedizen write body.');
+  const payload = route.body ? route.body.safeParse(body) : null;
+  if (payload && !payload.success) throw new Error('Unsupported Fedizen write body.');
   let response: Response;
   try {
     response = await fetch(`${FEDIZEN}${path}`, {
       method,
-      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json', ...(payload ? { 'content-type': 'application/json' } : {}) },
+      body: payload ? JSON.stringify(payload.data) : undefined,
       signal: AbortSignal.timeout(10000),
       redirect: 'error',
       cache: 'no-store',
@@ -393,7 +426,7 @@ export async function fedizenSend(token: string, method: 'POST', path: string): 
     const parsed = writeReply.safeParse(await readBoundedFedizenJson(response, 65536));
     return { status: response.status, data: parsed.success ? parsed.data : null };
   } catch {
-    // A 2xx with an unreadable body: the write happened, so report success without state.
+    // A 2xx with an empty or unreadable body (DELETE answers {}): the write happened, so report success without state.
     return { status: response.status, data: null };
   }
 }
