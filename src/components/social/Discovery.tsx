@@ -9,6 +9,7 @@ import { avatarPreset } from '@/lib/atlas-avatars';
 import { linkifyHashtagsWith, hashtagUrl } from '@/lib/hashtags';
 import { Composer } from './Composer';
 import { MessagesPage } from './MessagesPage';
+import { CollectionDialog, useCollectionOpener } from './CollectionsDesktop';
 import { Preferences } from './Preferences';
 import { AccountButton } from './AccountButton';
 import { CreatorTag } from './CreatorTag';
@@ -37,6 +38,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
   const [topic, setTopic] = useState('All topics');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [creatorDialog, setCreatorDialog] = useState<Creator | null>(null);
+  const collections = useCollectionOpener();
   const [tagFilter, setTagFilter] = useState<{ creatorId: string; tag: string } | null>(null);
   const matching = creators.filter(c => matchesCreator(c, submitted, network, topic));
   const feed = posts.filter(p => matching.some(c => c.id === p.creatorId) && (view !== 'feeds' || state.followed.includes(p.creatorId)) && (!tagFilter || (p.creatorId === tagFilter.creatorId && p.tags.includes(tagFilter.tag))));
@@ -79,7 +81,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
         <AccountButton />
       </header>
       <main className="mx-auto max-w-[1400px] px-5 pb-28 pt-7 sm:px-9">
-        {settingsView ? <Preferences page={view === 'intelligence' ? 'intelligence' : view === 'appearance' ? 'appearance' : 'settings'} /> : view === 'profile' ? <div className="mx-auto max-w-4xl"><ProfilePage initialSection={profileSection} onOpenCreator={setCreatorDialog} /></div> : pageView ? <div className={`mx-auto ${view === 'groups' ? 'max-w-4xl' : 'max-w-3xl'}`}>
+        {settingsView ? <Preferences page={view === 'intelligence' ? 'intelligence' : view === 'appearance' ? 'appearance' : 'settings'} /> : view === 'profile' ? <div className="mx-auto max-w-4xl"><ProfilePage initialSection={profileSection} onOpenCreator={setCreatorDialog} onOpenCollection={collections.open} /></div> : pageView ? <div className={`mx-auto ${view === 'groups' ? 'max-w-4xl' : 'max-w-3xl'}`}>
           {!(view === 'groups' && groupId) && <div className="mb-8 animate-float-up"><p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><span className="social-status-dot" />{pageTitles[view][0]}</p><h1 className="font-serif text-4xl leading-tight sm:text-5xl">{pageTitles[view][1]}</h1></div>}
           {view === 'activity' ? <ActivityPage /> : view === 'messages' ? <MessagesPage /> : <GroupsPage groupId={groupId} />}
         </div> : <>
@@ -112,6 +114,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
       </main>
     </div>
     {!settingsView && <Composer assistantEnabled={state.assistantEnabled} onNavigate={url => { if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); else { setQuery(url); setSubmitted(url); } }} />}
+    <CollectionDialog target={collections.target} onClose={collections.close} />
     {creatorDialog && <div className="social-backdrop fixed inset-0 z-[60] grid place-items-center px-5" onClick={() => setCreatorDialog(null)}><section role="dialog" aria-modal="true" aria-labelledby="creator-name" className="liquid-glass specular w-full max-w-sm rounded-3xl border border-border bg-card p-6" onClick={e => e.stopPropagation()}><div className="flex justify-between"><img className="social-avatar size-14" src={avatarPreset(creatorDialog.avatar_key).src} alt="" /><Button variant="ghost" size="icon" aria-label="Close creator profile" onClick={() => setCreatorDialog(null)}><X /></Button></div><h2 id="creator-name" className="mt-5 font-serif text-3xl">{creatorDialog.name}</h2><p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">{fullHandle(creatorDialog)} · <NetworkBadge network={creatorDialog.network} /></p><p className="mt-1 text-[11px] text-muted-foreground">Joined {creatorDialog.joined}{creatorDialog.follows_you ? ' · Follows you' : ''}</p><p className="mt-2 text-xs text-muted-foreground">{creatorDialog.followers} followers</p><p className="mt-5 text-sm leading-relaxed">{linkifyHashtagsWith(creatorDialog.bio, tag => { setTagFilter({ creatorId: creatorDialog.id, tag }); setCreatorDialog(null); })}</p><div className="mt-3 flex flex-wrap gap-2">{creatorDialog.featured_hashtags.map(t => <Button key={t.name} variant="ghost" className="atlas-profile-tag h-auto" onClick={() => { setTagFilter({ creatorId: creatorDialog.id, tag: t.name }); setCreatorDialog(null); }}>#{t.name} <small>{t.count} posts</small></Button>)}</div>{creatorDialog.podcast && <div className="mt-4"><p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground"><NetworkBadge network="Podcasts" /> feed</p><div className="flex flex-wrap gap-2">{creatorDialog.podcast.features.map(feature => <span key={feature} className="atlas-feature-chip" style={{ color: networkBrands.Podcasts.color, background: `color-mix(in oklab, ${networkBrands.Podcasts.color} 10%, transparent)` }}>{podcastFeatureLabels[feature]}</span>)}</div><p className="mt-2 text-[11px] text-muted-foreground">{creatorDialog.podcast.feed_url}</p></div>}<dl className="atlas-profile-fields mt-4">{creatorDialog.fields.map(f => <div key={f.name} className="atlas-profile-field"><dt className="atlas-profile-field-name">{f.name}</dt><dd className={f.verified ? 'atlas-profile-field-value atlas-profile-verified' : 'atlas-profile-field-value'}>{f.url ? <a href={f.url} target="_blank" rel="me noopener noreferrer">{f.value}</a> : f.value}</dd></div>)}</dl><p className="mt-3 text-xs text-muted-foreground">Sample profile · no live account connected</p><Button className="mt-6 w-full" onClick={() => state.toggleFollow(creatorDialog.id)}>{state.followed.includes(creatorDialog.id) ? <Check /> : <Plus />}{state.followed.includes(creatorDialog.id) ? 'Following · unfollow' : 'Follow voice'}</Button></section></div>}
   </div></div>;
 }

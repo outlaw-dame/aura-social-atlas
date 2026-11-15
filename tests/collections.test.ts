@@ -10,6 +10,8 @@ import {
   parseFediHandle,
 } from "../src/lib/collections";
 import { checkFeatureable, net, readMastodonCollection } from "../src/lib/collections.server";
+import { collectionLinksIn } from '../src/lib/collections';
+import { fromStatuses } from '../src/lib/fedizen-feed';
 
 const account = (id: string, acct: string, extra: Record<string, unknown> = {}) => ({
   id,
@@ -159,5 +161,25 @@ describe("Mastodon collections", () => {
     expect(parseFediHandle("@Jane@Social.Example.net")).toEqual({ user: "Jane", host: "social.example.net" });
     expect(parseFediHandle("https://social.example.net/@jane")).toEqual({ user: "jane", host: "social.example.net" });
     expect(parseFediHandle("@ann.bsky.social")).toBeNull();
+  });
+});
+
+describe("collection links in posts (Mastodon's tagged_collections, found by URL)", () => {
+  test("finds https Mastodon collection pages and nothing else, at most 3, no repeats", () => {
+    const html = '<p>See <a href="https://mastodon.social/collections/123">this</a>, <a href="https://mastodon.social/collections/123">again</a>, '
+      + '<a href="http://insecure.example/collections/9">http</a>, <a href="https://x.example/@a/collections">profile tab</a>, '
+      + '<a href="https://a.example/collections/1?x=1&amp;y=2">query</a>, <a href="https://b.example/collections/2/">b</a>, '
+      + '<a href="https://c.example/collections/3">c</a>, <a href="https://d.example/collections/4">d</a></p>';
+    expect(collectionLinksIn(html)).toEqual([
+      "https://mastodon.social/collections/123", "https://a.example/collections/1?x=1&y=2", "https://b.example/collections/2/",
+    ]);
+  });
+  test("Fedizen posts carry the collections they link, and only when there are some", () => {
+    const [withLink, without] = fromStatuses([
+      { id: "1", content: '<p><a href="https://mastodon.social/collections/42">Science writers</a></p>' },
+      { id: "2", content: "<p>No links</p>" },
+    ] as never);
+    expect(withLink.collections).toEqual(["https://mastodon.social/collections/42"]);
+    expect("collections" in without).toBe(false);
   });
 });

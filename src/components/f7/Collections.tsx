@@ -54,6 +54,7 @@ export function MyCollections({ onOpen }: { onOpen: (c: Collection) => void }) {
 
 /** Create or edit a collection's details (accounts are managed on the collection itself, as on Mastodon). */
 export function CollectionEditor({ opened, onClose, onSaved, editing }: { opened: boolean; onClose: () => void; onSaved: (id: string) => void; editing?: Collection }) {
+  const { user } = useAtlasAuth();
   const create = useServerFn(createCollection), update = useServerFn(updateCollection);
   const [name, setName] = useState(''), [description, setDescription] = useState(''), [tag, setTag] = useState(''), [language, setLanguage] = useState('');
   const [discoverable, setDiscoverable] = useState(true), [sensitive, setSensitive] = useState(false);
@@ -66,10 +67,11 @@ export function CollectionEditor({ opened, onClose, onSaved, editing }: { opened
   const save = async () => {
     const parsed = collectionInput.safeParse({ name, description, tag, language, discoverable, sensitive });
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? 'Check the details.'); return; }
+    if (!user) { setError('Sign in to save collections.'); return; }
     setBusy(true); setError(null);
     try {
-      if (editing) { await update({ data: { id: editing.id, input: parsed.data } }); onSaved(editing.id); }
-      else { const r = await create({ data: parsed.data }); if (r.id) onSaved(r.id); else setError(r.error); }
+      if (editing) { await update({ data: { id: editing.id, input: parsed.data, expectedAtlasUserId: user.id } }); onSaved(editing.id); }
+      else { const r = await create({ data: { input: parsed.data, expectedAtlasUserId: user.id } }); if (r.id) onSaved(r.id); else setError(r.error); }
     } catch { setError('Couldn’t save. Try again.'); } finally { setBusy(false); }
   };
   return <Sheet opened={opened} onSheetClosed={onClose} swipeToClose backdrop className="atlas-coll-editor" style={{ height: 'auto' }}>
@@ -88,7 +90,7 @@ export function CollectionEditor({ opened, onClose, onSaved, editing }: { opened
           <Button active={discoverable} onClick={() => setDiscoverable(true)}>Public</Button>
           <Button active={!discoverable} onClick={() => setDiscoverable(false)}>Unlisted</Button>
         </Segmented>
-        <BlockFooter>{discoverable ? 'Shown on your profile. Anyone with the link can open it.' : 'Not shown on your profile. Anyone with the link can open it.'}</BlockFooter>
+        <BlockFooter>{discoverable ? 'Shown on your profile. Anyone with the link can open it.' : 'Not shown on your profile. Anyone with the link can open it.'} Collections made in Atlas don’t reach Mastodon or Fedizen yet.</BlockFooter>
       </Block>
       <List strong inset>
         <ListItem title="Sensitive" footer="Hides the description and accounts behind a warning">
@@ -135,15 +137,15 @@ export function CollectionPopup({ opened, onClose, collection, id, link }: { ope
     } catch { /* dismissed */ }
   };
   const addAccount = async () => {
-    if (!c || !handle.trim()) return;
+    if (!c || !handle.trim() || !user) return;
     setAdding(true); setNote(null);
     try {
-      const r = await add({ data: { id: c.id, handle: handle.trim() } });
+      const r = await add({ data: { id: c.id, handle: handle.trim(), expectedAtlasUserId: user.id } });
       if (r.ok) { setHandle(''); await refresh(); } else setNote(r.message ?? 'Couldn’t add them.');
     } catch { setNote('Couldn’t add them. Try again.'); } finally { setAdding(false); }
   };
   const confirmDelete = () => f7.dialog.confirm(`Delete “${c?.name}”? This can’t be undone.`, 'Delete collection', async () => {
-    if (!c) return; await del({ data: { id: c.id } }); await refresh(); onClose();
+    if (!c || !user) return; await del({ data: { id: c.id, expectedAtlasUserId: user.id } }); await refresh(); onClose();
   });
   const hidden = !!c?.sensitive && !revealed && !isOwner;
 
@@ -173,6 +175,7 @@ export function CollectionPopup({ opened, onClose, collection, id, link }: { ope
             {c.tag && <> · <a href={`/tags/${encodeURIComponent(c.tag.toLowerCase())}`} className="atlas-tag">#{c.tag}</a></>}
             {!c.discoverable && ' · Unlisted'}
           </p>
+          {c.source === 'atlas' && <p className="atlas-coll-local">Made in Atlas. Mastodon and Fedizen can’t show it yet: it will federate once Fedizen supports collections.</p>}
           {hidden ? <div className="atlas-coll-cw">
             <p>This collection is marked sensitive.</p>
             <Button small round tonal onClick={() => setRevealed(true)}>Show</Button>
@@ -186,7 +189,7 @@ export function CollectionPopup({ opened, onClose, collection, id, link }: { ope
         {!hidden && <List strong inset dividers mediaList className="atlas-coll-items">
           {c.items.map(a => <ListItem key={a.actorUri} title={a.name} subtitle={a.acct} link={a.url ?? '#'} external target="_blank" after={a.state === 'pending' ? 'Pending' : undefined}>
             {a.avatar ? <img slot="media" src={a.avatar} alt="" width={44} height={44} referrerPolicy="no-referrer" /> : <span slot="media" className="atlas-activity-initial" aria-hidden="true">{a.name.charAt(0)}</span>}
-            {isOwner && <Button slot="after" small round onClick={async (e: { preventDefault: () => void; stopPropagation: () => void }) => { e.preventDefault(); e.stopPropagation(); await removeItem({ data: { id: c.id, actorUri: a.actorUri } }); await refresh(); }} aria-label={`Remove ${a.name}`}>
+            {isOwner && <Button slot="after" small round onClick={async (e: { preventDefault: () => void; stopPropagation: () => void }) => { e.preventDefault(); e.stopPropagation(); if (!user) return; await removeItem({ data: { id: c.id, actorUri: a.actorUri, expectedAtlasUserId: user.id } }); await refresh(); }} aria-label={`Remove ${a.name}`}>
               <Icon ios="f7:minus_circle" md="material:remove_circle_outline" />
             </Button>}
           </ListItem>)}

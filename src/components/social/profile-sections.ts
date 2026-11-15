@@ -1,9 +1,9 @@
 /**
  * Profile tabs, after Mastodon's 2026 profile redesign and Bluesky: Activity (one tab for posts, quote posts,
  * replies and boosts, filtered like Mastodon's Activity dropdown), Featured (Mastodon 4.4: featured hashtags and
- * featured profiles), Media, the owner-only Saved tab, then Circles (Bonfire's circles of people) and Lists.
+ * featured profiles), Media, Collections (Mastodon 4.6), the owner-only Saved tab, then Circles (Bonfire's circles of people) and Lists.
  */
-export const profileSections = ['Activity', 'Featured', 'Media', 'Saved', 'Circles', 'Lists'] as const;
+export const profileSections = ['Activity', 'Featured', 'Media', 'Collections', 'Saved', 'Circles', 'Lists'] as const;
 export type ProfileSection = (typeof profileSections)[number];
 
 /** Old tab names still open the right tab (?tab=posts, ?tab=replies, ?tab=feeds). */
