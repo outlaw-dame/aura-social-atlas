@@ -22,7 +22,7 @@ import { GroupPopup, MobileGroups } from './Groups';
 import type { Group } from '@/lib/groups';
 import type { Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
-import { MobileRecentArticles, MobileFedizenFeed, MobileActivity } from './FedizenMobile';
+import { MobileRecentArticles, MobileFedizenFeed, MobileActivity, MessagesPopup } from './FedizenMobile';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
 import { Spotlight } from '@/components/social/Spotlight';
@@ -121,6 +121,12 @@ export default function AtlasMobileApp() {
   const [creatorOpen, setCreatorOpen] = useState<Creator | null>(null);
   const [tagFeed, setTagFeed] = useState<{ creatorId: string; tag: string } | null>(null);
   const [fabHidden, setFabHidden] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  /* Search lives on Discover: go there and put the cursor in the field. */
+  const openSearch = () => {
+    f7.tab.show('#tab-discover');
+    window.setTimeout(() => { const el = document.querySelector<HTMLInputElement>('#tab-discover .searchbar input'); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus(); }, 80);
+  };
   const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
   const [title, setTitle] = useState('Discover');
   const [network, setNetwork] = useState<string>('All networks');
@@ -234,6 +240,13 @@ export default function AtlasMobileApp() {
             <NavLeft className="atlas-nav-menu">
               <Link iconOnly panelOpen="left" aria-label="Open menu"><Icon ios="f7:sidebar_left" md="material:menu" /></Link>
             </NavLeft>
+            {['Discover', 'Feeds', 'Groups', 'Activity'].includes(title) && (
+              <NavRight className="atlas-top-actions">
+                {/* Facebook-style: Search and Messages at the top right; Compose floats at the bottom. */}
+                <Link iconOnly className="atlas-top-btn" aria-label="Search" onClick={openSearch}><Icon ios="f7:search" md="material:search" /></Link>
+                <Link iconOnly className="atlas-top-btn" aria-label="Messages" onClick={() => setMessagesOpen(true)}><Icon ios="f7:bubble_left_bubble_right" md="material:forum" /></Link>
+              </NavRight>
+            )}
             {title === 'Profile' && (
               <NavRight>
                 <Link iconOnly aria-label="Settings" onClick={() => f7.tab.show('#tab-settings')}>
@@ -364,6 +377,7 @@ export default function AtlasMobileApp() {
       <GroupPopup group={groupOpen} onClose={() => setGroupOpen(null)} onOpen={setGroupOpen} />
       <CollectionPopup opened={!!collectionOpen} onClose={() => setCollectionOpen(null)} collection={collectionOpen?.collection} id={collectionOpen?.id} link={collectionOpen?.link} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
+      <MessagesPopup opened={messagesOpen} onClose={() => setMessagesOpen(false)} />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
   );

@@ -20,6 +20,8 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
 
 export type FedizenPost = { id: string; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; boostedBy?: string };
 export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string };
+/** A direct conversation (Mastodon `Conversation`): the other people in it and its latest message, as plain text. */
+export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
 type Acct = { display_name?: string; acct?: string; username?: string; avatar?: string };
 type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string }[] };
@@ -45,6 +47,16 @@ export function fromNotifications(list: Notice[]): FedizenNotice[] {
   return list.map(n => ({
     id: n.id, type: n.type ?? 'other', author: name(n.account), avatar: http(n.account?.avatar), date: n.created_at,
     text: `${verbs[n.type ?? ''] ?? 'interacted with you'}${n.status?.content ? ` — ${htmlToParagraphs(n.status.content).join(' ').slice(0, 140)}` : ''}`,
+  }));
+}
+
+type Conversation = { id: string; unread?: boolean; accounts?: Acct[]; last_status?: Status | null };
+export function fromConversations(list: Conversation[]): FedizenConversation[] {
+  return list.filter(c => c && typeof c.id === 'string').map(c => ({
+    id: c.id, unread: c.unread === true,
+    people: (c.accounts ?? []).map(a => ({ name: name(a), handle: `@${a.acct ?? a.username ?? ''}`, avatar: http(a.avatar) })),
+    text: htmlToParagraphs(c.last_status?.content ?? '').join(' ').slice(0, 200),
+    date: c.last_status?.created_at, url: http(c.last_status?.url) ?? http(c.last_status?.uri),
   }));
 }
 

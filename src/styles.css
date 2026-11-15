@@ -494,3 +494,11 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-group-search { margin-top: 0; }
 .atlas-group-more { display: flex; justify-content: center; }
 .atlas-group-more .button { width: auto; padding: 0 22px; min-height: 44px; }
+
+/* Top-right actions on the phone's main tabs (Search, Messages), Facebook-style round buttons. Compose floats at the bottom. */
+.atlas-top-actions { gap: 8px; }
+.navbar .atlas-top-btn.link.icon-only { width: 36px; height: 36px; min-width: 36px; padding: 0; border-radius: 50%; justify-content: center;
+  background: color-mix(in oklab, currentColor 8%, transparent); }
+.navbar .atlas-top-btn .icon { font-size: 18px; }
+.atlas-msg-unread .item-title { font-weight: 700; }
+.atlas-msg-dot { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--f7-theme-color); box-shadow: 0 0 0 2px var(--f7-list-strong-bg-color, #fff); }

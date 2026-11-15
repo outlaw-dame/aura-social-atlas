@@ -1,7 +1,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
-import { allowedCallback, fromNotifications, fromStatuses, hasScope, type FedizenNotice, type FedizenPost } from './fedizen-feed';
+import { allowedCallback, fromConversations, fromNotifications, fromStatuses, hasScope, type FedizenConversation, type FedizenNotice, type FedizenPost } from './fedizen-feed';
 
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const { tokenFor } = await import('./fedizen.server');
@@ -29,6 +29,17 @@ export const finishFedizenConnect = createServerFn({ method: 'POST' }).middlewar
 export const disconnectFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const { disconnect } = await import('./fedizen.server');
   await disconnect(context.userId); return { ok: true };
+});
+
+/** Direct conversations (Mastodon `GET /api/v1/conversations`, which Bonfire serves too) for the Messages page. */
+export type FedizenMessages = { connected: boolean; conversations: FedizenConversation[]; error?: 'expired' | 'unavailable' };
+export const getFedizenMessages = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }): Promise<FedizenMessages> => {
+  const { tokenFor, fedizenGet } = await import('./fedizen.server');
+  const t = await tokenFor(context.userId);
+  if (!t) return { connected: false, conversations: [] };
+  const r = await fedizenGet(t.access_token, '/api/v1/conversations?limit=30').catch(() => ({ status: 0, data: [] as unknown[] }));
+  const error = r.status === 401 ? 'expired' : r.status !== 200 ? 'unavailable' : undefined;
+  return { connected: true, conversations: fromConversations(r.data as never), error };
 });
 
 /** `canWrite` is false for connections made before Atlas asked to act for people: they reconnect once to join groups. */
