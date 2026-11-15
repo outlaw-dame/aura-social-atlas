@@ -2,12 +2,14 @@ import { Icon, Link } from 'framework7-react';
 import { CREDIT_LABEL, attributionNote } from '@/lib/article-author';
 import type { PostArticle } from '@/lib/fedizen-feed';
 import { openFediProfile } from '@/lib/fedi-profile';
+import { EpisodePlayer } from './EpisodePlayer';
 
 /**
  * Phone: the article a post links to and its verified authors ("More from"), as on desktop. Each author opens their
  * profile inside Atlas; the note says how Atlas verified them.
  */
 export function ArticleCard({ article }: { article?: PostArticle }) {
+  if (article?.episode) return <EpisodePlayer episode={article.episode} />;
   if (!article || !(article.title || article.authors?.length || article.byline)) return null;
   const host = (() => { try { return new URL(article.url).hostname.replace(/^www\./, ''); } catch { return ''; } })();
   const authors = article.authors ?? [];

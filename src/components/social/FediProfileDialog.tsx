@@ -3,6 +3,7 @@ import { ArrowUpRight, BadgeCheck, Bot, Lock, Mic, Rss, UserCheck, UserPlus, Use
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
+import { followLabels } from '@/lib/follow-labels';
 import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from './useFediProfile';
 
 /**
@@ -21,13 +22,13 @@ function Avatar({ p }: { p: FediProfile }) {
 
 function Follow({ p }: { p: FediProfile }) {
   const f = useFediFollow(p.acctVerified ? p.acct : undefined, p.actor);
-  const locked = p.locked;
+  const words = followLabels(p.kind, p.locked);
   if (!f.signedIn) return null;
   const on = f.state === 'following', asked = f.state === 'requested';
   if (!p.acctVerified) return <p className="max-w-56 text-right text-xs text-muted-foreground">{FOLLOW_PROBLEM.unverified}</p>;
   return <div className="flex flex-col items-end gap-1">
     {f.canFollow && <Button size="sm" variant={on || asked ? 'outline' : 'default'} className="rounded-full" disabled={f.busy} aria-pressed={on} onClick={f.toggle}>
-      {on ? <><UserCheck />Following</> : asked ? 'Requested' : <><UserPlus />{locked ? 'Request to follow' : 'Follow'}</>}
+      {on ? <><UserCheck />{words.on}</> : asked ? words.asked : <><UserPlus />{words.off}</>}
     </Button>}
     {f.error && <p role="alert" className="max-w-56 text-right text-xs text-muted-foreground">{f.error}</p>}
   </div>;

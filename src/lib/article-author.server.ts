@@ -5,6 +5,7 @@
  * internal names) that resolve only to public addresses (checked over DNS-over-HTTPS on every hop), every redirect hop re-validated (max 3), short timeouts, a response-size cap, no
  * credentials or cookies, and only the expected content types are parsed. Results are cached per isolate.
  */
+import { episodeFromObject, type FediEpisode } from "./podcast-episode";
 import {
   MAX_AUTHORS,
   actorFromWebfinger,
@@ -173,6 +174,7 @@ async function fromActivityPubObject(
   articleUrl: string,
   fetchImpl: FetchLike,
   lookup: Lookup,
+  onEpisode?: (e: FediEpisode) => void,
 ): Promise<FediAuthor[]> {
   if (isActor(obj)) return fromOwnPage(obj, articleUrl, fetchImpl, lookup);
   if (!isArticleObject(obj)) return [];
@@ -181,11 +183,17 @@ async function fromActivityPubObject(
   const actors = await Promise.all(
     attributedActors(obj).map((id) => fetchActor(id, fetchImpl, lookup)),
   );
-  return actors
+  const authors = actors
     .filter((a): a is NonNullable<typeof a> => !!a && actorMayClaim(a, articleUrl))
     .map((a) => actorToAuthor(a, "activitypub"))
     .filter((a): a is FediAuthor => !!a)
     .map((a) => (work ? { ...a, work } : a));
+  // A playable episode only with a verified podcast behind it.
+  if (work && authors[0] && onEpisode) {
+    const ep = episodeFromObject(obj, authors[0]);
+    if (ep) onEpisode(ep);
+  }
+  return authors;
 }
 
 /**
@@ -269,6 +277,7 @@ export async function resolveArticleAuthors(
   fetchImpl: FetchLike = fetch,
   lookup: Lookup = dohLookup,
   hints: ArticleHints = {},
+  onEpisode?: (e: FediEpisode) => void,
 ): Promise<FediAuthor[]> {
   if (!isPublicHttpsUrl(url)) return [];
   const page = await safeFetch(url, PAGE_ACCEPT, fetchImpl, lookup);
@@ -277,7 +286,7 @@ export async function resolveArticleAuthors(
   const articleUrl = page.url;
   const hinted = isPublicHttpsUrl(hints.authorUrl) ? [hints.authorUrl] : [];
   if (isJsonType(page.type)) {
-    const authors = await fromActivityPubObject(parseJson(page.text), articleUrl, fetchImpl, lookup);
+    const authors = await fromActivityPubObject(parseJson(page.text), articleUrl, fetchImpl, lookup, onEpisode);
     return (authors.length ? authors : await fromAuthorLinks(hinted, articleUrl, fetchImpl, lookup)).slice(0, MAX_AUTHORS);
   }
   if (!page.type.includes("html"))
@@ -291,6 +300,7 @@ export async function resolveArticleAuthors(
         articleUrl,
         fetchImpl,
         lookup,
+        onEpisode,
       );
       if (authors.length) return authors.slice(0, MAX_AUTHORS);
     }
@@ -342,7 +352,7 @@ export async function resolveAuthorsFor(
       continue;
     }
     pending.push(
-      resolveArticleAuthors(url, fetchImpl, lookup, hints[url])
+      resolveArticleAuthors(url, fetchImpl, lookup, hints[url], (e) => rememberEpisode(url, e))
         .catch(() => [])
         .then((a) => {
           remember(url, a);
@@ -355,7 +365,21 @@ export async function resolveAuthorsFor(
 }
 
 /** For tests. */
+/** Episodes found while resolving authors, keyed by the link that was resolved (same lifetime as credits). */
+const episodes = new Map<string, { at: number; episode: FediEpisode }>();
+function rememberEpisode(url: string, episode: FediEpisode) {
+  if (episodes.size >= MAX_ENTRIES) episodes.delete(episodes.keys().next().value as string);
+  episodes.set(url, { at: Date.now(), episode });
+}
+export function episodeFor(url: string): FediEpisode | undefined {
+  const e = episodes.get(url);
+  if (!e) return undefined;
+  if (Date.now() - e.at > POSITIVE_TTL) { episodes.delete(url); return undefined; }
+  return e.episode;
+}
+
 export function clearAuthorCache() {
+  episodes.clear();
   cache.clear();
   dnsCache.clear();
 }

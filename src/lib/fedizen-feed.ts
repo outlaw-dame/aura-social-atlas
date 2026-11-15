@@ -2,6 +2,7 @@
 import { htmlToParagraphs } from './spotlight';
 import { collectionLinksIn, mastodonCollectionApi } from './collections';
 import { isPublicHttpsUrl, type FediAuthor } from './article-author';
+import type { FediEpisode } from './podcast-episode';
 
 export const FEDIZEN = 'https://fedizen.net';
 /** Fedizen's own pages for what its API doesn't offer yet (Bonfire v1.1.0-rc.1: bonfire_ui_me SafetyLive, bonfire_ui_boundaries BoundariesLive). */
@@ -25,7 +26,7 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
 
 export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[];
   /** The article the post links to, and who wrote it as far as Atlas can verify ("More from"). */ article?: PostArticle };
-export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; /** The preview's author link: checked for an ActivityPub account, never shown as-is. */ authorUrl?: string; authors?: FediAuthor[] };
+export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; /** The preview's author link: checked for an ActivityPub account, never shown as-is. */ authorUrl?: string; authors?: FediAuthor[]; /** A podcast episode Atlas can play in place. */ episode?: FediEpisode };
 export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string };
 /** A direct conversation (Mastodon `Conversation`): the other people in it and its latest message, as plain text. */
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };

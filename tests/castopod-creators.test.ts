@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { attributionNote, CREDIT_LABEL } from "../src/lib/article-author";
-import { clearAuthorCache, resolveArticleAuthors, type Lookup } from "../src/lib/article-author.server";
+import { clearAuthorCache, episodeFor, resolveArticleAuthors, resolveAuthorsFor, type Lookup } from "../src/lib/article-author.server";
+import { clock, durationSeconds, episodeFromObject } from "../src/lib/podcast-episode";
 import { creditsBesidesAuthor } from "../src/lib/fedizen-feed";
 import { _clearFediProfileCache, loadFediProfile } from "../src/lib/fedi-profile.server";
 
@@ -11,7 +12,12 @@ const POD = `${HOST}/@openweb`;
 const EP = `${HOST}/@openweb/episodes/who-owns-the-feed`;
 const person = { "@context": ["https://www.w3.org/ns/activitystreams"], id: POD, type: "Person", preferredUsername: "openweb", name: "Open Web Radio", url: POD, outbox: `${POD}/outbox`, followers: `${POD}/followers`, icon: { type: "Image", url: `${HOST}/cover.jpg` } };
 const podcast = { ...person, type: "Podcast", rssFeed: `${HOST}/@openweb/feed.xml`, category: "Technology › Tech News", language: "en" };
-const episode = { id: EP, type: "PodcastEpisode", attributedTo: POD, cc: [`${POD}/followers`], description: { type: "Note", content: "…" }, audio: { type: "Audio", name: "Who owns the feed?" } };
+const episode = {
+  id: EP, type: "PodcastEpisode", attributedTo: POD, cc: [`${POD}/followers`], published: "2026-11-10T09:00:00+00:00",
+  description: { type: "Note", mediaType: "text/markdown", content: "…" },
+  image: { type: "Image", mediaType: "image/jpeg", url: `${HOST}/media/ep-cover.jpg` },
+  audio: { id: `${HOST}/audio/ep.mp3`, type: "Audio", name: "Who owns the feed?", size: 41234567, duration: 2581.4, url: { href: `${HOST}/audio/ep.mp3`, type: "Link", mediaType: "audio/mpeg" } },
+};
 const episodePage = `<html><head><title>Who owns the feed?</title><link rel="alternate" type="application/activity+json" href="${EP}"><script type="application/ld+json">{"@type":"PodcastEpisode"}</script></head><body></body></html>`;
 
 /** Content negotiation by Accept, as Castopod's router does. */
@@ -94,5 +100,41 @@ describe("Castopod episodes and podcasts get creator tags", () => {
     const { fetchImpl } = castopod();
     const p = (await loadFediProfile({ actor: POD }, 2000, fetchImpl, dns))!;
     expect(p).toMatchObject({ kind: "podcast", acctVerified: true, podcast: { feed: `${HOST}/@openweb/feed.xml`, category: "Technology › Tech News" } });
+  });
+});
+
+describe("Playable episodes", () => {
+  test("resolving an episode link also yields a playable episode with its verified podcast", async () => {
+    const { fetchImpl } = castopod();
+    await resolveAuthorsFor([EP], 2000, fetchImpl, dns);
+    expect(episodeFor(EP)).toEqual({
+      url: EP, title: "Who owns the feed?", image: `${HOST}/media/ep-cover.jpg`,
+      audio: { src: `${HOST}/audio/ep.mp3`, type: "audio/mpeg" }, duration: 2581, published: "2026-11-10T09:00:00+00:00",
+      podcast: expect.objectContaining({ acct: "@openweb@pods.example.org", work: "episode" }),
+    });
+  });
+
+  test("no episode when its podcast can't be verified", async () => {
+    const elsewhere = "https://other.example.net/@openweb";
+    const { fetchImpl } = castopod({ [EP]: [{ type: "application/activity+json", body: { ...episode, attributedTo: elsewhere } }], [elsewhere]: [{ type: "application/activity+json", body: { ...person, id: elsewhere } }] });
+    await resolveAuthorsFor([EP], 2000, fetchImpl, dns);
+    expect(episodeFor(EP)).toBeUndefined();
+  });
+
+  test("audio must be a public https audio file; titles are cleaned", () => {
+    const pod = { name: "P", acct: "@p@pods.example.org", url: POD, verifiedBy: "activitypub" as const };
+    expect(episodeFromObject({ ...episode, audio: { ...episode.audio, id: "http://x.org/a.mp3", url: { href: "http://x.org/a.mp3", mediaType: "audio/mpeg" } } }, pod)).toBeNull();
+    expect(episodeFromObject({ ...episode, audio: { ...episode.audio, id: undefined, url: { href: `${HOST}/v.mp4`, mediaType: "video/mp4" } } }, pod)).toBeNull();
+    expect(episodeFromObject({ ...episode, audio: { ...episode.audio, name: "Ep\u202E 1" } }, pod)?.title).toBe("Ep 1");
+    expect(episodeFromObject({ ...episode, type: "Note" }, pod)).toBeNull();
+  });
+
+  test("durations from seconds or xsd:duration; clock formatting", () => {
+    expect(durationSeconds(2581.4)).toBe(2581);
+    expect(durationSeconds("PT1H2M3S")).toBe(3723);
+    expect(durationSeconds("PT")).toBeUndefined();
+    expect(durationSeconds(-4)).toBeUndefined();
+    expect(clock(3723)).toBe("1:02:03");
+    expect(clock(65)).toBe("1:05");
   });
 });
