@@ -57,11 +57,12 @@ describe("Feed reads are allowlisted", () => {
     globalThis.fetch = (async (url: string) => { seen.push(url); return new Response("[]", { headers: { "content-type": "application/json" } }); }) as unknown as typeof fetch;
     expect((await fedizenGet("t", "/api/v1/followed_tags?limit=20")).status).toBe(200);
     expect((await fedizenGet("t", `/api/v1/timelines/tag/${encodeURIComponent("café")}?limit=10`)).status).toBe(200);
+    expect((await fedizenGet("t", `/api/v1/timelines/tag/${encodeURIComponent("日".repeat(100))}?limit=10`)).status).toBe(200);
     expect((await fedizenGet("t", "/api/v1/timelines/list/01HABCDEF?limit=20")).status).toBe(200);
     await expect(fedizenGet("t", "/api/v1/timelines/tag/a/b?limit=10")).rejects.toThrow("Unsupported Fedizen read path.");
     await expect(fedizenGet("t", "/api/v1/timelines/list/x?limit=40")).rejects.toThrow("Unsupported Fedizen read path.");
     await expect(fedizenGet("t", "/api/v1/timelines/public?limit=20")).rejects.toThrow("Unsupported Fedizen read path.");
-    expect(seen).toHaveLength(3);
+    expect(seen).toHaveLength(4);
   });
 });
 

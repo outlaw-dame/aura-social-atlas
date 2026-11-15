@@ -288,8 +288,9 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
     if (followed.status !== 200) missing.push('tags');
     const [tagFeeds, popular] = await Promise.all([
       Promise.all(tags.map(async tag => {
-        const r = await fedizenGet(c.token, `/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=10`);
-        return { tag, posts: r.status === 200 ? fromStatuses(r.data as never) : [] };
+        // One tag that can't be read leaves the others, and the rest of For You, untouched.
+        const r = await fedizenGet(c.token, `/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=10`).catch(() => null);
+        return { tag, posts: r?.status === 200 ? fromStatuses(r.data as never) : [] };
       })),
       joined ? popularInGroups(joined.map(g => g.id)).catch(() => null) : Promise.resolve(null),
     ]);

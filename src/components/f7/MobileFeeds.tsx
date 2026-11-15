@@ -47,6 +47,7 @@ function MobileForYou() {
   const d = q.data;
   return <>
     <BlockTitle>For You</BlockTitle>
+    {save.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{save.error}</p></Block>}
     {!user ? <Block strong inset>Sign in to Atlas and connect Fedizen for your For You feed.</Block>
       : q.isLoading ? <Block strong inset>Putting your feed together…</Block>
       : q.isError ? <Block strong inset>{FEED_PROBLEM.unavailable} <Link onClick={() => void q.refetch()}>Try again</Link></Block>
@@ -63,6 +64,7 @@ function MobileCircleFeed({ id, title }: { id: string; title: string }) {
   const save = useSaveToggle();
   return <>
     <BlockTitle>{title}</BlockTitle>
+    {save.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{save.error}</p></Block>}
     {q.isLoading ? <Block strong inset>Loading posts from {title}…</Block>
       : q.isError ? <Block strong inset>{FEED_PROBLEM.unavailable} <Link onClick={() => void q.refetch()}>Try again</Link></Block>
       : q.data?.error ? <Block strong inset>{FEED_PROBLEM[q.data.error]}{q.data.error === 'not-found' && user && <> <Link onClick={() => unpinCircle(user.id, id)}>Unpin it</Link></>}</Block>

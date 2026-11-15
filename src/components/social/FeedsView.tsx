@@ -81,6 +81,7 @@ function ForYouFeed() {
       : q.isError ? <p className="text-sm text-muted-foreground">{FEED_PROBLEM.unavailable} <Button variant="link" size="sm" className="px-1" onClick={() => void q.refetch()}><RotateCw />Try again</Button></p>
       : d?.error ? <p className="text-sm text-muted-foreground">{FEED_PROBLEM[d.error]}</p>
       : <>
+        {save.error && <p role="alert" className="mb-4 text-sm text-destructive">{save.error}</p>}
         {d && d.missing.length > 0 && <p role="status" className="mb-4 text-xs text-muted-foreground">Some of For You couldn’t load ({d.missing.map(m => (m === 'following' ? 'people you follow' : m === 'tags' ? 'followed hashtags' : 'your groups')).join(', ')}).</p>}
         <div className="space-y-6">{d?.posts.length ? d.posts.map(p => <FeedPostCard key={p.url} post={p} save={save} reasons={p.reasons} />)
           : <p className="text-sm text-muted-foreground">Nothing here yet. Follow people and hashtags, or join groups, and their posts will gather here.</p>}</div>
@@ -96,6 +97,6 @@ function CircleFeed({ id, title }: { id: string; title: string }) {
     {q.isLoading ? <p className="text-sm text-muted-foreground">Loading posts from {title}…</p>
       : q.isError ? <p className="text-sm text-muted-foreground">{FEED_PROBLEM.unavailable} <Button variant="link" size="sm" className="px-1" onClick={() => void q.refetch()}><RotateCw />Try again</Button></p>
       : q.data?.error ? <p className="text-sm text-muted-foreground">{FEED_PROBLEM[q.data.error]}{q.data.error === 'not-found' && user && <> <Button variant="link" size="sm" className="px-1" onClick={() => unpinCircle(user.id, id)}>Unpin it</Button></>}</p>
-      : <div className="space-y-6">{q.data?.posts.length ? q.data.posts.map(p => <FeedPostCard key={p.id} post={p} save={save} />) : <p className="text-sm text-muted-foreground">No recent posts from the people in {title}.</p>}</div>}
+      : <>{save.error && <p role="alert" className="mb-4 text-sm text-destructive">{save.error}</p>}<div className="space-y-6">{q.data?.posts.length ? q.data.posts.map(p => <FeedPostCard key={p.id} post={p} save={save} />) : <p className="text-sm text-muted-foreground">No recent posts from the people in {title}.</p>}</div></>}
   </section>;
 }

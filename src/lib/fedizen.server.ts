@@ -336,7 +336,8 @@ const accountsSchema = z.array(account.extend({ id: z.string().min(1).max(64) })
 
 const ID = '[A-Za-z0-9_-]{1,64}';
 /** A hashtag, percent-encoded (letters in any script arrive as %XX). */
-const TAG = '[A-Za-z0-9_%]{1,300}';
+// A followed tag's name is at most 100 characters; percent-encoded, a 4-byte UTF-8 character takes 12.
+const TAG = '[A-Za-z0-9_%]{1,1200}';
 const followedTagsSchema = z.array(z.object({ name: z.string().min(1).max(100) })).max(20);
 /** Every private read Atlas makes, each with the schema its answer must match. Anything else is refused. */
 const ACCT = '[A-Za-z0-9_.%-]{1,64}(%40[A-Za-z0-9.-]{1,253})?';
