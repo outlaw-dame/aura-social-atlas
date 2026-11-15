@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Bookmark, CalendarDays, CircleUserRound, Image, Layers, List, Lock, MessagesSquare, PenLine, Users, X } from 'lucide-react';
+import { Bookmark, CalendarDays, Check, CircleDashed, CircleUserRound, Image, List, Lock, PenLine, Star, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAtlasAuth } from './AuthState';
 import { useSocial } from './SocialState';
@@ -8,17 +8,17 @@ import { avatarPreset, defaultAvatarKey } from '@/lib/atlas-avatars';
 import { creators, fullHandle, posts, type Creator } from '@/lib/social-catalogue';
 import { extractHashtags, hashtagUrl, linkifyHashtags } from '@/lib/hashtags';
 import { CreatorTag } from './CreatorTag';
-import { profileSections, type ProfileSection } from './profile-sections';
+import { activityLabel, DEFAULT_ACTIVITY_FILTER, profileSections, type ActivityFilter, type ProfileSection } from './profile-sections';
 
 /* Desktop profile, laid out like a Bluesky profile (as the phone app's ProfileView): banner, avatar, Edit profile,
    name, handle, counts (Following opens the list of follows — not a tab), bio, featured hashtags, then tabs.
    Saved is the owner-only tab, like Bluesky's private Likes. */
 const empty: Record<ProfileSection, { icon: typeof PenLine; title: string; detail: string }> = {
-  Posts: { icon: PenLine, title: 'No posts yet', detail: 'Your posts will appear here once publishing is connected.' },
-  Replies: { icon: MessagesSquare, title: 'No replies yet', detail: 'Your replies will appear here once publishing is connected.' },
+  Activity: { icon: PenLine, title: 'No activity yet', detail: 'Your public posts, quote posts, replies and boosts on Fedizen will appear here.' },
+  Featured: { icon: Star, title: 'Nothing featured yet', detail: 'Feature hashtags from Edit profile, and people from their profiles, to show them here.' },
   Media: { icon: Image, title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
   Saved: { icon: Bookmark, title: 'Nothing saved yet', detail: 'Stories you save appear here. Only you can see this tab.' },
-  Feeds: { icon: Layers, title: 'No feeds yet', detail: 'Custom feeds you create will appear here.' },
+  Circles: { icon: CircleDashed, title: 'No circles yet', detail: 'Circles group the people you know, like colleagues, friends or locals, so you choose who sees and replies to each post. Circles you make on Fedizen will appear here.' },
   Lists: { icon: List, title: 'No lists yet', detail: 'Your creator lists will appear here when lists are available.' },
 };
 
@@ -61,11 +61,12 @@ function EditProfileDialog({ onClose }: { onClose: () => void }) {
   </Dialog>;
 }
 
-export function ProfilePage({ initialSection = 'Posts', onOpenCreator }: { initialSection?: ProfileSection; onOpenCreator: (c: Creator) => void }) {
+export function ProfilePage({ initialSection = 'Activity', onOpenCreator }: { initialSection?: ProfileSection; onOpenCreator: (c: Creator) => void }) {
   const { user, profile, loading, signOut } = useAtlasAuth();
   const { followed, saved, toggleSave, toggleFollow } = useSocial();
   const [section, setSection] = useState<ProfileSection>(initialSection);
   const [followsOpen, setFollowsOpen] = useState(false);
+  const [filter, setFilter] = useState<ActivityFilter>(DEFAULT_ACTIVITY_FILTER);
   const [editing, setEditing] = useState(false);
 
   if (loading) return <div className="h-64" aria-busy="true" />;
@@ -95,7 +96,6 @@ export function ProfilePage({ initialSection = 'Posts', onOpenCreator }: { initi
       </p>
       {profile?.bio ? <p className="mt-3 max-w-2xl text-sm leading-relaxed">{linkifyHashtags(profile.bio)}</p>
         : <p className="mt-3 text-sm text-muted-foreground">No bio yet — add one so people know what you share.</p>}
-      {featured.length > 0 && <div className="mt-3 flex flex-wrap gap-2" aria-label="Featured hashtags">{featured.map(t => <a key={t} className="atlas-profile-tag" href={hashtagUrl(t)}>#{t}</a>)}</div>}
       {profile?.created_at && <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays className="size-3.5" />Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>}
     </header>
 
@@ -107,7 +107,18 @@ export function ProfilePage({ initialSection = 'Posts', onOpenCreator }: { initi
     </div>
 
     <section id="profile-panel" role="tabpanel" aria-labelledby={`profile-tab-${section.toLowerCase()}`} className="pt-8">
-      {section === 'Saved' && savedPosts.length ? <div className="grid gap-x-6 gap-y-9 sm:grid-cols-2">{savedPosts.map(p => {
+      {section === 'Activity' && <div className="mb-6 flex flex-wrap items-center gap-2" role="group" aria-label="Show in Activity">
+        <span className="mr-1 text-xs text-muted-foreground">Showing {activityLabel(filter)}</span>
+        {(['replies', 'boosts'] as const).map(k => <Button key={k} size="sm" variant="ghost" aria-pressed={filter[k]} onClick={() => setFilter(f => ({ ...f, [k]: !f[k] }))}
+          className={`rounded-full ${filter[k] ? 'social-selected' : 'text-muted-foreground'}`}>{filter[k] && <Check />}{k === 'replies' ? 'Replies' : 'Boosts'}</Button>)}
+      </div>}
+      {section === 'Featured' && (featured.length > 0 ? <div className="space-y-8">
+        <div><h2 className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Hashtags</h2>
+          <div className="flex flex-wrap gap-2" aria-label="Featured hashtags">{featured.map(t => <a key={t} className="atlas-profile-tag" href={hashtagUrl(t)}>#{t}</a>)}</div></div>
+        <div><h2 className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Profiles</h2>
+          <p className="text-sm text-muted-foreground">People you feature from their profiles on Fedizen will appear here.</p></div>
+      </div> : <Empty icon={e.icon} title={e.title} detail={e.detail} />)}
+      {section !== 'Featured' && (section === 'Saved' && savedPosts.length ? <div className="grid gap-x-6 gap-y-9 sm:grid-cols-2">{savedPosts.map(p => {
         const c = creators.find(x => x.id === p.creatorId);
         return <article key={p.id}>
           <a href={p.url} target="_blank" rel="noreferrer" className="group block overflow-hidden rounded-2xl"><img src={p.image} alt={p.alt} loading="lazy" className="aspect-[4/3] w-full object-cover transition-transform duration-700 group-hover:scale-[1.025]" /></a>
@@ -116,7 +127,7 @@ export function ProfilePage({ initialSection = 'Posts', onOpenCreator }: { initi
           {c && <CreatorTag creator={c} onOpen={() => onOpenCreator(c)} />}
           <Button variant="ghost" size="sm" className="mt-2 px-0 text-muted-foreground" onClick={() => toggleSave(p.id)}><Bookmark className="fill-accent text-accent" />Remove from saved</Button>
         </article>;
-      })}</div> : <Empty icon={e.icon} title={e.title} detail={e.detail} />}
+      })}</div> : <Empty icon={e.icon} title={e.title} detail={e.detail} />)}
     </section>
     <footer className="mt-10 border-t border-border pt-5"><Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { void signOut(); }}>Sign out</Button></footer>
 

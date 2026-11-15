@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 import { Discovery } from '@/components/social/Discovery';
-import { profileSections } from '@/components/social/profile-sections';
+import { profileSections, sectionFromTab } from '@/components/social/profile-sections';
 
 const search = z.object({ tab: z.string().optional().catch(undefined) });
 export const Route = createFileRoute('/profile')({
@@ -15,6 +15,6 @@ export const Route = createFileRoute('/profile')({
 });
 function Page() {
   const { tab } = Route.useSearch();
-  const section = profileSections.find(s => s.toLowerCase() === tab?.toLowerCase());
+  const section = sectionFromTab(tab, profileSections);
   return <Discovery view="profile" profileSection={section} />;
 }
