@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Block, BlockFooter, BlockTitle, Button, Icon, Link, List, ListInput, ListItem, Navbar, NavRight, Page, Popup, f7 } from 'framework7-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
+import { ArticleCard } from './ArticleAuthors';
 import { LIBRARY_PROBLEM, useCircleActions, useCircleMembers, useFedizenCircles, useFedizenSaved, useSaveToggle } from '@/components/social/useFedizenLibrary';
 
 /**
@@ -35,6 +36,7 @@ export function MobileSaved({ stories }: { stories?: React.ReactNode }) {
       <div className="atlas-saved-head">{p.avatar && <img src={p.avatar} alt="" width={32} height={32} />}<span><b>{p.author}</b> <span>{p.handle} · {when(p.date)}</span></span></div>
       {p.paragraphs.map((t, i) => <p key={i}>{t}</p>)}
       {p.image && <img className="atlas-saved-image" src={p.image} alt="" loading="lazy" />}
+      <ArticleCard article={p.article} />
       <div className="atlas-saved-actions"><SaveLink post={p} save={save} /><Link external target="_blank" href={p.url}>Open</Link></div>
     </article>)}
     {empty && <div className="atlas-profile-empty">

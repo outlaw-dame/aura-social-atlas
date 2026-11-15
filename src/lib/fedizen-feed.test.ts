@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import { strictEqual } from 'node:assert';
 import { deepStrictEqual } from 'node:assert';
-import { allowedCallback, FEDIZEN_API_SCOPE, fromConversations, hasScope, safeReturnPath } from './fedizen-feed';
+import { allowedCallback, articleLinkIn, FEDIZEN_API_SCOPE, fromConversations, fromStatuses, hasScope, safeReturnPath } from './fedizen-feed';
 
 describe('Fedizen connection', () => {
   test('asks Fedizen to read and to act for the person', () => strictEqual(FEDIZEN_API_SCOPE, 'read write follow'));
@@ -60,5 +60,32 @@ describe('Saved and Circles mapping', () => {
     strictEqual(lookupAcct('bo'), 'bo');
     strictEqual(lookupAcct('a/b@x'), null);
     strictEqual(lookupAcct('ana@lemmy.ca/../x'), null);
+  });
+});
+
+describe('Article links in posts ("More from")', () => {
+  const html = '<p>Hi <span class="h-card"><a href="https://social.example/@ann" class="u-url mention">@ann</a></span> '
+    + '<a href="https://social.example/tags/news" class="mention hashtag" rel="tag">#news</a> '
+    + '<a href="https://mastodon.example/collections/abc">list</a> '
+    + '<a href="https://news.org/2026/story?a=1&amp;b=2" rel="nofollow noopener" target="_blank">story</a></p>';
+  test('skips mentions, hashtags and collection links; takes the first ordinary link', () =>
+    strictEqual(articleLinkIn(html), 'https://news.org/2026/story?a=1&b=2'));
+  test('ignores non-https and private hosts', () => {
+    strictEqual(articleLinkIn('<a href="http://news.org/x">x</a>'), undefined);
+    strictEqual(articleLinkIn('<a href="https://192.168.1.4/x">x</a>'), undefined);
+    strictEqual(articleLinkIn('<a href="https://localhost/x">x</a>'), undefined);
+  });
+  test('prefers Bonfire’s link preview and keeps its title and byline', () => {
+    const [p] = fromStatuses([{ id: '1', url: 'https://fedizen.net/post/1', content: '<p>read</p>', created_at: '2026-11-01T00:00:00Z',
+      account: { display_name: 'A', acct: 'a' }, card: { url: 'https://news.org/a', title: ' A story ', provider_name: 'News', author_name: 'Bea Writer' } }] as never);
+    deepStrictEqual(p.article, { url: 'https://news.org/a', title: 'A story', provider: 'News', byline: 'Bea Writer' });
+  });
+  test('without a preview, uses the link in the text with no borrowed title', () => {
+    const [p] = fromStatuses([{ id: '2', url: 'https://fedizen.net/post/2', content: html, created_at: '2026-11-01T00:00:00Z', account: { display_name: 'A', acct: 'a' }, card: null }] as never);
+    deepStrictEqual(p.article, { url: 'https://news.org/2026/story?a=1&b=2', title: undefined, provider: undefined, byline: undefined });
+  });
+  test('no article when the post links nowhere', () => {
+    const [p] = fromStatuses([{ id: '3', url: 'https://fedizen.net/post/3', content: '<p>plain</p>', created_at: '2026-11-01T00:00:00Z', account: { display_name: 'A', acct: 'a' } }] as never);
+    strictEqual('article' in p, false);
   });
 });

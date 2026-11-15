@@ -18,6 +18,13 @@
  */
 
 export type AttributionSource = "mastodon" | "activitypub" | "fediverse-creator" | "fedizen";
+/** How each author was verified, in plain words for the reader. */
+export const ATTRIBUTION_NOTE: Record<AttributionSource, string> = {
+  mastodon: "Credited by Mastodon from the publisher’s page",
+  activitypub: "From the article’s own ActivityPub record",
+  "fediverse-creator": "Confirmed by the author’s fediverse profile",
+  fedizen: "Published on Fedizen",
+};
 
 export type FediAuthor = {
   name: string;

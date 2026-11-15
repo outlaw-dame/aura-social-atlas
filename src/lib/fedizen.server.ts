@@ -284,6 +284,13 @@ const status = z.object({
   account: account.nullish(),
   media_attachments: z.array(media).nullish(),
   bookmarked: z.boolean().nullish(),
+  /** The link preview Bonfire builds for the post's first link (no `authors`: Atlas works those out itself). */
+  card: z.object({
+    url: z.string().max(2048).nullish(),
+    title: z.string().max(500).nullish(),
+    provider_name: z.string().max(200).nullish(),
+    author_name: z.string().max(200).nullish(),
+  }).nullish(),
 });
 // The REST client only reads one reblog level. Avoid unbounded recursion.
 const timelineStatus = status.extend({ reblog: status.nullish() });

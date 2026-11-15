@@ -6,6 +6,7 @@ import { PublicFedizenFeed } from './PublicFedizenFeed';
 import { selectBonfireHome } from '@/lib/bonfire-native-presentation';
 import { CollectionLinks } from './CollectionsDesktop';
 import { SaveButton } from './SavedAndCircles';
+import { PostArticleCard } from './ArticleAuthors';
 import { useSaveToggle } from './useFedizenLibrary';
 
 const when = (d?: string) => d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
@@ -52,6 +53,7 @@ export function FedizenFeed() {
         <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div>
         {p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
         <CollectionLinks links={"collections" in p ? p.collections : undefined} />
+        <PostArticleCard article={'article' in p ? p.article : undefined} />
         <div className="mt-2 flex items-center gap-2">
           {'statusId' in p && <SaveButton post={p} save={save} />}
           <a href={p.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Open on Fedizen<ArrowUpRight className="size-3" /></a>

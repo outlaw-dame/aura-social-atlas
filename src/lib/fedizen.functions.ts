@@ -85,11 +85,25 @@ export const getFedizenHome = createServerFn({ method: 'GET' }).middleware([requ
     accountHandle: t.account_handle,
     canWrite: hasScope(t.scope, 'write'),
     nativeReadEnabled: process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'] === 'verified',
-    posts: fromStatuses(home.data as never),
+    posts: await withArticleAuthors(fromStatuses(home.data as never)),
     notices: fromNotifications(notes.data as never),
     error,
   };
 });
+
+/**
+ * "More from" for links in posts, as Mastodon shows under a link preview, but verified the Atlas way: the article's
+ * own ActivityPub record (attributedTo) first, then its fediverse:creator tag; an author counts only if their
+ * account is on the article's host or lists its domain (attributionDomains). Shares the Spotlight resolver's cache
+ * and time budget, so a slow publisher never holds up the feed: what isn't ready shows on the next load.
+ */
+async function withArticleAuthors(posts: FedizenPost[], budgetMs = 2000): Promise<FedizenPost[]> {
+  const urls = posts.map(p => p.article?.url).filter((u): u is string => !!u);
+  if (!urls.length) return posts;
+  const { resolveAuthorsFor } = await import('./article-author.server');
+  const found = await resolveAuthorsFor(urls, budgetMs).catch(() => new Map<string, never[]>());
+  return posts.map(p => { const a = p.article && found.get(p.article.url); return a?.length ? { ...p, article: { ...p.article!, authors: a } } : p; });
+}
 
 /* ── Saved (Bonfire bookmarks) and Circles (Bonfire circles, as Mastodon Lists) ─────────────────────────── */
 
@@ -116,7 +130,7 @@ export const getFedizenSaved = createServerFn({ method: 'GET' }).middleware([req
     if ('error' in c) return { posts: [], error: c.error };
     const { fedizenGet } = await import('./fedizen.server');
     const r = await fedizenGet(c.token, '/api/v1/bookmarks?limit=40');
-    return r.status === 200 ? { posts: fromStatuses(r.data as never).map(p => ({ ...p, bookmarked: true })) } : { posts: [], error: problem(r.status) };
+    return r.status === 200 ? { posts: await withArticleAuthors(fromStatuses(r.data as never).map(p => ({ ...p, bookmarked: true }))) } : { posts: [], error: problem(r.status) };
   });
 
 /** Bookmark or unbookmark a Fedizen post. */
