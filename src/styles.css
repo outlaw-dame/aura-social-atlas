@@ -771,3 +771,6 @@ span.atlas-rich-face { display: inline-flex; align-items: center; justify-conten
 html.atlas-stack-open .view.atlas-stack { pointer-events: auto; }
 .atlas-stack > .atlas-stack-root { background: transparent; pointer-events: none; }
 .atlas-stack > .atlas-stack-root.page-current { visibility: hidden; }
+/* Follow / Following on a hashtag's page and Unfollow in Followed hashtags: sized to their label (Framework7 buttons
+   are full width by default). */
+.atlas-follow-tag, .atlas-unfollow-tag { width: auto; flex: none; padding: 0 14px; }

@@ -27,6 +27,7 @@ import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as FedizenCallbackRouteImport } from './routes/fedizen.callback'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
+import { Route as SettingsHashtagsRouteImport } from './routes/settings.hashtags'
 import { Route as SettingsIntelligenceRouteImport } from './routes/settings.intelligence'
 import { Route as SettingsModerationRouteImport } from './routes/settings.moderation'
 import { Route as TagsTagRouteImport } from './routes/tags.$tag'
@@ -121,6 +122,11 @@ const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
   path: '/appearance',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsHashtagsRoute = SettingsHashtagsRouteImport.update({
+  id: '/hashtags',
+  path: '/hashtags',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsIntelligenceRoute = SettingsIntelligenceRouteImport.update({
   id: '/intelligence',
   path: '/intelligence',
@@ -155,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
   '/settings/moderation': typeof SettingsModerationRoute
   '/tags/$tag': typeof TagsTagRoute
@@ -177,6 +184,7 @@ export interface FileRoutesByTo {
   '/api/chat': typeof ApiChatRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
   '/settings/moderation': typeof SettingsModerationRoute
   '/tags/$tag': typeof TagsTagRoute
@@ -201,6 +209,7 @@ export interface FileRoutesById {
   '/api/chat': typeof ApiChatRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
   '/settings/moderation': typeof SettingsModerationRoute
   '/tags/$tag': typeof TagsTagRoute
@@ -226,6 +235,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/fedizen/callback'
     | '/settings/appearance'
+    | '/settings/hashtags'
     | '/settings/intelligence'
     | '/settings/moderation'
     | '/tags/$tag'
@@ -248,6 +258,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/fedizen/callback'
     | '/settings/appearance'
+    | '/settings/hashtags'
     | '/settings/intelligence'
     | '/settings/moderation'
     | '/tags/$tag'
@@ -271,6 +282,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/fedizen/callback'
     | '/settings/appearance'
+    | '/settings/hashtags'
     | '/settings/intelligence'
     | '/settings/moderation'
     | '/tags/$tag'
@@ -425,6 +437,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsAppearanceRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/hashtags': {
+      id: '/settings/hashtags'
+      path: '/hashtags'
+      fullPath: '/settings/hashtags'
+      preLoaderRoute: typeof SettingsHashtagsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/intelligence': {
       id: '/settings/intelligence'
       path: '/intelligence'
@@ -451,6 +470,7 @@ declare module '@tanstack/react-router' {
 
 interface SettingsRouteChildren {
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
+  SettingsHashtagsRoute: typeof SettingsHashtagsRoute
   SettingsIntelligenceRoute: typeof SettingsIntelligenceRoute
   SettingsModerationRoute: typeof SettingsModerationRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
@@ -458,6 +478,7 @@ interface SettingsRouteChildren {
 
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsAppearanceRoute: SettingsAppearanceRoute,
+  SettingsHashtagsRoute: SettingsHashtagsRoute,
   SettingsIntelligenceRoute: SettingsIntelligenceRoute,
   SettingsModerationRoute: SettingsModerationRoute,
   SettingsIndexRoute: SettingsIndexRoute,
