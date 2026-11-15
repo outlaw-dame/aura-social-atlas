@@ -514,6 +514,21 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-featured .atlas-profile-tags { justify-content: flex-start; margin-top: 0; }
 .atlas-featured p { margin: 0; font-size: 14px; color: var(--muted-foreground); }
 /* A Mastodon collection linked in a post (Mastodon's tagged_collections): opens in Atlas. */
+.atlas-fedi-header { height: 120px; background: var(--muted) center / cover no-repeat; }
+.atlas-fedi-head { padding: 0 16px; display: flex; flex-direction: column; gap: 6px; }
+.atlas-fedi-head > img, .atlas-fedi-initial { width: 80px; height: 80px; margin-top: -40px; border-radius: 20px; object-fit: cover; border: 4px solid var(--f7-page-bg-color, var(--background)); background: var(--muted); }
+.atlas-fedi-initial { display: flex; align-items: center; justify-content: center; font: 32px 'Instrument Serif', serif; }
+.atlas-fedi-head h1 { margin: 4px 0 0; font: 400 30px/1.15 'Instrument Serif', serif; overflow-wrap: anywhere; }
+.atlas-fedi-head h1 small { font: 13px var(--f7-font-family); opacity: .6; }
+.atlas-fedi-head h1 .icon { font-size: 16px; margin-left: 6px; opacity: .6; }
+.atlas-fedi-acct { margin: 0; font-size: 14px; opacity: .7; overflow-wrap: anywhere; }
+.atlas-fedi-acct .icon { font-size: 14px; margin-left: 4px; color: var(--f7-theme-color); }
+.atlas-fedi-stats { display: flex; gap: 16px; font-size: 14px; margin: 4px 0 8px; } .atlas-fedi-stats span { opacity: .75; } .atlas-fedi-stats b { opacity: 1; }
+.atlas-fedi-note { margin: 0; font-size: 12px; opacity: .6; }
+.atlas-fedi-bio p, .atlas-fedi-post p { line-height: 1.5; }
+.atlas-fedi-post h2 { margin: 0 0 4px; font: 400 22px/1.2 'Instrument Serif', serif; }
+.atlas-fedi-post img { width: 100%; border-radius: 12px; margin-top: 8px; }
+.atlas-fedi-post summary { cursor: pointer; opacity: .7; }
 .atlas-article { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .atlas-article-link, .atlas-article-author { display: flex !important; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: .5px solid var(--border); border-radius: 14px; color: inherit !important; text-align: left; }
 .atlas-article-link > span, .atlas-article-author > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }

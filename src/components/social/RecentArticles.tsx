@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ArrowUpRight, BookOpen, Heart, MessageCircle, Repeat2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getRecentArticles } from '@/lib/bonfire.functions';
+import { openFediProfile } from '@/lib/fedi-profile';
 import type { BonfireArticle } from '@/lib/spotlight';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
@@ -26,7 +27,7 @@ export function RecentArticles() {
       </article>)}</div>}
     {open && <div className="social-backdrop fixed inset-0 z-[60] grid place-items-center px-4 py-6" onClick={() => setOpen(null)}>
       <section role="dialog" aria-modal="true" aria-labelledby="article-title" className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-card text-card-foreground shadow-2xl" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-border px-5 py-3"><p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">{open.avatar && <img src={open.avatar} alt="" className="size-6 rounded-full object-cover" />}<span className="truncate">{open.authorUrl ? <a href={open.authorUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-foreground hover:underline" aria-label={`More from ${open.author} on the fediverse`}>{open.author}</a> : <span className="font-semibold text-foreground">{open.author}</span>}{open.handle ? ` ${open.handle}` : ''} · {when(open.date)}</span></p><Button variant="ghost" size="icon" aria-label="Close article" onClick={() => setOpen(null)}><X /></Button></div>
+        <div className="flex items-center justify-between border-b border-border px-5 py-3"><p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">{open.avatar && <img src={open.avatar} alt="" className="size-6 rounded-full object-cover" />}<span className="truncate">{open.authorUrl ? <button type="button" onClick={() => openFediProfile({ actor: open.authorUrl, acct: open.handle, name: open.author })} className="font-semibold text-foreground hover:underline" aria-label={`More from ${open.author}`}>{open.author}</button> : <span className="font-semibold text-foreground">{open.author}</span>}{open.handle ? ` ${open.handle}` : ''} · {when(open.date)}</span></p><Button variant="ghost" size="icon" aria-label="Close article" onClick={() => setOpen(null)}><X /></Button></div>
         <div className="overflow-y-auto px-6 py-6">
           {open.image && <img src={open.image} alt="" className="mb-5 w-full rounded-2xl object-cover" />}
           <h2 id="article-title" className="font-serif text-3xl leading-tight">{open.title}</h2>

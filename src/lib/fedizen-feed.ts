@@ -25,13 +25,13 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
 
 export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[];
   /** The article the post links to, and who wrote it as far as Atlas can verify ("More from"). */ article?: PostArticle };
-export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; authors?: FediAuthor[] };
+export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; /** The preview's author link: checked for an ActivityPub account, never shown as-is. */ authorUrl?: string; authors?: FediAuthor[] };
 export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string };
 /** A direct conversation (Mastodon `Conversation`): the other people in it and its latest message, as plain text. */
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string };
-type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string }[]; bookmarked?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null } | null };
+type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string }[]; bookmarked?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null } | null };
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
 const http = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
@@ -176,5 +176,6 @@ function articleOf(o: Status): PostArticle | undefined {
   if (!url) return undefined;
   const fromCard = card?.url === url;
   const clip = (v?: string | null, n = 200) => (v && v.trim() ? v.trim().slice(0, n) : undefined);
-  return { url, title: fromCard ? clip(card?.title, 300) : undefined, provider: fromCard ? clip(card?.provider_name, 100) : undefined, byline: fromCard ? clip(card?.author_name, 100) : undefined };
+  const authorUrl = fromCard && isPublicHttpsUrl(card?.author_url) ? card!.author_url! : undefined;
+  return { url, title: fromCard ? clip(card?.title, 300) : undefined, provider: fromCard ? clip(card?.provider_name, 100) : undefined, byline: fromCard ? clip(card?.author_name, 100) : undefined, ...(authorUrl ? { authorUrl } : {}) };
 }

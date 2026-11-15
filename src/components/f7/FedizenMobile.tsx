@@ -5,6 +5,7 @@ import { getRecentArticles, getFedizenPublic } from '@/lib/bonfire.functions';
 import type { BonfireArticle } from '@/lib/spotlight';
 import { useFedizen, useFedizenMessages } from '@/components/social/useFedizen';
 import { openCollection } from '@/lib/collections';
+import { openFediProfile } from '@/lib/fedi-profile';
 import { useSaveToggle } from '@/components/social/useFedizenLibrary';
 import { SaveLink } from './SavedAndCircles';
 import { ArticleCard } from './ArticleAuthors';
@@ -33,7 +34,7 @@ export function MobileRecentArticles() {
           {open.image && <img src={open.image} alt="" style={{ width: '100%', borderRadius: 16 }} />}
           <h1 style={{ fontFamily: 'Instrument Serif, serif', fontWeight: 400, fontSize: 30, lineHeight: 1.15 }}>{open.title}</h1>
           {open.authorUrl
-            ? <Link external target="_blank" href={open.authorUrl} aria-label={`More from ${open.author} on the fediverse`} style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'inherit', margin: '4px 0 8px' }}>
+            ? <Link onClick={() => openFediProfile({ actor: open.authorUrl, acct: open.handle, name: open.author })} aria-label={`More from ${open.author}`} style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'inherit', margin: '4px 0 8px' }}>
                 {open.avatar && <img src={open.avatar} alt="" width={36} height={36} referrerPolicy="no-referrer" style={{ borderRadius: 10, objectFit: 'cover' }} />}
                 <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}><b style={{ fontSize: 14 }}>{open.author}</b><span style={{ opacity: .6, fontSize: 12 }}>{open.handle}</span></span>
               </Link>

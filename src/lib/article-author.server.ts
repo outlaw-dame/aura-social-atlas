@@ -153,7 +153,7 @@ const parseJson = (s: string): unknown => {
   }
 };
 
-async function fetchActor(id: string, fetchImpl: FetchLike, lookup: Lookup) {
+export async function fetchActor(id: string, fetchImpl: FetchLike = fetch, lookup: Lookup = dohLookup) {
   const res = await safeFetch(id, AP_ACCEPT, fetchImpl, lookup);
   if (!res || !isJsonType(res.type)) return null;
   const actor = parseJson(res.text);
@@ -206,23 +206,49 @@ async function fromCreatorHandle(
     : null;
 }
 
+/**
+ * Path 3 (Atlas): an author page that is itself an ActivityPub actor — the page's rel="author" links, or the author
+ * link a server's link preview carries. Same trust rule: the actor must be on the article's host or allow its domain.
+ */
+async function fromAuthorLinks(
+  links: string[],
+  articleUrl: string,
+  fetchImpl: FetchLike,
+  lookup: Lookup,
+): Promise<FediAuthor[]> {
+  const actors = await Promise.all(
+    [...new Set(links)].slice(0, MAX_AUTHORS).map((l) => fetchActor(l, fetchImpl, lookup)),
+  );
+  const seen = new Set<string>();
+  return actors
+    .filter((a): a is NonNullable<typeof a> => !!a && actorMayClaim(a, articleUrl))
+    .filter((a) => !seen.has(String(a.id)) && !!seen.add(String(a.id)))
+    .map((a) => actorToAuthor(a, "author-link"))
+    .filter((a): a is FediAuthor => !!a);
+}
+
+/** Hints from whoever showed the link, e.g. the author URL in a server's link preview. */
+export type ArticleHints = { authorUrl?: string };
+
 /** Who wrote the article at `url`, best evidence first. Empty when nothing verifiable is found. */
 export async function resolveArticleAuthors(
   url: string,
   fetchImpl: FetchLike = fetch,
   lookup: Lookup = dohLookup,
+  hints: ArticleHints = {},
 ): Promise<FediAuthor[]> {
   if (!isPublicHttpsUrl(url)) return [];
   const page = await safeFetch(url, PAGE_ACCEPT, fetchImpl, lookup);
   if (!page) return [];
   // The article lives where the redirects ended; trust is judged against that host.
   const articleUrl = page.url;
-  if (isJsonType(page.type))
-    return (await fromActivityPubObject(parseJson(page.text), articleUrl, fetchImpl, lookup)).slice(
-      0,
-      MAX_AUTHORS,
-    );
-  if (!page.type.includes("html")) return [];
+  const hinted = isPublicHttpsUrl(hints.authorUrl) ? [hints.authorUrl] : [];
+  if (isJsonType(page.type)) {
+    const authors = await fromActivityPubObject(parseJson(page.text), articleUrl, fetchImpl, lookup);
+    return (authors.length ? authors : await fromAuthorLinks(hinted, articleUrl, fetchImpl, lookup)).slice(0, MAX_AUTHORS);
+  }
+  if (!page.type.includes("html"))
+    return (await fromAuthorLinks(hinted, articleUrl, fetchImpl, lookup)).slice(0, MAX_AUTHORS);
   const head = parseArticleHead(page.text, articleUrl);
   if (head.apAlternate) {
     const ap = await safeFetch(head.apAlternate, AP_ACCEPT, fetchImpl, lookup);
@@ -239,7 +265,9 @@ export async function resolveArticleAuthors(
   const creators = await Promise.all(
     head.creators.map((h) => fromCreatorHandle(h, articleUrl, fetchImpl, lookup)),
   );
-  return creators.filter((a): a is FediAuthor => !!a).slice(0, MAX_AUTHORS);
+  const found = creators.filter((a): a is FediAuthor => !!a);
+  if (found.length) return found.slice(0, MAX_AUTHORS);
+  return (await fromAuthorLinks([...head.authorLinks, ...hinted], articleUrl, fetchImpl, lookup)).slice(0, MAX_AUTHORS);
 }
 
 /* ── Cache (per isolate) and batch resolution with a shared deadline ─────────────────────────── */
@@ -270,6 +298,7 @@ export async function resolveAuthorsFor(
   budgetMs = 3000,
   fetchImpl: FetchLike = fetch,
   lookup: Lookup = dohLookup,
+  hints: Record<string, ArticleHints> = {},
 ): Promise<Map<string, FediAuthor[]>> {
   const out = new Map<string, FediAuthor[]>();
   const pending: Promise<void>[] = [];
@@ -280,7 +309,7 @@ export async function resolveAuthorsFor(
       continue;
     }
     pending.push(
-      resolveArticleAuthors(url, fetchImpl, lookup)
+      resolveArticleAuthors(url, fetchImpl, lookup, hints[url])
         .catch(() => [])
         .then((a) => {
           remember(url, a);
