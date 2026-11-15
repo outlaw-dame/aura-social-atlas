@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Block, Button, Link, List, ListInput, Sheet, f7 } from 'framework7-react';
+import { Block, Button, Link, Sheet, f7 } from 'framework7-react';
+import { MentionField } from '@/components/social/MentionField';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import type { useSaveToggle } from '@/components/social/useFedizenLibrary';
 import { AUDIENCE_LABEL, compactCount, replyMention, replyVisibility, sharePost, useReactions, useReply } from '@/components/social/usePostActions';
@@ -47,7 +48,8 @@ export function MobilePostActions({ post: p, save, reactions, onReply }: { post:
 export function ReplySheet({ post, onClose }: { post: FedizenPost | null; onClose: () => void }) {
   const r = useReply();
   const [text, setText] = useState('');
-  useEffect(() => { if (post) { setText(replyMention(post.handle)); r.clearError(); } }, [post]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [confirmed, setConfirmed] = useState<string[]>([]);
+  useEffect(() => { if (post) { const m = replyMention(post.handle); setText(m); setConfirmed(m ? [m.trim()] : []); r.clearError(); } }, [post]); // eslint-disable-line react-hooks/exhaustive-deps
   const audience = post ? replyVisibility(post) : 'public';
   const send = async () => {
     if (!post) return;
@@ -61,10 +63,10 @@ export function ReplySheet({ post, onClose }: { post: FedizenPost | null; onClos
         <p className="atlas-reply-quote">{post.paragraphs.join(' ').slice(0, 160)}</p>
         <div className="atlas-reply-audience"><Icon ios={audience === 'public' ? 'f7:globe' : audience === 'direct' ? 'f7:at' : 'f7:lock'} md={audience === 'public' ? 'material:public' : audience === 'direct' ? 'material:alternate_email' : 'material:lock'} />{AUDIENCE_LABEL[audience]}, like the post</div>
       </Block>
-      <List strong inset>
-        <ListInput type="textarea" placeholder="Write your reply" value={text} maxlength={5000} resizable autofocus
-          inputStyle={{ fontSize: 16, minHeight: 96 }} onInput={(e: { target: { value: string } }) => setText(e.target.value)} />
-      </List>
+      <Block className="atlas-reply-field">
+        <MentionField value={text} onChange={setText} confirmed={confirmed} onConfirm={t => setConfirmed(c => [...c, t])} autoFocus
+          people={[{ handle: post.handle, name: post.author, avatar: post.avatar }]} placeholder="Write your reply" label="Your reply" onSubmit={() => void send()} />
+      </Block>
       {r.error && <Block><p role="alert" style={{ margin: 0 }}>{r.error}</p></Block>}
       <Block style={{ display: 'flex', gap: 8 }}>
         <Button tonal style={{ flex: 1 }} onClick={onClose}>Cancel</Button>

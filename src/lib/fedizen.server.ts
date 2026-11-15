@@ -362,6 +362,8 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: new RegExp(`^/api/v1/lists/${ID}/accounts\\?limit=80$`), schema: accountsSchema },
   // One account by handle, to add someone to a circle. Answers a single Account, returned here as a one-item list.
   { match: new RegExp(`^/api/v1/accounts/lookup\\?acct=${ACCT}$`), schema: account.extend({ id: z.string().min(1).max(64) }), single: true },
+  // People whose name or handle starts with what's typed after "@" in a reply (mention suggestions).
+  { match: new RegExp(`^/api/v1/accounts/search\\?q=${ACCT}&limit=6$`), schema: z.array(account.extend({ id: z.string().min(1).max(64) })).max(40) },
   // For You: the hashtags you follow (Bonfire: MastoTagController.followed), and each one's timeline.
   { match: /^\/api\/v1\/followed_tags\?limit=20$/, schema: followedTagsSchema },
   { match: new RegExp(`^/api/v1/timelines/tag/${TAG}\\?limit=10$`), schema: homeSchema },

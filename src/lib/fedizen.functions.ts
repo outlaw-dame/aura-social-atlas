@@ -172,6 +172,20 @@ export const setFedizenReaction = createServerFn({ method: 'POST' }).middleware(
     return { ok: true, on: typeof flag === 'boolean' ? flag : data.on, ...(typeof count === 'number' ? { count } : {}) };
   });
 
+/** People to mention: Fedizen's account search for what follows "@" (name or handle), at most six. */
+export const searchFedizenPeople = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ q: z.string().trim().regex(/^@?[A-Za-z0-9_.-]{1,64}(@[A-Za-z0-9.-]{0,253})?$/) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ people: FedizenPerson[]; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { people: [], error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const q = data.q.replace(/^@/, '').replace(/@$/, '');
+    const r = await fedizenGet(c.token, `/api/v1/accounts/search?q=${encodeURIComponent(q)}&limit=6`).catch(() => null);
+    if (!r || r.status !== 200) return { people: [], error: r ? problem(r.status) : 'unavailable' };
+    return { people: fromAccounts(r.data as never).slice(0, 6) };
+  });
+
 /** Reply to a Fedizen post. Atlas sends the post's own audience, so a reply to a followers-only post stays followers-only. */
 export const replyOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.extend({

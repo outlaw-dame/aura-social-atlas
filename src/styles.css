@@ -705,3 +705,23 @@ span.atlas-post-avatar { display: inline-flex; align-items: center; justify-cont
 .atlas-rich-host { font-size: 12px; opacity: .5; margin-top: 2px; }
 .atlas-rich-host::after { content: ' ↗'; }
 @media (prefers-reduced-motion: reduce) { .atlas-rich-link, .atlas-feed-tabs button { transition: none; } }
+
+/* Mentions in replies, after iMessage: a picked person's handle is tinted in the accent, and while typing "@…" the people
+   it could be sit in a strip under the box. The tint is a copy of the text drawn behind a transparent-text textarea, so
+   both must share every metric that affects layout. */
+.atlas-mention { display: flex; flex-direction: column; gap: 8px; }
+.atlas-mention-field { position: relative; border-radius: 20px; border: .5px solid var(--border, rgba(127,127,127,.3)); background: color-mix(in oklab, currentColor 5%, transparent); }
+.atlas-mention-mirror, .atlas-mention-field textarea { box-sizing: border-box; margin: 0; padding: 11px 15px; font: inherit; font-size: 16px; line-height: 1.4; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; tab-size: 4; }
+.atlas-mention-mirror { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: inherit; border: 0; }
+.atlas-mention-mirror mark { color: var(--f7-theme-color, var(--accent)); background: color-mix(in oklab, var(--f7-theme-color, var(--accent)) 14%, transparent); border-radius: 5px; box-shadow: 0 0 0 1px color-mix(in oklab, var(--f7-theme-color, var(--accent)) 14%, transparent); }
+.atlas-mention-field textarea { position: relative; display: block; width: 100%; min-height: 104px; max-height: 40vh; resize: none; border: 0; outline: none; background: transparent; color: transparent; caret-color: var(--f7-text-color, currentColor); -webkit-text-fill-color: transparent; }
+.atlas-mention-field textarea::placeholder { color: currentColor; -webkit-text-fill-color: color-mix(in oklab, var(--f7-text-color, CanvasText) 42%, transparent); }
+.atlas-mention-field:focus-within { border-color: color-mix(in oklab, var(--f7-theme-color, var(--accent)) 55%, transparent); }
+.atlas-mention-bar { display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px; min-height: 42px; }
+.atlas-mention-bar::-webkit-scrollbar { display: none; }
+.atlas-mention-bar button { flex: none; width: auto; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 6px; border: 0; border-radius: 20px; background: color-mix(in oklab, currentColor 9%, transparent); color: inherit; font: inherit; font-size: 15px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.atlas-mention-bar button.active { background: color-mix(in oklab, currentColor 17%, transparent); }
+.atlas-mention-bar button img, .atlas-mention-bar button > span[aria-hidden] { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in oklab, currentColor 12%, transparent); font-size: 13px; }
+.atlas-mention-bar .atlas-mention-typed { padding: 0 14px; background: none; font-weight: 500; opacity: .7; }
+.atlas-mention-hint { font-size: 13px; opacity: .55; padding: 0 8px; }
+.atlas-reply-field { margin-top: 8px; margin-bottom: 8px; }

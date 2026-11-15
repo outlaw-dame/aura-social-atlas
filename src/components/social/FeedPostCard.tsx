@@ -4,7 +4,7 @@ import type { FedizenPost } from '@/lib/fedizen-feed';
 import { shortAgo, type ForYouReason } from '@/lib/feed-types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
+import { MentionField } from './MentionField';
 import { CollectionLinks } from './CollectionsDesktop';
 import { PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
@@ -83,7 +83,8 @@ const AUDIENCE_ICON = { public: Globe2, unlisted: Globe2, private: Lock, direct:
 function ReplyDialog({ post, onClose }: { post: FedizenPost | null; onClose: () => void }) {
   const r = useReply();
   const [text, setText] = useState('');
-  useEffect(() => { if (post) { setText(replyMention(post.handle)); r.clearError(); } }, [post]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [confirmed, setConfirmed] = useState<string[]>([]);
+  useEffect(() => { if (post) { const m = replyMention(post.handle); setText(m); setConfirmed(m ? [m.trim()] : []); r.clearError(); } }, [post]); // eslint-disable-line react-hooks/exhaustive-deps
   const audience = post ? replyVisibility(post) : 'public';
   const Aud = AUDIENCE_ICON[audience];
   const send = async () => { if (post && (await r.reply(post, text))) onClose(); };
@@ -94,8 +95,8 @@ function ReplyDialog({ post, onClose }: { post: FedizenPost | null; onClose: () 
           <DialogTitle>Reply to {post.author}</DialogTitle>
           <DialogDescription className="line-clamp-2">{post.paragraphs.join(' ')}</DialogDescription>
         </DialogHeader>
-        <Textarea autoFocus value={text} maxLength={5000} onChange={e => setText(e.target.value)} placeholder="Write your reply" className="min-h-28" aria-label="Your reply"
-          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send(); }} />
+        <MentionField value={text} onChange={setText} confirmed={confirmed} onConfirm={t => setConfirmed(c => [...c, t])} autoFocus
+          people={[{ handle: post.handle, name: post.author, avatar: post.avatar }]} placeholder="Write your reply" label="Your reply" onSubmit={() => void send()} />
         <p className="flex items-center gap-1 text-xs text-muted-foreground"><Aud className="size-3.5" />{AUDIENCE_LABEL[audience]}, like the post</p>
         {r.error && <p role="alert" className="text-sm text-destructive">{r.error}</p>}
         <DialogFooter>
