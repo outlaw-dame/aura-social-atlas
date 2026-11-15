@@ -1,23 +1,22 @@
-import { Block, Button, Link, Navbar, NavRight, Page, Popup } from 'framework7-react';
+import { Block, Button, Link, Navbar, Page } from 'framework7-react';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useFedizen } from '@/components/social/useFedizen';
 import { FEED_PROBLEM, useTagFeed } from '@/components/social/useFeeds';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
-import { Icon } from './F7Extras';
 
 /**
- * Phone: a hashtag's feed, opened from a hashtag in a post or a followed-tag line. It reads Fedizen's tag timeline
- * through the person's own connection, so it holds only posts they may see — and act on, with the usual actions.
+ * Phone: a hashtag's feed, opened from a hashtag in a post or a followed-tag line. It's a page pushed onto the main
+ * view like any feed — back chevron, swipe back — not a sheet. It reads Fedizen's tag timeline through the person's
+ * own connection, so it holds only posts they may see — and act on, with the usual actions.
  */
-export function TagFeedPopup({ tag, onClose }: { tag: string | null; onClose: () => void }) {
+export function TagFeedPage({ f7route }: { f7route?: { params: { tag?: string } } }) {
+  const raw = f7route?.params.tag;
+  const tag = raw ? decodeURIComponent(raw) : null;
   const { user } = useAtlasAuth();
   const q = useTagFeed(tag);
   const actions = useMobilePostActions();
-  return <Popup opened={!!tag} onPopupClosed={onClose} swipeToClose className="atlas-tag-popup">
-    <Page>
-      <Navbar title={tag ?? ''}>
-        <NavRight><Link iconOnly popupClose aria-label="Close"><Icon ios="f7:xmark" md="material:close" /></Link></NavRight>
-      </Navbar>
+  return <Page className="atlas-tag-page">
+      <Navbar title={tag ?? ''} backLink backLinkShowText={false} />
       {tag && <>
         {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
         {!user ? <Block strong inset>Sign in to Atlas and connect Fedizen to see posts tagged {tag}.</Block>
@@ -28,8 +27,7 @@ export function TagFeedPopup({ tag, onClose }: { tag: string | null; onClose: ()
           : q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} inTag={tag} />)}
         {actions.sheet}
       </>}
-    </Page>
-  </Popup>;
+    </Page>;
 }
 
 /** Not connected, expired or missing a permission: connect Fedizen again from here (a new tab when Atlas is embedded). */
