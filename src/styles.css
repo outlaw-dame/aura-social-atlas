@@ -502,3 +502,14 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .navbar .atlas-top-btn .icon { font-size: 18px; }
 .atlas-msg-unread .item-title { font-weight: 700; }
 .atlas-msg-dot { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--f7-theme-color); box-shadow: 0 0 0 2px var(--f7-list-strong-bg-color, #fff); }
+
+/* Profile Activity filter (Mastodon's Activity menu: replies and boosts on or off) and the Featured tab. */
+.atlas-activity-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 16px 4px; }
+.atlas-activity-filter > span { margin-right: 4px; font-size: 13px; color: var(--muted-foreground); }
+.atlas-activity-filter button { flex: none; width: auto; margin: 0; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 14px; border: .5px solid var(--border); border-radius: 999px; background: none; font: inherit; font-size: 14px; font-weight: 500; color: var(--muted-foreground); cursor: pointer; }
+.atlas-activity-filter button .icon { font-size: 14px; }
+.atlas-activity-filter button.is-on { border-color: transparent; background: color-mix(in oklab, var(--f7-theme-color) 12%, transparent); color: var(--f7-theme-color); }
+.atlas-featured { padding: 8px 16px 16px; }
+.atlas-featured h3 { margin: 16px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted-foreground); }
+.atlas-featured .atlas-profile-tags { justify-content: flex-start; margin-top: 0; }
+.atlas-featured p { margin: 0; font-size: 14px; color: var(--muted-foreground); }

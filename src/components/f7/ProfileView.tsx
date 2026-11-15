@@ -8,14 +8,17 @@ import { CreatorTag } from '@/components/social/CreatorTag';
 import { linkifyHashtags, extractHashtags, hashtagUrl } from '@/lib/hashtags';
 import type { Collection } from '@/lib/collections';
 import { MyCollections } from './Collections';
+import { activityLabel, DEFAULT_ACTIVITY_FILTER, type ActivityFilter } from '@/components/social/profile-sections';
 
-/* Profile tabs follow Bluesky's profile: Posts, Replies, Media, Collections (Mastodon 4.6's curated account
-   collections), then the owner-only private tab (Bluesky's Likes/Saved; Atlas's Saved), then Circles (Bonfire's circles of people) and Lists. Follows are not a tab: they open from the Following count. */
-const sections = ['Posts', 'Replies', 'Media', 'Collections', 'Saved', 'Circles', 'Lists'] as const;
+/* Profile tabs after Mastodon's 2026 redesign: Activity (posts, quote posts, replies and boosts, filtered like
+   Mastodon's Activity menu), Featured (Mastodon 4.4: featured hashtags and profiles), Media, Collections (Mastodon
+   4.6), the owner-only Saved tab, then Circles (Bonfire's circles of people) and Lists. Follows are not a tab:
+   they open from the Following count. */
+const sections = ['Activity', 'Featured', 'Media', 'Collections', 'Saved', 'Circles', 'Lists'] as const;
 type Section = (typeof sections)[number];
 const emptySections: Record<Section, { ios: string; md: string; title: string; detail: string }> = {
-  Posts: { ios: 'f7:square_pencil', md: 'material:edit_note', title: 'No posts yet', detail: 'Your posts will appear here once publishing is connected.' },
-  Replies: { ios: 'f7:bubble_left_bubble_right', md: 'material:forum', title: 'No replies yet', detail: 'Your replies will appear here once publishing is connected.' },
+  Activity: { ios: 'f7:square_pencil', md: 'material:edit_note', title: 'No activity yet', detail: 'Your public posts, quote posts, replies and boosts on Fedizen will appear here.' },
+  Featured: { ios: 'f7:star', md: 'material:star_outline', title: 'Nothing featured yet', detail: 'Feature hashtags from Edit profile, and people from their profiles, to show them here.' },
   Media: { ios: 'f7:photo_on_rectangle', md: 'material:photo_library', title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
   Collections: { ios: 'f7:square_stack_3d_up', md: 'material:collections_bookmark', title: 'No collections yet', detail: '' },
   Saved: { ios: 'f7:bookmark', md: 'material:bookmark_border', title: 'Nothing saved yet', detail: 'Stories you save appear here. Only you can see this tab.' },
@@ -76,12 +79,13 @@ export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose
 export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: { onEditProfile: () => void; onOpenCreator: (creator: Creator) => void; onOpenCollection: (c: Collection) => void }) {
   const { user, profile, signOut } = useAtlasAuth();
   const { followed, saved, toggleSave, toggleFollow } = useSocial();
-  const [section, setSection] = useState<Section>('Posts');
+  const [section, setSection] = useState<Section>('Activity');
+  const [filter, setFilter] = useState<ActivityFilter>(DEFAULT_ACTIVITY_FILTER);
   const [followsOpen, setFollowsOpen] = useState(false);
   const savedPosts = posts.filter(post => saved.includes(post.id));
   const followedCreators = creators.filter(creator => followed.includes(creator.id));
   const empty = emptySections[section];
-  const hasContent = section === 'Saved' && savedPosts.length > 0;
+  const hasContent = (section === 'Saved' && savedPosts.length > 0) || (section === 'Featured' && (profile?.featured_hashtags ?? []).length > 0);
   const featured = profile?.featured_hashtags ?? [];
 
   if (!user) return (
@@ -112,11 +116,6 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
         {profile?.bio
           ? <p className="atlas-bsky-bio">{linkifyHashtags(profile.bio)}</p>
           : <p className="atlas-bsky-bio atlas-profile-bio-empty">No bio yet — add one so people know what you share.</p>}
-        {featured.length > 0 && (
-          <div className="atlas-profile-tags" aria-label="Featured hashtags">
-            {featured.map(tag => <a key={tag} className="atlas-profile-tag" href={hashtagUrl(tag)}>#{tag}</a>)}
-          </div>
-        )}
         {profile?.created_at && (
           <p className="atlas-bsky-joined"><Icon ios="f7:calendar" md="material:calendar_month" /> Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
         )}
@@ -132,6 +131,17 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
       </div>
       <section id="atlas-profile-content" className="atlas-profile-content" role="tabpanel" aria-labelledby={`atlas-profile-tab-${section.toLowerCase()}`}>
         {section === 'Collections' && <MyCollections onOpen={onOpenCollection} />}
+        {section === 'Activity' && <div className="atlas-activity-filter" role="group" aria-label="Show in Activity">
+          <span>Showing {activityLabel(filter)}</span>
+          {(['replies', 'boosts'] as const).map(k => <button key={k} type="button" aria-pressed={filter[k]} className={filter[k] ? 'is-on' : undefined} onClick={() => setFilter(f => ({ ...f, [k]: !f[k] }))}>
+            {filter[k] && <Icon ios="f7:checkmark" md="material:check" />}{k === 'replies' ? 'Replies' : 'Boosts'}</button>)}
+        </div>}
+        {section === 'Featured' && featured.length > 0 && <div className="atlas-featured">
+          <h3>Hashtags</h3>
+          <div className="atlas-profile-tags" aria-label="Featured hashtags">{featured.map(tag => <a key={tag} className="atlas-profile-tag" href={hashtagUrl(tag)}>#{tag}</a>)}</div>
+          <h3>Profiles</h3>
+          <p>People you feature from their profiles on Fedizen will appear here.</p>
+        </div>}
         {!hasContent && section !== 'Collections' && <div className="atlas-profile-empty">
           <div className="atlas-profile-empty-icon"><Icon ios={empty.ios} md={empty.md} /></div>
           <h2>{empty.title}</h2>
