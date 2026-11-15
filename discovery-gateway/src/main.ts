@@ -12,6 +12,7 @@ const cfg = loadConfig();
 const stores = await storesFor(cfg);
 const gateway = buildGateway(cfg, stores);
 let server: ReturnType<typeof Bun.serve> | undefined;
+let adminServer: ReturnType<typeof Bun.serve> | undefined;
 let worker: ReturnType<typeof superviseQueue> | undefined;
 let shutdownPromise: Promise<void> | undefined;
 
@@ -21,6 +22,7 @@ function shutdown(reason: string, exitCode: number): Promise<void> {
   shutdownPromise = (async () => {
     log('gateway.stopping', { reason, role });
     server?.stop();
+    adminServer?.stop();
     try {
       await worker?.stop();
     } catch (error) {
@@ -50,9 +52,28 @@ try {
     );
   }
   if (role !== 'worker') {
+    // The only publicly routed Railway listener rejects /admin even if a
+    // request bypasses Cloudflare. Never expose GATEWAY_ADMIN_PORT as a
+    // Railway public target port or domain.
     const handle = createHandler({ cfg, gateway, sql: stores.sql! });
     server = Bun.serve({ port: cfg.port, fetch: handle });
+    // This separate port is reachable through Railway private networking.
+    // The handler still requires the administrator bearer token.
+    const privateAdmin = createHandler({
+      cfg, gateway, sql: stores.sql!, adminEnabled: true,
+    });
+    adminServer = Bun.serve({
+      port: cfg.adminPort,
+      fetch: request => {
+        const path = new URL(request.url).pathname;
+        if (path !== '/admin' && !path.startsWith('/admin/')) {
+          return new Response('Not found', { status: 404 });
+        }
+        return privateAdmin(request);
+      },
+    });
     log('gateway.listening', { port: server.port, role });
+    log('gateway.private_admin_listening', { port: adminServer.port, role });
   } else {
     log('gateway.worker_started', { role });
   }

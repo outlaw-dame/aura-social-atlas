@@ -9,7 +9,9 @@ export const MIN_SAFE_BUN = [1, 4, 3] as const;
 
 export function assertSafeGatewayRuntime(version: string | undefined): void {
   if (!version) throw new Error('Atlas Discovery Gateway requires Bun 1.4.3 or newer.');
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(version);
+  // Prereleases are not equivalent to the patched stable release: refuse
+  // all pre-release channels, while allowing SemVer build metadata.
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z.-]+)?$/.exec(version);
   if (!match) throw new Error('Unrecognized Bun version; refusing to start gateway.');
   const actual = match.slice(1, 4).map(Number);
   for (let i = 0; i < MIN_SAFE_BUN.length; i++) {

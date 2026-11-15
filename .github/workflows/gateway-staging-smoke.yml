@@ -1,0 +1,138 @@
+name: Gateway staging HTTPS smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */2 * * *'
+  pull_request:
+    paths:
+      - .github/workflows/gateway-staging-smoke.yml
+      - '.github/gateway-staging-key-sha256.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-gateway-public-monitor
+  cancel-in-progress: false
+
+jobs:
+  gateway-staging-https:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify live staging HTTPS, public actor, and Cloudflare admin deny
+        env:
+          BASE: https://staging-gateway.damonoutlaw.xyz
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import ssl
+          import time
+          import urllib.error
+          import urllib.request
+
+          base = os.environ['BASE']
+          tls = ssl.create_default_context()
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  raise RuntimeError(f'Unexpected HTTP redirect on {req.full_url}: {code}')
+
+          opener = urllib.request.build_opener(
+              urllib.request.HTTPSHandler(context=tls),
+              NoRedirect(),
+          )
+
+          def get(path, accept='application/json', retries=6):
+              assert path.startswith('/')
+              for attempt in range(retries):
+                  request = urllib.request.Request(
+                      base + path,
+                      headers={'Accept': accept, 'User-Agent': 'AtlasStagingSmoke/1.0'},
+                  )
+                  try:
+                      with opener.open(request, timeout=12) as response:
+                          return response.status, response.headers, response.read(500_000)
+                  except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as exc:
+                      if isinstance(exc, urllib.error.HTTPError) and exc.code < 500 and exc.code != 429:
+                          raise
+                      if attempt == retries - 1:
+                          raise
+                      time.sleep(min(2 ** attempt, 10))
+
+          def assert_edge(headers):
+              assert headers.get('CF-Ray'), 'Expected Cloudflare proxy response header'
+
+          status, headers, payload = get('/healthz')
+          assert status == 200, f'Health endpoint: {status}'
+          assert_edge(headers)
+          assert headers.get('Cache-Control') == 'no-store', 'Health cache policy changed'
+          assert json.loads(payload) == {'ok': True}, 'Health/database check failed'
+          print('PASS: HTTPS/TLS, Cloudflare edge and PostgreSQL-backed health')
+
+          status, headers, payload = get('/actors/gateway', 'application/activity+json')
+          assert status == 200, f'Actor endpoint: {status}'
+          assert_edge(headers)
+          actor = json.loads(payload)
+          # mapActorAlias('/actor', 'gateway') changes the canonical actor ID.
+          assert actor.get('id') == base + '/actor', f"Incorrect canonical actor identity: {actor.get('id')!r}"
+          assert actor.get('inbox', '').startswith(base + '/'), 'Incorrect actor inbox origin'
+          assert actor.get('publicKey') or actor.get('assertionMethod'), 'Actor signing key missing'
+          alias_status, _, alias_payload = get('/actor', 'application/activity+json')
+          assert alias_status == 200
+          canonical = json.loads(alias_payload)
+          assert canonical.get('id') == actor['id'], 'Alternate actor path changed identity'
+          assert canonical.get('publicKey') == actor.get('publicKey'), 'Actor keys changed between requests'
+          print('PASS: canonical Fedify ActivityPub actor alias and stable public signing keys')
+          import hashlib
+          import urllib.parse
+          pubkey = actor.get('publicKey') or actor.get('assertionMethod')
+          key_digest = hashlib.sha256(json.dumps(pubkey, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+          print('Public actor key fingerprint (SHA256):', key_digest)
+          from pathlib import Path
+          approved_key = Path('.github/gateway-staging-key-sha256.txt').read_text(encoding='utf-8').strip()
+          assert len(approved_key) == 64 and all(ch in '0123456789abcdef' for ch in approved_key)
+          assert key_digest == approved_key, 'Unexpected actor signing-key change'
+
+          resource = 'acct:atlas-discovery-gateway@staging-gateway.damonoutlaw.xyz'
+          webfinger_path = '/.well-known/webfinger?' + urllib.parse.urlencode({'resource': resource})
+          status, headers, payload = get(webfinger_path, 'application/jrd+json')
+          assert status == 200, f'WebFinger handle lookup: {status}'
+          assert_edge(headers)
+          finger = json.loads(payload)
+          assert finger.get('subject') == resource, f"WebFinger subject mismatch: {finger.get('subject')!r}"
+          assert any(
+              x.get('rel') == 'self' and x.get('href') == base + '/actor'
+              for x in finger.get('links', [])
+          ), 'WebFinger does not resolve to the canonical actor URI'
+          print('PASS: advertised handle resolves over public WebFinger to /actor')
+
+
+          status, headers, payload = get('/api/v1/items?limit=1')
+          assert status == 200
+          assert_edge(headers)
+          data = json.loads(payload)
+          assert isinstance(data.get('items'), list), 'Unexpected discovery read response'
+          assert len(data['items']) <= 1
+          for item in data['items']:
+              assert isinstance(item.get('id'), str) and item['id'].startswith('https://')
+              assert isinstance(item.get('text'), str)
+              assert 'synthetic private content' not in item['text']
+              assert 'must never be ingested' not in item['text']
+          print('PASS: publicly accessible discovery API and private fixture exclusions')
+
+          try:
+              get('/admin/subscriptions', retries=1)
+          except urllib.error.HTTPError as exc:
+              assert exc.code == 403, f'Expected edge WAF deny (403), got {exc.code}'
+              assert_edge(exc.headers)
+          else:
+              raise AssertionError('Public admin access was not denied by Cloudflare')
+          print('PASS: Cloudflare denies unauthenticated public admin ingress')
+
+          # The one-shot interoperability fixture is intentionally excluded from
+          # continuous monitoring; it can be retired without affecting the gateway.
+          PY

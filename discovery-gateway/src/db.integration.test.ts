@@ -12,8 +12,9 @@ import { createHandler } from './http.ts';
 import { loadConfig } from './config.ts';
 import { authorizeIngest } from './policy.ts';
 import {
-  acceptedSubscriptionActors, createSubscription, deleteItem, getSubscription,
+  acceptedSubscriptionActors, createSubscription, deleteItem, getSubscription, isAcceptedSubscriptionActor, isActiveLitePubSubscriber,
   initSchema, insertItem, listFacets, listSubscriptions, loadKeyPair, normalizeStoredHashtags, pruneItems, queryItems,
+  suppressItem,
   saveKeyPair, setPendingFollowId, setSubscriptionState, settlePendingFollow, subscriptionByFollowId,
   type GatewayItem,
 } from './db.ts';
@@ -39,7 +40,7 @@ beforeAll(async () => {
   if (!databaseUrl) return;
   sql = postgres(databaseUrl, { max: 8, connect_timeout: 5 });
   await initSchema(sql);
-  await sql`TRUNCATE gateway_items, gateway_seen, gateway_subscriptions, gateway_keys`;
+  await sql`TRUNCATE gateway_items, gateway_seen, gateway_subscriptions, gateway_keys, gateway_suppressed`;
 });
 afterAll(async () => {
   if (sql) await sql.end({ timeout: 5 });
@@ -73,6 +74,47 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect((await subscriptionByFollowId(sql, `${prefix}retry`))?.state).toBe('pending');
   });
 
+  dbTest('indexed sender admission uses exact actor identity, kind and current state', async () => {
+    const host = 'relay-perf.example';
+    const id = crypto.randomUUID();
+    const liteUrl = `https://${host}/actors/lite-${id}`;
+    const siblingUrl = `https://${host}/actors/sibling-${id}`;
+    const tagUrl = `https://${host}/tag/${id}`;
+    const lite = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: liteUrl, actorHost: host,
+      selector: null, followActivityId: `${prefix}perf-lite-${id}`,
+    });
+    const sibling = await createSubscription(sql, {
+      kind: 'litepub', actorUrl: siblingUrl, actorHost: host,
+      selector: null, followActivityId: `${prefix}perf-sibling-${id}`,
+    });
+    const tag = await createSubscription(sql, {
+      kind: 'fedibuzz-tag', actorUrl: tagUrl, actorHost: host,
+      selector: id, followActivityId: `${prefix}perf-tag-${id}`,
+    });
+    expect(await isAcceptedSubscriptionActor(sql, liteUrl)).toBe(false);
+    expect(await isActiveLitePubSubscriber(sql, liteUrl)).toBe(true);
+    expect(await isActiveLitePubSubscriber(sql, siblingUrl)).toBe(true);
+    expect(await isActiveLitePubSubscriber(sql, tagUrl)).toBe(false);
+    expect(await isActiveLitePubSubscriber(sql, `https://${host}/actors/unknown`)).toBe(false);
+
+    await setSubscriptionState(sql, lite.subscription.id, 'accepted');
+    await setSubscriptionState(sql, tag.subscription.id, 'accepted');
+    expect(await isAcceptedSubscriptionActor(sql, liteUrl)).toBe(true);
+    expect(await isAcceptedSubscriptionActor(sql, tagUrl)).toBe(true);
+    expect(await isAcceptedSubscriptionActor(sql, siblingUrl)).toBe(false);
+    expect(await isAcceptedSubscriptionActor(sql, `https://${host}/actors/unknown`)).toBe(false);
+    expect(await isActiveLitePubSubscriber(sql, liteUrl)).toBe(true);
+    expect(await isActiveLitePubSubscriber(sql, tagUrl)).toBe(false);
+
+    await setSubscriptionState(sql, lite.subscription.id, 'disabled');
+    await setSubscriptionState(sql, sibling.subscription.id, 'rejected');
+    expect(await isAcceptedSubscriptionActor(sql, liteUrl)).toBe(false);
+    expect(await isActiveLitePubSubscriber(sql, liteUrl)).toBe(false);
+    expect(await isActiveLitePubSubscriber(sql, siblingUrl)).toBe(false);
+    expect(await isAcceptedSubscriptionActor(sql, tagUrl)).toBe(true);
+  });
+
   dbTest('IDOR: only the admin bearer may mutate even a known subscription UUID', async () => {
     const sub = await createSubscription(sql, {
       kind: 'litepub', actorUrl: 'https://relay.example/actors/idortest',
@@ -90,7 +132,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       sendUndoFollow: async () => { remoteCalls++; },
       fetch: async () => new Response('not found', { status: 404 }),
     } as unknown as Gateway;
-    const handle = createHandler({ cfg, gateway, sql });
+    const handle = createHandler({ cfg, gateway, sql, adminEnabled: true });
     const target = `https://gateway.example/admin/subscriptions/${sub.subscription.id}`;
     for (const method of ['DELETE', 'POST'] as const) {
       const url = method === 'POST' ? target + '/retry' : target;
@@ -230,6 +272,52 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
     expect(await deleteItem(sql, base + 0, author)).toBe(false);
   });
 
+  dbTest('admin takedown persists suppression against later and concurrent signed ingestion', async () => {
+    const id = prefix + 'moderated-' + crypto.randomUUID();
+    expect(await insertItem(sql, item(id))).toBe(true);
+    const cfg = loadConfig({
+      GATEWAY_ORIGIN: 'https://gateway.example',
+      GATEWAY_ADMIN_TOKEN: 'abcdefghijklmnopqrstuvwxyz123456',
+      DATABASE_URL: databaseUrl!,
+    });
+    const gateway = { fetch: async () => new Response('not found', { status: 404 }) } as unknown as Gateway;
+    const url = 'https://gateway.example/admin/moderation/suppress';
+    const payload = JSON.stringify({ id, reason: 'abuse' });
+    const privateHandler = createHandler({ cfg, gateway, sql, adminEnabled: true });
+    const publicHandler = createHandler({ cfg, gateway, sql });
+    const request = (auth?: string, body = payload) => new Request(url, {
+      method: 'POST', headers: auth ? { Authorization: auth } : undefined, body,
+    });
+    expect((await privateHandler(request())).status).toBe(401);
+    expect((await privateHandler(request('Bearer invalid'))).status).toBe(401);
+    expect((await publicHandler(request('Bearer ' + cfg.adminToken))).status).toBe(404);
+    for (const malformed of [
+      '{}', JSON.stringify({ id, reason: 'unsupported' }),
+      JSON.stringify({ id: 'http://localhost/private', reason: 'abuse' }),
+      JSON.stringify({ id: 'https://127.0.0.1/hidden', reason: 'abuse' }),
+    ]) {
+      expect((await privateHandler(request('Bearer ' + cfg.adminToken, malformed))).status).toBe(400);
+    }
+    const approved = await privateHandler(request('Bearer ' + cfg.adminToken));
+    expect(approved.status).toBe(200);
+    expect(await approved.json()).toEqual({ suppressed: true, removed: true, newlySuppressed: true });
+    expect((await sql`SELECT id FROM gateway_items WHERE id = ${id}`).length).toBe(0);
+    const stable = await privateHandler(request('Bearer ' + cfg.adminToken));
+    expect(await stable.json()).toEqual({ suppressed: true, removed: false, newlySuppressed: false });
+    expect((await sql`SELECT object_id, reason FROM gateway_suppressed WHERE object_id = ${id}`).length).toBe(1);
+    expect(await insertItem(sql, item(id, id + '/new-delivery'))).toBe(false);
+    const rival = prefix + 'moderated-race-' + crypto.randomUUID();
+    const outcomes = await Promise.all([
+      ...Array.from({ length: 12 }, (_, i) => insertItem(sql, item(rival, rival + '/delivery-' + i))),
+      suppressItem(sql, rival, 'privacy'),
+    ]);
+    expect(outcomes.at(-1)).toEqual({ suppressed: true, removed: expect.any(Boolean) });
+    expect((await sql`SELECT id FROM gateway_items WHERE id = ${rival}`).length).toBe(0);
+    expect(await insertItem(sql, item(rival, rival + '/later-delivery'))).toBe(false);
+    const otherId = prefix + 'nonmoderated-' + crypto.randomUUID();
+    expect(await insertItem(sql, item(otherId))).toBe(true);
+  });
+
   dbTest('retention bounds oldest rows, not current records', async () => {
     const before = await queryItems(sql, { limit: 100 });
     expect(before.items.length).toBeGreaterThan(2);
@@ -317,7 +405,7 @@ describe('PostgreSQL persistence and subscription lifecycle', () => {
       fetch: async () => new Response('Not found', { status: 404 }),
       lookupActor: async () => null,
     } as unknown as Gateway;
-    const handle = createHandler({ cfg, gateway, sql });
+    const handle = createHandler({ cfg, gateway, sql, adminEnabled: true });
     const anonymous = await handle(new Request('https://gateway.example/admin/subscriptions'));
     expect(anonymous.status).toBe(401);
     const headers = { Authorization: `Bearer ${cfg.adminToken}` };

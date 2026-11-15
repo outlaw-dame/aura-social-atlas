@@ -130,18 +130,21 @@ export type Database = {
           client_secret: string
           created_at: string
           redirect_uri: string
+          scopes: string
         }
         Insert: {
           client_id: string
           client_secret: string
           created_at?: string
           redirect_uri: string
+          scopes?: string
         }
         Update: {
           client_id?: string
           client_secret?: string
           created_at?: string
           redirect_uri?: string
+          scopes?: string
         }
         Relationships: []
       }
