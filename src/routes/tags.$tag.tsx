@@ -4,6 +4,8 @@ import { ArrowLeft, ArrowUpRight, Link2, MessageCircle, Repeat2, Star } from 'lu
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { FEED_PROBLEM, useTagFeed } from '@/components/social/useFeeds';
+import { FollowTagButton } from '@/components/social/FollowedHashtags';
+import { useTagFollowState } from '@/components/social/useTagFollow';
 import { StandaloneDesktopHosts } from '@/components/social/DesktopHosts';
 import { useFedizen } from '@/components/social/useFedizen';
 import { Button } from '@/components/ui/button';
@@ -39,18 +41,27 @@ function TagBody({ tag }: { tag: string }) {
   // fails or access lapsed, that failure with its retry or reconnect, never someone else's feed in its place. Only a
   // signed-out reader, or one who hasn't connected Fedizen, gets the public posts below, from mastodon.social.
   const personal = !!user && fedizen.data?.error !== 'not-connected';
+  const followState = useTagFollowState(norm);
   if (loading || (user && fedizen.isLoading)) return <TagShell tag={tag}><p className="text-sm text-muted-foreground">Loading posts…</p></TagShell>;
-  if (personal) return <TagShell tag={tag} >
+  // Follow / Following sits in the header, as Mastodon offers it, once Fedizen has answered for this account.
+  // Only once the list of tags you follow has arrived, so it never offers Follow for a tag you already follow.
+  const feedOk = personal && !fedizen.isError && !fedizen.data?.error;
+  const action = !feedOk ? null
+    : followState.known ? <FollowTagButton tag={norm} following={followState.following} />
+    : followState.failed ? <p role="alert" className="text-xs text-muted-foreground">Couldn’t check whether you follow this. <button type="button" className="underline" onClick={followState.retry}>Try again</button></p>
+    : null;
+  if (personal) return <TagShell tag={tag} action={action}>
     <FedizenTagPosts posts={fedizen.data?.posts ?? []} tag={tag} failed={fedizen.isError} problem={fedizen.data?.error} retry={() => void fedizen.refetch()} />
   </TagShell>;
   return <PublicTagPage tag={tag} />;
 }
 
-function TagShell({ tag, children }: { tag: string; children: React.ReactNode }) {
+function TagShell({ tag, action, children }: { tag: string; action?: React.ReactNode; children: React.ReactNode }) {
   return <main className="mx-auto min-h-dvh max-w-2xl px-4 py-6">
     <Link to="/feeds" className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />Feeds</Link>
-    <header className="mb-6 border-b border-border pb-5">
+    <header className="mb-6 flex items-center justify-between gap-4 border-b border-border pb-5">
       <h1 className="font-serif text-4xl italic text-accent">{tag}</h1>
+      {action}
     </header>
     {children}
   </main>;

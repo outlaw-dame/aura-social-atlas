@@ -347,7 +347,7 @@ const ID = '[A-Za-z0-9_-]{1,64}';
 /** A hashtag, percent-encoded (letters in any script arrive as %XX). */
 // A followed tag's name is at most 100 characters; percent-encoded, a 4-byte UTF-8 character takes 12.
 const TAG = '[A-Za-z0-9_%]{1,1200}';
-const followedTagsSchema = z.array(z.object({ name: z.string().min(1).max(100) })).max(100);
+const followedTagsSchema = z.array(z.object({ name: z.string().min(1).max(100) })).max(200);
 /** Every private read Atlas makes, each with the schema its answer must match. Anything else is refused. */
 const ACCT = '[A-Za-z0-9_.%-]{1,64}(%40[A-Za-z0-9.-]{1,253})?';
 const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
@@ -365,7 +365,8 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   // People whose name or handle starts with what's typed after "@" in a reply (mention suggestions).
   { match: new RegExp(`^/api/v1/accounts/search\\?q=${ACCT}&limit=6$`), schema: z.array(account.extend({ id: z.string().min(1).max(64) })).max(40) },
   // For You: the hashtags you follow (Bonfire: MastoTagController.followed), and each one's timeline.
-  { match: /^\/api\/v1\/followed_tags\?limit=(20|100)$/, schema: followedTagsSchema },
+  // 200 is Bonfire's (and Mastodon's) maximum page: the Followed hashtags list in Settings reads one full page.
+  { match: /^\/api\/v1\/followed_tags\?limit=(20|100|200)$/, schema: followedTagsSchema },
   { match: new RegExp(`^/api/v1/timelines/tag/${TAG}\\?limit=(10|20)$`), schema: homeSchema },
   // A circle's timeline (Bonfire: MastoListController.list_timeline over Circles), for circles pinned to Feeds.
   { match: new RegExp(`^/api/v1/timelines/list/${ID}\\?limit=20$`), schema: homeSchema },
@@ -429,6 +430,8 @@ const members = z.object({ account_ids: z.array(z.string().regex(new RegExp(`^${
 const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTypeAny }[] = [
   { method: 'POST', match: new RegExp(`^/api/v1-bonfire/groups/${ID}/(join|leave)$`) },
   { method: 'POST', match: new RegExp(`^/api/v1/accounts/${ID}/(follow|unfollow)$`) },
+  // Follow or unfollow a hashtag, as Mastodon does (Bonfire: MastoTagController, bonfire_tag; following creates the tag).
+  { method: 'POST', match: new RegExp(`^/api/v1/tags/${TAG}/(follow|unfollow)$`) },
   { method: 'POST', match: new RegExp(`^/api/v1/statuses/${ID}/(bookmark|unbookmark|favourite|unfavourite|reblog|unreblog)$`) },
   { method: 'POST', match: /^\/api\/v1\/statuses$/, body: reply },
   { method: 'POST', match: new RegExp(`^/api/v1/accounts/${ID}/(block|unblock)$`) },

@@ -376,14 +376,30 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
 /** The hashtags the person follows on Fedizen (lowercase, no "#"), for marking posts that use them. */
 export const getFollowedTags = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.parse(d))
-  .handler(async ({ data, context }): Promise<{ tags: string[]; error?: Problem }> => {
+  .handler(async ({ data, context }): Promise<{ tags: string[]; names?: string[]; full?: boolean; error?: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId);
     if ('error' in c) return { tags: [], error: c.error };
     const { fedizenGet } = await import('./fedizen.server');
-    const r = await fedizenGet(c.token, '/api/v1/followed_tags?limit=100').catch(() => null);
+    const r = await fedizenGet(c.token, '/api/v1/followed_tags?limit=200').catch(() => null);
     if (!r || r.status !== 200) return { tags: [], error: r ? problem(r.status) : 'unavailable' };
-    return { tags: [...new Set((r.data as { name: string }[]).map(t => t.name.replace(/^#/, '').toLowerCase()))] };
+    const names = (r.data as { name: string }[]).map(t => t.name.replace(/^#/, ''));
+    return { tags: [...new Set(names.map(n => n.toLowerCase()))], names, full: names.length >= 200 };
+  });
+
+/** Follow or unfollow a hashtag from the person's Fedizen account, as Mastodon does: one tap on the tag's page. */
+export const setTagFollow = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ tag: z.string().regex(/^[\p{L}\p{N}_]{1,100}$/u), on: z.boolean() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; following: boolean } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const r = await fedizenSend(c.token, 'POST', `/api/v1/tags/${encodeURIComponent(data.tag)}/${data.on ? 'follow' : 'unfollow'}`);
+    // Unfollowing a tag Fedizen has never seen answers 404: either way, it isn't followed.
+    if (!data.on && r.status === 404) return { ok: true, following: false };
+    if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
+    return { ok: true, following: typeof r.data?.following === 'boolean' ? r.data.following : data.on };
   });
 
 /** A hashtag's feed as the person sees it on Fedizen: the posts using it that they may see and act on (Bonfire applies
