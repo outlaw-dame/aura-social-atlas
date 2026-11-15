@@ -92,6 +92,8 @@ function useAdaptiveLayout(profile: DeviceProfile) {
       }
       const tabbar = profile.nav === 'tabbar' || profile.nav === 'tabbar-side' || profile.nav === 'deck';
       if (tabbar) f7.toolbar.show('.atlas-tabbar', false); else f7.toolbar.hide('.atlas-tabbar', false);
+      // Floating players (video, podcast) sit above the tab bar only when there is one (not with a rail or sidebar).
+      html.classList.toggle('atlas-has-tabbar', tabbar);
     });
   }, [profile]);
   // The <html> element is shared with the classic site: clear everything when /app unmounts.
@@ -99,7 +101,7 @@ function useAdaptiveLayout(profile: DeviceProfile) {
     const html = document.documentElement;
     for (const k of LAYOUT_KEYS) delete html.dataset[k];
     for (const v of LAYOUT_VARS) html.style.removeProperty(v);
-    html.classList.remove('atlas-rail');
+    html.classList.remove('atlas-rail', 'atlas-has-tabbar');
   }, []);
 }
 
@@ -137,8 +139,6 @@ export default function AtlasMobileApp() {
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [moderationOpen, setModerationOpen] = useState(false);
   const accent = useAccent();
-  // The floating video player sits above the tab bar on the phone.
-  useEffect(() => { document.documentElement.classList.add('atlas-has-tabbar'); return () => document.documentElement.classList.remove('atlas-has-tabbar'); }, []);
   // Framework7 derives its theme palette from the primary color; recompute it when the reader picks another accent.
   useEffect(() => { f7ready(() => f7.setColorTheme(accentHex(accent))); }, [accent]);
   const fediProfile = useFediProfileOpener();

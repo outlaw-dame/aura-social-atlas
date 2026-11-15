@@ -577,6 +577,9 @@ html.atlas-has-tabbar .atlas-pip { --pip-bottom: calc(var(--pip-gap) + var(--f7-
 .atlas-pip[data-corner^="t"] .atlas-pip-resize { top: auto; bottom: 0; }
 
 .atlas-mini { position: fixed; z-index: 5500; left: 8px; right: 8px; bottom: calc(var(--f7-toolbar-height, 50px) + var(--f7-safe-area-bottom, 0px) + 8px); height: 56px; display: flex; align-items: center; gap: 2px; padding: 0 6px 0 8px; border-radius: 16px; overflow: hidden; background: color-mix(in oklab, var(--f7-bars-bg-color, var(--card)) 82%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border: .5px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.18); color: var(--f7-text-color, inherit); }
+/* Without a tab bar (rail or sidebar on wide and unfolded screens) the podcast bar sits at the bottom, clear of the rail. */
+html:not(.atlas-has-tabbar) .atlas-mini { bottom: calc(var(--f7-safe-area-bottom, 0px) + 8px); }
+html.atlas-rail .atlas-mini { left: calc(var(--f7-panel-width, 88px) + 8px); }
 .atlas-mini-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; border: 0; background: none; color: inherit; text-align: left; padding: 0; cursor: pointer; }
 .atlas-mini-open img, .atlas-mini-open .atlas-episode-initial { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex: none; font-size: 16px; }
 .atlas-mini-open span { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
