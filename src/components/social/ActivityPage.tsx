@@ -14,7 +14,7 @@ const kinds: Record<string, { icon: typeof Bell; color: string }> = {
   poll: { icon: BarChart3, color: 'var(--accent)' },
 };
 
-/** Desktop Activity page: the person's real Fedizen notifications (read-only), as the phone app's Activity tab. */
+/** Desktop Activity page: the person's real Fedizen notifications, as the phone app's Activity tab. */
 export function ActivityPage() {
   const f = useFedizen();
   const note = (children: React.ReactNode) => <div className="rounded-2xl border border-border p-6 text-sm text-muted-foreground">{children}</div>;
@@ -22,7 +22,7 @@ export function ActivityPage() {
   if (f.loading) return note('Loading your activity…');
   if (f.queryError) return note(<>Atlas couldn’t check your Fedizen connection. <Button variant="link" size="sm" className="px-1" onClick={f.retry}>Try again</Button></>);
   if (!f.data?.connected || f.data.error === 'expired') return note(<>
-    <p>{f.data?.error === 'expired' ? 'Fedizen ended Atlas’s access. Connect again to see your activity.' : 'Connect Fedizen to see your notifications here. Atlas can only read — it can’t post, follow or change anything.'}</p>
+    <p>{f.data?.error === 'expired' ? 'Fedizen ended Atlas’s access. Connect again to see your activity.' : 'Connect your Fedizen account to see your notifications here, and to join groups and follow people from Atlas.'}</p>
     {f.embedded ? <Button asChild className="mt-4"><a href={`${window.location.origin}/activity`} target="_blank" rel="noopener noreferrer">Open Atlas in a new tab to connect<ArrowUpRight /></a></Button>
       : <Button className="mt-4" onClick={f.connect}><Link2 />Connect Fedizen</Button>}
     {f.error && <p role="alert" className="mt-3 text-destructive">{f.error}</p>}

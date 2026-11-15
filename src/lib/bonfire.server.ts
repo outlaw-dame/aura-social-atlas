@@ -1,38 +1,48 @@
 import { fromBonfireArticles, fromBonfirePosts, type BonfireActivityNode } from './spotlight';
-
-const query = (feed: string) => `{feedActivities(first:20,filter:{feedName:"${feed}"}){edges{node{id date canonicalUri verb{verb} boostCount likeCount repliesCount objectPostContent{name summary htmlBody} subject{... on User{character{username canonicalUri} profile{name icon}}} media{url mediaType} object{... on Post{id creator{... on User{character{username canonicalUri} profile{name icon}}}}}}}}}`;
-
+import { requestBonfireGraphQL } from './bonfire-graphql.server';
+import { publicFeedDocument, validatedBonfireNodes, type PublicFeedName } from './bonfire/graphql/operations';
 import type { RecentArticlesResult, PublicFeedResult } from './bonfire.functions';
 
-/** Public read of Fedizen's Bonfire GraphQL "articles" feed — the same data as Bonfire's Recent Articles. */
-async function feed(name: string): Promise<BonfireActivityNode[] | null> {
-  try {
-    const res = await fetch('https://fedizen.net/api/graphql', {
-      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ query: query(name) }), signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) { console.error(`Fedizen ${name} feed failed [${res.status}]`); return null; }
-    const json = await res.json() as { data?: { feedActivities?: { edges?: { node: BonfireActivityNode }[] } }; errors?: unknown };
-    if (json.errors || !json.data?.feedActivities) { console.error(`Fedizen ${name} GraphQL error`, JSON.stringify(json.errors).slice(0, 500)); return null; }
-    return (json.data.feedActivities.edges ?? []).map(e => e.node);
-  } catch (e) { console.error(`Fedizen ${name} fetch error`, e); return null; }
+/**
+ * The public feed operation remains a candidate contract until the actual
+ * installed Fedizen GraphQL schema has been captured (Phase A).
+ */
+function validatePublicFeed(data: unknown): BonfireActivityNode[] {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('Invalid GraphQL data');
+  }
+  const feed = (data as Record<string, unknown>).feedActivities;
+  if (!feed || typeof feed !== 'object' || Array.isArray(feed)) {
+    throw new Error('Invalid GraphQL feed');
+  }
+  return validatedBonfireNodes((feed as Record<string, unknown>).edges);
 }
 
-/** Public Bonfire "local" feed: what Fedizen members are posting, no sign-in needed. */
+async function readPublicFeed<T>(
+  name: PublicFeedName,
+  normalize: (nodes: BonfireActivityNode[]) => T,
+): Promise<T | null> {
+  try {
+    const nodes = await requestBonfireGraphQL({
+      operation: 'query',
+      document: publicFeedDocument(name),
+      validate: validatePublicFeed,
+    });
+    // Normalize inside the same failure boundary: nested remote fields can be
+    // malformed even after the top-level GraphQL edge shape is valid.
+    return normalize(nodes);
+  } catch {
+    console.error('Bonfire public feed unavailable', { feed: name });
+    return null;
+  }
+}
+
 export async function fetchPublicFeed(): Promise<PublicFeedResult> {
-  const nodes = await feed('local');
-  return nodes ? { posts: fromBonfirePosts(nodes) } : { posts: [], error: 'unavailable' };
+  const posts = await readPublicFeed('local', fromBonfirePosts);
+  return posts ? { posts } : { posts: [], error: 'unavailable' };
 }
 
 export async function fetchRecentArticles(): Promise<RecentArticlesResult> {
-  try {
-    const res = await fetch('https://fedizen.net/api/graphql', {
-      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ query: query('articles') }), signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) { console.error(`Fedizen articles failed [${res.status}]`); return { articles: [], error: 'unavailable' }; }
-    const json = await res.json() as { data?: { feedActivities?: { edges?: { node: never }[] } }; errors?: unknown };
-    if (json.errors || !json.data?.feedActivities) { console.error('Fedizen articles GraphQL error', JSON.stringify(json.errors).slice(0, 500)); return { articles: [], error: 'unavailable' }; }
-    return { articles: fromBonfireArticles((json.data.feedActivities.edges ?? []).map(e => e.node)) };
-  } catch (e) { console.error('Fedizen articles fetch error', e); return { articles: [], error: 'unavailable' }; }
+  const articles = await readPublicFeed('articles', fromBonfireArticles);
+  return articles ? { articles } : { articles: [], error: 'unavailable' };
 }

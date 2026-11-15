@@ -10,12 +10,16 @@ export type GatewayConfig = {
   databaseUrl: string | null;
   /** Bearer token for the admin API. Required, min 32 chars. Never exposed to any frontend. */
   adminToken: string;
+  /** Optional Cloudflare-to-origin shared secret for public ingress (never a browser credential). */
+  edgeSecret: string | null;
   /** Origins allowed to call the public read API cross-origin (CORS). Empty = same-origin only. */
   corsAllowlist: string[];
   /** Reserved for compatibility; always false because PostgreSQL is required. */
   devMemoryStore: boolean;
   /** Port for Bun.serve. */
   port: number;
+  /** Dedicated private Railway-network admin listener, never publicly routed. */
+  adminPort: number;
   /** Max bytes accepted for an inbound federation POST body. */
   maxBodyBytes: number;
   /** Max redirects followed when fetching remote objects. */
@@ -68,6 +72,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new Error('DATABASE_URL must use a PostgreSQL connection URL.');
   }
   const adminToken = required(env, 'GATEWAY_ADMIN_TOKEN');
+  const edgeSecret = env['GATEWAY_EDGE_SECRET']?.trim() || null;
+  if (edgeSecret && edgeSecret.length < 32) throw new Error('GATEWAY_EDGE_SECRET must be at least 32 characters.');
   if (adminToken.length < 32) throw new Error('GATEWAY_ADMIN_TOKEN must be at least 32 characters.');
   const corsAllowlist = (env['GATEWAY_CORS_ORIGINS'] ?? '')
     .split(',').map(s => s.trim()).filter(Boolean)
@@ -81,13 +87,18 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       }
       return u.origin;
     });
+  const port = intInRange('PORT', env['PORT'], 4100, 1, 65535);
+  const adminPort = intInRange('GATEWAY_ADMIN_PORT', env['GATEWAY_ADMIN_PORT'], 4101, 1, 65535);
+  if (adminPort === port) throw new Error('GATEWAY_ADMIN_PORT must differ from public PORT.');
   return {
     origin: originUrl.origin,
     databaseUrl,
     adminToken,
+    edgeSecret,
     corsAllowlist,
     devMemoryStore,
-    port: intInRange('PORT', env['PORT'], 4100, 1, 65535),
+    port,
+    adminPort,
     maxBodyBytes: intInRange('GATEWAY_MAX_BODY_BYTES', env['GATEWAY_MAX_BODY_BYTES'], 1_048_576, 1024, 16 * 1024 * 1024),
     maxRedirects: intInRange('GATEWAY_MAX_REDIRECTS', env['GATEWAY_MAX_REDIRECTS'], 3, 0, 10),
     fetchTimeoutMs: intInRange('GATEWAY_FETCH_TIMEOUT_MS', env['GATEWAY_FETCH_TIMEOUT_MS'], 10_000, 1000, 60_000),

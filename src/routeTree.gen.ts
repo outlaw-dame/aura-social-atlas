@@ -17,6 +17,7 @@ import { Route as FeedsRouteImport } from './routes/feeds'
 import { Route as FollowingRouteImport } from './routes/following'
 import { Route as GroupsRouteImport } from './routes/groups'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
+import { Route as MessagesRouteImport } from './routes/messages'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SavedRouteImport } from './routes/saved'
@@ -67,6 +68,11 @@ const GroupsRoute = GroupsRouteImport.update({
 const IntelligenceRoute = IntelligenceRouteImport.update({
   id: '/intelligence',
   path: '/intelligence',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MessagesRoute = MessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProfileRoute = ProfileRouteImport.update({
@@ -134,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/following': typeof FollowingRoute
   '/groups': typeof GroupsRoute
   '/intelligence': typeof IntelligenceRoute
+  '/messages': typeof MessagesRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/saved': typeof SavedRoute
@@ -155,6 +162,7 @@ export interface FileRoutesByTo {
   '/following': typeof FollowingRoute
   '/groups': typeof GroupsRoute
   '/intelligence': typeof IntelligenceRoute
+  '/messages': typeof MessagesRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/saved': typeof SavedRoute
@@ -176,6 +184,7 @@ export interface FileRoutesById {
   '/following': typeof FollowingRoute
   '/groups': typeof GroupsRoute
   '/intelligence': typeof IntelligenceRoute
+  '/messages': typeof MessagesRoute
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/saved': typeof SavedRoute
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
     | '/following'
     | '/groups'
     | '/intelligence'
+    | '/messages'
     | '/profile'
     | '/reset-password'
     | '/saved'
@@ -220,6 +230,7 @@ export interface FileRouteTypes {
     | '/following'
     | '/groups'
     | '/intelligence'
+    | '/messages'
     | '/profile'
     | '/reset-password'
     | '/saved'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/following'
     | '/groups'
     | '/intelligence'
+    | '/messages'
     | '/profile'
     | '/reset-password'
     | '/saved'
@@ -262,6 +274,7 @@ export interface RootRouteChildren {
   FollowingRoute: typeof FollowingRoute
   GroupsRoute: typeof GroupsRoute
   IntelligenceRoute: typeof IntelligenceRoute
+  MessagesRoute: typeof MessagesRoute
   ProfileRoute: typeof ProfileRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SavedRoute: typeof SavedRoute
@@ -328,6 +341,13 @@ declare module '@tanstack/react-router' {
       path: '/intelligence'
       fullPath: '/intelligence'
       preLoaderRoute: typeof IntelligenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/messages': {
+      id: '/messages'
+      path: '/messages'
+      fullPath: '/messages'
+      preLoaderRoute: typeof MessagesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/profile': {
@@ -435,6 +455,7 @@ const rootRouteChildren: RootRouteChildren = {
   FollowingRoute: FollowingRoute,
   GroupsRoute: GroupsRoute,
   IntelligenceRoute: IntelligenceRoute,
+  MessagesRoute: MessagesRoute,
   ProfileRoute: ProfileRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SavedRoute: SavedRoute,

@@ -1,0 +1,97 @@
+name: Gateway isolated cross-revision schema rollback compatibility
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-schema-rollback.yml'
+      - 'discovery-gateway/src/db.ts'
+      - 'discovery-gateway/src/stores.ts'
+      - 'discovery-gateway/package.json'
+      - 'discovery-gateway/bun.lock'
+permissions:
+  contents: read
+jobs:
+  rollback-compat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      db:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: rollback_ci
+          POSTGRES_PASSWORD: synthetic_ci_only
+          POSTGRES_DB: rollback_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rollback_ci -d rollback_ci"
+          --health-interval 2s --health-timeout 2s --health-retries 12
+    env:
+      GATEWAY_TEST_DATABASE_URL: postgres://rollback_ci:synthetic_ci_only@127.0.0.1:5432/rollback_ci
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: current
+      - uses: actions/checkout@v6
+        with:
+          ref: ad18ba39f0dfce569cbc1e4f78585d819e8a519c
+          path: deployed-baseline
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - name: Install pinned packages for both isolated revisions
+        run: |
+          set -euo pipefail
+          (cd deployed-baseline/discovery-gateway && bun install --frozen-lockfile)
+          (cd current/discovery-gateway && bun install --frozen-lockfile)
+      - name: Initialize the real schema with previously deployed revision
+        working-directory: deployed-baseline/discovery-gateway
+        run: |
+          bun -e 'import postgres from "postgres"; import { initSchema } from "./src/db.ts"; const sql=postgres(process.env.GATEWAY_TEST_DATABASE_URL!); try { await initSchema(sql) } finally { await sql.end() }'
+      - name: Seed synthetic actor identity, subscription, post and seen activity
+        run: |
+          set -euo pipefail
+          docker run --rm -i --network host postgres:18-alpine \
+            psql "$GATEWAY_TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO gateway_keys(actor_identifier,private_key,public_key)
+            VALUES ('gateway','{"synthetic":"nonsecret-private"}'::jsonb,'{"synthetic":"nonsecret-public"}'::jsonb);
+          INSERT INTO gateway_subscriptions(kind,actor_url,actor_host,state,follow_activity_id)
+            VALUES ('litepub','https://synthetic.invalid/actor','synthetic.invalid','accepted','https://synthetic.invalid/follow');
+          INSERT INTO gateway_items(id,activity_id,relay_actor,author_id,object_origin,text)
+            VALUES ('https://synthetic.invalid/post','https://synthetic.invalid/create',
+                    'https://synthetic.invalid/actor','https://synthetic.invalid/actor',
+                    'https://synthetic.invalid','synthetic-compatible');
+          INSERT INTO gateway_seen(activity_id)
+            VALUES ('https://synthetic.invalid/replayed');
+          SQL
+      - name: Snapshot only synthetic identity and state fingerprints
+        run: |
+          set -euo pipefail
+          docker run --rm --network host postgres:18-alpine \
+            psql "$GATEWAY_TEST_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 -c "
+            SELECT 'keys:' || actor_identifier || ':' || md5(private_key::text || ':' || public_key::text) FROM gateway_keys
+            UNION ALL SELECT 'subscriptions:' || actor_url || ':' || state || ':' || follow_activity_id FROM gateway_subscriptions
+            UNION ALL SELECT 'items:' || id || ':' || activity_id || ':' || text FROM gateway_items
+            UNION ALL SELECT 'seen:' || activity_id FROM gateway_seen
+            ORDER BY 1;" > /tmp/baseline-state.txt
+          test "$(wc -l < /tmp/baseline-state.txt)" -eq 4
+      - name: Initialize schema using newer source on same database
+        working-directory: current/discovery-gateway
+        run: |
+          bun -e 'import postgres from "postgres"; import { initSchema } from "./src/db.ts"; const sql=postgres(process.env.GATEWAY_TEST_DATABASE_URL!); try { await initSchema(sql) } finally { await sql.end() }'
+      - name: Reinitialize schema using previously deployed source
+        working-directory: deployed-baseline/discovery-gateway
+        run: |
+          bun -e 'import postgres from "postgres"; import { initSchema } from "./src/db.ts"; const sql=postgres(process.env.GATEWAY_TEST_DATABASE_URL!); try { await initSchema(sql) } finally { await sql.end() }'
+      - name: Verify no identity or data loss across both revisions
+        run: |
+          set -euo pipefail
+          docker run --rm --network host postgres:18-alpine \
+            psql "$GATEWAY_TEST_DATABASE_URL" -XAt -v ON_ERROR_STOP=1 -c "
+            SELECT 'keys:' || actor_identifier || ':' || md5(private_key::text || ':' || public_key::text) FROM gateway_keys
+            UNION ALL SELECT 'subscriptions:' || actor_url || ':' || state || ':' || follow_activity_id FROM gateway_subscriptions
+            UNION ALL SELECT 'items:' || id || ':' || activity_id || ':' || text FROM gateway_items
+            UNION ALL SELECT 'seen:' || activity_id FROM gateway_seen
+            ORDER BY 1;" > /tmp/rollback-state.txt
+          cmp /tmp/baseline-state.txt /tmp/rollback-state.txt
+          echo 'PASS: prior->current->prior schema initialization preserved synthetic keys, subscriptions, items and deduplication'

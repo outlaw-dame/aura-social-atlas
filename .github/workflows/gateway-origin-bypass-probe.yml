@@ -1,0 +1,86 @@
+name: Gateway staging origin-bypass security probe
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 9 * * 1'
+  pull_request:
+    paths:
+      - '.github/workflows/gateway-origin-bypass-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  public-origin-bypass:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify cloud edge restriction cannot be bypassed by direct Railway ingress
+        run: |
+          python3 - <<'PY'
+          import ssl
+          import urllib.error
+          import urllib.request
+
+          origin = 'https://qb9rmgmw.up.railway.app'
+          public_host = 'staging-gateway.damonoutlaw.xyz'
+          opener = urllib.request.build_opener(
+              urllib.request.HTTPSHandler(context=ssl.create_default_context()),
+          )
+
+          def probe(path, host):
+              request = urllib.request.Request(
+                  origin + path,
+                  headers={'Host': host, 'User-Agent': 'AtlasSecurityOriginProbe/1.0'},
+              )
+              try:
+                  with opener.open(request, timeout=12) as response:
+                      return response.status, dict(response.headers)
+              except urllib.error.HTTPError as response:
+                  return response.code, dict(response.headers)
+
+          # An origin may reject unknown Host routing at its edge, but must also
+          # reject a forged custom Host; TLS SNI remains the direct origin name.
+          # The Railway public domain was removed after Cloudflare Tunnel
+          # cutover. A forged Host must now be rejected by Railway routing
+          # (404/421), or by gateway origin authentication (403) if routed.
+          # These are all explicit *denials*, never proof from a 429 or 5xx.
+          # Test each public attack surface against both raw and spoofed Host.
+          for path in (
+              '/healthz',
+              '/actor',
+              '/api/v1/items?limit=1',
+              '/actors/gateway/inbox',
+              '/admin/subscriptions',
+          ):
+              direct, direct_headers = probe(path, 'qb9rmgmw.up.railway.app')
+              forged, forged_headers = probe(path, public_host)
+              assert direct == 404, (
+                  f'Unmapped Railway origin served {path}: HTTP {direct}'
+              )
+              assert forged in (403, 404, 421), (
+                  f'Forged Host reached {path}: HTTP {forged}'
+              )
+              assert not direct_headers.get('Cf-Ray'), (
+                  f'Direct-origin probe unexpectedly passed through Cloudflare: {path}'
+              )
+              assert not forged_headers.get('Cf-Ray'), (
+                  f'Forged Host unexpectedly passed through Cloudflare: {path}'
+              )
+              print('PASS: routing/origin-auth denied', path,
+                    'direct', direct, 'forged', forged)
+
+          print('PASS: five direct-origin routes reject raw and forged Host')
+          # Positive-path assertion: origin authentication must not break
+          # legitimate Cloudflare-forwarded traffic or public key discovery.
+          cloudflare_url = 'https://' + public_host + '/healthz'
+          with opener.open(urllib.request.Request(cloudflare_url,
+                      headers={'User-Agent': 'AtlasSecurityOriginProbe/1.0'}), timeout=12) as res:
+              assert res.status == 200, 'Cloudflare HTTPS health is not available'
+              assert res.headers.get('Cf-Ray'), 'Cloudflare proxy header missing'
+              assert res.headers.get('Cache-Control') == 'no-store'
+              assert res.read(4096).strip() == b'{"ok":true}', 'Gateway database-backed health failed'
+          print('PASS: legitimate Cloudflare HTTPS still reaches healthy gateway')
+
+          PY
