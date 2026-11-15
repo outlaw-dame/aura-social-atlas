@@ -56,6 +56,16 @@ function mediaSession(ep: FediEpisode) {
   on('seekto', d => { if (d.seekTime != null) seek(d.seekTime); });
 }
 
+/** Starts playback; a rejection counts as an error only if it isn't a deliberate abort (pausing, or switching
+ *  episodes, while the audio is still loading) and the episode is still the one loaded. */
+function start(a: HTMLAudioElement, url: string) {
+  void a.play().catch((e: unknown) => {
+    if (state.current !== url) return;
+    const aborted = e instanceof DOMException && e.name === 'AbortError';
+    set({ loading: false, ...(aborted ? {} : { error: true }) });
+  });
+}
+
 /** Play this episode (loading it first if another was playing), or pause it. */
 export function toggle(ep: FediEpisode) {
   const a = element();
@@ -65,10 +75,10 @@ export function toggle(ep: FediEpisode) {
     a.src = ep.audio.src;
     set({ current: ep.url, playing: false, loading: true, time: 0, duration: ep.duration, error: false });
     mediaSession(ep);
-    void a.play().catch(() => set({ loading: false, error: true }));
+    start(a, ep.url);
     return;
   }
-  if (a.paused) { set({ loading: true }); void a.play().catch(() => set({ loading: false, error: true })); }
+  if (a.paused) { set({ loading: true, error: false }); start(a, ep.url); }
   else a.pause();
 }
 
