@@ -5,6 +5,7 @@ import type { PostArticle } from '@/lib/fedizen-feed';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { VideoPlayer } from './VideoPlayer';
 import { EpisodePlayer } from './EpisodePlayer';
+import { RichLink } from './RichLink';
 
 function AuthorAvatar({ a }: { a: FediAuthor }) {
   const [broken, setBroken] = useState(false);
@@ -45,13 +46,8 @@ export function PostArticleCard({ article }: { article?: PostArticle }) {
   const showLink = !!(article.title || article.authors?.length || article.byline);
   if (!showLink) return null;
   return <div className="mt-3">
-    {article.title && <a href={article.url} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 rounded-2xl border border-border p-3 transition-colors hover:bg-secondary/60">
-      <span className="min-w-0 flex-1">
-        <span className="block text-[11px] text-muted-foreground">{article.authors?.[0]?.work === 'episode' ? `Podcast episode · ${article.provider || host}` : article.provider || host}</span>
-        <span className="mt-0.5 line-clamp-2 block text-sm font-semibold">{article.title}</span>
-      </span>
-      <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-    </a>}
-    <AuthorCards authors={article.authors} byline={article.byline} className="mt-2" />
+    {article.title && <RichLink article={article} kicker={article.authors?.[0]?.work === 'episode' ? `Podcast episode · ${article.provider || host}` : undefined} />}
+    {/* With a preview, its card carries the creators; these are for a credit without one. */}
+    {!article.title && <AuthorCards authors={article.authors} byline={article.byline} className="mt-2" />}
   </div>;
 }

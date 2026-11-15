@@ -48,8 +48,33 @@ async function gql<T>(query: string, variables: Record<string, unknown> = {}): P
 }
 
 /** Posts reach a group through the group's boost, so the booster is the group, not a person who boosted. */
-const groupPosts = (nodes: BonfireActivityNode[]): GroupPost[] =>
-  fromBonfirePosts(nodes).map(({ boostedBy, ...p }) => ({ ...p, group: boostedBy }));
+/** Bonfire's REST API knows a post by its object id (the same ULID), so group posts can be liked, boosted,
+ *  saved and replied to like any other. */
+const groupPosts = (nodes: BonfireActivityNode[]): GroupPost[] => {
+  const objectOf = new Map(nodes.map(n => [n.id, n.object?.id ?? n.id]));
+  return fromBonfirePosts(nodes).map(({ boostedBy, ...p }) => {
+    const objectId = objectOf.get(p.id);
+    return { ...p, group: boostedBy, ...(objectId && /^[A-Za-z0-9_-]{1,64}$/.test(objectId) ? { objectId } : {}) };
+  });
+};
+
+/** Group posts that keep every group a post was boosted into: the shared mapping shows each post once, under its
+ *  first booster, so the others are gathered here first. */
+function withEveryGroup(nodes: BonfireActivityNode[]): GroupPost[] {
+  const groupsOf = new Map<string, string[]>(), keyOfFirst = new Map<string, string>();
+  for (const raw of nodes) {
+    const key = raw.object?.id ?? raw.id;
+    if (!groupsOf.has(key)) { groupsOf.set(key, []); keyOfFirst.set(raw.id, key); }
+    const boost = raw.verb?.verb === 'Boost' || raw.verb?.verb === 'Announce';
+    const name = boost ? (raw.subject?.profile?.name || raw.subject?.character?.username) : undefined;
+    const list = groupsOf.get(key)!;
+    if (name && !list.includes(name)) list.push(name);
+  }
+  return groupPosts(nodes).map(p => {
+    const all = groupsOf.get(keyOfFirst.get(p.id) ?? '') ?? [];
+    return all.length ? { ...p, groups: all } : p;
+  });
+}
 
 type Page = { categories?: { pageInfo?: { endCursor?: string | null; hasNextPage?: boolean }; edges?: unknown[] } };
 const PAGE_QUERY = (fields: string) => `query($after:[Cursor!]){categories(limit:${PAGE},after:$after){pageInfo{endCursor hasNextPage} edges{${fields}}}}`;
@@ -100,6 +125,97 @@ export async function getGroup(id: string): Promise<{ group: Group; topics: Grou
   };
 }
 
+// Bonfire's "Top discussions" preset (bonfire_social runtime_config, :trending_discussions) is the most-replied
+// activities of the last day; For You asks the same of the groups you're in, over a week so quiet groups count too.
+const POPULAR = `query($subjects:[String]){feedActivities(first:20,filter:{feedName:"known_groups",subjects:$subjects,sortBy:REPLY_COUNT,sortOrder:DESC,timeLimit:7}){edges{node{id date canonicalUri verb{verb} objectPostContent{name summary htmlBody} subject{${ACTOR}} media{url mediaType} object{... on Post{id creator{${ACTOR}}}}}}}}`;
+
+/**
+ * The most-discussed posts of the past week in these groups, most replies first. Groups are asked about 50 at a time
+ * (four queries at once); each batch's posts come back in reply order and are interleaved, so every batch's top post
+ * ranks above any batch's second. `complete` is false when a batch couldn't be read; null when none could.
+ */
+export async function popularInGroups(ids: string[]): Promise<{ posts: GroupPost[]; complete: boolean } | null> {
+  if (!ids.length) return { posts: [], complete: true };
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += 50) batches.push(ids.slice(i, i + 50));
+  const lists: GroupPost[][] = [];
+  let failed = 0;
+  for (let i = 0; i < batches.length; i += 4) {
+    const results = await Promise.all(batches.slice(i, i + 4).map(b =>
+      gql<{ feedActivities?: { edges?: { node: BonfireActivityNode }[] } }>(POPULAR, { subjects: b }).catch(() => null)));
+    for (const d of results) {
+      if (!d?.feedActivities) { failed++; continue; }
+      lists.push(withEveryGroup((d.feedActivities.edges ?? []).map(e => e.node)));
+    }
+  }
+  if (failed === batches.length) return null;
+  // Interleave, and when one post reached groups in different batches keep it once with all of them.
+  const posts: GroupPost[] = [];
+  const byUrl = new Map<string, GroupPost>();
+  for (let k = 0; lists.some(l => k < l.length); k++) for (const l of lists) {
+    if (k >= l.length) continue;
+    const p = l[k], had = byUrl.get(p.url);
+    if (had) { had.groups = [...new Set([...(had.groups ?? []), ...(p.groups ?? [])])]; continue; }
+    byUrl.set(p.url, p); posts.push(p);
+  }
+  return { posts, complete: !failed };
+}
+
+/* Every group in the directory (public, the same for everyone), read page by page and kept briefly. */
+let directory: { at: number; groups: Group[]; complete: boolean } | null = null;
+const DIRECTORY_TTL = 10 * 60_000;
+async function allGroups(): Promise<{ groups: Group[]; complete: boolean } | null> {
+  if (directory && Date.now() - directory.at < DIRECTORY_TTL) return directory;
+  const groups: Group[] = [];
+  let after: string | undefined;
+  let complete = false;
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const page = await listGroups(after);
+    if (!page) { if (!i) return null; break; }
+    groups.push(...page.groups.filter(g => g.type === 'group'));
+    if (!page.next) { complete = true; break; }
+    after = page.next;
+  }
+  directory = { at: Date.now(), groups, complete };
+  return directory;
+}
+
+/* A person's memberships, kept briefly so each For You load doesn't re-check the whole directory. */
+const joinedCache = new Map<string, { at: number; value: { groups: Group[]; complete: boolean } }>();
+const JOINED_TTL = 5 * 60_000, JOINED_MAX = 500;
+
+/**
+ * The groups this person has joined. Bonfire's groups index has no member filter, so this walks the whole directory
+ * and asks relationships about 40 groups at a time (four requests at once). `complete` is false when part of the
+ * directory or of the membership checks couldn't be read; null when none of it could.
+ */
+export async function joinedGroups(userId: string): Promise<{ groups: Group[]; complete: boolean } | null> {
+  const hit = joinedCache.get(userId);
+  if (hit && Date.now() - hit.at < JOINED_TTL) return hit.value;
+  const dir = await allGroups();
+  if (!dir) return null;
+  const batches: Group[][] = [];
+  for (let i = 0; i < dir.groups.length; i += 40) batches.push(dir.groups.slice(i, i + 40));
+  const joined: Group[] = [];
+  let failed = 0;
+  for (let i = 0; i < batches.length; i += 4) {
+    const results = await Promise.all(batches.slice(i, i + 4).map(b => memberships(userId, b.map(g => g.id)).catch(() => null)));
+    results.forEach((m, k) => {
+      if (!m?.ok) { failed++; return; }
+      joined.push(...batches[i + k].filter(g => m.memberships[g.id] === 'member'));
+    });
+  }
+  if (batches.length && failed === batches.length) return null;
+  const value = { groups: joined, complete: dir.complete && !failed };
+  if (value.complete) {
+    if (joinedCache.size >= JOINED_MAX) joinedCache.delete(joinedCache.keys().next().value as string);
+    joinedCache.set(userId, { at: Date.now(), value });
+  }
+  return value;
+}
+/** Forget cached memberships (after joining or leaving a group, and in tests). */
+export function forgetJoinedGroups(userId?: string) { if (userId) joinedCache.delete(userId); else { joinedCache.clear(); directory = null; } }
+
 /** The latest posts across every group Fedizen knows (Bonfire's "All known groups" feed). */
 export async function latestInGroups(): Promise<GroupPost[] | null> {
   const d = await gql<{ feedActivities?: { edges?: { node: BonfireActivityNode }[] } }>(FEED, { subjects: null });
@@ -133,6 +249,7 @@ export async function setMembership(userId: string, id: string, action: GroupAct
     ? `/api/v1/accounts/${encodeURIComponent(id)}/${on ? 'follow' : 'unfollow'}`
     : `/api/v1-bonfire/groups/${encodeURIComponent(id)}/${on ? 'join' : 'leave'}`;
   const r = await (membershipNet.send ?? (await fz()).fedizenSend)(t.access_token, 'POST', path);
+  forgetJoinedGroups(userId);
   if (r.status < 200 || r.status >= 300) return { ok: false, reason: problemFromStatus(r.status) };
   return { ok: true, membership: membershipFrom(r.data) };
 }

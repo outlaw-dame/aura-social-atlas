@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Bookmark, CircleDashed, Minus, Plus, Repeat2, UsersRound } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Bookmark, CircleDashed, Minus, Pin, PinOff, Plus, Repeat2, UsersRound } from 'lucide-react';
+import { pinCircle, unpinCircle, usePinnedCircles } from '@/lib/feed-types';
+import { useAtlasAuth } from './AuthState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { FedizenPost } from '@/lib/fedizen-feed';
@@ -58,6 +60,16 @@ export function DesktopSaved({ stories }: { stories?: React.ReactNode }) {
   </div>;
 }
 
+/** Pin this circle to the Feeds page (posts from the people in it), or unpin it. */
+function PinToFeeds({ circle }: { circle: { id: string; title: string } }) {
+  const { user } = useAtlasAuth();
+  const pinned = usePinnedCircles(user?.id).some(c => c.id === circle.id);
+  if (!user) return null;
+  return <Button variant={pinned ? 'secondary' : 'outline'} size="sm" className="rounded-full" aria-pressed={pinned} onClick={() => (pinned ? unpinCircle(user.id, circle.id) : pinCircle(user.id, circle))}>
+    {pinned ? <><PinOff />Pinned to Feeds</> : <><Pin />Pin to Feeds</>}
+  </Button>;
+}
+
 /** Profile → Circles: your Bonfire circles, and the people in each. */
 export function DesktopCircles() {
   const q = useFedizenCircles();
@@ -86,13 +98,14 @@ export function DesktopCircles() {
 }
 
 function CircleView({ circle, canWrite, onBack }: { circle: { id: string; title: string }; canWrite: boolean; onBack: () => void }) {
+  const { user } = useAtlasAuth();
   const q = useCircleMembers(circle.id);
   const act = useCircleActions();
   const [handle, setHandle] = useState(''), [note, setNote] = useState<string | null>(null), [confirming, setConfirming] = useState(false);
   const people = q.data?.people ?? [];
   return <div className="space-y-4">
     <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />All circles</button>
-    <div className="flex items-center gap-3"><CircleDashed className="size-6 text-accent" /><h3 className="font-serif text-3xl">{circle.title}</h3></div>
+    <div className="flex flex-wrap items-center gap-3"><CircleDashed className="size-6 text-accent" /><h3 className="flex-1 font-serif text-3xl">{circle.title}</h3><PinToFeeds circle={circle} /></div>
     {q.isLoading && <p className="text-sm text-muted-foreground">Loading who’s in it…</p>}
     {q.data?.error && <p role="alert" className="text-sm text-muted-foreground">{LIBRARY_PROBLEM[q.data.error]}</p>}
     <ul className="divide-y divide-border">
@@ -109,7 +122,7 @@ function CircleView({ circle, canWrite, onBack }: { circle: { id: string; title:
     </form>}
     {note && <p role="alert" className="text-sm text-destructive">{note}</p>}
     {canWrite && (confirming
-      ? <div className="flex gap-2"><Button variant="destructive" size="sm" className="rounded-full" onClick={async () => { const err = await act.remove(circle.id); if (err) setNote(err); else onBack(); }}>Delete circle</Button><Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>Keep it</Button></div>
+      ? <div className="flex gap-2"><Button variant="destructive" size="sm" className="rounded-full" onClick={async () => { const err = await act.remove(circle.id); if (err) setNote(err); else { if (user) unpinCircle(user.id, circle.id); onBack(); } }}>Delete circle</Button><Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>Keep it</Button></div>
       : <Button variant="ghost" size="sm" className="rounded-full text-destructive" onClick={() => setConfirming(true)}>Delete circle</Button>)}
   </div>;
 }

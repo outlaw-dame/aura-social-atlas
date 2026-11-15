@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
+import type { ForYouPost } from './feed-types';
 import { allowedCallback, assertFedizenSessionIntent, creditsBesidesAuthor, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
 
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
@@ -154,6 +155,54 @@ export const setFedizenSaved = createServerFn({ method: 'POST' }).middleware([re
     return { ok: true, saved: typeof r.data?.bookmarked === 'boolean' ? r.data.bookmarked : data.on };
   });
 
+/** Like or boost a Fedizen post, or undo it. Answers with what Fedizen now says (flag and count) when it says. */
+export const setFedizenReaction = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ statusId: ulid, kind: z.enum(['like', 'boost']), on: z.boolean() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; on: boolean; count?: number } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const verb = data.kind === 'like' ? (data.on ? 'favourite' : 'unfavourite') : (data.on ? 'reblog' : 'unreblog');
+    const r = await fedizenSend(c.token, 'POST', `/api/v1/statuses/${data.statusId}/${verb}`);
+    if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
+    const d = (r.data ?? {}) as { favourited?: boolean | null; reblogged?: boolean | null; favourites_count?: number | null; reblogs_count?: number | null; reblog?: { reblogged?: boolean | null; reblogs_count?: number | null } | null };
+    const flag = data.kind === 'like' ? d.favourited : (d.reblog?.reblogged ?? d.reblogged);
+    const count = data.kind === 'like' ? d.favourites_count : (d.reblog?.reblogs_count ?? d.reblogs_count);
+    return { ok: true, on: typeof flag === 'boolean' ? flag : data.on, ...(typeof count === 'number' ? { count } : {}) };
+  });
+
+/** People to mention: Fedizen's account search for what follows "@" (name or handle), at most six. */
+export const searchFedizenPeople = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ q: z.string().trim().regex(/^@?[A-Za-z0-9_.-]{1,64}(@[A-Za-z0-9.-]{0,253})?$/) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ people: FedizenPerson[]; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { people: [], error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const q = data.q.replace(/^@/, '').replace(/@$/, '');
+    const r = await fedizenGet(c.token, `/api/v1/accounts/search?q=${encodeURIComponent(q)}&limit=6`).catch(() => null);
+    if (!r || r.status !== 200) return { people: [], error: r ? problem(r.status) : 'unavailable' };
+    return { people: fromAccounts(r.data as never).slice(0, 6) };
+  });
+
+/** Reply to a Fedizen post. Atlas sends the post's own audience, so a reply to a followers-only post stays followers-only. */
+export const replyOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({
+    statusId: ulid, text: z.string().trim().min(1).max(5000),
+    visibility: z.enum(['public', 'unlisted', 'private', 'direct']),
+  }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; url?: string } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const r = await fedizenSend(c.token, 'POST', '/api/v1/statuses', { status: data.text, in_reply_to_id: data.statusId, visibility: data.visibility });
+    if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
+    const url = typeof r.data?.url === 'string' && /^https:\/\/fedizen\.net\//.test(r.data.url) ? r.data.url : undefined;
+    return { ok: true, ...(url ? { url } : {}) };
+  });
+
 /** Your circles on Fedizen. */
 export const getFedizenCircles = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.parse(d))
@@ -259,4 +308,81 @@ export const changeFedizenBlock = createServerFn({ method: 'POST' }).middleware(
     const r = await fedizenSend(c.token, 'POST', `/api/v1/accounts/${accountId}/${data.block ? 'block' : 'unblock'}`);
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
     return { ok: true, person };
+  });
+
+/* ── Feeds: For You and pinned circles ──────────────────────────────────────────────────────── */
+
+/**
+ * For You: your home timeline (people you follow), the timelines of up to four hashtags you follow, and the
+ * most-discussed posts of the past week in the groups you're in, merged and ranked (rankForYou). A source that
+ * fails is left out and named in `missing`, so the rest still shows.
+ */
+export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: ForYouPost[]; tags: string[]; groups: string[]; missing: ('following' | 'tags' | 'groups')[]; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { posts: [], tags: [], groups: [], missing: [], error: c.error };
+    const [{ fedizenGet }, { joinedGroups, popularInGroups }, { rankForYou, fromGroupPost }] = await Promise.all([import('./fedizen.server'), import('./groups.server'), import('./feed-types')]);
+    const missing: ('following' | 'tags' | 'groups')[] = [];
+    const [home, followed, joined] = await Promise.all([
+      fedizenGet(c.token, '/api/v1/timelines/home?limit=20'),
+      fedizenGet(c.token, '/api/v1/followed_tags?limit=20'),
+      joinedGroups(context.userId).catch(() => null),
+    ]);
+    if (home.status === 401) return { posts: [], tags: [], groups: [], missing: [], error: 'expired' };
+    if (home.status !== 200) missing.push('following');
+    const tags = followed.status === 200 ? (followed.data as { name: string }[]).map(t => t.name.replace(/^#/, '')).slice(0, 4) : [];
+    if (followed.status !== 200) missing.push('tags');
+    const [tagFeeds, popular] = await Promise.all([
+      Promise.all(tags.map(async tag => {
+        // One tag that can't be read leaves the others, and the rest of For You, untouched.
+        const r = await fedizenGet(c.token, `/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=10`).catch(() => null);
+        return { tag, ok: r?.status === 200, posts: r?.status === 200 ? fromStatuses(r.data as never) : [] };
+      })),
+      joined ? popularInGroups(joined.groups.map(g => g.id)).catch(() => null) : Promise.resolve(null),
+    ]);
+    if (tagFeeds.some(t => !t.ok) && !missing.includes('tags')) missing.push('tags');
+    if (!joined || !joined.complete || !popular || !popular.complete) missing.push('groups');
+    const joinedByName = new Map((joined?.groups ?? []).map(g => [g.name.toLowerCase(), g] as const));
+    const posts = rankForYou({
+      following: home.status === 200 ? fromStatuses(home.data as never) : [],
+      tags: tagFeeds.map(({ tag, posts }) => ({ tag, posts })),
+      // A post shared into several of your groups counts once for each of them. Each is matched to your joined group
+      // of that name for its id and avatar (the chip shows the avatar and opens the group).
+      groups: (popular?.posts ?? []).flatMap(p => (p.groups?.length ? p.groups : [p.group]).map(group => {
+        const g = group ? joinedByName.get(group.toLowerCase()) : undefined;
+        return { ...fromGroupPost(p), group, ...(g ? { groupId: g.id, ...(g.avatar ? { groupAvatar: g.avatar } : {}) } : {}) };
+      })),
+    });
+    // Group posts come from Fedizen's public feed, which doesn't know what you've liked, boosted or saved: read each
+    // as you see it. One that can't be read keeps Share only, so no button claims a state it doesn't know.
+    const hydrate = async (p: ForYouPost): Promise<ForYouPost> => {
+      if (!p.id.startsWith('g-') || !p.statusId) return p;
+      const r = await fedizenGet(c.token, `/api/v1/statuses/${p.statusId}`).catch(() => null);
+      const s = r?.status === 200 ? fromStatuses(r.data as never)[0] : undefined;
+      if (!s) { const { statusId: _drop, ...rest } = p; return rest as ForYouPost; }
+      return { ...p, statusId: s.statusId, bookmarked: s.bookmarked, counts: s.counts, liked: s.liked, boosted: s.boosted, visibility: s.visibility, article: p.article ?? s.article,
+        // The REST read also carries what the public feed leaves out: an attached video and the full preview image.
+        ...(s.video && !p.video ? { video: s.video } : {}), ...(!p.image && s.image ? { image: s.image } : {}), ...(s.collections && !p.collections ? { collections: s.collections } : {}) } as ForYouPost;
+    };
+    const hydrated: ForYouPost[] = [];
+    for (let i = 0; i < posts.length; i += 8) hydrated.push(...await Promise.all(posts.slice(i, i + 8).map(hydrate)));
+    // Credits and players for the links in them, as on Following.
+    const withAuthors = await withArticleAuthors(hydrated);
+    return { posts: withAuthors as ForYouPost[], tags, groups: (joined?.groups ?? []).map(g => g.name), missing };
+  });
+
+/** A circle's feed: posts from the people in it (Bonfire serves circles as Mastodon lists). */
+export const getCircleFeed = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ id: ulid }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; error?: Problem | 'not-found' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { posts: [], error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const r = await fedizenGet(c.token, `/api/v1/timelines/list/${data.id}?limit=20`);
+    if (r.status === 404) return { posts: [], error: 'not-found' };
+    if (r.status !== 200) return { posts: [], error: problem(r.status) };
+    return { posts: await withArticleAuthors(fromStatuses(r.data as never)) };
   });

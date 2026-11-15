@@ -6,11 +6,11 @@ import type { BonfireArticle } from '@/lib/spotlight';
 import { useFedizen, useFedizenMessages } from '@/components/social/useFedizen';
 import { openCollection } from '@/lib/collections';
 import { openFediProfile } from '@/lib/fedi-profile';
-import { useSaveToggle } from '@/components/social/useFedizenLibrary';
 import { SaveLink } from './SavedAndCircles';
 import { ArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { Icon } from './F7Extras';
+import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 
@@ -51,10 +51,10 @@ export function MobileRecentArticles() {
 
 export function MobileFedizenFeed() {
   const f = useFedizen();
-  const save = useSaveToggle();
+  const actions = useMobilePostActions();
   return <>
     <BlockTitle>Your Fedizen feed</BlockTitle>
-    {save.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{save.error}</p></Block>}
+    {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
     {!f.signedIn ? <Block strong inset>Sign in to Atlas to see your Fedizen feed. <Link href="/auth" external>Sign in</Link></Block>
       : f.loading ? <Block strong inset>Loading your Fedizen feed…</Block>
       : !f.data?.connected || f.data.error === 'expired' ? <Block strong inset>
@@ -63,20 +63,9 @@ export function MobileFedizenFeed() {
         {f.error && <p role="alert" style={{ color: 'var(--f7-theme-color)' }}>{f.error}</p>}
       </Block>
       : !f.data.posts.length ? <Block strong inset>Your Fedizen timeline is empty.</Block>
-      : f.data.posts.map(p => <Card key={p.id} outline>
-        <CardContent>
-          {p.boostedBy && <p style={{ fontSize: 11, opacity: .6, marginTop: 0 }}>↻ {p.boostedBy} boosted</p>}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} style={{ borderRadius: 16 }} />}<span><b>{p.author}</b> <span style={{ opacity: .6 }}>{p.handle}</span></span></div>
-          {p.paragraphs.map((t, i) => <p key={i} style={{ lineHeight: 1.5 }}>{t}</p>)}
-          {p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" style={{ width: '100%', borderRadius: 12 }} />}
-          {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
-            <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />
-          </button>)}
-          <ArticleCard article={p.article} />
-        </CardContent>
-        <CardFooter><span style={{ fontSize: 12, opacity: .6 }}>{when(p.date)}</span><span style={{ display: 'flex', gap: 12 }}><SaveLink post={p} save={save} /><Link external target="_blank" href={p.url}>Open</Link></span></CardFooter>
-      </Card>)}
+      : f.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}
     {(!f.signedIn || (!f.loading && (!f.data?.connected || f.data.error === 'expired'))) && <MobilePublicFedizen />}
+    {actions.sheet}
   </>;
 }
 

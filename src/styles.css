@@ -384,6 +384,11 @@ html[data-nav="tabbar-side"] .atlas-tabbar::before { display: none; }
 html[data-nav="tabbar-side"] .atlas-tabbar .toolbar-inner { position: static; flex-direction: column; justify-content: center; gap: 6px; height: 100%; padding: 0; }
 html[data-nav="tabbar-side"] .atlas-tabbar .tab-link { flex: 0 0 auto; width: 100%; min-width: 0; padding: 0 4px; height: 58px; }
 html[data-nav="tabbar-side"] .view-main .page-content { padding-bottom: calc(16px + var(--atlas-sa-bottom)); }
+/* Phones with a bottom tab bar: Compose floats at the bottom right, so the actions in a post's footer move to the
+   left (the date, which nothing taps, takes the right), and every tab ends with room to scroll its last post clear. */
+html[data-nav="tabbar"] .page-content .card .card-footer:not(.atlas-post-footer) { flex-direction: row-reverse; }
+html[data-nav="tabbar"] .page-content .card .card-footer:not(.atlas-post-footer) > :only-child { margin-right: auto; }
+html[data-nav="tabbar"] .tabs > .tab.page-content::after { content: ''; display: block; height: 76px; }
 html[data-nav="tabbar-side"] .atlas-fab, html[data-nav="rail"] .atlas-fab, html[data-nav="sidebar"] .atlas-fab { margin-bottom: var(--atlas-sa-bottom) !important; }
 
 /* Wide windows mirror the desktop Discover page: hero, then the feed with a "Voices to know" column
@@ -576,6 +581,18 @@ html.atlas-has-tabbar .atlas-pip { --pip-bottom: calc(var(--pip-gap) + var(--f7-
 .atlas-pip[data-corner$="l"] .atlas-pip-resize { right: 0; cursor: nesw-resize; }
 .atlas-pip[data-corner^="t"] .atlas-pip-resize { top: auto; bottom: 0; }
 
+/* Feeds tabs, after Particle: plain names, the open one in a filled pill, a dot before any with posts you haven't seen. */
+.atlas-feed-tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; padding: 10px 12px 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-padding-inline: 12px; }
+.atlas-feed-tabs::-webkit-scrollbar { display: none; }
+.atlas-feed-tabs button { flex: none; width: auto; display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 18px; background: none; color: var(--f7-text-color, inherit); opacity: .82; font: inherit; font-size: 15px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: background-color .2s, color .2s, opacity .2s; }
+.atlas-feed-tabs button.active { opacity: 1; background: var(--f7-text-color, var(--foreground)); color: var(--f7-page-bg-color, var(--background)); }
+.atlas-feed-tabs button:focus-visible { outline: 2px solid var(--f7-theme-color); outline-offset: 2px; }
+.atlas-new-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--f7-theme-color, var(--accent)); flex: none; }
+.atlas-feed-tab-add { min-width: 36px; justify-content: center; padding: 0 !important; opacity: .55 !important; }
+.atlas-feed-tab-add .icon { font-size: 18px; }
+.atlas-reasons { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.atlas-reasons span { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; background: color-mix(in oklab, var(--muted) 70%, transparent); font-size: 11px; opacity: .8; }
+.atlas-reasons .icon { font-size: 12px; }
 .atlas-mini { position: fixed; z-index: 5500; left: 8px; right: 8px; bottom: calc(var(--f7-toolbar-height, 50px) + var(--f7-safe-area-bottom, 0px) + 8px); height: 56px; display: flex; align-items: center; gap: 2px; padding: 0 6px 0 8px; border-radius: 16px; overflow: hidden; background: color-mix(in oklab, var(--f7-bars-bg-color, var(--card)) 82%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border: .5px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.18); color: var(--f7-text-color, inherit); }
 /* Without a tab bar (rail or sidebar on wide and unfolded screens) the podcast bar sits at the bottom, clear of the rail. */
 html:not(.atlas-has-tabbar) .atlas-mini { bottom: calc(var(--f7-safe-area-bottom, 0px) + 8px); }
@@ -644,3 +661,90 @@ html.atlas-rail .atlas-mini { left: calc(var(--f7-panel-width, 88px) + 8px); }
 .atlas-saved-actions { display: flex; gap: 16px; font-size: 14px; }
 .atlas-save-link { display: inline-flex; align-items: center; gap: 4px; }
 .atlas-save-link .icon { font-size: 18px; }
+
+/* Post cards in Feeds: author row, text, media or link preview, then the standard actions. */
+.atlas-post-card .card-content { padding-bottom: 4px; }
+.atlas-post-head { display: flex; align-items: center; gap: 10px; }
+.atlas-post-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: none; }
+span.atlas-post-avatar { display: inline-flex; align-items: center; justify-content: center; font-size: 17px; }
+.atlas-post-who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.atlas-post-who b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-post-who small { font-size: 13px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-post-time { flex: none; align-self: flex-start; font-size: 13px; color: var(--f7-text-color) !important; opacity: .55; padding: 2px 0 8px 8px; }
+.atlas-post-text { font-size: 16px; line-height: 1.45; margin: 10px 0 0; overflow-wrap: anywhere; }
+.atlas-post-image { display: block; width: 100%; margin-top: 10px; border-radius: 14px; }
+.atlas-post-boosted { display: flex; align-items: center; gap: 4px; margin: 0 0 8px; font-size: 12px; opacity: .6; }
+.atlas-post-boosted .icon { font-size: 13px; }
+.atlas-post-footer { padding-top: 0 !important; padding-bottom: 2px !important; min-height: 0 !important; }
+.atlas-post-footer::before { display: none !important; }
+.atlas-post-footer { justify-content: flex-start !important; }
+.atlas-post-actions { display: flex; align-items: center; flex: 1 1 auto; width: auto; min-width: 0; gap: 2px; margin: 0 -10px; }
+.atlas-post-actions .link { display: inline-flex !important; align-items: center; gap: 4px; min-width: 44px; height: 44px; padding: 0 10px; color: var(--f7-text-color) !important; opacity: .62; transition: opacity .15s, color .15s; }
+.atlas-post-actions .link .icon { font-size: 20px; }
+.atlas-post-actions .link span { font-size: 13px; font-variant-numeric: tabular-nums; }
+.atlas-post-actions .link.on { color: var(--f7-theme-color) !important; opacity: 1; }
+.atlas-post-actions .link.disabled { pointer-events: none; opacity: .35; }
+.atlas-post-actions .atlas-post-share { margin-left: auto !important; }
+.atlas-reply-quote { margin: 6px 0 0; font-size: 14px; opacity: .6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.atlas-reply-audience { display: flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 13px; opacity: .7; }
+.atlas-reply-audience .icon { font-size: 15px; }
+
+/* Link previews, after Particle's story cards: the image runs edge to edge and fades into a panel tinted by itself. */
+.atlas-rich-link { position: relative; isolation: isolate; display: flex; flex-direction: column; margin-top: 12px; overflow: hidden; border-radius: 18px; border: .5px solid var(--border, rgba(127,127,127,.25)); background: color-mix(in oklab, currentColor 5%, transparent); color: inherit; }
+.atlas-rich-link.has-image { border-color: transparent; background: #15151a; color: #fff; }
+.atlas-rich-main { display: flex !important; flex-direction: column; color: inherit !important; text-decoration: none !important; -webkit-tap-highlight-color: transparent; transition: opacity .2s; }
+.atlas-rich-main:active { opacity: .8; }
+.atlas-rich-tint { position: absolute; inset: -25%; z-index: -1; background-size: cover; background-position: center bottom; filter: blur(40px) saturate(1.5) brightness(.5); }
+.atlas-rich-image { display: block; width: 100%; aspect-ratio: 1.91 / 1; max-height: 340px; object-fit: cover; -webkit-mask-image: linear-gradient(#000 58%, transparent); mask-image: linear-gradient(#000 58%, transparent); }
+.atlas-rich-body { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 16px; min-width: 0; }
+.has-image .atlas-rich-body { position: relative; margin-top: -44px; }
+.atlas-rich-meta { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; opacity: .78; }
+.atlas-rich-meta span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-rich-meta img { width: 16px; height: 16px; border-radius: 4px; flex: none; background: #fff; }
+.atlas-rich-title { font-size: 19px; line-height: 1.22; font-weight: 700; letter-spacing: -.01em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: pretty; }
+.atlas-rich-summary { font-size: 14px; line-height: 1.42; opacity: .72; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.atlas-rich-host { font-size: 12px; opacity: .5; margin-top: 2px; }
+.atlas-rich-host::after { content: ' ↗'; }
+/* Creator attribution at the foot of the card: a hairline, each creator as a row that opens their profile in Atlas,
+   then how Atlas verified them. */
+.atlas-rich-credits { display: flex; flex-direction: column; margin: 0 16px; padding: 4px 0 12px; border-top: .5px solid color-mix(in oklab, currentColor 18%, transparent); }
+.atlas-rich-creator { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.atlas-rich-creator:active { opacity: .7; }
+.atlas-rich-creator:focus-visible { outline: 2px solid var(--f7-theme-color, var(--accent)); outline-offset: 2px; border-radius: 10px; }
+.atlas-rich-face { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: none; box-shadow: 0 0 0 .5px color-mix(in oklab, currentColor 25%, transparent); }
+span.atlas-rich-face { display: inline-flex; align-items: center; justify-content: center; background: color-mix(in oklab, currentColor 14%, transparent); font-size: 17px; font-weight: 600; }
+.atlas-rich-face.is-square { border-radius: 10px; }
+.atlas-rich-creator-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.atlas-rich-creator-text small { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; opacity: .6; }
+.atlas-rich-creator-text b { font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-rich-creator-text span { font-size: 13px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-rich-chevron { width: 18px; height: 18px; flex: none; opacity: .5; }
+.atlas-rich-note { display: flex; align-items: center; gap: 5px; margin: 2px 0 0; font-size: 11px; opacity: .6; }
+.atlas-rich-note svg { width: 13px; height: 13px; flex: none; }
+@media (prefers-reduced-motion: reduce) { .atlas-rich-main, .atlas-feed-tabs button { transition: none; } }
+
+/* Mentions in replies, after iMessage: a picked person's handle is tinted in the accent, and while typing "@…" the people
+   it could be sit in a strip under the box. The tint is a copy of the text drawn behind a transparent-text textarea, so
+   both must share every metric that affects layout. */
+.atlas-mention { display: flex; flex-direction: column; gap: 8px; }
+.atlas-mention-field { position: relative; border-radius: 20px; border: .5px solid var(--border, rgba(127,127,127,.3)); background: color-mix(in oklab, currentColor 5%, transparent); }
+.atlas-mention-mirror, .atlas-mention-field textarea { box-sizing: border-box; margin: 0; padding: 11px 15px; font: inherit; font-size: 16px; line-height: 1.4; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; tab-size: 4; }
+.atlas-mention-mirror { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: inherit; border: 0; }
+.atlas-mention-mirror mark { color: var(--f7-theme-color, var(--accent)); background: color-mix(in oklab, var(--f7-theme-color, var(--accent)) 14%, transparent); border-radius: 5px; box-shadow: 0 0 0 1px color-mix(in oklab, var(--f7-theme-color, var(--accent)) 14%, transparent); }
+.atlas-mention-field textarea { position: relative; display: block; width: 100%; min-height: 104px; max-height: 40vh; resize: none; border: 0; outline: none; background: transparent; color: transparent; caret-color: var(--f7-text-color, currentColor); -webkit-text-fill-color: transparent; }
+.atlas-mention-field textarea::placeholder { color: currentColor; -webkit-text-fill-color: color-mix(in oklab, var(--f7-text-color, CanvasText) 42%, transparent); }
+.atlas-mention-field:focus-within { border-color: color-mix(in oklab, var(--f7-theme-color, var(--accent)) 55%, transparent); }
+.atlas-mention-bar { display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px; min-height: 42px; }
+.atlas-mention-bar::-webkit-scrollbar { display: none; }
+.atlas-mention-bar button { flex: none; width: auto; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 6px; border: 0; border-radius: 20px; background: color-mix(in oklab, currentColor 9%, transparent); color: inherit; font: inherit; font-size: 15px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.atlas-mention-bar button.active { background: color-mix(in oklab, currentColor 17%, transparent); }
+.atlas-mention-bar button img, .atlas-mention-bar button > span[aria-hidden] { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in oklab, currentColor 12%, transparent); font-size: 13px; }
+.atlas-mention-bar .atlas-mention-typed { padding: 0 14px; background: none; font-weight: 500; opacity: .7; }
+.atlas-mention-hint { font-size: 13px; opacity: .55; padding: 0 8px; }
+.atlas-reply-field { margin-top: 8px; margin-bottom: 8px; }
+/* "Popular in" names their group with its avatar, and the name opens the group. */
+.atlas-reason-group { gap: 5px !important; white-space: nowrap; }
+.atlas-reason-group button { display: inline-flex; align-items: center; gap: 5px; min-height: 24px; margin: -4px -2px; padding: 0 2px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.atlas-reason-group b { font-weight: 650; color: var(--f7-text-color, inherit); }
+.atlas-reason-face { width: 16px; height: 16px; border-radius: 4px; object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: color-mix(in oklab, currentColor 18%, transparent); }
+.atlas-reasons span.atlas-reason-face { padding: 0; border-radius: 4px; opacity: 1; }

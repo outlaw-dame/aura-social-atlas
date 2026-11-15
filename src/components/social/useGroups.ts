@@ -53,7 +53,8 @@ export function useGroupMembership(g: Group | null | undefined) {
     mutationFn: (on: boolean) => setFn({ data: { id: g!.id, action: actionFor(g!), on, expectedAtlasUserId: user!.id } }),
     onMutate: () => setError(null),
     onSuccess: r => {
-      if (r.ok) qc.setQueryData(key, { ok: true, memberships: { [g!.id]: r.membership } });
+      // Your groups feed For You's "Popular in" posts, so it reads again with the new membership.
+      if (r.ok) { qc.setQueryData(key, { ok: true, memberships: { [g!.id]: r.membership } }); void qc.invalidateQueries({ queryKey: ['fedizen-foryou'] }); }
       else { setError(MEMBERSHIP_PROBLEM[r.reason]); if (r.reason !== 'failed') void qc.invalidateQueries({ queryKey: ['fedizen-status'] }); }
     },
     onError: () => setError(MEMBERSHIP_PROBLEM.failed),

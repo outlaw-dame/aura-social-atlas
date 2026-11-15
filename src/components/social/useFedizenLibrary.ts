@@ -15,7 +15,7 @@ import type { FedizenPost } from '@/lib/fedizen-feed';
 export type LibraryProblem = 'not-connected' | 'needs-permission' | 'expired' | 'unavailable' | 'not-found';
 export const LIBRARY_PROBLEM: Record<LibraryProblem, string> = {
   'not-connected': 'Connect your Fedizen account to use this.',
-  'needs-permission': 'Reconnect Fedizen so Atlas can save posts and manage circles for you.',
+  'needs-permission': 'Reconnect Fedizen so Atlas can act for you: save, like, boost and reply to posts, and manage circles.',
   expired: 'Fedizen ended Atlas’s access. Connect again to continue.',
   unavailable: 'Fedizen couldn’t do that right now. Try again.',
   'not-found': 'No one with that handle was found on Fedizen.',
@@ -48,7 +48,8 @@ const savedStore = (() => {
     snapshot: () => entries,
     /** A different signed-in account starts from nothing. */
     own: (userId: string | undefined) => { if (owner !== userId) { owner = userId; entries = new Map(); } },
-    set: (statusId: string, e: SavedEntry) => { entries.set(statusId, e); emit(); },
+    /** Writes only while `userId` still owns the store: a reply that lands after an account switch is dropped. */
+    set: (userId: string, statusId: string, e: SavedEntry) => { if (owner !== userId) return; entries.set(statusId, e); emit(); },
   };
 })();
 export const _savedStoreForTests = savedStore;
@@ -66,15 +67,16 @@ export function useSaveToggle() {
     if (!user || !p.statusId || isPending(p)) return;
     const id = p.statusId, was = isSaved(p), on = !was;
     setError(null);
-    savedStore.set(id, { saved: on, pending: true });
+    const uid = user.id;
+    savedStore.set(uid, id, { saved: on, pending: true });
     try {
-      const r = await write({ data: { expectedAtlasUserId: user.id, statusId: id, on } });
-      if (!r.ok) { savedStore.set(id, { saved: was, pending: false }); setError(LIBRARY_PROBLEM[r.error]); return; }
-      savedStore.set(id, { saved: r.saved, pending: false });
+      const r = await write({ data: { expectedAtlasUserId: uid, statusId: id, on } });
+      if (!r.ok) { savedStore.set(uid, id, { saved: was, pending: false }); setError(LIBRARY_PROBLEM[r.error]); return; }
+      savedStore.set(uid, id, { saved: r.saved, pending: false });
       void qc.invalidateQueries({ queryKey: ['fedizen-saved'] });
       void qc.invalidateQueries({ queryKey: ['fedizen-home'] });
     } catch {
-      savedStore.set(id, { saved: was, pending: false });
+      savedStore.set(uid, id, { saved: was, pending: false });
       setError(LIBRARY_PROBLEM.unavailable);
     }
   };
@@ -108,7 +110,8 @@ export function useCircleActions() {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();
   const circle = useServerFn(changeFedizenCircle), member = useServerFn(changeFedizenCircleMember);
-  const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ['fedizen-circles'] }), qc.invalidateQueries({ queryKey: ['fedizen-circle'] })]);
+  // Members (and so each pinned circle's feed) may have changed too.
+  const refresh = () => Promise.all(['fedizen-circles', 'fedizen-circle', 'fedizen-circle-feed'].map(k => qc.invalidateQueries({ queryKey: [k] })));
   const run = useMutation({
     mutationFn: async (fn: (uid: string) => Promise<{ ok: boolean; error?: LibraryProblem }>) => {
       if (!user) return LIBRARY_PROBLEM['not-connected'];
@@ -150,7 +153,7 @@ export function useBlockActions() {
         const r = await change({ data: { expectedAtlasUserId: user.id, ...d } });
         if (!r.ok) return LIBRARY_PROBLEM[r.error];
         // The block changes what the feeds may show: refresh the list and every personal feed holding their posts.
-        await Promise.all(['fedizen-blocks', 'fedizen-home', 'bonfire-native-home', 'fedizen-messages', 'fedizen-saved']
+        await Promise.all(['fedizen-blocks', 'fedizen-home', 'bonfire-native-home', 'fedizen-messages', 'fedizen-saved', 'fedizen-foryou', 'fedizen-circle-feed']
           .map(k => qc.invalidateQueries({ queryKey: [k] })));
         return null;
       } catch { return LIBRARY_PROBLEM.unavailable; }

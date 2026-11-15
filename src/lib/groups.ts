@@ -19,7 +19,11 @@ import { htmlToParagraphs } from './spotlight';
 export const BONFIRE_VERSION = 'v1.1.0-rc.1';
 
 /** A post in a group's feed, as plain text (remote HTML is never rendered). `group` names the group it was posted in. */
-export type GroupPost = { id: string; paragraphs: string[]; date?: string; url: string; author: string; handle: string; avatar?: string; image?: string; group?: string };
+export type GroupPost = { id: string; paragraphs: string[]; date?: string; url: string; author: string; handle: string; avatar?: string; image?: string; group?: string;
+  /** Every group it was shared into, when one post reached several (popularInGroups). */
+  groups?: string[];
+  /** The post's own id, which Fedizen's REST API (like, boost, save, reply) accepts. */
+  objectId?: string };
 
 export type JoinMode = 'open' | 'local' | 'request' | 'invite';
 
@@ -196,3 +200,18 @@ export function groupMembersLine(g: Pick<Group, 'members' | 'host'>): string {
   const n = g.members == null ? '' : `${g.members.toLocaleString()} ${g.members === 1 ? 'member' : 'members'}${remote ? ' here' : ''}`;
   return [n, remote ? g.host : ''].filter(Boolean).join(' · ');
 }
+
+/* ── Opening a group from anywhere (a "Popular in" chip in For You) ────────────────────────────────── */
+
+export const OPEN_GROUP_EVENT = 'atlas:open-group';
+export type GroupTarget = { id: string; name: string; avatar?: string };
+/** Asks the phone app to open a group's page; the page then loads the rest of the group from Fedizen. */
+export function openGroup(target: GroupTarget): void {
+  if (typeof window === 'undefined' || !/^[A-Za-z0-9_-]{1,64}$/.test(target.id)) return;
+  window.dispatchEvent(new CustomEvent<GroupTarget>(OPEN_GROUP_EVENT, { detail: { id: target.id, name: target.name.slice(0, 200), avatar: target.avatar } }));
+}
+/** A group known only by id, name and avatar, until its page has loaded the rest. */
+export const groupStub = (t: GroupTarget): Group => ({
+  id: t.id, name: t.name, type: 'group', host: 'fedizen.net', url: '', summary: [], avatar: t.avatar,
+  joinMode: 'open', announcements: false, membersOnlyContent: false, federated: false, archived: false,
+});

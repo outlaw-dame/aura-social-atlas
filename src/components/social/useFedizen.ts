@@ -111,11 +111,16 @@ export function useFedizen() {
         await drop({ data: { expectedAtlasUserId: id } });
         // Cancel old user-bound reads before dropping their private responses;
         // an in-flight GET must not repopulate the cache after disconnect.
+        // For You and pinned circles hold the same account's private posts; their views fall back to "Connect
+        // Fedizen" when they read again.
+        const personal = [['fedizen-foryou', id], ['fedizen-circle-feed', id]] as const;
         await Promise.all([
           qc.cancelQueries({ queryKey: key, exact: true }),
           qc.cancelQueries({ queryKey: nativeKey, exact: true }),
+          ...personal.map(k => qc.cancelQueries({ queryKey: k })),
         ]);
         qc.removeQueries({ queryKey: nativeKey, exact: true });
+        for (const k of personal) qc.removeQueries({ queryKey: k });
         const disconnected: FedizenHome = {
           connected: false, accountHandle: null, posts: [], notices: [],
         };

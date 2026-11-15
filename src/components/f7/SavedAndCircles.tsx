@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Block, BlockFooter, BlockTitle, Button, Icon, Link, List, ListInput, ListItem, Navbar, NavRight, Page, Popup, f7 } from 'framework7-react';
+import { Block, BlockFooter, BlockTitle, Button, Icon, Link, List, ListInput, ListItem, Navbar, NavRight, Page, Popup, Toggle, f7 } from 'framework7-react';
+import { pinCircle, unpinCircle, usePinnedCircles } from '@/lib/feed-types';
+import { useAtlasAuth } from '@/components/social/AuthState';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { ArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
@@ -86,10 +88,12 @@ function CirclePopup({ circle, canWrite, onClose }: { circle: { id: string; titl
   const act = useCircleActions();
   const [handle, setHandle] = useState(''), [note, setNote] = useState<string | null>(null);
   const people = q.data?.people ?? [];
+  const { user } = useAtlasAuth();
+  const pinned = usePinnedCircles(user?.id).some(c => c.id === circle?.id);
   const add = async () => { if (!circle || !handle.trim()) return; const err = await act.addMember(circle.id, handle.trim()); setNote(err); if (!err) setHandle(''); };
   const remove = () => circle && f7.dialog.confirm(`Delete “${circle.title}”? People in it aren’t told, and posts shared with it keep their audience.`, 'Delete circle', async () => {
     const err = await act.remove(circle.id);
-    if (err) setNote(err); else onClose();
+    if (err) setNote(err); else { if (user) unpinCircle(user.id, circle.id); onClose(); }
   });
   return <Popup opened={!!circle} onPopupClosed={() => { setNote(null); setHandle(''); onClose(); }} swipeToClose>
     <Page>
@@ -112,6 +116,11 @@ function CirclePopup({ circle, canWrite, onClose }: { circle: { id: string; titl
         <Block><Button fill round onClick={add} disabled={!handle.trim() || act.busy}>Add</Button></Block>
       </>}
       {note && <BlockFooter><span role="alert">{note}</span></BlockFooter>}
+      {circle && user && <List strong inset>
+        <ListItem title="Pin to Feeds" footer="Read posts from the people in this circle on the Feeds page.">
+          <Toggle slot="after" checked={pinned} onToggleChange={() => (pinned ? unpinCircle(user.id, circle.id) : pinCircle(user.id, circle))} />
+        </ListItem>
+      </List>}
       {canWrite && <Block><Button color="red" round onClick={remove}>Delete circle</Button></Block>}
     </Page>
   </Popup>;

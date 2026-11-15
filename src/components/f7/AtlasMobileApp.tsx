@@ -24,10 +24,11 @@ import { FediProfilePopup } from './FediProfile';
 import { MiniPlayer } from './MiniPlayer';
 import { useFediProfileOpener } from '@/components/social/useFediProfile';
 import { GroupPopup, MobileGroups } from './Groups';
-import type { Group } from '@/lib/groups';
+import { OPEN_GROUP_EVENT, groupStub, type Group, type GroupTarget } from '@/lib/groups';
 import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
-import { MobileRecentArticles, MobileFedizenFeed, MobileActivity, MessagesPopup } from './FedizenMobile';
+import { MobileRecentArticles, MobileActivity, MessagesPopup } from './FedizenMobile';
+import { MobileFeeds } from './MobileFeeds';
 import { ModerationPopup } from './Moderation';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
@@ -119,6 +120,12 @@ export default function AtlasMobileApp() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [collectionOpen, setCollectionOpen] = useState<{ collection?: Collection; id?: string; link?: string } | null>(null);
   const [groupOpen, setGroupOpen] = useState<Group | null>(null);
+  // A "Popular in" chip in For You opens its group here.
+  useEffect(() => {
+    const on = (e: Event) => { const t = (e as CustomEvent<GroupTarget>).detail; if (t?.id) setGroupOpen(groupStub(t)); };
+    window.addEventListener(OPEN_GROUP_EVENT, on);
+    return () => window.removeEventListener(OPEN_GROUP_EVENT, on);
+  }, []);
   // Collection links in posts open here, as on Mastodon (tagged_collections).
   useEffect(() => {
     const on = (e: Event) => { const link = (e as CustomEvent<{ link?: string }>).detail?.link; if (link) setCollectionOpen({ link }); };
@@ -149,6 +156,8 @@ export default function AtlasMobileApp() {
   };
   const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
   const [title, setTitle] = useState('Discover');
+  // Feeds stays mounted under the other dock tabs; it counts posts as seen only while its tab is on screen.
+  const [feedsShown, setFeedsShown] = useState(false);
   const [network, setNetwork] = useState<string>('All networks');
 
   useEffect(() => { setMode(dark ? 'dark' : 'light'); }, []);
@@ -327,12 +336,13 @@ export default function AtlasMobileApp() {
               )}
             </Tab>
 
-            <Tab id="tab-feeds" className="page-content" onTabShow={() => setTitle('Feeds')}>
-              <MobileFedizenFeed />
-              <BlockTitle>Atlas creators you follow</BlockTitle>
-              {followingPosts.length ? followingPosts.map(postCard) : (
-                <Block strong inset>Follow creators in Discover and their stories will show up here.</Block>
-              )}
+            <Tab id="tab-feeds" className="page-content" onTabShow={() => { setTitle('Feeds'); setFeedsShown(true); }} onTabHide={() => setFeedsShown(false)}>
+              <MobileFeeds visible={feedsShown} following={<>
+                <BlockTitle>Atlas creators you follow</BlockTitle>
+                {followingPosts.length ? followingPosts.map(postCard) : (
+                  <Block strong inset>Follow creators in Discover and their stories will show up here.</Block>
+                )}
+              </>} />
             </Tab>
 
             <Tab id="tab-groups" className="page-content" onTabShow={() => setTitle('Groups')}>

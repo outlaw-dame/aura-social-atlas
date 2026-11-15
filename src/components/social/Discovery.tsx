@@ -18,7 +18,7 @@ import { AccountButton } from './AccountButton';
 import { CreatorTag } from './CreatorTag';
 import { Spotlight } from './Spotlight';
 import { RecentArticles } from './RecentArticles';
-import { FedizenFeed } from './FedizenFeed';
+import { FeedsView } from './FeedsView';
 import { GatewayDiscovery } from './GatewayDiscovery';
 import { VoicesToKnow } from './VoicesToKnow';
 import { ProfilePage } from './ProfilePage';
@@ -99,7 +99,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
         {tagFilter && tagFilterCreator && <div role="status" className="mb-6 flex flex-wrap items-center gap-3 text-sm"><span>Stories tagged <span className="atlas-hashtag">#{tagFilter.tag}</span> by {tagFilterCreator.name}</span><Button size="sm" variant="link" onClick={() => setTagFilter(null)}>Show everything</Button></div>}
         <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-10 xl:grid-cols-[minmax(0,1fr)_260px]">
           <section aria-label="Stories">
-            {view === 'discover' && !searchActive && !tagFilter && <GatewayDiscovery />}{view === 'feeds' && !searchActive && !tagFilter && <FedizenFeed />}{view === 'discover' && !searchActive && !tagFilter && <><Spotlight /><RecentArticles /></>}
+            {view === 'discover' && !searchActive && !tagFilter && <GatewayDiscovery />}{view === 'feeds' && !searchActive && !tagFilter && <FeedsView />}{view === 'discover' && !searchActive && !tagFilter && <><Spotlight /><RecentArticles /></>}
             <div className="mb-5 flex items-baseline justify-between"><h2 className="font-serif text-2xl italic">{view === 'discover' ? searchActive ? 'From the community' : 'From our creators' : 'From voices you follow'}</h2><span className="text-[10px] uppercase text-muted-foreground">Sample stories</span></div>
             {feed.length ? <div className="grid gap-x-6 gap-y-9 sm:grid-cols-2">{feed.map((p, i) => {
               const creator = creators.find(c => c.id === p.creatorId);
