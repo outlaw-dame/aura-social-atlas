@@ -54,3 +54,17 @@ describe("A follow isn't undone by a list read already in flight", () => {
     expect(src.match(/invalidateQueries\(\{ queryKey: k \}\)/g)?.length).toBe(3);
   });
 });
+
+describe("The Follow button never guesses", () => {
+  test("phone and desktop wait for the followed list, offer a retry when it fails, and don't keep a failed read", () => {
+    const hook = readFileSync("src/components/social/useTagFollow.ts", "utf8");
+    expect(hook).toContain("export function useTagFollowState");
+    expect(hook).toMatch(/staleTime: q => \(q\.state\.data\?\.error \? 0 : 5 \* 60_000\)/);
+    const phone = readFileSync("src/components/f7/TagFeed.tsx", "utf8");
+    expect(phone).toContain("const canFollow = feedOk && state.known;");
+    expect(phone).toContain("state.failed");
+    const desk = readFileSync("src/routes/tags.$tag.tsx", "utf8");
+    expect(desk).toMatch(/followState\.known \? <FollowTagButton/);
+    expect(desk).toContain("followState.retry");
+  });
+});

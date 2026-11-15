@@ -3,8 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowUpRight, Link2, MessageCircle, Repeat2, Star } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from '@/components/social/AuthState';
-import { FEED_PROBLEM, useFollowedTags, useTagFeed } from '@/components/social/useFeeds';
+import { FEED_PROBLEM, useTagFeed } from '@/components/social/useFeeds';
 import { FollowTagButton } from '@/components/social/FollowedHashtags';
+import { useTagFollowState } from '@/components/social/useTagFollow';
 import { StandaloneDesktopHosts } from '@/components/social/DesktopHosts';
 import { useFedizen } from '@/components/social/useFedizen';
 import { Button } from '@/components/ui/button';
@@ -40,10 +41,15 @@ function TagBody({ tag }: { tag: string }) {
   // fails or access lapsed, that failure with its retry or reconnect, never someone else's feed in its place. Only a
   // signed-out reader, or one who hasn't connected Fedizen, gets the public posts below, from mastodon.social.
   const personal = !!user && fedizen.data?.error !== 'not-connected';
-  const followed = useFollowedTags();
+  const followState = useTagFollowState(norm);
   if (loading || (user && fedizen.isLoading)) return <TagShell tag={tag}><p className="text-sm text-muted-foreground">Loading posts…</p></TagShell>;
   // Follow / Following sits in the header, as Mastodon offers it, once Fedizen has answered for this account.
-  const action = personal && !fedizen.isError && !fedizen.data?.error ? <FollowTagButton tag={norm} following={followed.has(norm)} /> : null;
+  // Only once the list of tags you follow has arrived, so it never offers Follow for a tag you already follow.
+  const feedOk = personal && !fedizen.isError && !fedizen.data?.error;
+  const action = !feedOk ? null
+    : followState.known ? <FollowTagButton tag={norm} following={followState.following} />
+    : followState.failed ? <p role="alert" className="text-xs text-muted-foreground">Couldn’t check whether you follow this. <button type="button" className="underline" onClick={followState.retry}>Try again</button></p>
+    : null;
   if (personal) return <TagShell tag={tag} action={action}>
     <FedizenTagPosts posts={fedizen.data?.posts ?? []} tag={tag} failed={fedizen.isError} problem={fedizen.data?.error} retry={() => void fedizen.refetch()} />
   </TagShell>;

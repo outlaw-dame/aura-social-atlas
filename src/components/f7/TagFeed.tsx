@@ -1,8 +1,8 @@
 import { Block, Button, Link, List, ListItem, Navbar, NavRight, Page } from 'framework7-react';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useFedizen } from '@/components/social/useFedizen';
-import { FEED_PROBLEM, useFollowedTags, useTagFeed } from '@/components/social/useFeeds';
-import { useFollowedTagList, useTagFollow } from '@/components/social/useTagFollow';
+import { FEED_PROBLEM, useTagFeed } from '@/components/social/useFeeds';
+import { useFollowedTagList, useTagFollow, useTagFollowState } from '@/components/social/useTagFollow';
 import { hashtagLabel, TagText } from '@/lib/hashtags';
 import { pushPage, tagPageUrl } from './navigation';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
@@ -18,11 +18,13 @@ export function TagFeedPage({ f7route }: { f7route?: { params: { tag?: string } 
   const { user } = useAtlasAuth();
   const q = useTagFeed(tag);
   const actions = useMobilePostActions();
-  const followed = useFollowedTags();
   const follow = useTagFollow();
-  const following = !!tag && followed.has(tag.toLowerCase());
-  // Follow / Following at the top right, as Mastodon and Ivory put it, once Fedizen has answered for this account.
-  const canFollow = !!tag && !!user && !q.isError && !!q.data && !q.data.error;
+  const state = useTagFollowState(tag);
+  const following = state.following;
+  // Follow / Following at the top right, as Mastodon and Ivory put it, once Fedizen has answered for this account —
+  // both the tag's feed and the list of tags you follow, so the button never guesses.
+  const feedOk = !!tag && !!user && !q.isError && !!q.data && !q.data.error;
+  const canFollow = feedOk && state.known;
   return <Page className="atlas-tag-page">
       <Navbar title={tag ?? ''} backLink backLinkShowText={false}>
         {canFollow && <NavRight>
@@ -33,6 +35,7 @@ export function TagFeedPage({ f7route }: { f7route?: { params: { tag?: string } 
       </Navbar>
       {tag && <>
         {follow.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{follow.error}</p></Block>}
+        {feedOk && state.failed && <Block strong inset><p role="alert" style={{ margin: 0 }}>Couldn’t check whether you follow this hashtag. <Link onClick={state.retry}>Try again</Link></p></Block>}
         {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
         {!user ? <Block strong inset>Sign in to Atlas and connect Fedizen to see posts tagged {tag}.</Block>
           : q.isLoading ? <Block strong inset>Loading posts tagged {tag}…</Block>

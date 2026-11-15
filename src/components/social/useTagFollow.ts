@@ -23,7 +23,8 @@ export function useFollowedTagList() {
   return useQuery({
     queryKey: key(id),
     queryFn: () => read({ data: { expectedAtlasUserId: id! } }),
-    enabled: !!id, staleTime: 5 * 60_000,
+    // A failed read isn't kept: the next view asks Fedizen again.
+    enabled: !!id, staleTime: q => (q.state.data?.error ? 0 : 5 * 60_000),
   });
 }
 
@@ -70,4 +71,20 @@ export function useTagFollow() {
     }
   };
   return { toggle, busy, error, clearError: () => setError(null), signedIn: !!user };
+}
+
+/**
+ * Whether the person follows one tag, and whether that is known yet. Until Fedizen's list has arrived the answer is
+ * unknown, so the Follow button waits rather than guessing "Follow" for a tag already followed; if the list can't be
+ * read, `failed` says so and `retry` asks again.
+ */
+export function useTagFollowState(tag: string | null) {
+  const q = useFollowedTagList();
+  const known = !!q.data && !q.data.error && !q.isError;
+  return {
+    known,
+    following: known && !!tag && q.data!.tags.includes(tag.toLowerCase()),
+    failed: !q.isLoading && !known,
+    retry: () => void q.refetch(),
+  };
 }
