@@ -59,10 +59,15 @@ describe("Feed reads are allowlisted", () => {
     expect((await fedizenGet("t", `/api/v1/timelines/tag/${encodeURIComponent("café")}?limit=10`)).status).toBe(200);
     expect((await fedizenGet("t", `/api/v1/timelines/tag/${encodeURIComponent("日".repeat(100))}?limit=10`)).status).toBe(200);
     expect((await fedizenGet("t", "/api/v1/timelines/list/01HABCDEF?limit=20")).status).toBe(200);
+    globalThis.fetch = (async (url: string) => { seen.push(url); return new Response(JSON.stringify({ id: "01P", favourited: true, favourites_count: 3 }), { headers: { "content-type": "application/json" } }); }) as unknown as typeof fetch;
+    const one = await fedizenGet("t", "/api/v1/statuses/01P");
+    expect(one.status).toBe(200);
+    expect(one.data[0]).toMatchObject({ id: "01P", favourited: true, favourites_count: 3 });
+    await expect(fedizenGet("t", "/api/v1/statuses/01P/context")).rejects.toThrow("Unsupported Fedizen read path.");
     await expect(fedizenGet("t", "/api/v1/timelines/tag/a/b?limit=10")).rejects.toThrow("Unsupported Fedizen read path.");
     await expect(fedizenGet("t", "/api/v1/timelines/list/x?limit=40")).rejects.toThrow("Unsupported Fedizen read path.");
     await expect(fedizenGet("t", "/api/v1/timelines/public?limit=20")).rejects.toThrow("Unsupported Fedizen read path.");
-    expect(seen).toHaveLength(4);
+    expect(seen).toHaveLength(5);
   });
 });
 

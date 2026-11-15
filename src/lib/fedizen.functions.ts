@@ -336,8 +336,19 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
       // A post shared into several of your groups counts once for each of them.
       groups: (popular?.posts ?? []).flatMap(p => (p.groups?.length ? p.groups : [p.group]).map(group => ({ ...fromGroupPost(p), group }))),
     });
+    // Group posts come from Fedizen's public feed, which doesn't know what you've liked, boosted or saved: read each
+    // as you see it. One that can't be read keeps Share only, so no button claims a state it doesn't know.
+    const hydrate = async (p: ForYouPost): Promise<ForYouPost> => {
+      if (!p.id.startsWith('g-') || !p.statusId) return p;
+      const r = await fedizenGet(c.token, `/api/v1/statuses/${p.statusId}`).catch(() => null);
+      const s = r?.status === 200 ? fromStatuses(r.data as never)[0] : undefined;
+      if (!s) { const { statusId: _drop, ...rest } = p; return rest as ForYouPost; }
+      return { ...p, statusId: s.statusId, bookmarked: s.bookmarked, counts: s.counts, liked: s.liked, boosted: s.boosted, visibility: s.visibility, article: p.article ?? s.article } as ForYouPost;
+    };
+    const hydrated: ForYouPost[] = [];
+    for (let i = 0; i < posts.length; i += 8) hydrated.push(...await Promise.all(posts.slice(i, i + 8).map(hydrate)));
     // Credits and players for the links in them, as on Following.
-    const withAuthors = await withArticleAuthors(posts);
+    const withAuthors = await withArticleAuthors(hydrated);
     return { posts: withAuthors as ForYouPost[], tags, groups: (joined?.groups ?? []).map(g => g.name), missing };
   });
 

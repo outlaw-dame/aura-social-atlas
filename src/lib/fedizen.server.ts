@@ -367,6 +367,8 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: new RegExp(`^/api/v1/timelines/tag/${TAG}\\?limit=10$`), schema: homeSchema },
   // A circle's timeline (Bonfire: MastoListController.list_timeline over Circles), for circles pinned to Feeds.
   { match: new RegExp(`^/api/v1/timelines/list/${ID}\\?limit=20$`), schema: homeSchema },
+  // One post, as the person sees it (their like, boost and bookmark, its counts): for group posts read publicly.
+  { match: new RegExp(`^/api/v1/statuses/${ID}$`), schema: timelineStatus, single: true },
 ];
 
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;
