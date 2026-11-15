@@ -42,3 +42,15 @@ describe("Follow lives where Mastodon puts it", () => {
     expect(readFileSync("src/components/social/Preferences.tsx", "utf8")).toContain('to="/settings/hashtags"');
   });
 });
+
+describe("A follow isn't undone by a list read already in flight", () => {
+  test("cancels the account's followed-tags read before the optimistic change, and reconciles after", () => {
+    const src = readFileSync("src/components/social/useTagFollow.ts", "utf8");
+    const cancel = src.indexOf("await qc.cancelQueries({ queryKey: k })");
+    const snapshot = src.indexOf("const before = qc.getQueryData");
+    expect(cancel).toBeGreaterThan(0);
+    expect(cancel).toBeLessThan(snapshot);
+    expect(src.indexOf("setBusy(lower)")).toBeLessThan(cancel);
+    expect(src.match(/invalidateQueries\(\{ queryKey: k \}\)/g)?.length).toBe(3);
+  });
+});

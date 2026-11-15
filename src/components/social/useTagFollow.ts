@@ -44,6 +44,9 @@ export function useTagFollow() {
     const name = tag.replace(/^#/, '');
     const lower = name.toLowerCase();
     const k = key(uid);
+    setBusy(lower); setError(null);
+    // A read of the list still in flight would land after the change below and undo it: stop it first.
+    await qc.cancelQueries({ queryKey: k });
     const before = qc.getQueryData<FollowedTags>(k);
     const apply = (follow: boolean) => qc.setQueryData<FollowedTags>(k, d => {
       const base = d ?? { tags: [], names: [] };
@@ -51,15 +54,17 @@ export function useTagFollow() {
       const names = (base.names ?? []).filter(n => n.toLowerCase() !== lower);
       return follow ? { ...base, tags: [lower, ...tags], names: [name, ...names] } : { ...base, tags, names };
     });
-    setBusy(lower); setError(null);
     apply(on);
     try {
       const r = await write({ data: { expectedAtlasUserId: uid, tag: name, on } });
-      if (!r.ok) { qc.setQueryData(k, before); setError(followProblem(r.error)); return; }
+      if (!r.ok) { qc.setQueryData(k, before); setError(followProblem(r.error)); void qc.invalidateQueries({ queryKey: k }); return; }
       if (r.following !== on) apply(r.following);
+      // Reconcile with Fedizen's own list (and For You, which reads it) now that the write has settled.
+      void qc.invalidateQueries({ queryKey: k });
       void qc.invalidateQueries({ queryKey: ['fedizen-foryou', uid] });
     } catch {
       qc.setQueryData(k, before); setError(FOLLOW_PROBLEM.unavailable);
+      void qc.invalidateQueries({ queryKey: k });
     } finally {
       setBusy(null);
     }
