@@ -1,5 +1,6 @@
-import { Block, BlockFooter, Link, Navbar, NavRight, Page, Popup } from 'framework7-react';
+import { Block, BlockFooter, Button, Link, Navbar, NavRight, Page, Popup } from 'framework7-react';
 import { useAtlasAuth } from '@/components/social/AuthState';
+import { useFedizen } from '@/components/social/useFedizen';
 import { FEED_PROBLEM, useFollowedTags, useTagFeed } from '@/components/social/useFeeds';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
 import { Icon } from './F7Extras';
@@ -23,12 +24,22 @@ export function TagFeedPopup({ tag, onClose }: { tag: string | null; onClose: ()
         {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
         {!user ? <Block strong inset>Sign in to Atlas and connect Fedizen to see posts using #{tag}.</Block>
           : q.isLoading ? <Block strong inset>Loading posts with #{tag}…</Block>
-          : q.isError ? <Block strong inset>{FEED_PROBLEM.unavailable} <Link onClick={() => void q.refetch()}>Try again</Link></Block>
-          : q.data?.error ? <Block strong inset>{FEED_PROBLEM[q.data.error]}</Block>
+          : q.isError || q.data?.error === 'unavailable' ? <Block strong inset>{FEED_PROBLEM.unavailable} <Link onClick={() => void q.refetch()}>Try again</Link></Block>
+          : q.data?.error ? <Block strong inset><p style={{ marginTop: 0 }}>{FEED_PROBLEM[q.data.error]}</p><ConnectFedizen /></Block>
           : !q.data?.posts.length ? <Block strong inset>No posts you can see use #{tag} yet.</Block>
           : q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} inTag={tag} />)}
         {actions.sheet}
       </>}
     </Page>
   </Popup>;
+}
+
+/** Not connected, expired or missing a permission: connect Fedizen again from here (a new tab when Atlas is embedded). */
+function ConnectFedizen() {
+  const f = useFedizen();
+  return <>
+    {f.embedded ? <Button fill round external target="_blank" href={`${window.location.origin}/app`}>Open Atlas in a new tab to connect</Button>
+      : <Button fill round onClick={() => void f.connect()} disabled={f.actionBusy}>{f.actionBusy ? 'Connecting…' : 'Connect Fedizen'}</Button>}
+    {f.error && <p role="alert">{f.error}</p>}
+  </>;
 }

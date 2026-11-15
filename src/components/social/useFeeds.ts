@@ -51,7 +51,8 @@ export function useTagFeed(tag: string | null) {
   return useQuery({
     queryKey: ['fedizen-tag-feed', id, tag],
     queryFn: () => read({ data: { expectedAtlasUserId: id!, tag: tag! } }),
-    enabled: !!id && !!tag, staleTime: 60_000,
+    // A feed is fresh for a minute; a failure isn't, so reopening the tag (or remounting) asks Fedizen again.
+    enabled: !!id && !!tag, staleTime: q => (q.state.data?.error ? 0 : 60_000),
   });
 }
 
