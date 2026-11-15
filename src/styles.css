@@ -690,9 +690,10 @@ span.atlas-post-avatar { display: inline-flex; align-items: center; justify-cont
 .atlas-reply-audience .icon { font-size: 15px; }
 
 /* Link previews, after Particle's story cards: the image runs edge to edge and fades into a panel tinted by itself. */
-.atlas-rich-link { position: relative; isolation: isolate; display: flex !important; flex-direction: column; margin-top: 12px; overflow: hidden; border-radius: 18px; border: .5px solid var(--border, rgba(127,127,127,.25)); background: color-mix(in oklab, currentColor 5%, transparent); color: inherit !important; text-decoration: none !important; -webkit-tap-highlight-color: transparent; transition: transform .2s; }
-.atlas-rich-link:active { transform: scale(.985); }
-.atlas-rich-link.has-image { border-color: transparent; background: #15151a; color: #fff !important; }
+.atlas-rich-link { position: relative; isolation: isolate; display: flex; flex-direction: column; margin-top: 12px; overflow: hidden; border-radius: 18px; border: .5px solid var(--border, rgba(127,127,127,.25)); background: color-mix(in oklab, currentColor 5%, transparent); color: inherit; }
+.atlas-rich-link.has-image { border-color: transparent; background: #15151a; color: #fff; }
+.atlas-rich-main { display: flex !important; flex-direction: column; color: inherit !important; text-decoration: none !important; -webkit-tap-highlight-color: transparent; transition: opacity .2s; }
+.atlas-rich-main:active { opacity: .8; }
 .atlas-rich-tint { position: absolute; inset: -25%; z-index: -1; background-size: cover; background-position: center bottom; filter: blur(40px) saturate(1.5) brightness(.5); }
 .atlas-rich-image { display: block; width: 100%; aspect-ratio: 1.91 / 1; max-height: 340px; object-fit: cover; -webkit-mask-image: linear-gradient(#000 58%, transparent); mask-image: linear-gradient(#000 58%, transparent); }
 .atlas-rich-body { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 16px; min-width: 0; }
@@ -704,7 +705,23 @@ span.atlas-post-avatar { display: inline-flex; align-items: center; justify-cont
 .atlas-rich-summary { font-size: 14px; line-height: 1.42; opacity: .72; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .atlas-rich-host { font-size: 12px; opacity: .5; margin-top: 2px; }
 .atlas-rich-host::after { content: ' ↗'; }
-@media (prefers-reduced-motion: reduce) { .atlas-rich-link, .atlas-feed-tabs button { transition: none; } }
+/* Creator attribution at the foot of the card: a hairline, each creator as a row that opens their profile in Atlas,
+   then how Atlas verified them. */
+.atlas-rich-credits { display: flex; flex-direction: column; margin: 0 16px; padding: 4px 0 12px; border-top: .5px solid color-mix(in oklab, currentColor 18%, transparent); }
+.atlas-rich-creator { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.atlas-rich-creator:active { opacity: .7; }
+.atlas-rich-creator:focus-visible { outline: 2px solid var(--f7-theme-color, var(--accent)); outline-offset: 2px; border-radius: 10px; }
+.atlas-rich-face { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: none; box-shadow: 0 0 0 .5px color-mix(in oklab, currentColor 25%, transparent); }
+span.atlas-rich-face { display: inline-flex; align-items: center; justify-content: center; background: color-mix(in oklab, currentColor 14%, transparent); font-size: 17px; font-weight: 600; }
+.atlas-rich-face.is-square { border-radius: 10px; }
+.atlas-rich-creator-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.atlas-rich-creator-text small { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; opacity: .6; }
+.atlas-rich-creator-text b { font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-rich-creator-text span { font-size: 13px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-rich-chevron { width: 18px; height: 18px; flex: none; opacity: .5; }
+.atlas-rich-note { display: flex; align-items: center; gap: 5px; margin: 2px 0 0; font-size: 11px; opacity: .6; }
+.atlas-rich-note svg { width: 13px; height: 13px; flex: none; }
+@media (prefers-reduced-motion: reduce) { .atlas-rich-main, .atlas-feed-tabs button { transition: none; } }
 
 /* Mentions in replies, after iMessage: a picked person's handle is tinted in the accent, and while typing "@…" the people
    it could be sit in a strip under the box. The tint is a copy of the text drawn behind a transparent-text textarea, so

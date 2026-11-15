@@ -47,6 +47,7 @@ export function PostArticleCard({ article }: { article?: PostArticle }) {
   if (!showLink) return null;
   return <div className="mt-3">
     {article.title && <RichLink article={article} kicker={article.authors?.[0]?.work === 'episode' ? `Podcast episode · ${article.provider || host}` : undefined} />}
-    <AuthorCards authors={article.authors} byline={article.byline} className="mt-2" />
+    {/* With a preview, its card carries the creators; these are for a credit without one. */}
+    {!article.title && <AuthorCards authors={article.authors} byline={article.byline} className="mt-2" />}
   </div>;
 }
