@@ -10,8 +10,8 @@ import type { Collection } from '@/lib/collections';
 import { MyCollections } from './Collections';
 
 /* Profile tabs follow Bluesky's profile: Posts, Replies, Media, Collections (Mastodon 4.6's curated account
-   collections), then the owner-only private tab (Bluesky's Likes/Saved; Atlas's Saved), then Feeds and Lists. Follows are not a tab: they open from the Following count. */
-const sections = ['Posts', 'Replies', 'Media', 'Collections', 'Saved', 'Feeds', 'Lists'] as const;
+   collections), then the owner-only private tab (Bluesky's Likes/Saved; Atlas's Saved), then Circles (Bonfire's circles of people) and Lists. Follows are not a tab: they open from the Following count. */
+const sections = ['Posts', 'Replies', 'Media', 'Collections', 'Saved', 'Circles', 'Lists'] as const;
 type Section = (typeof sections)[number];
 const emptySections: Record<Section, { ios: string; md: string; title: string; detail: string }> = {
   Posts: { ios: 'f7:square_pencil', md: 'material:edit_note', title: 'No posts yet', detail: 'Your posts will appear here once publishing is connected.' },
@@ -19,7 +19,7 @@ const emptySections: Record<Section, { ios: string; md: string; title: string; d
   Media: { ios: 'f7:photo_on_rectangle', md: 'material:photo_library', title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
   Collections: { ios: 'f7:square_stack_3d_up', md: 'material:collections_bookmark', title: 'No collections yet', detail: '' },
   Saved: { ios: 'f7:bookmark', md: 'material:bookmark_border', title: 'Nothing saved yet', detail: 'Stories you save appear here. Only you can see this tab.' },
-  Feeds: { ios: 'f7:rectangle_stack', md: 'material:dynamic_feed', title: 'No feeds yet', detail: 'Custom feeds you create will appear here.' },
+  Circles: { ios: 'f7:circle_grid_hex', md: 'material:bubble_chart', title: 'No circles yet', detail: 'Circles group the people you know, like colleagues, friends or locals, so you choose who sees and replies to each post. Circles you make on Fedizen will appear here.' },
   Lists: { ios: 'f7:list_bullet', md: 'material:format_list_bulleted', title: 'No lists yet', detail: 'Your creator lists will appear here when lists are available.' },
 };
 

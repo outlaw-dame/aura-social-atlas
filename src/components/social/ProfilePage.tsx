@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Bookmark, CalendarDays, CircleUserRound, Image, Layers, List, Lock, MessagesSquare, PenLine, Users, X } from 'lucide-react';
+import { Bookmark, CalendarDays, CircleDashed, CircleUserRound, Image, List, Lock, MessagesSquare, PenLine, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAtlasAuth } from './AuthState';
 import { useSocial } from './SocialState';
@@ -18,7 +18,7 @@ const empty: Record<ProfileSection, { icon: typeof PenLine; title: string; detai
   Replies: { icon: MessagesSquare, title: 'No replies yet', detail: 'Your replies will appear here once publishing is connected.' },
   Media: { icon: Image, title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
   Saved: { icon: Bookmark, title: 'Nothing saved yet', detail: 'Stories you save appear here. Only you can see this tab.' },
-  Feeds: { icon: Layers, title: 'No feeds yet', detail: 'Custom feeds you create will appear here.' },
+  Circles: { icon: CircleDashed, title: 'No circles yet', detail: 'Circles group the people you know, like colleagues, friends or locals, so you choose who sees and replies to each post. Circles you make on Fedizen will appear here.' },
   Lists: { icon: List, title: 'No lists yet', detail: 'Your creator lists will appear here when lists are available.' },
 };
 
