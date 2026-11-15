@@ -23,14 +23,14 @@ function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
 
 /** Phone: why a post is in For You. "Popular in" shows the group's avatar before its name; the name opens the group. */
 export function MobileReasonChips({ reasons }: { reasons?: ForYouReason[] }) {
-  if (!reasons?.some(r => r.kind !== 'tag')) return null;
-  return <p className="atlas-reasons">{reasons.map((r, i) => r.kind === 'group'
-    ? <span key={i} className="atlas-reason-group">Popular in {r.groupId
+  // Only what the reader couldn't tell already: which group made it popular. They know whom they follow, and a
+  // followed hashtag shows as the post's tag line (FollowedTagLine), as Ivory does.
+  const groups = (reasons ?? []).filter(r => r.kind === 'group');
+  if (!groups.length) return null;
+  return <p className="atlas-reasons">{groups.map((r, i) =>
+    <span key={i} className="atlas-reason-group">Popular in {r.groupId
       ? <button type="button" onClick={() => openGroup({ id: r.groupId!, name: r.group, avatar: r.avatar })} aria-label={`Open ${r.group}`}><ChipGroupFace name={r.group} avatar={r.avatar} /><b>{r.group}</b></button>
-      : <><ChipGroupFace name={r.group} /><b>{r.group}</b></>}</span>
-    // A followed hashtag shows as the post's tag line instead (FollowedTagLine), as Ivory does.
-    : r.kind === 'tag' ? null
-    : <span key={i}><Icon ios="f7:person_crop_circle_badge_checkmark" md="material:how_to_reg" />You follow</span>)}</p>;
+      : <><ChipGroupFace name={r.group} /><b>{r.group}</b></>}</span>)}</p>;
 }
 
 /** The followed hashtags a post uses, at its top left with a tag icon and no accent colour, after Ivory. Each opens its

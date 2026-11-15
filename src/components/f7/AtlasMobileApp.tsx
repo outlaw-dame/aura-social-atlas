@@ -408,16 +408,13 @@ export default function AtlasMobileApp() {
       <Popup opened={!!tagFeed} onPopupClosed={() => setTagFeed(null)}>
         {tagFeed && tagFeedCreator && (
           <Page>
-            <Navbar title={tagFeed.tag} subtitle={`Hashtag · ${tagFeedCreator.name}`}>
+            <Navbar title={tagFeed.tag} subtitle={tagFeedCreator.name}>
               <NavRight>
                 <Link iconOnly popupClose aria-label="Close tag feed">
                   <Icon ios="f7:xmark" md="material:close" />
                 </Link>
               </NavRight>
             </Navbar>
-            <Block strong inset style={{ fontSize: 13 }}>
-              Stories by {tagFeedCreator.name} tagged <span className="atlas-hashtag"><TagText tag={tagFeed.tag} /></span>
-            </Block>
             {tagFeedPosts.length ? tagFeedPosts.map(postCard) : (
               <Block strong inset>No stories with this tag yet.</Block>
             )}

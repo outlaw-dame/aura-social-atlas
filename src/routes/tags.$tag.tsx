@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowUpRight, Link2, MessageCircle, Repeat2, Star, Tag } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Link2, MessageCircle, Repeat2, Star } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from '@/components/social/AuthState';
-import { FEED_PROBLEM, useFollowedTags, useTagFeed } from '@/components/social/useFeeds';
+import { FEED_PROBLEM, useTagFeed } from '@/components/social/useFeeds';
 import { StandaloneDesktopHosts } from '@/components/social/DesktopHosts';
 import { useFedizen } from '@/components/social/useFedizen';
 import { Button } from '@/components/ui/button';
@@ -35,25 +35,22 @@ function TagBody({ tag }: { tag: string }) {
   const { user, loading } = useAtlasAuth();
   const norm = tag.replace(/^#/, '').toLowerCase();
   const fedizen = useTagFeed(user && /^[\p{L}\p{N}_]{1,100}$/u.test(norm) ? norm : null);
-  const followed = useFollowedTags();
   // Signed in with Fedizen connected: Fedizen's feed for the tag, as the person may see and act on it — and when Fedizen
   // fails or access lapsed, that failure with its retry or reconnect, never someone else's feed in its place. Only a
   // signed-out reader, or one who hasn't connected Fedizen, gets the public posts below, from mastodon.social.
   const personal = !!user && fedizen.data?.error !== 'not-connected';
   if (loading || (user && fedizen.isLoading)) return <TagShell tag={tag}><p className="text-sm text-muted-foreground">Loading posts…</p></TagShell>;
-  if (personal) return <TagShell tag={tag} note={<>{followed.has(norm) && <><Tag className="size-3.5" aria-hidden="true" />You follow this hashtag · </>}Posts on Fedizen tagged {tag} that you can see</>}>
+  if (personal) return <TagShell tag={tag} >
     <FedizenTagPosts posts={fedizen.data?.posts ?? []} tag={tag} failed={fedizen.isError} problem={fedizen.data?.error} retry={() => void fedizen.refetch()} />
   </TagShell>;
   return <PublicTagPage tag={tag} />;
 }
 
-function TagShell({ tag, note, children }: { tag: string; note?: React.ReactNode; children: React.ReactNode }) {
+function TagShell({ tag, children }: { tag: string; children: React.ReactNode }) {
   return <main className="mx-auto min-h-dvh max-w-2xl px-4 py-6">
     <Link to="/feeds" className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />Feeds</Link>
     <header className="mb-6 border-b border-border pb-5">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Hashtag</p>
       <h1 className="font-serif text-4xl italic text-accent">{tag}</h1>
-      {note && <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">{note}</p>}
     </header>
     {children}
   </main>;
@@ -86,9 +83,8 @@ function PublicTagPage({ tag }: { tag: string }) {
   return <main className="mx-auto min-h-dvh max-w-2xl px-4 py-6">
     <Link to="/" className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />Discover</Link>
     <header className="mb-6 border-b border-border pb-5">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Hashtag</p>
       <h1 className="font-serif text-4xl italic text-accent">{tag}</h1>
-      <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">Public posts known to <NetworkBadge network="Mastodon" /> mastodon.social that used this hashtag</p>
+      <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">From <NetworkBadge network="Mastodon" /> mastodon.social</p>
     </header>
     {isLoading && <p className="text-sm text-muted-foreground">Loading posts…</p>}
     {error && <p className="text-sm text-muted-foreground">This hashtag feed couldn't be loaded. Please try again shortly.</p>}

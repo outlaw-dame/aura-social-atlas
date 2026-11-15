@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Bookmark, Globe2, Heart, Lock, MessageCircle, Repeat2, Share, Tag, UserCheck, AtSign } from 'lucide-react';
+import { Bookmark, Globe2, Heart, Lock, MessageCircle, Repeat2, Share, Tag, AtSign } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { shortAgo, type ForYouReason } from '@/lib/feed-types';
 import { Button } from '@/components/ui/button';
@@ -24,15 +24,15 @@ function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
 /** Why a post is in For You, in a few words. "Popular in" shows the group's avatar before its name; the name opens the
  *  group's page in Atlas. */
 export function ReasonChips({ reasons }: { reasons?: ForYouReason[] }) {
-  // A followed hashtag shows as the post's tag line instead (FollowedTagLine), as Ivory does.
-  const shown = (reasons ?? []).filter(r => r.kind !== 'tag');
-  if (!shown.length) return null;
-  return <p className="mb-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">{shown.map((r, i) =>
+  // Only what the reader couldn't tell already: which group made it popular. They know whom they follow, and a
+  // followed hashtag shows as the post's tag line (FollowedTagLine), as Ivory does.
+  const groups = (reasons ?? []).filter(r => r.kind === 'group');
+  if (!groups.length) return null;
+  return <p className="mb-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">{groups.map((r, i) =>
     <span key={i} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5">
-      {r.kind === 'group' ? <>Popular in {r.groupId
-          ? <Link to="/groups" search={{ group: r.groupId }} className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline"><ChipGroupFace name={r.group} avatar={r.avatar} />{r.group}</Link>
-          : <span className="inline-flex items-center gap-1 font-semibold text-foreground"><ChipGroupFace name={r.group} />{r.group}</span>}</>
-        : <><UserCheck className="size-3" />You follow</>}
+      Popular in {r.groupId
+        ? <Link to="/groups" search={{ group: r.groupId }} className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline"><ChipGroupFace name={r.group} avatar={r.avatar} />{r.group}</Link>
+        : <span className="inline-flex items-center gap-1 font-semibold text-foreground"><ChipGroupFace name={r.group} />{r.group}</span>}
     </span>)}</p>;
 }
 

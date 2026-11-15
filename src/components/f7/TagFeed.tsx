@@ -1,7 +1,7 @@
-import { Block, BlockFooter, Button, Link, Navbar, NavRight, Page, Popup } from 'framework7-react';
+import { Block, Button, Link, Navbar, NavRight, Page, Popup } from 'framework7-react';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useFedizen } from '@/components/social/useFedizen';
-import { FEED_PROBLEM, useFollowedTags, useTagFeed } from '@/components/social/useFeeds';
+import { FEED_PROBLEM, useTagFeed } from '@/components/social/useFeeds';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
 import { Icon } from './F7Extras';
 
@@ -12,15 +12,13 @@ import { Icon } from './F7Extras';
 export function TagFeedPopup({ tag, onClose }: { tag: string | null; onClose: () => void }) {
   const { user } = useAtlasAuth();
   const q = useTagFeed(tag);
-  const followed = useFollowedTags();
   const actions = useMobilePostActions();
   return <Popup opened={!!tag} onPopupClosed={onClose} swipeToClose className="atlas-tag-popup">
     <Page>
-      <Navbar title={tag ?? ''} subtitle="Hashtag">
+      <Navbar title={tag ?? ''}>
         <NavRight><Link iconOnly popupClose aria-label="Close"><Icon ios="f7:xmark" md="material:close" /></Link></NavRight>
       </Navbar>
       {tag && <>
-        <BlockFooter>{followed.has(tag) ? <><Icon ios="f7:tag" md="material:sell" /> You follow this hashtag. </> : null}Posts on Fedizen tagged {tag} that you can see.</BlockFooter>
         {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
         {!user ? <Block strong inset>Sign in to Atlas and connect Fedizen to see posts tagged {tag}.</Block>
           : q.isLoading ? <Block strong inset>Loading posts tagged {tag}…</Block>
