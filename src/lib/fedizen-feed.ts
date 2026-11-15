@@ -19,13 +19,13 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
   return have.has(needed) || (needed.includes(':') && have.has(needed.split(':')[0]));
 }
 
-export type FedizenPost = { id: string; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[] };
+export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[] };
 export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string };
 /** A direct conversation (Mastodon `Conversation`): the other people in it and its latest message, as plain text. */
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
-type Acct = { display_name?: string; acct?: string; username?: string; avatar?: string };
-type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string }[] };
+type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string };
+type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string }[]; bookmarked?: boolean | null };
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
 const http = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
@@ -35,7 +35,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
   return list.map(s => {
     const o = s.reblog ?? s;
     return {
-      id: s.id, author: name(o.account), handle: `@${o.account?.acct ?? ''}`, avatar: http(o.account?.avatar),
+      id: s.id, statusId: o.id, bookmarked: o.bookmarked === true || s.bookmarked === true, author: name(o.account), handle: `@${o.account?.acct ?? ''}`, avatar: http(o.account?.avatar),
       paragraphs: htmlToParagraphs(o.content ?? ''), url: http(o.url) ?? http(o.uri) ?? FEDIZEN, date: o.created_at,
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
       boostedBy: s.reblog ? name(s.account) : undefined,
@@ -131,4 +131,21 @@ export function assertFedizenSessionIntent(expectedUserId: string, authenticated
   if (!expectedUserId || expectedUserId !== authenticatedUserId) {
     throw new Error('Atlas session changed. Sign in again before continuing with Fedizen.');
   }
+}
+
+/** A Bonfire circle (served to Mastodon clients as a List): a named group of people you choose. */
+export type FedizenCircle = { id: string; title: string };
+/** Someone in a circle, or found by handle to add to one. */
+export type FedizenPerson = { id: string; name: string; handle: string; avatar?: string };
+
+export function fromLists(list: { id: string; title?: string | null }[]): FedizenCircle[] {
+  return list.filter(l => l && typeof l.id === 'string').map(l => ({ id: l.id, title: (l.title ?? '').trim() || 'Untitled circle' }));
+}
+export function fromAccounts(list: Acct[]): FedizenPerson[] {
+  return list.filter(a => a && typeof a.id === 'string' && a.id).map(a => ({ id: a.id!, name: name(a), handle: `@${a.acct ?? a.username ?? ''}`, avatar: http(a.avatar) }));
+}
+/** "@name@server", "name@server" or "name" → what Mastodon's account lookup takes, or null. */
+export function lookupAcct(handle: string): string | null {
+  const h = handle.trim().replace(/^@/, '');
+  return /^[A-Za-z0-9_.-]{1,64}(@[A-Za-z0-9.-]{1,253})?$/.test(h) ? h : null;
 }

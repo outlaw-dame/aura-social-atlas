@@ -5,6 +5,8 @@ import { getRecentArticles, getFedizenPublic } from '@/lib/bonfire.functions';
 import type { BonfireArticle } from '@/lib/spotlight';
 import { useFedizen, useFedizenMessages } from '@/components/social/useFedizen';
 import { openCollection } from '@/lib/collections';
+import { useSaveToggle } from '@/components/social/useFedizenLibrary';
+import { SaveLink } from './SavedAndCircles';
 import { Icon } from './F7Extras';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
@@ -46,8 +48,10 @@ export function MobileRecentArticles() {
 
 export function MobileFedizenFeed() {
   const f = useFedizen();
+  const save = useSaveToggle();
   return <>
     <BlockTitle>Your Fedizen feed</BlockTitle>
+    {save.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{save.error}</p></Block>}
     {!f.signedIn ? <Block strong inset>Sign in to Atlas to see your Fedizen feed. <Link href="/auth" external>Sign in</Link></Block>
       : f.loading ? <Block strong inset>Loading your Fedizen feed…</Block>
       : !f.data?.connected || f.data.error === 'expired' ? <Block strong inset>
@@ -66,7 +70,7 @@ export function MobileFedizenFeed() {
             <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />
           </button>)}
         </CardContent>
-        <CardFooter><span style={{ fontSize: 12, opacity: .6 }}>{when(p.date)}</span><Link external target="_blank" href={p.url}>Open</Link></CardFooter>
+        <CardFooter><span style={{ fontSize: 12, opacity: .6 }}>{when(p.date)}</span><span style={{ display: 'flex', gap: 12 }}><SaveLink post={p} save={save} /><Link external target="_blank" href={p.url}>Open</Link></span></CardFooter>
       </Card>)}
     {(!f.signedIn || (!f.loading && (!f.data?.connected || f.data.error === 'expired'))) && <MobilePublicFedizen />}
   </>;

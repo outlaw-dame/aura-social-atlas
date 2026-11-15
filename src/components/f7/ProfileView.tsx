@@ -8,6 +8,7 @@ import { CreatorTag } from '@/components/social/CreatorTag';
 import { linkifyHashtags, extractHashtags, hashtagUrl } from '@/lib/hashtags';
 import type { Collection } from '@/lib/collections';
 import { MyCollections } from './Collections';
+import { MobileCircles, MobileSaved } from './SavedAndCircles';
 import { activityLabel, DEFAULT_ACTIVITY_FILTER, type ActivityFilter } from '@/components/social/profile-sections';
 
 /* Profile tabs after Mastodon's 2026 redesign: Activity (posts, quote posts, replies and boosts, filtered like
@@ -21,7 +22,7 @@ const emptySections: Record<Section, { ios: string; md: string; title: string; d
   Featured: { ios: 'f7:star', md: 'material:star_outline', title: 'Nothing featured yet', detail: 'Feature hashtags from Edit profile, and people from their profiles, to show them here.' },
   Media: { ios: 'f7:photo_on_rectangle', md: 'material:photo_library', title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
   Collections: { ios: 'f7:square_stack_3d_up', md: 'material:collections_bookmark', title: 'No collections yet', detail: '' },
-  Saved: { ios: 'f7:bookmark', md: 'material:bookmark_border', title: 'Nothing saved yet', detail: 'Stories you save appear here. Only you can see this tab.' },
+  Saved: { ios: 'f7:bookmark', md: 'material:bookmark_border', title: 'Nothing saved yet', detail: 'Posts you save on Fedizen. Each keeps the audience its author chose.' },
   Circles: { ios: 'f7:circle_grid_hex', md: 'material:bubble_chart', title: 'No circles yet', detail: 'Circles group the people you know, like colleagues, friends or locals, so you choose who sees and replies to each post. Circles you make on Fedizen will appear here.' },
   Lists: { ios: 'f7:list_bullet', md: 'material:format_list_bulleted', title: 'No lists yet', detail: 'Your creator lists will appear here when lists are available.' },
 };
@@ -125,7 +126,7 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
         {sections.map(item => (
           <button key={item} type="button" role="tab" id={`atlas-profile-tab-${item.toLowerCase()}`} aria-selected={section === item}
             aria-controls="atlas-profile-content" className={section === item ? 'is-active' : undefined} onClick={() => setSection(item)}>
-            {item === 'Saved' && <Icon ios="f7:lock_fill" md="material:lock" />}{item}
+            {item}
           </button>
         ))}
       </div>
@@ -142,12 +143,13 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
           <h3>Profiles</h3>
           <p>People you feature from their profiles on Fedizen will appear here.</p>
         </div>}
-        {!hasContent && section !== 'Collections' && <div className="atlas-profile-empty">
+        {section === 'Circles' && <MobileCircles />}
+        {!hasContent && !['Collections', 'Saved', 'Circles'].includes(section) && <div className="atlas-profile-empty">
           <div className="atlas-profile-empty-icon"><Icon ios={empty.ios} md={empty.md} /></div>
           <h2>{empty.title}</h2>
           <p>{empty.detail}</p>
         </div>}
-        {section === 'Saved' && savedPosts.map(post => <article key={post.id} className="atlas-profile-story">
+        {section === 'Saved' && <MobileSaved stories={savedPosts.length ? <><h3 className="atlas-library-heading">Stories saved in Atlas</h3>{savedPosts.map(post => <article key={post.id} className="atlas-profile-story">
           <Link external target="_blank" {...{ rel: 'noopener noreferrer' }} href={post.url} className="atlas-profile-story-image"><img src={post.image} alt={post.alt} loading="lazy" /></Link>
           <div className="atlas-profile-story-body">
             <span className="atlas-profile-story-meta">{creators.find(creator => creator.id === post.creatorId)?.name} · {post.kind}</span>
@@ -156,7 +158,7 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
             {(() => { const creator = creators.find(c => c.id === post.creatorId); return creator ? <CreatorTag creator={creator} onOpen={() => onOpenCreator(creator)} /> : null; })()}
             <Button small tonal onClick={() => toggleSave(post.id)}><Icon ios="f7:bookmark_fill" md="material:bookmark" /> Remove from saved</Button>
           </div>
-        </article>)}
+        </article>)}</> : undefined} />}
       </section>
       <footer className="atlas-profile-footer">
         <Button small onClick={() => { void signOut(); }}>Sign out</Button>

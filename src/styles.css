@@ -520,3 +520,19 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-coll-link b { font-size: 14px; } .atlas-coll-link small { font-size: 12px; color: var(--muted-foreground); }
 .atlas-coll-link > .icon:last-child { font-size: 14px; color: var(--muted-foreground); }
 .atlas-coll-local { margin: 8px 0 0; font-size: 12px; color: var(--muted-foreground); }
+
+/* Profile Saved (Fedizen bookmarks) and Circles (Bonfire circles) on the phone. */
+.atlas-library { padding: 4px 0 16px; }
+.atlas-library-note { margin: 12px 16px; font-size: 13px; color: var(--muted-foreground); }
+.atlas-library-error { margin: 12px 16px; font-size: 13px; color: var(--f7-theme-color); }
+.atlas-library-heading { margin: 20px 16px 8px; font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted-foreground); }
+.atlas-saved-post { margin: 0 16px; padding: 14px 0; border-bottom: .5px solid var(--border); font-size: 15px; line-height: 1.5; }
+.atlas-saved-post p { margin: 8px 0; }
+.atlas-saved-boost { font-size: 11px; color: var(--muted-foreground); }
+.atlas-saved-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.atlas-saved-head img { border-radius: 16px; object-fit: cover; }
+.atlas-saved-head span span { color: var(--muted-foreground); }
+.atlas-saved-image { width: 100%; border-radius: 12px; }
+.atlas-saved-actions { display: flex; gap: 16px; font-size: 14px; }
+.atlas-save-link { display: inline-flex; align-items: center; gap: 4px; }
+.atlas-save-link .icon { font-size: 18px; }
