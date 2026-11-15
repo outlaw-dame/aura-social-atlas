@@ -344,11 +344,16 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
     ]);
     if (tagFeeds.some(t => !t.ok) && !missing.includes('tags')) missing.push('tags');
     if (!joined || !joined.complete || !popular || !popular.complete) missing.push('groups');
+    const joinedByName = new Map((joined?.groups ?? []).map(g => [g.name.toLowerCase(), g] as const));
     const posts = rankForYou({
       following: home.status === 200 ? fromStatuses(home.data as never) : [],
       tags: tagFeeds.map(({ tag, posts }) => ({ tag, posts })),
-      // A post shared into several of your groups counts once for each of them.
-      groups: (popular?.posts ?? []).flatMap(p => (p.groups?.length ? p.groups : [p.group]).map(group => ({ ...fromGroupPost(p), group }))),
+      // A post shared into several of your groups counts once for each of them. Each is matched to your joined group
+      // of that name for its id and avatar (the chip shows the avatar and opens the group).
+      groups: (popular?.posts ?? []).flatMap(p => (p.groups?.length ? p.groups : [p.group]).map(group => {
+        const g = group ? joinedByName.get(group.toLowerCase()) : undefined;
+        return { ...fromGroupPost(p), group, ...(g ? { groupId: g.id, ...(g.avatar ? { groupAvatar: g.avatar } : {}) } : {}) };
+      })),
     });
     // Group posts come from Fedizen's public feed, which doesn't know what you've liked, boosted or saved: read each
     // as you see it. One that can't be read keeps Share only, so no button claims a state it doesn't know.

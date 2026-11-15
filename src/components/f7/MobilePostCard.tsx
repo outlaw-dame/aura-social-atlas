@@ -3,6 +3,7 @@ import { Card, CardContent, CardFooter, Link } from 'framework7-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { shortAgo, type ForYouReason } from '@/lib/feed-types';
 import { openCollection } from '@/lib/collections';
+import { openGroup } from '@/lib/groups';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { useSaveToggle } from '@/components/social/useFedizenLibrary';
 import { useReactions } from '@/components/social/usePostActions';
@@ -10,12 +11,22 @@ import { ArticleCard } from './ArticleAuthors';
 import { MobilePostActions, ReplySheet } from './PostActions';
 import { Icon } from './F7Extras';
 
-/** Phone: why a post is in For You. */
+/** A group's avatar in a reason chip: its picture, else its initial, as a rounded square (groups are squares). */
+function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
+  const [broken, setBroken] = useState(false);
+  return avatar && !broken
+    ? <img className="atlas-reason-face" src={avatar} alt="" width={18} height={18} referrerPolicy="no-referrer" loading="lazy" onError={() => setBroken(true)} />
+    : <span className="atlas-reason-face" aria-hidden="true">{name.charAt(0)}</span>;
+}
+
+/** Phone: why a post is in For You. "Popular in" shows the group's avatar before its name; the name opens the group. */
 export function MobileReasonChips({ reasons }: { reasons?: ForYouReason[] }) {
   if (!reasons?.length) return null;
-  return <p className="atlas-reasons">{reasons.map((r, i) => <span key={i}>
-    {r.kind === 'tag' ? <><Icon ios="f7:number" md="material:tag" />{r.tag}</> : r.kind === 'group' ? <><Icon ios="f7:bubble_left_bubble_right" md="material:forum" />Popular in {r.group}</> : <><Icon ios="f7:person_crop_circle_badge_checkmark" md="material:how_to_reg" />You follow</>}
-  </span>)}</p>;
+  return <p className="atlas-reasons">{reasons.map((r, i) => r.kind === 'group'
+    ? <span key={i} className="atlas-reason-group">Popular in {r.groupId
+      ? <button type="button" onClick={() => openGroup({ id: r.groupId!, name: r.group, avatar: r.avatar })} aria-label={`Open ${r.group}`}><ChipGroupFace name={r.group} avatar={r.avatar} /><b>{r.group}</b></button>
+      : <><ChipGroupFace name={r.group} /><b>{r.group}</b></>}</span>
+    : <span key={i}>{r.kind === 'tag' ? <><Icon ios="f7:number" md="material:tag" />{r.tag}</> : <><Icon ios="f7:person_crop_circle_badge_checkmark" md="material:how_to_reg" />You follow</>}</span>)}</p>;
 }
 
 /** Everything a feed of post cards shares: Save, Like and Boost state, and the reply sheet (render `sheet` once). */

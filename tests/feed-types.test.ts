@@ -148,3 +148,12 @@ describe("For You dedupe", () => {
     expect(out[0].reasons).toEqual([{ kind: "following" }, { kind: "group", group: "Makers" }]);
   });
 });
+
+describe("Popular in your groups chips", () => {
+  test("a group reason carries the joined group's id and avatar", () => {
+    const g = { ...post("01G", 1), id: "g-a1", group: "Makers", groupId: "01MAKERS", groupAvatar: "https://fedizen.net/m.png" };
+    const [out] = rankForYou({ following: [], tags: [], groups: [g] }, NOW);
+    expect(out.reasons).toEqual([{ kind: "group", group: "Makers", groupId: "01MAKERS", avatar: "https://fedizen.net/m.png" }]);
+    expect((out as Record<string, unknown>).groupId).toBeUndefined();
+  });
+});

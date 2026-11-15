@@ -24,7 +24,7 @@ import { FediProfilePopup } from './FediProfile';
 import { MiniPlayer } from './MiniPlayer';
 import { useFediProfileOpener } from '@/components/social/useFediProfile';
 import { GroupPopup, MobileGroups } from './Groups';
-import type { Group } from '@/lib/groups';
+import { OPEN_GROUP_EVENT, groupStub, type Group, type GroupTarget } from '@/lib/groups';
 import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileActivity, MessagesPopup } from './FedizenMobile';
@@ -120,6 +120,12 @@ export default function AtlasMobileApp() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [collectionOpen, setCollectionOpen] = useState<{ collection?: Collection; id?: string; link?: string } | null>(null);
   const [groupOpen, setGroupOpen] = useState<Group | null>(null);
+  // A "Popular in" chip in For You opens its group here.
+  useEffect(() => {
+    const on = (e: Event) => { const t = (e as CustomEvent<GroupTarget>).detail; if (t?.id) setGroupOpen(groupStub(t)); };
+    window.addEventListener(OPEN_GROUP_EVENT, on);
+    return () => window.removeEventListener(OPEN_GROUP_EVENT, on);
+  }, []);
   // Collection links in posts open here, as on Mastodon (tagged_collections).
   useEffect(() => {
     const on = (e: Event) => { const link = (e as CustomEvent<{ link?: string }>).detail?.link; if (link) setCollectionOpen({ link }); };

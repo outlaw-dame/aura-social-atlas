@@ -20,7 +20,9 @@ export const BASE_FEEDS: { id: FeedKind; label: string; hint: string }[] = [
 ];
 
 /** Why a post is in For You. */
-export type ForYouReason = { kind: 'following' } | { kind: 'tag'; tag: string } | { kind: 'group'; group: string };
+/** A group reason carries the group's id and avatar when it's one of your joined groups, so its chip can show the
+ *  avatar and open the group. */
+export type ForYouReason = { kind: 'following' } | { kind: 'tag'; tag: string } | { kind: 'group'; group: string; groupId?: string; avatar?: string };
 export type ForYouPost = FedizenPost & { reasons: ForYouReason[] };
 
 export function fromGroupPost(p: GroupPost): FedizenPost {
@@ -35,7 +37,7 @@ const WEIGHT: Record<ForYouReason['kind'], number> = { following: 1, tag: 0.85, 
  * recency (half-life of 12 hours), weighted by why it's there, with a boost for a group's most-discussed posts
  * (they arrive most-replied first) and for posts with more than one reason.
  */
-export function rankForYou(sources: { following: FedizenPost[]; tags: { tag: string; posts: FedizenPost[] }[]; groups: (FedizenPost & { group?: string })[] }, now = Date.now(), max = 40): ForYouPost[] {
+export function rankForYou(sources: { following: FedizenPost[]; tags: { tag: string; posts: FedizenPost[] }[]; groups: (FedizenPost & { group?: string; groupId?: string; groupAvatar?: string })[] }, now = Date.now(), max = 40): ForYouPost[] {
   // One entry per post: matched by its Fedizen status id when it has one (a group boost and the home timeline can give
   // the same post different URLs), else by URL.
   type Entry = { post: FedizenPost; reasons: ForYouReason[]; boost: number };
@@ -51,7 +53,10 @@ export function rankForYou(sources: { following: FedizenPost[]; tags: { tag: str
   };
   for (const p of sources.following) add(p, { kind: 'following' });
   for (const t of sources.tags) for (const p of t.posts) add(p, { kind: 'tag', tag: t.tag });
-  sources.groups.forEach((p, i, all) => add(p, { kind: 'group', group: p.group ?? 'your group' }, 0.5 * (1 - i / Math.max(1, all.length))));
+  sources.groups.forEach((p, i, all) => {
+    const { group, groupId, groupAvatar, ...post } = p;
+    add(post, { kind: 'group', group: group ?? 'your group', ...(groupId ? { groupId } : {}), ...(groupAvatar ? { avatar: groupAvatar } : {}) }, 0.5 * (1 - i / Math.max(1, all.length)));
+  });
   const score = (e: { post: FedizenPost; reasons: ForYouReason[]; boost: number }) => {
     const t = e.post.date ? Date.parse(e.post.date) : NaN;
     const age = Number.isFinite(t) ? Math.max(0, now - t) / HOUR : 48;
