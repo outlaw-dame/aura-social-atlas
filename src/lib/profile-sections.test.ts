@@ -4,7 +4,7 @@ import { activityLabel, profileSections, sectionFromTab } from '../components/so
 
 describe('Profile tabs', () => {
   test('Activity replaces Posts and Replies; Featured follows it', () => {
-    strictEqual(profileSections.join(','), 'Activity,Featured,Media,Saved,Circles,Lists');
+    strictEqual(profileSections.join(','), 'Activity,Featured,Media,Collections,Saved,Circles,Lists');
   });
   test('old links still open the right tab', () => {
     strictEqual(sectionFromTab('posts', profileSections), 'Activity');

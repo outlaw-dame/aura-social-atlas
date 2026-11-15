@@ -8,6 +8,8 @@ import { avatarPreset, defaultAvatarKey } from '@/lib/atlas-avatars';
 import { creators, fullHandle, posts, type Creator } from '@/lib/social-catalogue';
 import { extractHashtags, hashtagUrl, linkifyHashtags } from '@/lib/hashtags';
 import { CreatorTag } from './CreatorTag';
+import { DesktopCollections } from './CollectionsDesktop';
+import type { Collection } from '@/lib/collections';
 import { activityLabel, DEFAULT_ACTIVITY_FILTER, profileSections, type ActivityFilter, type ProfileSection } from './profile-sections';
 
 /* Desktop profile, laid out like a Bluesky profile (as the phone app's ProfileView): banner, avatar, Edit profile,
@@ -17,6 +19,7 @@ const empty: Record<ProfileSection, { icon: typeof PenLine; title: string; detai
   Activity: { icon: PenLine, title: 'No activity yet', detail: 'Your public posts, quote posts, replies and boosts on Fedizen will appear here.' },
   Featured: { icon: Star, title: 'Nothing featured yet', detail: 'Feature hashtags from Edit profile, and people from their profiles, to show them here.' },
   Media: { icon: Image, title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
+  Collections: { icon: Image, title: 'No collections yet', detail: '' },
   Saved: { icon: Bookmark, title: 'Nothing saved yet', detail: 'Stories you save appear here. Only you can see this tab.' },
   Circles: { icon: CircleDashed, title: 'No circles yet', detail: 'Circles group the people you know, like colleagues, friends or locals, so you choose who sees and replies to each post. Circles you make on Fedizen will appear here.' },
   Lists: { icon: List, title: 'No lists yet', detail: 'Your creator lists will appear here when lists are available.' },
@@ -61,7 +64,7 @@ function EditProfileDialog({ onClose }: { onClose: () => void }) {
   </Dialog>;
 }
 
-export function ProfilePage({ initialSection = 'Activity', onOpenCreator }: { initialSection?: ProfileSection; onOpenCreator: (c: Creator) => void }) {
+export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpenCollection }: { initialSection?: ProfileSection; onOpenCreator: (c: Creator) => void; onOpenCollection: (c: Collection) => void }) {
   const { user, profile, loading, signOut } = useAtlasAuth();
   const { followed, saved, toggleSave, toggleFollow } = useSocial();
   const [section, setSection] = useState<ProfileSection>(initialSection);
@@ -118,7 +121,8 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator }: { in
         <div><h2 className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Profiles</h2>
           <p className="text-sm text-muted-foreground">People you feature from their profiles on Fedizen will appear here.</p></div>
       </div> : <Empty icon={e.icon} title={e.title} detail={e.detail} />)}
-      {section !== 'Featured' && (section === 'Saved' && savedPosts.length ? <div className="grid gap-x-6 gap-y-9 sm:grid-cols-2">{savedPosts.map(p => {
+      {section === 'Collections' && <DesktopCollections onOpen={onOpenCollection} />}
+      {section !== 'Featured' && section !== 'Collections' && (section === 'Saved' && savedPosts.length ? <div className="grid gap-x-6 gap-y-9 sm:grid-cols-2">{savedPosts.map(p => {
         const c = creators.find(x => x.id === p.creatorId);
         return <article key={p.id}>
           <a href={p.url} target="_blank" rel="noreferrer" className="group block overflow-hidden rounded-2xl"><img src={p.image} alt={p.alt} loading="lazy" className="aspect-[4/3] w-full object-cover transition-transform duration-700 group-hover:scale-[1.025]" /></a>

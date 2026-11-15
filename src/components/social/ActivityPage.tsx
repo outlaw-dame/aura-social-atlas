@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { ArrowUpRight, AtSign, Bell, BarChart3, Heart, Link2, PenLine, Repeat2, UserPlus } from 'lucide-react';
+import { ArrowUpRight, AtSign, Bell, BarChart3, Heart, Layers3, Link2, PenLine, Repeat2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFedizen } from './useFedizen';
 
@@ -12,6 +12,9 @@ const kinds: Record<string, { icon: typeof Bell; color: string }> = {
   mention: { icon: AtSign, color: 'var(--accent)' },
   status: { icon: PenLine, color: 'var(--accent)' },
   poll: { icon: BarChart3, color: 'var(--accent)' },
+  // Mastodon 4.6 collections: someone featured you, or changed a collection you're in.
+  added_to_collection: { icon: Layers3, color: 'var(--accent)' },
+  collection_update: { icon: Layers3, color: 'var(--accent)' },
 };
 
 /** Desktop Activity page: the person's real Fedizen notifications, as the phone app's Activity tab. */

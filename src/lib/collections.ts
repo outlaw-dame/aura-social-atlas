@@ -173,6 +173,26 @@ export function mastodonCollectionApi(link: string): { host: string; api: string
   return { host: u.hostname.toLowerCase(), api: `https://${u.hostname.toLowerCase()}/api/v1/collections/${m[1]}` };
 }
 
+/**
+ * Collections linked in a post (Mastodon's `tagged_collections`, found here by URL because Fedizen's posts don't
+ * carry that field): https links whose path is a Mastodon collection page, `/collections/:id`. At most 3, no repeats.
+ */
+export function collectionLinksIn(html: string): string[] {
+  const out: string[] = [];
+  for (const m of html.matchAll(/href\s*=\s*"([^"]{1,500})"/gi)) {
+    const link = m[1].replace(/&amp;/g, '&');
+    if (mastodonCollectionApi(link) && !out.includes(link)) out.push(link);
+    if (out.length === 3) break;
+  }
+  return out;
+}
+
+/** Open a collection in the app from anywhere (a post, a notification): phone and desktop shells listen for it. */
+export const OPEN_COLLECTION_EVENT = 'atlas:open-collection';
+export function openCollection(link: string): void {
+  if (typeof window !== 'undefined' && mastodonCollectionApi(link)) window.dispatchEvent(new CustomEvent(OPEN_COLLECTION_EVENT, { detail: { link } }));
+}
+
 /** "@user@server" (or "user@server", or a profile URL like https://server/@user) → parts, or null. */
 export function parseFediHandle(raw: string): { user: string; host: string } | null {
   const v = raw.trim();

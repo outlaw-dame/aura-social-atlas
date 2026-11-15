@@ -7,5 +7,5 @@ import { getMyCollections } from '@/lib/collections.functions';
 export function useMyCollections() {
   const { user } = useAtlasAuth();
   const list = useServerFn(getMyCollections);
-  return useQuery({ queryKey: ['my-collections', user?.id], queryFn: () => list(), enabled: !!user, staleTime: 30_000 });
+  return useQuery({ queryKey: ['my-collections', user?.id], queryFn: () => list({ data: { expectedAtlasUserId: user!.id } }), enabled: !!user, staleTime: 30_000 });
 }

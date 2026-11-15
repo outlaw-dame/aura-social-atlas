@@ -20,7 +20,7 @@ import { ProfileView, EditProfileSheet } from './ProfileView';
 import { CollectionPopup } from './Collections';
 import { GroupPopup, MobileGroups } from './Groups';
 import type { Group } from '@/lib/groups';
-import type { Collection } from '@/lib/collections';
+import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileFedizenFeed, MobileActivity, MessagesPopup } from './FedizenMobile';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
@@ -110,6 +110,12 @@ export default function AtlasMobileApp() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [collectionOpen, setCollectionOpen] = useState<{ collection?: Collection; id?: string; link?: string } | null>(null);
   const [groupOpen, setGroupOpen] = useState<Group | null>(null);
+  // Collection links in posts open here, as on Mastodon (tagged_collections).
+  useEffect(() => {
+    const on = (e: Event) => { const link = (e as CustomEvent<{ link?: string }>).detail?.link; if (link) setCollectionOpen({ link }); };
+    window.addEventListener(OPEN_COLLECTION_EVENT, on);
+    return () => window.removeEventListener(OPEN_COLLECTION_EVENT, on);
+  }, []);
   // Shared links open the collection in the app: /app?collection=<Atlas id> or ?collection=<Mastodon collection URL>.
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('collection');
