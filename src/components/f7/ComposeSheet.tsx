@@ -65,7 +65,13 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
             </div>
             {m.state === 'failed' ? <figcaption role="alert" className="atlas-compose-error">{m.error}</figcaption>
               : <figcaption>
-                <input ref={el => { if (el) altFields.current.set(m.key, el); else altFields.current.delete(m.key); }} aria-label={`Alt text for this ${m.kind}`} value={m.alt} maxLength={MAX_ALT} disabled={p.sending} placeholder={m.kind === 'video' ? 'Describe the video' : 'Describe the photo'} onChange={e => p.setAlt(m.key, e.target.value)} />
+                <span className="atlas-compose-alt">
+                  <textarea ref={el => { if (el) altFields.current.set(m.key, el as unknown as HTMLInputElement); else altFields.current.delete(m.key); }} aria-label={`Alt text for this ${m.kind}`} value={m.alt} maxLength={MAX_ALT} disabled={p.sending || m.describing} rows={m.alt.length > 40 ? 3 : 1}
+                    placeholder={m.describing ? 'Writing alt text…' : m.kind === 'video' ? 'Describe the video' : 'Describe the photo'} onChange={e => p.setAlt(m.key, e.target.value)} />
+                  {m.kind === 'image' && p.canGenerateAlt && <button type="button" aria-label="Write alt text with AI" disabled={p.sending || m.describing || m.state === 'preparing'} onClick={() => void p.generateAlt(m.key)}>
+                    {m.describing ? <span className="preloader preloader-small" /> : <Icon ios="f7:sparkles" md="material:auto_awesome" />}
+                  </button>}
+                </span>
                 {m.error && <span role="alert" className="atlas-compose-error">{m.error}</span>}
               </figcaption>}
           </figure>)}

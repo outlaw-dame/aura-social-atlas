@@ -73,3 +73,22 @@ export async function prepareImage(file: File, maxBytes: number): Promise<File> 
     img.close();
   }
 }
+
+/**
+ * A small copy of an image for an AI model to describe: at most 1568 px on the long side (Anthropic's guidance for
+ * vision, about 1.15 MP), JPEG, metadata dropped, as base64. A GIF is described from its first frame.
+ */
+export async function describable(file: Blob): Promise<{ data: string; mediaType: 'image/jpeg' }> {
+  const img = await decode(file);
+  try {
+    const k = Math.min(1, 1568 / Math.max(img.w, img.h));
+    const blob = await toJpeg(img.draw, Math.max(1, Math.round(img.w * k)), Math.max(1, Math.round(img.h * k)), 0.85);
+    if (!blob) throw new ImageUnreadable();
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return { data: btoa(bin), mediaType: 'image/jpeg' };
+  } finally {
+    img.close();
+  }
+}

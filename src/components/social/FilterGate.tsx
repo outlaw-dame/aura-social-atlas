@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import type { FilterablePost, Verdict } from '@/lib/content-filter';
 import { shortAgo } from '@/lib/feed-types';
-import { usePostFilter } from './useIntelligence';
-import { MediaVeilContext } from './SensitiveMedia';
+import { useNotFollowed, usePostFilter } from './useIntelligence';
+import { MediaVeilContext, NotFollowedContext } from './SensitiveMedia';
+import { useReading } from '@/lib/reading-prefs';
 import { WarningPanel } from './ContentWarning';
 
 /** Why a post was filtered, in a few words: the words that matched, or the AI model that judged it in context. */
@@ -48,8 +49,9 @@ export function useFilterGate(post: GatedPost): GateView {
  *  words shows a warning mark, "Content Warning", which filter hid it and why, and View post — as Bluesky clients do. */
 export function FilterGate({ post, children }: { post: GatedPost; children: ReactNode }) {
   const g = useFilterGate(post);
+  const notFollowed = useNotFollowed(post, useReading().blurStrangers);
   if (g.kind === 'none') return null;
-  if (g.kind === 'show' || g.kind === 'blur') return <MediaVeilContext.Provider value={g.kind === 'blur' ? { reason: hiddenBy(g.filter, g.why), onShow: g.onShow } : null}>{children}</MediaVeilContext.Provider>;
+  if (g.kind === 'show' || g.kind === 'blur') return <NotFollowedContext.Provider value={notFollowed}><MediaVeilContext.Provider value={g.kind === 'blur' ? { reason: hiddenBy(g.filter, g.why), onShow: g.onShow } : null}>{children}</MediaVeilContext.Provider></NotFollowedContext.Provider>;
   const ago = shortAgo(post.date);
   return <article className="border-b border-border pb-4">
     {post.author && <div className="flex items-center gap-3">

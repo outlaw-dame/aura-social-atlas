@@ -15,6 +15,11 @@ export function MobileReadingSettings() {
     <List strong inset dividers>
       {MEDIA_DISPLAY.map(m => <ListItem key={m.id} title={m.name} radio radioIcon="end" name="atlas-media-display" checked={r.media === m.id} onChange={() => setReading({ media: m.id })} />)}
     </List>
+    <List strong inset dividers>
+      <ListItem title="Blur media from people you don’t follow">
+        <Toggle slot="after" checked={r.blurStrangers} onToggleChange={() => setReading({ blurStrangers: !r.blurStrangers })} />
+      </ListItem>
+    </List>
     <BlockFooter>{MEDIA_DISPLAY.find(m => m.id === r.media)?.note} Media your keyword filters hide stays hidden either way.</BlockFooter>
     <BlockTitle>Posting</BlockTitle>
     <List strong inset dividers>

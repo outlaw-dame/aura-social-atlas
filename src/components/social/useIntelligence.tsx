@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import {
   addContentFilters, deleteContentFilter, describePostForFilter, expandContentFilter, followingAmong, getIntelligence, judgeFilteredPosts,
-  listContentFilters, removeAiKey, saveAiKey, suggestContentFilters, updateContentFilter, updateIntelligence,
+  listContentFilters, removeAiKey, saveAiKey, suggestContentFilters, altTextForImage, updateContentFilter, updateIntelligence,
   type AiProblem, type IntelligenceStatus,
 } from '@/lib/intelligence.functions';
 import { getFedizenStatus } from '@/lib/fedizen.functions';
@@ -11,6 +11,7 @@ import { FilterEngine, type FollowLookup, type Judge } from '@/lib/filter-engine
 import { FILTER_PLACES, lintFilters, type ContentFilter, type FilterAction, type FilterablePost, type FilterPlace, type Verdict } from '@/lib/content-filter';
 import { PROVIDERS, type Credential, type ProviderId } from '@/lib/intelligence/providers';
 import type { DeviceKey, DevicePrefs } from '@/lib/intelligence/device-keys';
+import type { ImageInput } from '@/lib/intelligence/llm';
 import { useAtlasAuth } from './AuthState';
 
 export const AI_PROBLEM: Record<AiProblem, string> = {
@@ -23,6 +24,7 @@ export const AI_PROBLEM: Record<AiProblem, string> = {
   'bad-output': 'The model’s answer couldn’t be used. Try again, or choose another model.',
   'bad-model': 'That model isn’t available to this key. Choose another.',
   'browser-blocked': 'This provider doesn’t accept requests straight from a browser. Keep this key on Atlas’s server instead.',
+  'no-vision': 'Your AI model can’t read images. Choose one that can in Settings → Intelligence.',
   storage: 'Atlas couldn’t save that. Try again.',
 };
 
@@ -125,6 +127,7 @@ export function useAiRunner() {
   const ai = useIntelligence().data;
   const judgeServer = useServerFn(judgeFilteredPosts), expandServer = useServerFn(expandContentFilter);
   const suggestServer = useServerFn(suggestContentFilters), describeServer = useServerFn(describePostForFilter);
+  const altServer = useServerFn(altTextForImage);
   const id = user?.id ?? '';
   const active = ai?.active ?? null, ready = intelligenceReady(ai), deep = !!ai?.deepMatching;
   const local = useCallback(async (): Promise<{ c: Credential; model: string } | AiProblem> => {
@@ -165,7 +168,15 @@ export function useAiRunner() {
       }
       return describeServer({ data: { expectedAtlasUserId: id, text } }).catch(() => ({ error: 'unavailable' as const }));
     },
-  }), [ready, active, deep, local, judgeServer, expandServer, suggestServer, describeServer, id]);
+    /** Alt text for an image about to be posted (the model must read images): on this device or Atlas's server. */
+    altText: async (image: ImageInput, text: string): Promise<{ alt: string } | { error: AiProblem }> => {
+      if (active?.where === 'device') {
+        const k = await local(); if (typeof k === 'string') return { error: k };
+        try { return { alt: await (await tasks()).writeAltText(k.c, k.model, image, text) }; } catch (e) { return { error: await problemOf(e) }; }
+      }
+      return altServer({ data: { expectedAtlasUserId: id, image, text } }).catch(() => ({ error: 'unavailable' as const }));
+    },
+  }), [ready, active, deep, local, judgeServer, expandServer, suggestServer, describeServer, altServer, id]);
 }
 
 /* ── Keyword filters ─────────────────────────────────────────────────────────────────────────── */
@@ -243,7 +254,7 @@ export function useFilterCautions(filters: ContentFilter[]) {
 
 /* ── Applying filters in every feed ──────────────────────────────────────────────────────────── */
 
-type FilterEnv = { engine: FilterEngine; me: string | null; product: string | null };
+type FilterEnv = { engine: FilterEngine; me: string | null; product: string | null ; following: FollowLookup };
 const EngineContext = createContext<FilterEnv | null>(null);
 const PlaceContext = createContext<FilterPlace>('home');
 
@@ -293,7 +304,7 @@ export function ContentFilterProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     engine.configure({ filters: list, ai: runner.ready, deep: !!ai?.deepMatching, scope: `${user?.id}:${runner.where}`, judge: runner.judge(list), following });
   }, [engine, list, runner, ai?.deepMatching, user?.id, following]);
-  const env = useMemo(() => ({ engine, me: fedizen.data?.handle ?? null, product: ai?.active ? PROVIDERS[ai.active.provider].product : null }), [engine, fedizen.data?.handle, ai?.active]);
+  const env = useMemo(() => ({ engine, me: fedizen.data?.handle ?? null, product: ai?.active ? PROVIDERS[ai.active.provider].product : null, following }), [engine, fedizen.data?.handle, ai?.active, following]);
   return <EngineContext.Provider value={env}>{children}</EngineContext.Provider>;
 }
 
@@ -313,6 +324,21 @@ export function usePostFilter(post: FilterablePost & { handle?: string }): { ver
   const verdict = useMemo(() => (env ? env.engine.evaluate(subject, place) : CLEAR), [env, subject, place, revision]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { env?.engine.request(subject, place); }, [env, subject, place, revision]);
   return { verdict, place, product: env?.product ?? null };
+}
+
+/**
+ * Whether a post's author is someone the person doesn't follow on Fedizen, for "Blur media from people you don't
+ * follow" (lib/reading-prefs). Asked only while `active`; false for their own posts and for posts with no Fedizen
+ * account id (profiles, other servers' hashtag feeds), true while the answer is pending, so media doesn't flash
+ * before it's veiled.
+ */
+export function useNotFollowed(post: { authorId?: string; handle?: string }, active: boolean): boolean {
+  const env = useContext(EngineContext);
+  useSyncExternalStore(env?.engine.subscribe ?? noop, env?.engine.getRevision ?? zero, zero);
+  const id = active && env && !isOwnPost(post.handle, env.me) ? post.authorId : undefined;
+  useEffect(() => { if (id) env?.following.request(id); }, [id, env]);
+  if (!id || !env) return false;
+  return env.following.get(id) !== true;
 }
 
 const CLEAR: Verdict = { state: 'clear' };

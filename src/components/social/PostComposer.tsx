@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { missingAlt, useReading } from '@/lib/reading-prefs';
-import { AtSign, Globe2, ImagePlus, Loader2, Lock, MoonStar, TriangleAlert, X } from 'lucide-react';
+import { AtSign, Globe2, ImagePlus, Loader2, Lock, MoonStar, Sparkles, TriangleAlert, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -49,10 +49,15 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
           </div>
           {m.state === 'failed' ? <p role="alert" className="text-xs text-destructive">{m.error}</p>
             : <>
-              <label className="block"><span className="sr-only">Alt text for this {m.kind}</span>
-                <input ref={el => { if (el) altFields.current.set(m.key, el); else altFields.current.delete(m.key); }} value={m.alt} onChange={e => p.setAlt(m.key, e.target.value)} maxLength={MAX_ALT} disabled={p.sending} placeholder={m.kind === 'video' ? 'Describe the video' : 'Describe the image (alt text)'}
-                  className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-              </label>
+              <div className="flex items-start gap-1">
+                <label className="block min-w-0 flex-1"><span className="sr-only">Alt text for this {m.kind}</span>
+                  <textarea ref={el => { if (el) altFields.current.set(m.key, el as unknown as HTMLInputElement); else altFields.current.delete(m.key); }} value={m.alt} onChange={e => p.setAlt(m.key, e.target.value)} maxLength={MAX_ALT} disabled={p.sending || m.describing} rows={m.alt.length > 60 ? 3 : 1}
+                    placeholder={m.describing ? 'Writing alt text…' : m.kind === 'video' ? 'Describe the video' : 'Describe the image (alt text)'}
+                    className="block w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                </label>
+                {m.kind === 'image' && p.canGenerateAlt && <Button type="button" variant="ghost" size="icon" className="size-7 shrink-0" disabled={p.sending || m.describing || m.state === 'preparing'} onClick={() => void p.generateAlt(m.key)}
+                  aria-label="Write alt text with AI" title={m.alt ? 'Write it again with AI' : 'Write alt text with AI'}>{m.describing ? <Loader2 className="animate-spin" /> : <Sparkles />}</Button>}
+              </div>
               {m.error && <p role="alert" className="text-xs text-destructive">{m.error}</p>}
             </>}
         </li>)}

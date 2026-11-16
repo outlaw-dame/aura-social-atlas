@@ -10,7 +10,7 @@ import { FILTER_PLACES, MAX_EXPANSIONS, MAX_FILTERS, filterKind, normalizeFilter
  * (vault.server.ts); a key kept on the device only never reaches these functions (device-keys.ts).
  */
 
-export type AiProblem = 'not-configured' | 'not-ready' | 'bad-key' | 'no-access' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'browser-blocked' | 'storage';
+export type AiProblem = 'not-configured' | 'not-ready' | 'bad-key' | 'no-access' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'browser-blocked' | 'no-vision' | 'storage';
 export type SavedKey = { provider: ProviderId; hint: string; models: string[] };
 export type IntelligenceStatus = {
   /** Atlas's Intelligence tables exist (settings and filters can be kept). */ available: boolean;
@@ -263,4 +263,24 @@ export const followingAmong = createServerFn({ method: 'POST' }).middleware([req
     for (const id of data.ids) following[id] = false;
     for (const rel of r.data as { id: string; following?: boolean | null }[]) if (rel.id in following) following[rel.id] = rel.following === true;
     return { following };
+  });
+
+/** Alt text for an image being posted, from the person's AI model on Atlas's server (vision). The image arrives
+ *  already scaled down in the browser (lib/prepare-image: describable), so it's small. */
+export const altTextForImage = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({
+    expectedAtlasUserId: Uid,
+    image: z.object({ data: z.string().min(16).max(2_800_000).regex(/^[A-Za-z0-9+/]+=*$/), mediaType: z.enum(['image/jpeg', 'image/png', 'image/gif']) }),
+    text: z.string().max(5000).default(''),
+  }).parse(d))
+  .handler(async ({ data, context }): Promise<{ alt: string } | { error: AiProblem }> => {
+    sameSession(data.expectedAtlasUserId, context.userId);
+    try {
+      const ai = await (await store()).activeModel(context.userId);
+      if ('problem' in ai) return { error: ai.problem };
+      const { writeAltText } = await import('./intelligence/tasks');
+      return { alt: await writeAltText(ai.credential, ai.model, data.image, data.text) };
+    } catch (e) {
+      return { error: (await store()).problem(e) };
+    }
   });

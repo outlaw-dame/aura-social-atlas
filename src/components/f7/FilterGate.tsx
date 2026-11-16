@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import { Card, CardContent } from 'framework7-react';
-import { MediaVeilContext } from '@/components/social/SensitiveMedia';
+import { MediaVeilContext, NotFollowedContext } from '@/components/social/SensitiveMedia';
+import { useReading } from '@/lib/reading-prefs';
 import { shortAgo } from '@/lib/feed-types';
 import { hiddenBy, useFilterGate, type GatedPost } from '@/components/social/FilterGate';
+import { useNotFollowed } from '@/components/social/useIntelligence';
 import { WarningPanel } from '@/components/social/ContentWarning';
 
 /**
@@ -12,8 +14,9 @@ import { WarningPanel } from '@/components/social/ContentWarning';
  */
 export function MobileFilterGate({ post, card = true, children }: { post: GatedPost; card?: boolean; children: ReactNode }) {
   const g = useFilterGate(post);
+  const notFollowed = useNotFollowed(post, useReading().blurStrangers);
   if (g.kind === 'none') return null;
-  if (g.kind === 'show' || g.kind === 'blur') return <MediaVeilContext.Provider value={g.kind === 'blur' ? { reason: hiddenBy(g.filter, g.why), onShow: g.onShow } : null}>{children}</MediaVeilContext.Provider>;
+  if (g.kind === 'show' || g.kind === 'blur') return <NotFollowedContext.Provider value={notFollowed}><MediaVeilContext.Provider value={g.kind === 'blur' ? { reason: hiddenBy(g.filter, g.why), onShow: g.onShow } : null}>{children}</MediaVeilContext.Provider></NotFollowedContext.Provider>;
   const ago = shortAgo(post.date);
   const body = <>
     {post.author && <div className="atlas-post-head">

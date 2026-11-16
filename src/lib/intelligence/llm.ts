@@ -12,7 +12,7 @@ import { CLOUDFLARE_ACCOUNT, type Credential, type ProviderId } from './provider
 export const ANTHROPIC_VERSION = '2026-10-21';
 
 export class ProviderError extends Error {
-  constructor(public code: 'bad-key' | 'no-access' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'browser-blocked', public status?: number) { super(code); }
+  constructor(public code: 'bad-key' | 'no-access' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'browser-blocked' | 'no-vision', public status?: number) { super(code); }
 }
 
 const inBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -141,4 +141,46 @@ export async function completeJson(c: Credential, model: string, task: { system:
     r = await call(`${openAiBase(c)}/chat/completions`, c, { body: { ...base, messages: [{ role: 'system', content: `${task.system}\nReply with JSON only, matching this JSON Schema: ${JSON.stringify(task.schema)}` }, base.messages[1]] }, timeout: 60_000 }) as typeof r;
   }
   return parseJsonReply(r.choices?.[0]?.message?.content ?? '');
+}
+
+/** An image for a model to look at: base64 data, and its type (Atlas sends JPEG, PNG or GIF). */
+export type ImageInput = { data: string; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' };
+
+/**
+ * A short plain-text answer about one image (vision). Anthropic's Messages API takes the image as a base64 block;
+ * the OpenAI-compatible APIs (OpenAI, Gemini, Mistral, Kimi, Workers AI) as an `image_url` data URL. A model that
+ * can't read images answers 400 (or 422), reported as 'no-vision'.
+ * Sources: platform.claude.com/docs/en/build-with-claude/vision; platform.openai.com/docs/guides/images-vision;
+ * ai.google.dev/gemini-api/docs/openai#image-understanding; docs.mistral.ai/capabilities/vision.
+ */
+export async function describeImageText(c: Credential, model: string, task: { system: string; prompt: string; image: ImageInput; maxTokens?: number }): Promise<string> {
+  const max = task.maxTokens ?? 1200;
+  const vision = (e: unknown) => (e instanceof ProviderError && (e.status === 400 || e.status === 422) ? new ProviderError('no-vision', e.status) : e);
+  if (c.provider === 'anthropic') {
+    let r: { content?: { type?: string; text?: string }[] };
+    try {
+      r = await call('https://api.anthropic.com/v1/messages', c, {
+        body: { model, max_tokens: max, system: task.system, messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: task.image.mediaType, data: task.image.data } },
+          { type: 'text', text: task.prompt },
+        ] }] },
+        timeout: 60_000,
+      }) as typeof r;
+    } catch (e) { throw vision(e); }
+    return (r.content ?? []).filter(b => b.type === 'text').map(b => b.text ?? '').join('').trim();
+  }
+  let r: { choices?: { message?: { content?: string | null } }[] };
+  try {
+    r = await call(`${openAiBase(c)}/chat/completions`, c, {
+      body: {
+        model, [MAX_PARAM[c.provider]]: max,
+        messages: [{ role: 'system', content: task.system }, { role: 'user', content: [
+          { type: 'text', text: task.prompt },
+          { type: 'image_url', image_url: { url: `data:${task.image.mediaType};base64,${task.image.data}` } },
+        ] }],
+      },
+      timeout: 60_000,
+    }) as typeof r;
+  } catch (e) { throw vision(e); }
+  return (r.choices?.[0]?.message?.content ?? '').trim();
 }

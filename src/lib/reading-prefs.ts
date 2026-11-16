@@ -8,6 +8,8 @@ import { useSyncExternalStore } from 'react';
  *   (Mastodon: `reading:expand:media` = default / show_all / hide_all).
  * Fedizen's preferences endpoint always answers Mastodon's defaults and has nowhere to keep a change, so Atlas keeps
  * these on the device. A keyword filter that hides media still does, whatever the media setting (as on Mastodon).
+ * `blurStrangers` adds "Blur media from people you don't follow" (as Bluesky and Ivory offer for strangers): media
+ * from accounts the person doesn't follow on Fedizen is blurred too.
  */
 export const MEDIA_DISPLAY = [
   { id: 'default', name: 'Blur sensitive media', note: 'Media marked sensitive by its author is blurred until you open it.' },
@@ -19,8 +21,8 @@ export type MediaDisplay = (typeof MEDIA_DISPLAY)[number]['id'];
  * `altReminder` (Posting): before a post with media that has no alt text goes out, ask first — on by default, as
  * Ivory's "Alt Text Reminder" is.
  */
-export type ReadingPrefs = { expandWarnings: boolean; media: MediaDisplay; altReminder: boolean };
-export const DEFAULT_READING: ReadingPrefs = { expandWarnings: false, media: 'default', altReminder: true };
+export type ReadingPrefs = { expandWarnings: boolean; media: MediaDisplay; altReminder: boolean; blurStrangers: boolean };
+export const DEFAULT_READING: ReadingPrefs = { expandWarnings: false, media: 'default', altReminder: true, blurStrangers: false };
 const KEY = 'atlas-reading';
 
 export function parseReading(raw: string | null): ReadingPrefs {
@@ -30,6 +32,7 @@ export function parseReading(raw: string | null): ReadingPrefs {
       expandWarnings: v.expandWarnings === true,
       media: MEDIA_DISPLAY.some(m => m.id === v.media) ? v.media as MediaDisplay : 'default',
       altReminder: v.altReminder !== false,
+      blurStrangers: v.blurStrangers === true,
     };
   } catch { return DEFAULT_READING; }
 }
@@ -55,9 +58,13 @@ export function useReading(): ReadingPrefs {
 /** The attachments a post would go out with no alt text, when the reminder is on. */
 export const missingAlt = <T extends { alt: string }>(prefs: ReadingPrefs, media: T[]): T[] => (prefs.altReminder ? media.filter(m => !m.alt.trim()) : []);
 
-/** Why media is veiled, if it is: a filter's reason first, then the author's mark, then the reader's own setting. */
-export function veilReason(prefs: ReadingPrefs, filterReason: string | null, sensitive: boolean | undefined): string | null {
+/**
+ * Why media is veiled, if it is: a filter's reason first; then "Blur media from people you don't follow" (its own
+ * switch, so it holds even under Show all media); then the author's mark; then Blur all media.
+ */
+export function veilReason(prefs: ReadingPrefs, filterReason: string | null, sensitive: boolean | undefined, notFollowed = false): string | null {
   if (filterReason) return filterReason;
+  if (prefs.blurStrangers && notFollowed) return sensitive ? 'The author marked this media as sensitive' : 'From someone you don’t follow';
   if (prefs.media === 'show_all') return null;
   if (sensitive) return 'The author marked this media as sensitive';
   if (prefs.media === 'hide_all') return 'Hidden by your media setting';

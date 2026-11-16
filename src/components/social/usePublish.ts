@@ -3,9 +3,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { getFedizenComposeLimits, getFedizenStatus, postOnFedizen, uploadFedizenMedia } from '@/lib/fedizen.functions';
 import { DEFAULT_LIMITS, MAX_ALT, MAX_CW, canAdd, effectiveSensitive, formatBytes, mediaKind } from '@/lib/compose-media';
-import { ImageTooLarge, prepareImage } from '@/lib/prepare-image';
+import { ImageTooLarge, describable, prepareImage } from '@/lib/prepare-image';
 import { useAtlasAuth } from './AuthState';
 import { LIBRARY_PROBLEM } from './useFedizenLibrary';
+import { AI_PROBLEM, useAiRunner } from './useIntelligence';
 
 export type Audience = 'public' | 'unlisted' | 'private' | 'direct';
 export const AUDIENCES: { id: Audience; label: string; note: string }[] = [
@@ -16,7 +17,7 @@ export const AUDIENCES: { id: Audience; label: string; note: string }[] = [
 ];
 
 export type Attachment = {
-  key: string; file: File; kind: 'image' | 'video'; url: string; alt: string;
+  key: string; file: File; kind: 'image' | 'video'; url: string; alt: string; /** Alt text is being written by the AI model. */ describing?: boolean;
   state: 'preparing' | 'ready' | 'uploading' | 'uploaded' | 'failed'; mediaId?: string; error?: string;
 };
 
@@ -47,6 +48,7 @@ export function usePublish() {
   const [media, setMedia] = useState<Attachment[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const ai = useAiRunner();
   const mediaRef = useRef(media); mediaRef.current = media;
   useEffect(() => () => mediaRef.current.forEach(m => URL.revokeObjectURL(m.url)), []);
 
@@ -75,8 +77,22 @@ export function usePublish() {
   };
   const remove = (key: string) => setMedia(ms => { const m = ms.find(x => x.key === key); if (m) URL.revokeObjectURL(m.url); return ms.filter(x => x.key !== key); });
   const setAlt = (key: string, alt: string) => patch(key, { alt: alt.slice(0, MAX_ALT), mediaId: undefined, state: 'ready' });
+  /** Alt text written by the person's AI model (Settings → Intelligence), which they can then edit. Images only. */
+  const generateAlt = async (key: string) => {
+    const m = mediaRef.current.find(x => x.key === key);
+    if (!m || m.kind !== 'image' || m.describing || !ai.ready) return;
+    patch(key, { describing: true, error: undefined });
+    try {
+      const image = await describable(m.file);
+      const r = await ai.altText(image, text);
+      if ('error' in r) patch(key, { describing: false, error: AI_PROBLEM[r.error] });
+      else patch(key, { describing: false, alt: r.alt.slice(0, MAX_ALT), mediaId: undefined, state: 'ready' });
+    } catch {
+      patch(key, { describing: false, error: 'This image couldn’t be read.' });
+    }
+  };
 
-  const busy = media.some(m => m.state === 'preparing');
+  const busy = media.some(m => m.state === 'preparing' || m.describing);
   const broken = media.some(m => m.state === 'failed');
   const length = [...text].length;
   const ready = canPost && !sending && !busy && !broken && (text.trim().length > 0 || media.length > 0) && length <= limits.maxChars && (!cwOn || warning.length > 0);
@@ -119,7 +135,7 @@ export function usePublish() {
     signedIn: !!user, canPost, connected: !!status.data?.connected, limits,
     text, setText, cw, setCw, cwOn, setCwOn, audience, setAudience,
     sensitive, sensitiveLocked: media.length > 0 && warning.length > 0, setSensitive,
-    media, add, remove, setAlt,
+    media, add, remove, setAlt, generateAlt, canGenerateAlt: ai.ready,
     notice, clearNotice: () => setNotice(null), sending, ready, length, reset, send,
   };
 }
