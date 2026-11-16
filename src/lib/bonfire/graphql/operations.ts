@@ -88,13 +88,15 @@ export const NATIVE_POST_BY_ID_DOCUMENT = `query AtlasNativePostById($id:ID!) {
 }`;
 
 /**
- * Quote a post (FEP-044f): Bonfire's `createPost` with `quoteId`. Fedizen's Mastodon REST `POST /api/v1/statuses`
- * doesn't take Mastodon 4.5's `quoted_status_id` (bonfire_posts masto_adapter.ex builds a post from status,
- * spoiler_text, media_ids and in_reply_to_id only), so quotes go through GraphQL, as Bonfire's own composer does.
- * Arguments from bonfire_social social_api_graphql.ex (`create_post`: post_content, boundary, uploaded_media,
- * quote_id), in the camelCase Fedizen's schema uses (the observed documents above).
- * `boundary` takes the same presets the REST adapter maps visibilities to: "public" or "unlisted".
+ * A new Public or Quiet public post through Bonfire's `createPost`, for what Fedizen's Mastodon REST
+ * `POST /api/v1/statuses` can't say (bonfire_posts masto_adapter.ex builds a post from status, spoiler_text,
+ * media_ids, sensitive and in_reply_to_id only):
+ * - `quoteId`: quote a post (FEP-044f; Mastodon 4.5's `quoted_status_id` isn't taken).
+ * - `permissions`: who may quote it (lib/quote-policy; Mastodon's `quote_approval_policy` isn't taken either).
+ * Arguments from bonfire_social social_api_graphql.ex (`create_post`: post_content, boundary, permissions,
+ * uploaded_media, quote_id), in the camelCase Fedizen's live schema shows. `boundary` takes the presets the REST
+ * adapter maps visibilities to: "public" or "unlisted".
  */
-export const QUOTE_POST_DOCUMENT = `mutation AtlasQuotePost($postContent: PostContentInput!, $boundary: String, $quoteId: ID, $uploadedMedia: [ID]) {
-  createPost(postContent: $postContent, boundary: $boundary, quoteId: $quoteId, uploadedMedia: $uploadedMedia) { id activity { canonicalUri } }
+export const CREATE_POST_DOCUMENT = `mutation AtlasCreatePost($postContent: PostContentInput!, $boundary: String, $quoteId: ID, $uploadedMedia: [ID], $permissions: [BoundaryPermissionInput]) {
+  createPost(postContent: $postContent, boundary: $boundary, quoteId: $quoteId, uploadedMedia: $uploadedMedia, permissions: $permissions) { id activity { canonicalUri } }
 }`;

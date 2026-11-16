@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Block, Button, Icon, List, ListInput, ListItem, Popup, Page, Navbar, NavLeft, NavRight, Link, Toggle, f7 } from 'framework7-react';
+import { Block, Button, Icon, List, ListInput, ListItem, Popup, Page, Navbar, NavLeft, NavRight, Link, Sheet, Toggle, f7 } from 'framework7-react';
+import { GifPicker } from '@/components/social/GifPicker';
 import { MAX_ALT, MAX_CW, PICKER_ACCEPT, altReminderText } from '@/lib/compose-media';
 import { missingAlt, useReading } from '@/lib/reading-prefs';
 import { usePublish, type Audience } from '@/components/social/usePublish';
@@ -28,6 +29,14 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
   }, [intent]); // eslint-disable-line react-hooks/exhaustive-deps
   const pick = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState('');
+  const [gifOpen, setGifOpen] = useState(false);
+  const mediaFull = p.media.some(m => m.kind === 'video') || p.media.length >= 4;
+  // Who may quote (lib/quote-policy), as an action sheet: the current choice in bold, as iOS marks it.
+  const quoteShown = p.quoteLock === 'private' ? 'nobody' : p.quotePolicy;
+  const chooseQuotes = () => f7.actions.create({ buttons: [
+    [{ text: 'Who can quote this post', label: true }, ...p.quotePolicies.map(q => ({ text: q.label, bold: q.id === p.quotePolicy, onClick: () => p.setQuotePolicy(q.id) }))],
+    [{ text: 'Cancel', color: 'red' }],
+  ] }).open();
   const over = p.length > p.limits.maxChars;
   const prefs = useReading();
   const altFields = useRef(new Map<string, HTMLInputElement>());
@@ -81,7 +90,7 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
                 <span className="atlas-compose-alt">
                   <textarea ref={el => { if (el) altFields.current.set(m.key, el as unknown as HTMLInputElement); else altFields.current.delete(m.key); }} aria-label={`Alt text for this ${m.kind}`} value={m.alt} maxLength={MAX_ALT} disabled={p.sending || m.describing} rows={m.alt.length > 40 ? 3 : 1}
                     placeholder={m.describing ? 'Writing alt text…' : m.kind === 'video' ? 'Describe the video' : 'Describe the photo'} onChange={e => p.setAlt(m.key, e.target.value)} />
-                  {m.kind === 'image' && p.canGenerateAlt && <button type="button" aria-label="Write alt text with AI" disabled={p.sending || m.describing || m.state === 'preparing'} onClick={() => void p.generateAlt(m.key)}>
+                  {m.kind === 'image' && !m.gif && p.canGenerateAlt && <button type="button" aria-label="Write alt text with AI" disabled={p.sending || m.describing || m.state === 'preparing'} onClick={() => void p.generateAlt(m.key)}>
                     {m.describing ? <span className="preloader preloader-small" /> : <Icon ios="f7:sparkles" md="material:auto_awesome" />}
                   </button>}
                 </span>
@@ -93,6 +102,9 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
           <ListItem link="#" title={p.media.some(m => m.kind === 'video') || p.media.length >= 4 ? 'Media added' : 'Add photos or a video'} onClick={() => pick.current?.click()} disabled={p.sending}>
             <Icon slot="media" ios="f7:photo_on_rectangle" md="material:add_photo_alternate" />
           </ListItem>
+          {p.gifs && <ListItem link="#" title="Add a GIF" onClick={() => setGifOpen(true)} disabled={p.sending || mediaFull}>
+            <span slot="media" className="atlas-gif-glyph" aria-hidden>GIF</span>
+          </ListItem>}
           <ListItem title="Content warning">
             <Icon slot="media" ios="f7:exclamationmark_triangle" md="material:warning" />
             <Toggle slot="after" checked={p.cwOn} onToggleChange={() => p.setCwOn(!p.cwOn)} />
@@ -107,6 +119,13 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
             <Icon slot="media" ios={AUDIENCE_ICON[a.id].ios} md={AUDIENCE_ICON[a.id].md} />
           </ListItem>)}
         </List>
+        <List strong inset>
+          <ListItem link={p.quoteLock ? undefined : '#'} title="Quotes" after={p.quoteLock === 'sensitive' ? 'Fedizen’s default' : p.quotePolicies.find(q => q.id === quoteShown)?.short}
+            footer={p.quoteLock === 'private' ? 'Followers-only and mentions-only posts can’t be quoted' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : undefined}
+            onClick={p.quoteLock || p.sending ? undefined : chooseQuotes}>
+            <Icon slot="media" ios="f7:quote_bubble" md="material:format_quote" />
+          </ListItem>
+        </List>
         <Block className="atlas-compose-foot">
           {p.notice && <p role="alert" className="atlas-compose-error">{p.notice}</p>}
           <span className={over ? 'atlas-compose-error' : ''}>{p.limits.maxChars - p.length} characters left</span>
@@ -114,5 +133,8 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
         <input ref={pick} type="file" accept={PICKER_ACCEPT} multiple hidden onChange={e => { if (e.target.files) p.add(e.target.files); e.target.value = ''; }} />
       </>}
     </Page>
+    <Sheet opened={gifOpen} onSheetClosed={() => setGifOpen(false)} swipeToClose backdrop push className="atlas-gif-sheet" style={{ height: '72vh' }}>
+      {gifOpen && <GifPicker autoFocus={false} onPick={g => { if (p.addGif(g)) setGifOpen(false); else f7.toast.create({ text: 'This post has all the media it can take', closeTimeout: 2000 }).open(); }} />}
+    </Sheet>
   </Popup>;
 }

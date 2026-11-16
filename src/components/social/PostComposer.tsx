@@ -1,7 +1,10 @@
 import { useRef, useState } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { missingAlt, useReading } from '@/lib/reading-prefs';
-import { AtSign, Globe2, ImagePlus, Loader2, Lock, MoonStar, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { AtSign, Globe2, ImagePlus, Loader2, Lock, MoonStar, Quote, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import type { QuotePolicy } from '@/lib/quote-policy';
+import { GifPicker } from './GifPicker';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,6 +25,8 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
   const over = p.length > p.limits.maxChars;
   const prefs = useReading();
   const [asking, setAsking] = useState(false);
+  const [gifOpen, setGifOpen] = useState(false);
+  const gifFull = p.media.some(m => m.kind === 'video') || p.media.length >= 4;
   const altFields = useRef(new Map<string, HTMLInputElement>());
   const post = async () => { const r = await p.send(); if (r) onPosted(r.url); };
   // Alt text reminder (Settings → Posting): ask before media goes out undescribed.
@@ -57,7 +62,7 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
                     placeholder={m.describing ? 'Writing alt text…' : m.kind === 'video' ? 'Describe the video' : 'Describe the image (alt text)'}
                     className="block w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring" />
                 </label>
-                {m.kind === 'image' && p.canGenerateAlt && <Button type="button" variant="ghost" size="icon" className="size-7 shrink-0" disabled={p.sending || m.describing || m.state === 'preparing'} onClick={() => void p.generateAlt(m.key)}
+                {m.kind === 'image' && !m.gif && p.canGenerateAlt && <Button type="button" variant="ghost" size="icon" className="size-7 shrink-0" disabled={p.sending || m.describing || m.state === 'preparing'} onClick={() => void p.generateAlt(m.key)}
                   aria-label="Write alt text with AI" title={m.alt ? 'Write it again with AI' : 'Write alt text with AI'}>{m.describing ? <Loader2 className="animate-spin" /> : <Sparkles />}</Button>}
               </div>
               {m.error && <p role="alert" className="text-xs text-destructive">{m.error}</p>}
@@ -74,11 +79,25 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
       <input ref={pick} type="file" accept={PICKER_ACCEPT} multiple hidden onChange={e => { if (e.target.files) p.add(e.target.files); e.target.value = ''; }} />
       <Button variant="ghost" size="icon" aria-label="Add images or a video" title="Add images or a video" disabled={p.sending} onClick={() => pick.current?.click()}><ImagePlus /></Button>
       <Button variant="ghost" size="icon" aria-label="Content warning" title="Content warning" aria-pressed={p.cwOn} disabled={p.sending} onClick={() => p.setCwOn(!p.cwOn)} className={p.cwOn ? 'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-400' : ''}><TriangleAlert /></Button>
+      {p.gifs && <Popover open={gifOpen} onOpenChange={setGifOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label="Add a GIF" title={gifFull ? 'This post has all the media it can take' : 'Add a GIF'} disabled={p.sending || gifFull}><span className="atlas-gif-glyph" aria-hidden>GIF</span></Button>
+        </PopoverTrigger>
+        <PopoverContent side="top" align="start" className="w-[22rem] p-0"><GifPicker onPick={g => { if (p.addGif(g)) setGifOpen(false); }} /></PopoverContent>
+      </Popover>}
       <Select value={p.audience} onValueChange={v => p.setAudience(v as Audience)} disabled={p.sending}>
         <SelectTrigger aria-label="Who can see it" className="h-8 w-auto gap-1.5 border-0 bg-transparent px-2 text-xs shadow-none">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>{p.audiences.map(a => { const I = AUDIENCE_ICON[a.id]; return <SelectItem key={a.id} value={a.id}><span className="flex items-center gap-2"><I className="size-3.5" />{a.label}</span></SelectItem>; })}</SelectContent>
+      </Select>
+      {/* Who may quote (lib/quote-policy). Followers-only and mentions-only posts can't be quoted, as on Mastodon. */}
+      <Select value={p.quoteLock === 'private' ? 'nobody' : p.quotePolicy} onValueChange={v => p.setQuotePolicy(v as QuotePolicy)} disabled={p.sending || !!p.quoteLock}>
+        <SelectTrigger aria-label="Who can quote it" title={p.quoteLock === 'private' ? 'Followers-only and mentions-only posts can’t be quoted' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : 'Who can quote it'}
+          className="h-8 w-auto gap-1.5 border-0 bg-transparent px-2 text-xs shadow-none">
+          <Quote className="size-3.5" /><span>{p.quoteLock === 'sensitive' ? 'Default' : (p.quotePolicies.find(q => q.id === (p.quoteLock === 'private' ? 'nobody' : p.quotePolicy))?.short)}</span>
+        </SelectTrigger>
+        <SelectContent>{p.quotePolicies.map(q => <SelectItem key={q.id} value={q.id}><span className="flex flex-col"><span>{q.label}</span>{q.note && <span className="text-[11px] opacity-70">{q.note}</span>}</span></SelectItem>)}</SelectContent>
       </Select>
       <span className={`ml-auto px-2 text-xs tabular-nums ${over ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite">{p.limits.maxChars - p.length}</span>
       <Button size="sm" disabled={!p.ready || over} onClick={() => void send()}>{p.sending ? <><Loader2 className="animate-spin" />Posting…</> : 'Post'}</Button>

@@ -550,30 +550,33 @@ export const postOnFedizen = createServerFn({ method: 'POST' }).middleware([requ
 
 
 /**
- * Quotes a post on Fedizen: the person's text (and content warning, and up to 4 uploaded media) with the quoted post
- * attached below it, as Mastodon 4.5's quote posts. Through Bonfire GraphQL (QUOTE_POST_DOCUMENT says why). Only
- * Public or Quiet public, as on Mastodon; if the quoted author must approve quotes, Bonfire sends them a request.
+ * A new Public or Quiet public post through Bonfire GraphQL `createPost` (CREATE_POST_DOCUMENT says why not REST):
+ * the person's text, content warning and up to 4 uploaded media, who may quote it (lib/quote-policy), and, when
+ * quoting, the quoted post (FEP-044f; if its author must approve quotes, Bonfire sends them a request).
  */
-export const quoteOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+export const createPostOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.extend({
-    statusId: ulid,
+    quoteId: ulid.optional(),
     text: z.string().trim().max(MAX_TEXT),
     cw: z.string().trim().max(MAX_CW).optional(),
     visibility: z.enum(['public', 'unlisted']),
     mediaIds: z.array(ulid).max(4).default([]),
-  }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty quote').parse(d))
+    quotes: z.enum(['anyone', 'ask', 'nobody']),
+  }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty post').parse(d))
   .handler(async ({ data, context }): Promise<{ ok: true; url?: string } | { ok: false; error: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId, true);
     if ('error' in c) return { ok: false, error: c.error };
     const { requestBonfireGraphQL, BonfireGraphQLError } = await import('./bonfire-graphql.server');
-    const { QUOTE_POST_DOCUMENT } = await import('./bonfire/graphql/operations');
+    const { CREATE_POST_DOCUMENT } = await import('./bonfire/graphql/operations');
+    const { quotePermissions } = await import('./quote-policy');
     try {
       const r = await requestBonfireGraphQL({
-        operation: 'mutation', document: QUOTE_POST_DOCUMENT, accessToken: c.token,
+        operation: 'mutation', document: CREATE_POST_DOCUMENT, accessToken: c.token,
         variables: {
           postContent: { htmlBody: data.text, ...(data.cw ? { summary: data.cw } : {}) },
-          boundary: data.visibility, quoteId: data.statusId,
+          boundary: data.visibility, permissions: quotePermissions(data.quotes),
+          ...(data.quoteId ? { quoteId: data.quoteId } : {}),
           ...(data.mediaIds.length ? { uploadedMedia: data.mediaIds } : {}),
         },
         validate: v => z.object({ createPost: z.object({ id: z.string().max(64), activity: z.object({ canonicalUri: z.string().max(2048).nullish() }).nullish() }) }).parse(v).createPost,
@@ -583,5 +586,57 @@ export const quoteOnFedizen = createServerFn({ method: 'POST' }).middleware([req
     } catch (e) {
       const status = e instanceof BonfireGraphQLError ? e.status : undefined;
       return { ok: false, error: status ? problem(status) : 'unavailable' };
+    }
+  });
+
+type GifProblem = 'not-configured' | 'busy' | 'unavailable';
+
+/**
+ * GIFs for the composer's picker from KLIPY (lib/klipy.server): trending with no `q`, else a search. Signed-in only,
+ * so Atlas's KLIPY key is spent on its own people; KLIPY sees Atlas's server, not the person.
+ */
+export const getGifs = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({
+    q: z.string().trim().max(100).default(''),
+    page: z.number().int().min(1).max(40).default(1),
+    locale: z.string().regex(/^[a-z]{2}_[A-Z]{2}$/).optional(),
+  }).parse(d))
+  .handler(async ({ data }): Promise<{ ok: true; gifs: import('./klipy.server').Gif[]; hasNext: boolean } | { ok: false; error: GifProblem }> => {
+    const { listGifs, KlipyError } = await import('./klipy.server');
+    try { return { ok: true, ...(await listGifs(data.q, data.page, data.locale)) }; }
+    catch (e) { return { ok: false, error: e instanceof KlipyError ? e.reason : 'unavailable' }; }
+  });
+
+/** Whether this Atlas has a KLIPY key, so the composer offers GIFs at all. */
+export const getGifsEnabled = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async () => {
+  const { klipyKey } = await import('./klipy.server');
+  return { enabled: !!klipyKey() };
+});
+
+/**
+ * Puts a KLIPY GIF on Fedizen as an image of the person's, with its alt text, when the post is sent: the server looks
+ * the GIF up by slug (never a URL from the browser), takes the largest size within Fedizen's image limit, checks
+ * it really is a GIF, and uploads it as any other image. Answers the media id to attach.
+ */
+export const attachGifOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ slug: z.string().regex(/^[A-Za-z0-9_-]{1,200}$/), description: z.string().max(MAX_ALT) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; id: string } | { ok: false; error: Problem | GifProblem | 'too-large' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenGet, fedizenUpload } = await import('./fedizen.server');
+    const k = await import('./klipy.server');
+    const r0 = await fedizenGet(c.token, '/api/v2/instance').catch(() => null);
+    const limit = Math.min(UPLOAD_CEILING, (r0?.status === 200 ? (r0.data[0] as { configuration?: { media_attachments?: { image_size_limit?: number | null } | null } | null }) : null)?.configuration?.media_attachments?.image_size_limit || DEFAULT_LIMITS.imageBytes);
+    try {
+      const file = k.pickFile(await k.gifItem(data.slug), limit);
+      if (!file) return { ok: false, error: 'too-large' };
+      const gif = await k.downloadGif(file.url, limit);
+      const r = await fedizenUpload(c.token, gif, `${data.slug}.gif`, data.description, limit);
+      if (!r.id) return { ok: false, error: r.status === 413 ? 'too-large' : problem(r.status) };
+      await k.countShare(data.slug);
+      return { ok: true, id: r.id };
+    } catch (e) {
+      return { ok: false, error: k.isTooLarge(e) ? 'too-large' : e instanceof k.KlipyError ? e.reason : 'unavailable' };
     }
   });
