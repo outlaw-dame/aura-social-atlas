@@ -32,7 +32,7 @@ describe('Fedizen delegated OAuth grant acceptance', () => {
     const fetcher = mock(async (url: RequestInfo | URL, init?: RequestInit) => {
       expect(String(url)).toBe('https://fedizen.net/api/v1/accounts/verify_credentials');
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer secret');
-      expect(init?.redirect).toBe('error');
+      expect(init?.redirect).toBe('manual');
       expect(init?.cache).toBe('no-store');
       return new Response(JSON.stringify({ id: '123', acct: 'alice' }), { status: 200 });
     }) as typeof fetch;

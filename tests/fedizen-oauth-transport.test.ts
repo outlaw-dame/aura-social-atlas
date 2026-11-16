@@ -25,7 +25,7 @@ describe('Fedizen OAuth app-registration response boundary', () => {
       calls++;
       expect(String(url)).toBe('https://fedizen.net/api/v1/apps');
       expect(init?.method).toBe('POST');
-      expect(init?.redirect).toBe('error');
+      expect(init?.redirect).toBe('manual');
       expect(init?.cache).toBe('no-store');
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       expect(body.redirect_uris).toBe('https://atlas.lovable.app/fedizen/callback');
@@ -90,7 +90,7 @@ describe('Fedizen OAuth app-registration response boundary', () => {
     let calls = 0;
     const fetcher = mock(async (_url: RequestInfo | URL, init?: RequestInit) => {
       calls++;
-      expect(init?.redirect).toBe('error');
+      expect(init?.redirect).toBe('manual');
       return new Response(null, { status: 307, headers: { location: 'https://untrusted.invalid/register' } });
     }) as typeof fetch;
     await expect(registerFedizenOAuthApp('https://atlas.lovable.app/fedizen/callback', fetcher))
@@ -109,7 +109,7 @@ describe('Fedizen authorization-code exchange security', () => {
       calls++;
       expect(String(url)).toBe('https://fedizen.net/oauth/token');
       expect(init?.method).toBe('POST');
-      expect(init?.redirect).toBe('error');
+      expect(init?.redirect).toBe('manual');
       expect(init?.cache).toBe('no-store');
       expect(new Headers(init?.headers).get('content-type')).toBe('application/x-www-form-urlencoded');
       const payload = new URLSearchParams(String(init?.body));
@@ -129,7 +129,7 @@ describe('Fedizen authorization-code exchange security', () => {
     let calls = 0;
     const fetcher = mock(async (_url: RequestInfo | URL, init?: RequestInit) => {
       calls++;
-      expect(init?.redirect).toBe('error');
+      expect(init?.redirect).toBe('manual');
       return new Response(null, { status: 307, headers: { location: 'https://untrusted.invalid/steal-token' } });
     }) as typeof fetch;
     expect(await redeemFedizenReadCode('code', redirect, 'verifier', app, fetcher)).toEqual({ kind: 'rejected' });

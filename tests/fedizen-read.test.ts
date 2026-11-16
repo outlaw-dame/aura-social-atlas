@@ -31,7 +31,7 @@ describe('Fedizen read-side failure isolation', () => {
     const urls: string[] = [];
     globalThis.fetch = mock(async (url, init) => {
       urls.push(String(url));
-      expect(init?.redirect).toBe('error');
+      expect(init?.redirect).toBe('manual');
       expect(init?.cache).toBe('no-store');
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer sentinel');
       return new Response('[{"id":"item-1"}]', { status: 200 });

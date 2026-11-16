@@ -80,7 +80,7 @@ export async function registerFedizenOAuthApp(
         scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin,
       }),
       signal: AbortSignal.timeout(10000),
-      redirect: 'error',
+      redirect: 'manual',
       cache: 'no-store',
     });
   } catch (e) {
@@ -184,7 +184,7 @@ export async function verifyFedizenReadGrant(
       method: 'GET',
       headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       signal: AbortSignal.timeout(10000),
-      redirect: 'error',
+      redirect: 'manual',
       cache: 'no-store',
     });
     if (!response.ok) {
@@ -223,7 +223,7 @@ export async function redeemFedizenReadCode(
         code_verifier: codeVerifier,
       }),
       signal: AbortSignal.timeout(10000),
-      redirect: 'error',
+      redirect: 'manual',
       cache: 'no-store',
     });
   } catch {
@@ -462,7 +462,7 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
       method: 'GET',
       headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       signal: AbortSignal.timeout(10000),
-      redirect: 'error',
+      redirect: 'manual',
       cache: 'no-store',
     });
   } catch (e) {
@@ -554,7 +554,7 @@ export async function fedizenSend(token: string, method: 'POST' | 'PUT' | 'DELET
       headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT, ...(payload ? { 'content-type': 'application/json' } : {}) },
       body: payload ? JSON.stringify(payload.data) : undefined,
       signal: AbortSignal.timeout(10000),
-      redirect: 'error',
+      redirect: 'manual',
       cache: 'no-store',
     });
   } catch (e) {
@@ -601,7 +601,7 @@ export async function fedizenUpload(token: string, file: Blob, name: string, des
       body: form,
       // Bonfire stores and resizes (or transcodes) the file before it answers.
       signal: AbortSignal.timeout(file.type.startsWith('video/') ? 120_000 : 45_000),
-      redirect: 'error',
+      redirect: 'manual',
       cache: 'no-store',
     });
   } catch {
