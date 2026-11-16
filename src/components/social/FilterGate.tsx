@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
 import type { FilterablePost, Verdict } from '@/lib/content-filter';
 import { shortAgo } from '@/lib/feed-types';
 import { usePostFilter } from './useIntelligence';
+import { MediaVeilContext } from './SensitiveMedia';
 
 /** Why a post was filtered, in a few words: the words that matched, or the AI model that judged it in context. */
 export function filterReason(v: Extract<Verdict, { state: 'filtered' }>, product: string | null): string {
@@ -30,7 +30,7 @@ export function WarningMark({ className = '' }: { className?: string }) {
  * - pending (being checked) and hide: nothing — except on a profile someone opened on purpose, where a hidden post
  *   shows as a notice (Bluesky blurs instead of removing when you look at a post itself);
  * - warn: "Filtered: …" with Show anyway (Mastodon);
- * - blur: the post, with its images and video hidden until shown (Mastodon 4.4's "blur").
+ * - blur: the post, with its images and video behind a Sensitive veil until shown (Mastodon 4.4's "blur").
  */
 export function useFilterGate(post: GatedPost): GateView {
   const { verdict: v, place, product } = usePostFilter(post);
@@ -47,12 +47,8 @@ export function useFilterGate(post: GatedPost): GateView {
  *  words shows a warning mark, "Content Warning", which filter hid it and why, and View post — as Bluesky clients do. */
 export function FilterGate({ post, children }: { post: GatedPost; children: ReactNode }) {
   const g = useFilterGate(post);
-  if (g.kind === 'show') return <>{children}</>;
   if (g.kind === 'none') return null;
-  if (g.kind === 'blur') return <div className="atlas-filter-blur">
-    <p className="mb-2 flex items-center gap-2 text-xs text-muted-foreground"><span className="min-w-0 flex-1 truncate">Media hidden · {g.filter}</span><Button variant="ghost" size="sm" className="h-7 rounded-full" onClick={g.onShow}>Show</Button></p>
-    {children}
-  </div>;
+  if (g.kind === 'show' || g.kind === 'blur') return <MediaVeilContext.Provider value={g.kind === 'blur' ? { reason: hiddenBy(g.filter, g.why), onShow: g.onShow } : null}>{children}</MediaVeilContext.Provider>;
   const ago = shortAgo(post.date);
   return <article className="border-b border-border pb-4">
     {post.author && <div className="flex items-center gap-3">

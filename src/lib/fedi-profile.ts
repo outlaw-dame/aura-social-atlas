@@ -17,6 +17,8 @@ export type FediProfilePost = {
   /** The author's content warning; the post body stays folded behind it. */
   cw?: string;
   image?: string;
+  /** The author marked its media sensitive: shown behind a veil. */
+  sensitive?: boolean;
   /** A video post (PeerTube), playable in place. */
   video?: FediVideo;
 };
@@ -149,8 +151,9 @@ export function postsFromOutbox(page: unknown, actorId: string, max = 10): FediP
     const published = str(o.published);
     out.push({
       id, url: href(o.url) ?? id, date: published && !Number.isNaN(Date.parse(published)) ? published : undefined,
-      title, paragraphs, cw, image: img && o.sensitive !== true ? href(img.url) : undefined,
-      ...(() => { const v = list(o.type).includes('Video') && o.sensitive !== true ? videoFromObject(o) : null; return v ? { video: v } : {}; })(),
+      title, paragraphs, cw, image: img ? href(img.url) : undefined,
+      ...(o.sensitive === true ? { sensitive: true } : {}),
+      ...(() => { const v = list(o.type).includes('Video') ? videoFromObject(o) : null; return v ? { video: v } : {}; })(),
     });
   }
   return out;

@@ -290,6 +290,8 @@ const status = z.object({
   content: z.string().nullish(),
   account: account.nullish(),
   media_attachments: z.array(media).nullish(),
+  /** The author marked the media sensitive: shown behind a veil. */
+  sensitive: z.boolean().nullish().catch(null),
   bookmarked: z.boolean().nullish(),
   // Counts and the person's own reactions (Bonfire's status mapper fills all five); each fails on its own to null.
   replies_count: z.number().int().min(0).nullish().catch(null),

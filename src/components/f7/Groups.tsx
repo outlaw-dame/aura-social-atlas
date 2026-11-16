@@ -4,6 +4,7 @@ import { useGroup, useGroupMembership, useGroupsDirectory, useLatestInGroups } f
 import { groupAccessLabel, groupHandle, groupMembersLine, matchesGroup, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { MobileFilterGate } from './FilterGate';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 const meta = (g: Group) => [groupMembersLine(g), groupAccessLabel(g)].filter(Boolean).join(' · ');
@@ -36,7 +37,7 @@ function PostCardBody({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
         <span><b>{p.author}</b>{showGroup && p.group && <> <span className="atlas-group-in">in {p.group}</span></>}<small>{p.handle}{p.date ? ` · ${when(p.date)}` : ''}</small></span>
       </div>
       {p.paragraphs.slice(0, 4).map((t, i) => <p key={i}>{t}</p>)}
-      {p.image && <img className="atlas-group-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+      <SensitiveMedia cta="Tap to view">{p.image && <img className="atlas-group-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia>
     </CardContent>
     <CardFooter><span /><Link external target="_blank" href={p.url}>Open on Fedizen</Link></CardFooter>
   </Card>;

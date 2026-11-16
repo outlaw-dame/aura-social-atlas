@@ -5,6 +5,7 @@ import { getFedizenPublic } from '@/lib/bonfire.functions';
 import { linkifyHashtags } from '@/lib/hashtags';
 import { FilterPlaceProvider } from './useIntelligence';
 import { FilterGate } from './FilterGate';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 
 const when = (d?: string) => d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
@@ -22,7 +23,7 @@ export function PublicFedizenFeed() {
       : <div className="space-y-6"><FilterPlaceProvider place="public">{posts.slice(0, 10).map(p => <FilterGate key={p.id} post={p}><article className="border-b border-border pb-5">
         <p className="flex items-center gap-2 text-xs">{p.avatar ? <img src={p.avatar} alt="" width={32} height={32} className="size-8 atlas-avatar object-cover" loading="lazy" referrerPolicy="no-referrer" /> : <span className="size-8 atlas-avatar bg-muted" />}<span className="min-w-0"><span className="font-semibold">{p.author}</span> <span className="text-muted-foreground">{p.handle} · {when(p.date)}</span></span></p>
         <div className="mt-3 space-y-2 break-words text-sm leading-relaxed">{p.paragraphs.slice(0, 6).map((t, i) => <p key={i}>{linkifyHashtags(t)}</p>)}</div>
-        {p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
+        <SensitiveMedia sensitive={p.sensitive}>{p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}</SensitiveMedia>
         <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Open on Fedizen<ArrowUpRight className="size-3" /></a>
       </article></FilterGate>)}</FilterPlaceProvider></div>}
   </section>;

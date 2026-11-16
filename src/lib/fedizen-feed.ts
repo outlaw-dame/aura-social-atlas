@@ -25,7 +25,7 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
   return have.has(needed) || (needed.includes(':') && have.has(needed.split(':')[0]));
 }
 
-export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[];
+export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; /** The author marked its media sensitive. */ sensitive?: boolean; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[];
   /** A video attached to the post (a federated PeerTube video arrives this way). */ video?: FediVideo;
   /** The article the post links to, and who wrote it as far as Atlas can verify ("More from"). */ article?: PostArticle;
   /** Reply, boost and like counts, and whether the person has liked or boosted it (Fedizen statuses only). */
@@ -40,7 +40,7 @@ export type FedizenNotice = { id: string; type: string; author: string; avatar?:
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string };
-type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
+type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; sensitive?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
   replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null;
   spoiler_text?: string | null; tags?: { name?: string }[] | null; poll?: { options?: { title?: string }[] } | null;
   quote?: { quoted_status?: { content?: string | null; spoiler_text?: string | null; media_attachments?: { description?: string | null }[] | null } | null } | null };
@@ -57,6 +57,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
       paragraphs: htmlToParagraphs(o.content ?? ''), url: http(o.url) ?? http(o.uri) ?? FEDIZEN, date: o.created_at,
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
       boostedBy: s.reblog ? name(s.account) : undefined,
+      ...(o.sensitive === true && o.media_attachments?.length ? { sensitive: true } : {}),
       ...(typeof o.replies_count === 'number' || typeof o.reblogs_count === 'number' || typeof o.favourites_count === 'number'
         ? { counts: { replies: o.replies_count ?? 0, boosts: o.reblogs_count ?? 0, likes: o.favourites_count ?? 0 } } : {}),
       ...(o.favourited === true ? { liked: true } : {}), ...(o.reblogged === true ? { boosted: true } : {}),

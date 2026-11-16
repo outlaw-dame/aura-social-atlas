@@ -8,6 +8,7 @@ import { VideoPlayer } from './VideoPlayer';
 import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from './useFediProfile';
 import { FilterPlaceProvider } from './useIntelligence';
 import { FilterGate } from './FilterGate';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 
 /**
  * Desktop: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -83,7 +84,7 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
               {post.title && <h3 className="font-serif text-xl">{post.title}</h3>}
               {post.cw ? <details className="mt-1 text-sm"><summary className="cursor-pointer text-muted-foreground">Content warning: {post.cw}</summary><div className="mt-2 space-y-2 leading-relaxed">{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div></details>
                 : <div className="mt-1 space-y-2 text-sm leading-relaxed">{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div>}
-              {post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-72 w-full rounded-2xl object-cover" />}
+              <SensitiveMedia sensitive={post.sensitive}>{post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-72 w-full rounded-2xl object-cover" />}</SensitiveMedia>
               <p className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">{day(post.date)}<a href={post.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">Original<ArrowUpRight className="size-3" /></a></p>
             </article></FilterGate>)}</FilterPlaceProvider>
             {!p.posts.length && <p className="border-t border-border pt-4 text-sm text-muted-foreground">{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</p>}

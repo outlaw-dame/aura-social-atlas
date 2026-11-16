@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Card, CardContent, Link } from 'framework7-react';
+import { Card, CardContent } from 'framework7-react';
+import { MediaVeilContext } from '@/components/social/SensitiveMedia';
 import { shortAgo } from '@/lib/feed-types';
 import { WarningMark, hiddenBy, useFilterGate, type GatedPost } from '@/components/social/FilterGate';
 
@@ -10,12 +11,8 @@ import { WarningMark, hiddenBy, useFilterGate, type GatedPost } from '@/componen
  */
 export function MobileFilterGate({ post, card = true, children }: { post: GatedPost; card?: boolean; children: ReactNode }) {
   const g = useFilterGate(post);
-  if (g.kind === 'show') return <>{children}</>;
   if (g.kind === 'none') return null;
-  if (g.kind === 'blur') return <div className="atlas-filter-blur">
-    <div className="atlas-filter-blur-bar"><span>Media hidden · {g.filter}</span><Link onClick={g.onShow}>Show</Link></div>
-    {children}
-  </div>;
+  if (g.kind === 'show' || g.kind === 'blur') return <MediaVeilContext.Provider value={g.kind === 'blur' ? { reason: hiddenBy(g.filter, g.why), onShow: g.onShow } : null}>{children}</MediaVeilContext.Provider>;
   const ago = shortAgo(post.date);
   const body = <>
     {post.author && <div className="atlas-post-head">

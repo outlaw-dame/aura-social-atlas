@@ -6,6 +6,7 @@ import { useGroup, useGroupMembership, useGroupsDirectory, useLatestInGroups } f
 import { groupAccessLabel, groupHandle, groupMembersLine, matchesGroup, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
 import { FilterPlaceProvider } from './useIntelligence';
 import { FilterGate } from './FilterGate';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 
@@ -43,7 +44,7 @@ function PostBody({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
         <span className="block truncate text-muted-foreground">{p.handle}{p.date ? ` · ${when(p.date)}` : ''}</span></span>
     </p>
     <div className="mt-3 space-y-2 text-sm leading-relaxed [overflow-wrap:anywhere]">{p.paragraphs.slice(0, 6).map((t, i) => <p key={i}>{t}</p>)}</div>
-    {p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
+    <SensitiveMedia>{p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}</SensitiveMedia>
     <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Open on Fedizen<ArrowUpRight className="size-3" /></a>
   </article>;
 }

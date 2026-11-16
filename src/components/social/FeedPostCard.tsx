@@ -15,6 +15,7 @@ import { useSaveToggle } from './useFedizenLibrary';
 import { FilterGate } from './FilterGate';
 import { PostMoreMenu } from './FilterLikeThis';
 import { AUDIENCE_LABEL, compactCount, replyMention, replyVisibility, sharePost, useReactions, useReply } from './usePostActions';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
   const [broken, setBroken] = useState(false);
@@ -105,7 +106,7 @@ function FeedPostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenP
       {ago && <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline" title={p.date ? new Date(p.date).toLocaleString() : undefined}>{ago}</a>}
     </div>
     <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{linkifyHashtagsWith(t, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
-    {p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
+    <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}</SensitiveMedia>
     <CollectionLinks links={p.collections} />
     <PostArticleCard article={p.article} />
     <Actions post={p} actions={actions} />

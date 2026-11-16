@@ -14,6 +14,7 @@ import { getTagFeed } from '@/lib/tag-feed.functions';
 import { linkifyHashtags } from '@/lib/hashtags';
 import { NetworkBadge } from '@/lib/networks';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 
 export const Route = createFileRoute('/tags/$tag')({
   head: ({ params }) => {
@@ -108,7 +109,7 @@ function PublicTagPage({ tag }: { tag: string }) {
         <time className="ml-auto shrink-0 text-[11px] text-muted-foreground" dateTime={p.createdAt}>{new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time>
       </a>
       <div className="space-y-2 break-words text-sm leading-relaxed">{p.text.map((t, i) => <p key={i}>{linkifyHashtags(t)}</p>)}</div>
-      {p.image && <img src={p.image} alt="" className="mt-3 max-h-96 w-full rounded-xl object-cover" loading="lazy" referrerPolicy="no-referrer" />}
+      <SensitiveMedia sensitive={p.sensitive}>{p.image && <img src={p.image} alt="" className="mt-3 max-h-96 w-full rounded-xl object-cover" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia>
       <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-3 flex gap-5 text-xs text-muted-foreground hover:text-foreground" aria-label="Open original post">
         <span className="flex items-center gap-1"><MessageCircle className="size-3.5" />{p.replies}</span>
         <span className="flex items-center gap-1"><Repeat2 className="size-3.5" />{p.boosts}</span>

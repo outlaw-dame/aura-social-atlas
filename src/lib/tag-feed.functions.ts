@@ -4,7 +4,7 @@ import { htmlToParagraphs } from './spotlight';
 export type TagPost = {
   id: string; url: string; createdAt: string; text: string[];
   author: { name: string; acct: string; avatar: string; url: string };
-  image?: string; replies: number; boosts: number; favourites: number;
+  image?: string; /** The author marked its media sensitive. */ sensitive?: boolean; replies: number; boosts: number; favourites: number;
 };
 
 type Status = {
@@ -27,12 +27,12 @@ export const getTagFeed = createServerFn({ method: 'GET' })
     const list = await res.json() as Status[];
     return list.map(s => {
       const acct = s.account.acct.includes('@') ? s.account.acct : `${s.account.acct}@mastodon.social`;
-      const img = !s.sensitive ? s.media_attachments.find(m => m.type === 'image' && m.preview_url)?.preview_url ?? undefined : undefined;
+      const img = s.media_attachments.find(m => m.type === 'image' && m.preview_url)?.preview_url ?? undefined;
       return {
         id: s.id, url: s.url ?? s.uri, createdAt: s.created_at,
         text: s.spoiler_text ? [`Content warning: ${s.spoiler_text}`] : htmlToParagraphs(s.content),
         author: { name: s.account.display_name || s.account.username, acct: `@${acct}`, avatar: s.account.avatar, url: s.account.url },
-        image: img, replies: s.replies_count, boosts: s.reblogs_count, favourites: s.favourites_count,
+        image: img, ...(s.sensitive === true && img ? { sensitive: true } : {}), replies: s.replies_count, boosts: s.reblogs_count, favourites: s.favourites_count,
       };
     });
   });
