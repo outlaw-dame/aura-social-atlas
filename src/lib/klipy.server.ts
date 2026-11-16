@@ -75,7 +75,7 @@ async function klipy(path: string, init?: RequestInit): Promise<unknown> {
   const key = klipyKey();
   if (!key) throw new KlipyError('not-configured');
   const res = await fetch(`${BASE}/${encodeURIComponent(key)}/${path}`, {
-    ...init, redirect: 'error', signal: AbortSignal.timeout(TIMEOUT),
+    ...init, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT),
     headers: { accept: 'application/json', ...(init?.body ? { 'content-type': 'application/json' } : {}) },
   });
   if (!res.ok) { await res.body?.cancel().catch(() => {}); throw new KlipyError(res.status === 429 ? 'busy' : 'unavailable'); }

@@ -17,7 +17,7 @@ const FEDIDB = 'https://api.fedidb.org/v1';
 const CASTOPOD_INDEX = 'https://index.castopod.org/podcastindex.json';
 
 async function getJson(url: string, maxBytes: number, timeoutMs = 8000): Promise<unknown> {
-  const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'Atlas/1.0 (Voices to know)' }, redirect: 'error', signal: AbortSignal.timeout(timeoutMs) });
+  const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'Atlas/1.0 (Voices to know)' }, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const len = Number(res.headers.get('content-length') ?? 0);
   if (len > maxBytes) throw new Error('too large');

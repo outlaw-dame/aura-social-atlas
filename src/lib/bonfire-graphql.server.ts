@@ -136,7 +136,7 @@ export async function requestBonfireGraphQL<T>(request: BonfireGraphQLRequest<T>
         signal: signal
           ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
           : AbortSignal.timeout(TIMEOUT_MS),
-        redirect: 'error',
+        redirect: 'manual',
         cache: 'no-store',
       });
     } catch (e) {

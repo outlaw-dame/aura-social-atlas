@@ -29,7 +29,7 @@ describe('Bonfire deployed-schema profile and post detail readers', () => {
     const fetchImpl = mock(async (url: RequestInfo | URL, init?: RequestInit) => {
       expect(String(url)).toBe('https://fedizen.net/api/graphql');
       expect(init?.method).toBe('POST');
-      expect(init?.redirect).toBe('error');
+      expect(init?.redirect).toBe('manual');
       expect(init?.cache).toBe('no-store');
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer read-fixture');
       const request = JSON.parse(String(init?.body));

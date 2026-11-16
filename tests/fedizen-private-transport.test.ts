@@ -31,7 +31,7 @@ describe('Fedizen private reads and writes are allowlisted', () => {
     const ok = await fedizenGet('t', '/api/v1/conversations?limit=30');
     expect(ok.status).toBe(200);
     expect((ok.data[0] as Record<string, unknown>).extra).toBeUndefined();
-    expect(seen?.redirect).toBe('error');
+    expect(seen?.redirect).toBe('manual');
     expect(seen?.cache).toBe('no-store');
     globalThis.fetch = (async () => new Response('[{"unread":true}]')) as unknown as typeof fetch;
     expect(await fedizenGet('t', '/api/v1/conversations?limit=30')).toEqual({ status: 502, data: [] });
@@ -54,7 +54,7 @@ describe('Fedizen private reads and writes are allowlisted', () => {
     const r = await fedizenSend('t', 'POST', '/api/v1-bonfire/groups/01M6H1DWNEPEGAP2GM9QDVS135/join');
     expect(r.status).toBe(200);
     expect(r.data).toEqual({ following: true, group: { member: true } });
-    expect(seen?.redirect).toBe('error');
+    expect(seen?.redirect).toBe('manual');
     globalThis.fetch = (async () => new Response('', { status: 403 })) as unknown as typeof fetch;
     expect(await fedizenSend('t', 'POST', '/api/v1/accounts/abc/unfollow')).toEqual({ status: 403, data: null });
   });
