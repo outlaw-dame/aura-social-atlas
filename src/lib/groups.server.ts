@@ -1,4 +1,4 @@
-import { FEDIZEN_USER_AGENT } from './fedizen-http';
+import { FEDIZEN_USER_AGENT, transportDetail } from './fedizen-http';
 /**
  * Groups — public reads from Fedizen's Bonfire GraphQL API (v1.1.0-rc.1). No sign-in: Bonfire applies each
  * group's boundaries for an anonymous reader, so hidden groups and members-only posts are never returned.
@@ -32,7 +32,7 @@ async function gqlRaw<T>(query: string, variables: Record<string, unknown> = {})
     });
     if (!res.ok) { console.error(`Fedizen groups request failed [${res.status}]`); return null; }
     return await res.json() as GqlResult<T>;
-  } catch (e) { console.error('Fedizen groups fetch error', e); return null; }
+  } catch (e) { console.error('Fedizen groups fetch error', { kind: transportDetail(e) }); return null; }
 }
 
 async function gql<T>(query: string, variables: Record<string, unknown> = {}): Promise<T | null> {
@@ -43,9 +43,9 @@ async function gql<T>(query: string, variables: Record<string, unknown> = {}): P
     });
     if (!res.ok) { console.error(`Fedizen groups request failed [${res.status}]`); return null; }
     const json = await res.json() as { data?: T; errors?: unknown };
-    if (json.errors || !json.data) { console.error('Fedizen groups GraphQL error', JSON.stringify(json.errors).slice(0, 500)); return null; }
+    if (json.errors || !json.data) { console.error('Fedizen groups GraphQL error', { kind: 'graphql' }); return null; }
     return json.data;
-  } catch (e) { console.error('Fedizen groups fetch error', e); return null; }
+  } catch (e) { console.error('Fedizen groups fetch error', { kind: transportDetail(e) }); return null; }
 }
 
 /** Posts reach a group through the group's boost, so the booster is the group, not a person who boosted. */
