@@ -18,7 +18,7 @@ const SHELL_URL = '/app';
 const PRECACHE = [SHELL_URL, '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/favicon.png'];
 
 // Requests that must always go to the network (sign-in, API, server functions, OAuth callbacks).
-const NETWORK_ONLY_PATHS = ['/api/', '/auth', '/fedizen.callback', '/_serverFn/', '/_server'];
+const NETWORK_ONLY_PATHS = ['/api/', '/auth', '/fedizen/callback', '/_serverFn/', '/_server'];
 const isNetworkOnly = (url) => NETWORK_ONLY_PATHS.some((p) => url.pathname.startsWith(p));
 
 // Only same-origin hashed build assets are ever precached.

@@ -21,7 +21,8 @@ describe('Fedizen connection', () => {
     strictEqual(safeReturnPath(null), '/feeds');
   });
   test('returns codes only to Atlas hosts', () => {
-    strictEqual(allowedCallback('https://atlas.lovable.app', 'https://atlas.lovable.app'), 'https://atlas.lovable.app/fedizen/callback');
+    strictEqual(allowedCallback('https://aura-social-atlas.lovable.app', 'https://aura-social-atlas.lovable.app'), 'https://aura-social-atlas.lovable.app/fedizen/callback');
+    strictEqual(allowedCallback('https://atlas.lovable.app', 'https://atlas.lovable.app'), null); // another Lovable tenant
     strictEqual(allowedCallback('https://evil.example', 'https://evil.example'), null);
     strictEqual(allowedCallback('http://atlas.lovable.app', 'http://atlas.lovable.app'), null);
   });

@@ -62,7 +62,7 @@ export const disconnectFedizen = createServerFn({ method: 'POST' }).middleware([
   .handler(async ({ data, context }) => {
   assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
   const { disconnect } = await import('./fedizen.server');
-  await disconnect(context.userId); return { ok: true };
+  const { revoked } = await disconnect(context.userId); return { ok: true, revoked };
 });
 
 /** Direct conversations (Mastodon `GET /api/v1/conversations`, which Bonfire v1.1.0-rc.1 serves) for Messages. */

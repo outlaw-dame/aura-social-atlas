@@ -7,10 +7,10 @@ describe('Fedizen OAuth redirect-origin trust boundary', () => {
   });
 
   test('accepts only the exact browser request origin on the current Atlas host', () => {
-    expect(allowedCallback('https://atlas.lovable.app', 'https://atlas.lovable.app'))
-      .toBe('https://atlas.lovable.app/fedizen/callback');
-    expect(allowedCallback('https://atlas.lovableproject.com', 'https://atlas.lovableproject.com'))
-      .toBe('https://atlas.lovableproject.com/fedizen/callback');
+    for (const o of ['https://aura-social-atlas.lovable.app', 'https://preview--aura-social-atlas.lovable.app',
+      'https://id-preview--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovable.app', 'https://id-preview-b5bac2df--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovable.app',
+      'https://d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovableproject.com'])
+      expect(allowedCallback(o, o)).toBe(`${o}/fedizen/callback`);
     expect(allowedCallback('http://localhost:3000', 'http://localhost:3000'))
       .toBe('http://localhost:3000/fedizen/callback');
   });
@@ -35,6 +35,13 @@ describe('Fedizen OAuth redirect-origin trust boundary', () => {
     ['https://atlas.lovable.app', 'https://atlas.lovable.app/'],
     ['http://localhost:3000', 'http://localhost:3001'],
     ['http://127.0.0.1:3000', 'http://127.0.0.1:3000'],
+    // Other Lovable tenants, with no allowlist configured
+    ['https://atlas.lovable.app', 'https://atlas.lovable.app'],
+    ['https://atlas.lovableproject.com', 'https://atlas.lovableproject.com'],
+    ['https://id-preview--00000000-1c72-40dc-8fa6-0b966befbe5b.lovable.app', 'https://id-preview--00000000-1c72-40dc-8fa6-0b966befbe5b.lovable.app'],
+    ['https://preview--aura-social-atlas-evil.lovable.app', 'https://preview--aura-social-atlas-evil.lovable.app'],
+    ['https://evil--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovable.app', 'https://evil--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovable.app'],
+    ['https://aura-social-atlas.lovable.app.evil.example', 'https://aura-social-atlas.lovable.app.evil.example'],
   ] as const)('refuses untrusted, noncanonical or cross-origin redirect %#', (client, request) => {
     expect(allowedCallback(client, request)).toBeNull();
   });

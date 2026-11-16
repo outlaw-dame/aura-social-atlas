@@ -279,10 +279,49 @@ export async function tokenFor(userId: string) {
   return connectionFor(await admin(), userId);
 }
 
-export async function disconnect(userId: string): Promise<void> {
+/**
+ * Asks Fedizen to revoke a token (RFC 7009: POST /oauth/revoke with the issuing client's credentials; Bonfire serves
+ * it through Boruta, bonfire_open_id lib/web/routes.ex). Which registered app issued a stored token isn't recorded,
+ * so each of Atlas's registrations is tried until one is accepted. Best-effort: true once Fedizen confirms.
+ */
+export async function revokeFedizenToken(
+  token: string,
+  apps: { client_id: string; client_secret: string }[],
+  fetcher: typeof fetch = fetch,
+): Promise<boolean> {
+  for (const app of apps.slice(0, 12)) {
+    try {
+      const response = await fetcher(`${FEDIZEN}/oauth/revoke`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
+        body: new URLSearchParams({ token, token_type_hint: 'access_token', client_id: app.client_id, client_secret: app.client_secret }),
+        signal: AbortSignal.timeout(8000),
+        redirect: 'manual',
+        cache: 'no-store',
+      });
+      await response.body?.cancel().catch(() => {});
+      if (response.ok) return true;
+    } catch { /* try the next registration; the stored copy is deleted regardless */ }
+  }
+  return false;
+}
+
+/**
+ * Disconnects Fedizen: revokes the grant at Fedizen, so the token stops working there too, then deletes Atlas's copy.
+ * The local copy goes even if Fedizen can't be reached; the person can still revoke Atlas in Fedizen's settings.
+ */
+export async function disconnect(userId: string): Promise<{ revoked: boolean }> {
   const db = await admin();
+  const conn = await connectionFor(db, userId).catch(() => null);
+  let revoked = false;
+  if (conn?.access_token) {
+    const { data: apps } = await db.from('fedizen_oauth_apps').select('client_id, client_secret').limit(12);
+    const parsed = (apps ?? []).map(parseFedizenOAuthApp).filter((a): a is { client_id: string; client_secret: string } => !!a);
+    revoked = await revokeFedizenToken(conn.access_token, parsed);
+  }
   const { error } = await db.from('fedizen_connections').delete().eq('user_id', userId);
   if (error) throw new Error('Could not disconnect Fedizen account.');
+  return { revoked };
 }
 
 /** Server-side schema projection for each private endpoint Atlas reads.

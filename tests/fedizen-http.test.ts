@@ -54,3 +54,27 @@ describe('fetch options Cloudflare Workers accept', () => {
     expect(transportDetail(new Error("The 'cache' field on 'RequestInitializerDict' is not implemented."))).toBe('network');
   });
 });
+
+describe('disconnecting Fedizen revokes the grant (RFC 7009)', () => {
+  test('tries each registration until Fedizen accepts, sending the token and client credentials as a form', async () => {
+    const { revokeFedizenToken } = await import('../src/lib/fedizen.server');
+    const seen: { url: string; body: URLSearchParams; redirect?: RequestRedirect }[] = [];
+    const fetcher = (async (url: string, init: RequestInit) => {
+      const body = new URLSearchParams(String(init.body));
+      seen.push({ url, body, redirect: init.redirect });
+      return new Response('', { status: body.get('client_id') === 'b' ? 200 : 401 });
+    }) as unknown as typeof fetch;
+    const ok = await revokeFedizenToken('tok', [{ client_id: 'a', client_secret: 'x' }, { client_id: 'b', client_secret: 'y' }, { client_id: 'c', client_secret: 'z' }], fetcher);
+    expect(ok).toBe(true);
+    expect(seen.map(s => s.body.get('client_id'))).toEqual(['a', 'b']);
+    expect(seen[0].url).toBe('https://fedizen.net/oauth/revoke');
+    expect(seen[1].body.get('token')).toBe('tok');
+    expect(seen[1].body.get('client_secret')).toBe('y');
+    expect(seen.every(s => s.redirect === 'manual')).toBe(true);
+  });
+  test('Fedizen unreachable: reports not revoked, never throws', async () => {
+    const { revokeFedizenToken } = await import('../src/lib/fedizen.server');
+    const fetcher = (async () => { throw new TypeError('down'); }) as unknown as typeof fetch;
+    expect(await revokeFedizenToken('tok', [{ client_id: 'a', client_secret: 'x' }], fetcher)).toBe(false);
+  });
+});

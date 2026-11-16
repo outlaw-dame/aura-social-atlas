@@ -26,6 +26,16 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+/**
+ * Everything cached for an account that signed out (or was switched away from): every query whose key carries its
+ * id — Home, notifications, messages, saved posts, circles, filters, AI settings, compose limits and the rest — is
+ * cancelled and dropped, so nothing private stays in memory for whoever uses the device next.
+ */
+function forgetAccount(queryClient: ReturnType<typeof useQueryClient>, userId: string) {
+  const mine = { predicate: (q: { queryKey: readonly unknown[] }) => q.queryKey.includes(userId) };
+  void queryClient.cancelQueries(mine).then(() => queryClient.removeQueries(mine));
+}
+
 export function AtlasAuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const previousUser = useRef<string | null>(null);
@@ -63,14 +73,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
     if (priorId && priorId !== userId) {
       // Home kept on this device for the prior account goes too (signing out, or switching account).
       clearHomeCache(priorId);
-      // Both REST and native GraphQL results can contain private data. Drop
-      // only the prior account's keys so switching accounts never reuses them.
-      for (const prefix of ['fedizen-home', 'bonfire-native-home']) {
-        const oldKey = [prefix, priorId];
-        void queryClient.cancelQueries({ queryKey: oldKey, exact: true }).then(() => {
-          queryClient.removeQueries({ queryKey: oldKey, exact: true });
-        });
-      }
+      forgetAccount(queryClient, priorId);
     }
   }, [userId, queryClient]);
 
@@ -94,7 +97,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const signOut = async () => {
-    if (session?.user.id) clearHomeCache(session.user.id);
+    if (session?.user.id) { clearHomeCache(session.user.id); forgetAccount(queryClient, session.user.id); }
     await supabase.auth.signOut();
     setSession(null);
     setProfileRecord(null);
