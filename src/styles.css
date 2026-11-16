@@ -665,6 +665,9 @@ html.atlas-rail .atlas-mini { left: calc(var(--f7-panel-width, 88px) + 8px); }
 
 /* Post cards in Feeds: author row, text, media or link preview, then the standard actions. */
 .atlas-post-card .card-content { padding-bottom: 4px; }
+/* A post a "warn" filter caught: one quiet line, like Mastodon's "Filtered: …" with "Show anyway". */
+.atlas-post-filtered .card-content { display: flex; align-items: center; gap: 12px; padding-bottom: 16px; font-size: 15px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
+.atlas-post-filtered .card-content > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .atlas-post-head { display: flex; align-items: center; gap: 10px; }
 .atlas-post-avatar { width: 40px; height: 40px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; background: color-mix(in oklab, currentColor 8%, transparent); }
 span.atlas-post-avatar { display: inline-flex; align-items: center; justify-content: center; font-size: 17px; }

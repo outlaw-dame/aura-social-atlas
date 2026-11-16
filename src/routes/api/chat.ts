@@ -1,4 +1,3 @@
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 import { createFileRoute } from "@tanstack/react-router";
 import { convertToModelMessages, streamText, tool, stepCountIs, type UIMessage } from "ai";
 import { z } from "zod";
@@ -21,18 +20,27 @@ export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        // Signed-in only, with the person's own key (Settings → Intelligence); Atlas's own AI credit is never used.
+        const { userIdFromRequest } = await import("@/lib/intelligence/session.server");
+        const userId = await userIdFromRequest(request);
+        if (!userId) return new Response("Sign in to use the assistant", { status: 401 });
+
         const { messages } = (await request.json()) as ChatRequestBody;
-        if (!Array.isArray(messages)) {
+        if (!Array.isArray(messages) || messages.length > 100) {
           return new Response("Messages are required", { status: 400 });
         }
 
-        const key = process.env.LOVABLE_API_KEY;
-        if (!key) {
-          return new Response("Missing LOVABLE_API_KEY", { status: 500 });
+        const { assistantModel } = await import("@/lib/intelligence/store.server");
+        const ai = await assistantModel(userId);
+        if ("problem" in ai) {
+          return new Response(ai.problem === "not-ready" ? "Turn on Intelligence and add an API key in Settings" : "The AI service isn't available right now", { status: 409 });
         }
-
-        const gateway = createLovableAiGatewayProvider(key);
-        const model = gateway("google/gemini-3-flash-preview");
+        const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+        const { openAiBase } = await import("@/lib/intelligence/llm.server");
+        // Every provider here takes OpenAI-style chat with streaming and tools; for Anthropic that's its OpenAI SDK
+        // compatibility layer. The base URL is fixed per provider, so the key only goes to its own provider.
+        const provider = createOpenAICompatible({ name: ai.credential.provider, baseURL: openAiBase(ai.credential), apiKey: ai.credential.key });
+        const model = provider.chatModel(ai.model);
 
         const result = streamText({
           model,

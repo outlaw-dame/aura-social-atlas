@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import {
   Sheet, Popup, Page, Navbar, NavRight, Link, Block, List, ListInput, Button, Messages, Message, Messagebar, Icon, f7,
 } from 'framework7-react';
+import { supabase } from '@/integrations/supabase/client';
 
 /** Draft-only composer: nothing is published until a social account is connected. */
 export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: () => void }) {
@@ -32,7 +33,13 @@ const PROMPTS = ['What is the open social web?', 'How do Mastodon and Bluesky di
 
 /** Assistant chat in a native-style popup; same /api/chat transport as the website. */
 export function AssistantPopup({ opened, onClose }: { opened: boolean; onClose: () => void }) {
-  const transport = useMemo(() => new DefaultChatTransport({ api: '/api/chat' }), []);
+  const transport = useMemo(() => new DefaultChatTransport({
+    api: '/api/chat',
+    headers: async (): Promise<Record<string, string>> => {
+      const { data } = await supabase.auth.getSession();
+      return data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : {};
+    },
+  }), []);
   const { messages, sendMessage, status } = useChat({ transport });
   const [input, setInput] = useState('');
   const handled = useRef(new Set<string>());

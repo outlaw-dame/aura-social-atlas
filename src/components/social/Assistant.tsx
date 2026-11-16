@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { ArrowUp, PenLine, Send, Sparkle, X } from "lucide-react";
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
 const SUGGESTED_PROMPTS = ["What is the open social web?", "How do Mastodon and Bluesky differ?", "Explain RSS feeds"];
 export function AssistantOverlay({
   open,
@@ -18,7 +19,14 @@ export function AssistantOverlay({
   showLauncher?: boolean;
   onCompose?: () => void;
 }) {
-  const transport = useMemo(() => new DefaultChatTransport({ api: "/api/chat" }), []);
+  // The chat route answers with the person's own AI key, so it needs to know who's asking.
+  const transport = useMemo(() => new DefaultChatTransport({
+    api: "/api/chat",
+    headers: async (): Promise<Record<string, string>> => {
+      const { data } = await supabase.auth.getSession();
+      return data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : {};
+    },
+  }), []);
   const { messages, sendMessage, status, error } = useChat({
     transport,
     onError: (e) => console.error("chat error", e),

@@ -34,6 +34,8 @@ import { MobileFeeds } from './MobileFeeds';
 import { FollowedTagsPage, TagFeedPage } from './TagFeed';
 import { bindStack, popToRoot, pushPage, showTab, tagPageUrl } from './navigation';
 import { ModerationPopup } from './Moderation';
+import { IntelligencePage, KeywordFiltersPage } from './Intelligence';
+import { intelligenceReady, useIntelligence } from '@/components/social/useIntelligence';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
 import { Spotlight } from '@/components/social/Spotlight';
@@ -117,7 +119,10 @@ export default function AtlasMobileApp() {
   const panelHeldAtStart = useMemo(() => profile.nav === 'rail' || profile.nav === 'sidebar', []); // eslint-disable-line react-hooks/exhaustive-deps
   useAdaptiveLayout(profile);
   useEffect(registerAppServiceWorker, []);
-  const { followed, saved, canSave, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled, setAssistantEnabled } = useSocial();
+  const { followed, saved, canSave, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled: assistantWanted } = useSocial();
+  // The assistant answers with the person's own key: only there once Intelligence is on with a key.
+  const intelligence = useIntelligence();
+  const assistantEnabled = assistantWanted && intelligenceReady(intelligence.data);
   const auth = useAtlasAuth() as { user?: { email?: string } | null; profile?: { display_name: string | null; avatar_key: string | null } | null; signOut?: () => Promise<void> };
   const [query, setQuery] = useState('');
   const [composeOpen, setComposeOpen] = useState(false);
@@ -403,14 +408,17 @@ export default function AtlasMobileApp() {
               </List>
               <BlockTitle>Safety</BlockTitle>
               <List strong inset dividers>
-                <ListItem link="#" title="Moderation" footer="Keyword filters, blocked people and blocked instances" onClick={() => setModerationOpen(true)}>
+                <ListItem link="#" title="Keyword filters" onClick={() => pushPage('/keyword-filters/')}>
+                  <Icon slot="media" ios="f7:text_badge_xmark" md="material:filter_alt" />
+                </ListItem>
+                <ListItem link="#" title="Moderation" footer="Blocked people and blocked instances" onClick={() => setModerationOpen(true)}>
                   <Icon slot="media" ios="f7:shield_lefthalf_fill" md="material:shield" />
                 </ListItem>
               </List>
               <BlockTitle>Intelligence</BlockTitle>
               <List strong inset dividers>
-                <ListItem title="AI assistant" footer="Off by default. When on, a sparkle button opens chat.">
-                  <Toggle slot="after" checked={assistantEnabled} onToggleChange={() => setAssistantEnabled(!assistantEnabled)} />
+                <ListItem link="#" title="Intelligence" footer="Off by default. AI with your own key: smarter keyword filters and the assistant." onClick={() => pushPage('/intelligence/')}>
+                  <Icon slot="media" ios="f7:sparkles" md="material:auto_awesome" />
                 </ListItem>
               </List>
               <Block>
@@ -468,5 +476,7 @@ const STACK_ROUTES = [
   { path: '/', component: StackRoot },
   { path: '/tag/:tag/', component: TagFeedPage },
   { path: '/followed-tags/', component: FollowedTagsPage },
+  { path: '/intelligence/', component: IntelligencePage },
+  { path: '/keyword-filters/', component: KeywordFiltersPage },
   { path: '/creator-tag/:creator/:tag/', component: SampleTagPage },
 ];

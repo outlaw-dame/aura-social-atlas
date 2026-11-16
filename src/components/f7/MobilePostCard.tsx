@@ -12,6 +12,7 @@ import { useReactions } from '@/components/social/usePostActions';
 import { ArticleCard } from './ArticleAuthors';
 import { MobilePostActions, ReplySheet } from './PostActions';
 import { Icon } from './F7Extras';
+import { usePostFilter } from '@/components/social/useIntelligence';
 
 /** A group's avatar in a reason chip: its picture, else its initial, as a rounded square (groups are squares). */
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
@@ -64,7 +65,23 @@ function Avatar({ post: p }: { post: FedizenPost }) {
 }
 
 /** Phone: one post in a feed — author, text, media or link preview — with the standard post actions. */
-export function MobilePostCard({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string }) {
+/** A post one of the person's filters set to "warn" caught (Mastodon's "Filtered: …", "Show anyway"). */
+function FilteredNotice({ filter, onShow }: { filter: string; onShow: () => void }) {
+  return <Card outline className="atlas-post-card atlas-post-filtered">
+    <CardContent><span>Filtered: {filter}</span><Link onClick={onShow}>Show anyway</Link></CardContent>
+  </Card>;
+}
+
+/** Phone: one post, unless the person's keyword filters hide it (or show it behind a notice). */
+export function MobilePostCard(props: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string }) {
+  const verdict = usePostFilter(props.post);
+  const [shown, setShown] = useState(false);
+  if (verdict.state === 'pending' || (verdict.state === 'filtered' && verdict.action === 'hide')) return null;
+  if (verdict.state === 'filtered' && !shown) return <FilteredNotice filter={verdict.filter.text} onShow={() => setShown(true)} />;
+  return <MobilePostCardBody {...props} />;
+}
+
+function MobilePostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string }) {
   const ago = shortAgo(p.date);
   const tagLine = useTagLine(p, reasons).filter(t => t !== inTag);
   return <Card outline className="atlas-post-card">

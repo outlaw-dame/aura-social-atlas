@@ -14,6 +14,102 @@ export type Database = {
   }
   public: {
     Tables: {
+      atlas_ai_keys: {
+        Row: {
+          ciphertext: string
+          created_at: string
+          hint: string
+          iv: string
+          key_id: string
+          models: Json
+          provider: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ciphertext: string
+          created_at?: string
+          hint: string
+          iv: string
+          key_id: string
+          models?: Json
+          provider: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ciphertext?: string
+          created_at?: string
+          hint?: string
+          iv?: string
+          key_id?: string
+          models?: Json
+          provider?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      atlas_ai_settings: {
+        Row: {
+          deep_matching: boolean
+          enabled: boolean
+          model: string | null
+          provider: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          deep_matching?: boolean
+          enabled?: boolean
+          model?: string | null
+          provider?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          deep_matching?: boolean
+          enabled?: boolean
+          model?: string | null
+          provider?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      atlas_content_filters: {
+        Row: {
+          action: string
+          created_at: string
+          expansions: Json
+          id: string
+          kind: string
+          semantic: boolean
+          text: string
+          user_id: string
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          expansions?: Json
+          id?: string
+          kind: string
+          semantic?: boolean
+          text: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          expansions?: Json
+          id?: string
+          kind?: string
+          semantic?: boolean
+          text?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       atlas_collection_items: {
         Row: {
           acct: string

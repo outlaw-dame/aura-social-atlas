@@ -12,6 +12,7 @@ import { CollectionLinks } from './CollectionsDesktop';
 import { PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
 import { useSaveToggle } from './useFedizenLibrary';
+import { usePostFilter } from './useIntelligence';
 import { AUDIENCE_LABEL, compactCount, replyMention, replyVisibility, sharePost, useReactions, useReply } from './usePostActions';
 
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
@@ -83,7 +84,24 @@ function Actions({ post: p, actions }: { post: FedizenPost; actions: FeedActions
 }
 
 /** Desktop: one post in a feed — author, text, media or link preview — with the standard post actions. */
-export function FeedPostCard({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {
+/** A post one of the person's filters set to "warn" caught (Mastodon's "Filtered: …", "Show anyway"). */
+function FilteredNotice({ filter, onShow }: { filter: string; onShow: () => void }) {
+  return <div className="flex items-center gap-3 border-b border-border pb-4 text-sm text-muted-foreground">
+    <span className="min-w-0 flex-1 truncate">Filtered: {filter}</span>
+    <Button variant="ghost" size="sm" className="rounded-full" onClick={onShow}>Show anyway</Button>
+  </div>;
+}
+
+/** Desktop: one post, unless the person's keyword filters hide it (or show it behind a notice). */
+export function FeedPostCard(props: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {
+  const verdict = usePostFilter(props.post);
+  const [shown, setShown] = useState(false);
+  if (verdict.state === 'pending' || (verdict.state === 'filtered' && verdict.action === 'hide')) return null;
+  if (verdict.state === 'filtered' && !shown) return <FilteredNotice filter={verdict.filter.text} onShow={() => setShown(true)} />;
+  return <FeedPostCardBody {...props} />;
+}
+
+function FeedPostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {
   const ago = shortAgo(p.date);
   const tagLine = useTagLine(p, reasons).filter(t => t !== inTag);
   const navigate = useNavigate();
