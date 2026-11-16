@@ -260,7 +260,10 @@ export async function finishConnect(userId: string, code: string, state: string)
   const { grant } = exchange;
   const handle = await verifyFedizenReadGrant(grant.access_token);
   if (!handle) return { ok: false as const, error: 'Fedizen could not verify the connected account. Connect again.' };
-  const { error: saveError } = await db.from('fedizen_connections').upsert({ user_id: userId, access_token: grant.access_token, scope: grant.scope, account_handle: handle });
+  const row = { user_id: userId, access_token: grant.access_token, scope: grant.scope, account_handle: handle };
+  // Remember the issuing app so Disconnect can revoke with it (migration 0005); without the column, save as before.
+  let { error: saveError } = await db.from('fedizen_connections').upsert({ ...row, client_id: app.client_id });
+  if (saveError?.code === '42703') ({ error: saveError } = await db.from('fedizen_connections').upsert(row));
   if (saveError) throw new Error('Could not save Fedizen connection.');
   return { ok: true as const };
 }
@@ -281,15 +284,15 @@ export async function tokenFor(userId: string) {
 
 /**
  * Asks Fedizen to revoke a token (RFC 7009: POST /oauth/revoke with the issuing client's credentials; Bonfire serves
- * it through Boruta, bonfire_open_id lib/web/routes.ex). Which registered app issued a stored token isn't recorded,
- * so each of Atlas's registrations is tried until one is accepted. Best-effort: true once Fedizen confirms.
+ * it through Boruta, bonfire_open_id lib/web/routes.ex), trying the given registrations in order until one is
+ * accepted. Best-effort: true once Fedizen confirms.
  */
 export async function revokeFedizenToken(
   token: string,
   apps: { client_id: string; client_secret: string }[],
   fetcher: typeof fetch = fetch,
 ): Promise<boolean> {
-  for (const app of apps.slice(0, 12)) {
+  for (const app of apps) {
     try {
       const response = await fetcher(`${FEDIZEN}/oauth/revoke`, {
         method: 'POST',
@@ -306,6 +309,32 @@ export async function revokeFedizenToken(
   return false;
 }
 
+type OAuthApp = { client_id: string; client_secret: string };
+const parseApps = (rows: unknown[] | null) => (rows ?? []).map(parseFedizenOAuthApp).filter((a): a is OAuthApp => !!a);
+
+/**
+ * The registration that issued a user's grant (recorded since migration 0005). A connection from before then, or a
+ * database without the column, gets every registration, newest first — none left out, so no grant stays live.
+ */
+async function issuingApps(db: Awaited<ReturnType<typeof admin>>, userId: string): Promise<OAuthApp[]> {
+  const { data: rec, error } = await db.from('fedizen_connections').select('client_id').eq('user_id', userId).maybeSingle();
+  const clientId = !error && typeof (rec as { client_id?: unknown } | null)?.client_id === 'string' ? (rec as { client_id: string }).client_id : null;
+  if (clientId) {
+    const { data } = await db.from('fedizen_oauth_apps').select('client_id, client_secret').eq('client_id', clientId).limit(1);
+    const own = parseApps(data);
+    if (own.length) return own;
+  }
+  const all: OAuthApp[] = [];
+  for (let from = 0; ; from += 100) {
+    const { data, error: pageError } = await db.from('fedizen_oauth_apps').select('client_id, client_secret')
+      .order('created_at', { ascending: false }).range(from, from + 99);
+    if (pageError || !data?.length) break;
+    all.push(...parseApps(data));
+    if (data.length < 100) break;
+  }
+  return all;
+}
+
 /**
  * Disconnects Fedizen: revokes the grant at Fedizen, so the token stops working there too, then deletes Atlas's copy.
  * The local copy goes even if Fedizen can't be reached; the person can still revoke Atlas in Fedizen's settings.
@@ -314,11 +343,7 @@ export async function disconnect(userId: string): Promise<{ revoked: boolean }> 
   const db = await admin();
   const conn = await connectionFor(db, userId).catch(() => null);
   let revoked = false;
-  if (conn?.access_token) {
-    const { data: apps } = await db.from('fedizen_oauth_apps').select('client_id, client_secret').limit(12);
-    const parsed = (apps ?? []).map(parseFedizenOAuthApp).filter((a): a is { client_id: string; client_secret: string } => !!a);
-    revoked = await revokeFedizenToken(conn.access_token, parsed);
-  }
+  if (conn?.access_token) revoked = await revokeFedizenToken(conn.access_token, await issuingApps(db, userId));
   const { error } = await db.from('fedizen_connections').delete().eq('user_id', userId);
   if (error) throw new Error('Could not disconnect Fedizen account.');
   return { revoked };
