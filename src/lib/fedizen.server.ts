@@ -364,6 +364,15 @@ const TAG = '[A-Za-z0-9_%]{1,1200}';
 const followedTagsSchema = z.array(z.object({ name: z.string().min(1).max(100) })).max(200);
 /** Every private read Atlas makes, each with the schema its answer must match. Anything else is refused. */
 const ACCT = '[A-Za-z0-9_.%-]{1,64}(%40[A-Za-z0-9.-]{1,253})?';
+const instanceSchema = z.object({
+  configuration: z.object({
+    statuses: z.object({ max_characters: z.number().int().positive().nullish().catch(null) }).partial().nullish().catch(null),
+    media_attachments: z.object({
+      image_size_limit: z.number().positive().nullish().catch(null),
+      video_size_limit: z.number().positive().nullish().catch(null),
+    }).partial().nullish().catch(null),
+  }).partial().nullish().catch(null),
+});
 const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v1\/timelines\/home\?limit=20$/, schema: homeSchema },
   { match: /^\/api\/v1\/notifications\?limit=20$/, schema: notificationsSchema },
@@ -384,6 +393,8 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: new RegExp(`^/api/v1/timelines/tag/${TAG}\\?limit=(10|20)$`), schema: homeSchema },
   // A circle's timeline (Bonfire: MastoListController.list_timeline over Circles), for circles pinned to Feeds.
   { match: new RegExp(`^/api/v1/timelines/list/${ID}\\?limit=20$`), schema: homeSchema },
+  // What the server takes in a post: its upload size limits and length (Bonfire: InstanceAdapter), for the composer.
+  { match: /^\/api\/v2\/instance$/, schema: instanceSchema, single: true },
   // One post, as the person sees it (their like, boost and bookmark, its counts): for group posts read publicly.
   { match: new RegExp(`^/api/v1/statuses/${ID}$`), schema: timelineStatus, single: true },
 ];
@@ -434,14 +445,19 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
  * no redirects, no caching, bounded reply, nothing logged.
  */
 const title = z.object({ title: z.string().trim().min(1).max(100) }).strict();
-/** A reply, and nothing else: Atlas only posts in answer to a post, in that post's audience or a narrower one. */
+/**
+ * A post: a reply (in the post's audience or a narrower one) or a new post, with its text, an optional content
+ * warning, and up to 4 uploaded media ids marked sensitive or not. Text may be empty only when there is media.
+ */
 const reply = z.object({
-  status: z.string().trim().min(1).max(5000),
-  in_reply_to_id: z.string().regex(new RegExp(`^${ID}$`)),
+  status: z.string().trim().max(5000),
+  in_reply_to_id: z.string().regex(new RegExp(`^${ID}$`)).optional(),
   visibility: z.enum(['public', 'unlisted', 'private', 'direct']),
   /** A content warning (Mastodon: spoiler_text; Bonfire stores it as the post's summary). */
   spoiler_text: z.string().trim().min(1).max(500).optional(),
-}).strict();
+  media_ids: z.array(z.string().regex(new RegExp(`^${ID}$`))).min(1).max(4).optional(),
+  sensitive: z.boolean().optional(),
+}).strict().refine(p => p.status.length > 0 || !!p.media_ids?.length, 'empty post').refine(p => p.sensitive === undefined || !!p.media_ids?.length, 'sensitive without media');
 const members = z.object({ account_ids: z.array(z.string().regex(new RegExp(`^${ID}$`))).min(1).max(20) }).strict();
 const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTypeAny }[] = [
   { method: 'POST', match: new RegExp(`^/api/v1-bonfire/groups/${ID}/(join|leave)$`) },
@@ -502,5 +518,49 @@ export async function fedizenSend(token: string, method: 'POST' | 'PUT' | 'DELET
   } catch {
     // A 2xx with an empty or unreadable body (DELETE answers {}): the write happened, so report success without state.
     return { status: response.status, data: null };
+  }
+}
+
+
+const uploadedSchema = z.object({
+  id: z.string().regex(new RegExp(`^${ID}$`)),
+  type: z.string().max(20).nullish(),
+  preview_url: z.string().max(2048).nullish(),
+});
+export const MEDIA_UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/webm'];
+
+/**
+ * Uploads one file to Fedizen (POST /api/v2/media, multipart, as Mastodon's API takes it), with its alt text. Only the
+ * types Fedizen stores as images or video, at most `maxBytes`. Answers the media id to attach to a post.
+ */
+export async function fedizenUpload(token: string, file: Blob, name: string, description: string, maxBytes: number): Promise<{ status: number; id?: string; preview?: string }> {
+  if (!MEDIA_UPLOAD_TYPES.includes(file.type)) throw new Error('Unsupported Fedizen upload type.');
+  if (file.size <= 0 || file.size > maxBytes) throw new Error('Unsupported Fedizen upload size.');
+  if (description.length > 1500) throw new Error('Unsupported Fedizen upload description.');
+  const form = new FormData();
+  form.set('file', file, name.replace(/[^\w.-]+/g, '_').slice(0, 100) || 'upload');
+  if (description.trim()) form.set('description', description.trim());
+  let response: Response;
+  try {
+    response = await fetch(`${FEDIZEN}/api/v2/media`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      body: form,
+      // Bonfire stores and resizes (or transcodes) the file before it answers.
+      signal: AbortSignal.timeout(file.type.startsWith('video/') ? 120_000 : 45_000),
+      redirect: 'error',
+      cache: 'no-store',
+    });
+  } catch {
+    return { status: 503 };
+  }
+  if (!response.ok) { await response.body?.cancel().catch(() => {}); return { status: response.status }; }
+  try {
+    const m = uploadedSchema.safeParse(await readBoundedFedizenJson(response, 65536));
+    if (!m.success) return { status: 502 };
+    const preview = m.data.preview_url && /^https:\/\//.test(m.data.preview_url) ? m.data.preview_url : undefined;
+    return { status: response.status, id: m.data.id, ...(preview ? { preview } : {}) };
+  } catch {
+    return { status: 502 };
   }
 }

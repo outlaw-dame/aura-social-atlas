@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { WarningMark } from './FilterGate';
+import { useReading } from '@/lib/reading-prefs';
 
 /**
  * The centred warning panel shared by filtered posts and authors' content warnings: a warning mark, a bold line,
@@ -27,7 +28,10 @@ export const AUTHOR_CW = 'Content warning from the author';
  * opened (SensitiveMedia), as on Mastodon, where a warning also marks the media sensitive.
  */
 export function AuthorWarning({ cw, phone = false, children }: { cw?: string; phone?: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
+  const { expandWarnings } = useReading();
+  // Opened by default under "Always expand content warnings"; Hide still folds it.
+  const [choice, setOpen] = useState<boolean | null>(null);
+  const open = choice ?? expandWarnings;
   if (!cw) return <>{children}</>;
   if (!open) return <WarningPanel title={cw} detail={AUTHOR_CW} cta={phone ? 'Tap to view' : 'Show post'} onClick={() => setOpen(true)} phone={phone} />;
   return <>

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { fedizenGet, fedizenSend } from '../src/lib/fedizen.server';
+import { fedizenGet, fedizenSend, fedizenUpload } from '../src/lib/fedizen.server';
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
@@ -11,10 +11,10 @@ describe('Fedizen private reads and writes are allowlisted', () => {
     await expect(fedizenGet('t', '/api/v1/accounts/verify_credentials')).rejects.toThrow('Unsupported Fedizen read path.');
     await expect(fedizenGet('t', '/api/v1/conversations?limit=31')).rejects.toThrow('Unsupported Fedizen read path.');
     await expect(fedizenGet('t', '/api/v1/accounts/relationships?id%5B%5D=a/../b')).rejects.toThrow('Unsupported Fedizen read path.');
-    // Atlas posts only replies: a body without the post it answers, or with anything else in it, never leaves.
+    // A post's body is checked: nothing beyond its known fields, and never empty.
     await expect(fedizenSend('t', 'POST', '/api/v1/statuses')).rejects.toThrow('Unsupported Fedizen write body.');
-    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'hi', visibility: 'public' })).rejects.toThrow('Unsupported Fedizen write body.');
-    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'hi', in_reply_to_id: '01A', visibility: 'public', media_ids: ['x'] })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'hi', visibility: 'public', poll: {} })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'hi', in_reply_to_id: '01A', visibility: 'public', scheduled_at: '2030-01-01' })).rejects.toThrow('Unsupported Fedizen write body.');
     await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: ' ', in_reply_to_id: '01A', visibility: 'public' })).rejects.toThrow('Unsupported Fedizen write body.');
     await expect(fedizenSend('t', 'POST', '/api/v1/statuses/01A/pin')).rejects.toThrow('Unsupported Fedizen write path.');
     await expect(fedizenSend('t', 'POST', '/api/v1-bonfire/groups/a%2F..%2Fx/join')).rejects.toThrow('Unsupported Fedizen write path.');
@@ -144,5 +144,41 @@ describe('Likes, boosts and replies', () => {
     expect(body).toEqual({ status: 'agreed', in_reply_to_id: '01A', visibility: 'public', spoiler_text: 'finale spoilers' });
     await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'x', in_reply_to_id: '01A', visibility: 'public', spoiler_text: 'w', sensitive: true })).rejects.toThrow('Unsupported Fedizen write body.');
     await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'x', in_reply_to_id: '01A', visibility: 'public', spoiler_text: 'w'.repeat(501) })).rejects.toThrow('Unsupported Fedizen write body.');
+  });
+});
+
+describe('posting with media', () => {
+  test('a new post may carry up to 4 media ids, marked sensitive; never empty, never sensitive without media', async () => {
+    const bodies: unknown[] = [];
+    globalThis.fetch = (async (_u: string, init?: RequestInit) => { bodies.push(JSON.parse(String(init?.body))); return new Response(JSON.stringify({ id: 'p1', url: 'https://fedizen.net/post/p1' })); }) as unknown as typeof fetch;
+    await fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'hi', visibility: 'public' });
+    await fedizenSend('t', 'POST', '/api/v1/statuses', { status: '', visibility: 'private', media_ids: ['m1', 'm2'], sensitive: true, spoiler_text: 'cw' });
+    expect(bodies[1]).toEqual({ status: '', visibility: 'private', media_ids: ['m1', 'm2'], sensitive: true, spoiler_text: 'cw' });
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: ' ', visibility: 'public' })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'x', visibility: 'public', sensitive: true })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'x', visibility: 'public', media_ids: ['1', '2', '3', '4', '5'] })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'x', visibility: 'public', media_ids: ['../x'] })).rejects.toThrow('Unsupported Fedizen write body.');
+  });
+  test('an upload goes to /api/v2/media as multipart with its alt text, and answers the media id', async () => {
+    let seen: { url: string; form: FormData | null } = { url: '', form: null };
+    globalThis.fetch = (async (u: string, init?: RequestInit) => { seen = { url: u, form: init?.body as FormData }; return new Response(JSON.stringify({ id: 'M1', type: 'image', preview_url: 'https://fedizen.net/m/1.jpg' })); }) as unknown as typeof fetch;
+    const r = await fedizenUpload('t', new Blob([new Uint8Array(10)], { type: 'image/jpeg' }), 'my photo.jpg', 'A cat on a wall', 5_000_000);
+    expect(r).toEqual({ status: 200, id: 'M1', preview: 'https://fedizen.net/m/1.jpg' });
+    expect(seen.url).toBe('https://fedizen.net/api/v2/media');
+    expect(seen.form?.get('description')).toBe('A cat on a wall');
+    expect((seen.form?.get('file') as File).name).toBe('my_photo.jpg');
+  });
+  test('uploads outside the types Fedizen stores, or over the limit, never leave', async () => {
+    let called = false;
+    globalThis.fetch = (async () => { called = true; return new Response('{}'); }) as unknown as typeof fetch;
+    await expect(fedizenUpload('t', new Blob(['x'], { type: 'image/svg+xml' }), 'a.svg', '', 5_000_000)).rejects.toThrow('Unsupported Fedizen upload type.');
+    await expect(fedizenUpload('t', new Blob(['x'], { type: 'application/pdf' }), 'a.pdf', '', 5_000_000)).rejects.toThrow('Unsupported Fedizen upload type.');
+    await expect(fedizenUpload('t', new Blob([new Uint8Array(11)], { type: 'image/png' }), 'a.png', '', 10)).rejects.toThrow('Unsupported Fedizen upload size.');
+    expect(called).toBe(false);
+  });
+  test('the instance limits are an allowed read', async () => {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ configuration: { statuses: { max_characters: 500000 }, media_attachments: { image_size_limit: 8000000, video_size_limit: 40000000 } } }))) as unknown as typeof fetch;
+    const r = await fedizenGet('t', '/api/v2/instance');
+    expect(r.data[0]).toMatchObject({ configuration: { media_attachments: { image_size_limit: 8000000 } } });
   });
 });

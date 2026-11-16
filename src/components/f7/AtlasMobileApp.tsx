@@ -44,6 +44,7 @@ import { describeProfile, type DeviceProfile } from '@/lib/device-profile';
 import { useDeviceProfile } from '@/lib/use-device-profile';
 import { VideoDock } from '@/components/social/VideoDock';
 import { registerAppServiceWorker } from '@/lib/register-sw';
+import { MobileReadingSettings } from './ReadingSettings';
 
 Framework7.use(Framework7React);
 
@@ -400,6 +401,7 @@ export default function AtlasMobileApp() {
               <Block strong inset><AccentPicker /></Block>
               <BlockTitle>Avatars</BlockTitle>
               <Block strong inset><AvatarShapePicker /></Block>
+              <MobileReadingSettings />
               <BlockTitle>Following</BlockTitle>
               <List strong inset dividers>
                 <ListItem link="#" title="Followed hashtags" onClick={() => pushPage('/followed-tags/')}>

@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import type { ForYouPost } from './feed-types';
+import { DEFAULT_LIMITS, MAX_ALT, MAX_CW, MAX_TEXT, UPLOAD_CEILING, type ComposeLimits } from './compose-media';
 import { allowedCallback, assertFedizenSessionIntent, creditsBesidesAuthor, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
 
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
@@ -430,4 +431,79 @@ export const getCircleFeed = createServerFn({ method: 'GET' }).middleware([requi
     if (r.status === 404) return { posts: [], error: 'not-found' };
     if (r.status !== 200) return { posts: [], error: problem(r.status) };
     return { posts: await withArticleAuthors(fromStatuses(r.data as never)) };
+  });
+
+
+/** What Fedizen takes in a post: its upload size limits (capped by what Atlas relays) and length. */
+export const getFedizenComposeLimits = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<ComposeLimits> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return DEFAULT_LIMITS;
+    const { fedizenGet } = await import('./fedizen.server');
+    const r = await fedizenGet(c.token, '/api/v2/instance').catch(() => null);
+    const conf = (r?.status === 200 ? (r.data[0] as { configuration?: { statuses?: { max_characters?: number | null } | null; media_attachments?: { image_size_limit?: number | null; video_size_limit?: number | null } | null } | null }) : null)?.configuration;
+    const cap = (n: number | null | undefined, fallback: number) => Math.min(UPLOAD_CEILING, n && n > 0 ? n : fallback);
+    return {
+      imageBytes: cap(conf?.media_attachments?.image_size_limit, DEFAULT_LIMITS.imageBytes),
+      videoBytes: cap(conf?.media_attachments?.video_size_limit, DEFAULT_LIMITS.videoBytes),
+      maxChars: Math.min(MAX_TEXT, conf?.statuses?.max_characters ?? MAX_TEXT),
+    };
+  });
+
+/**
+ * Uploads one image or video for a post, with its alt text (multipart, relayed to Fedizen's /api/v2/media). The
+ * size limit is Fedizen's own, read again here rather than trusted from the browser.
+ */
+export const uploadFedizenMedia = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => {
+    if (!(d instanceof FormData)) throw new Error('Expected a form.');
+    const file = d.get('file');
+    if (!(file instanceof Blob)) throw new Error('Expected a file.');
+    const parsed = me.extend({ description: z.string().max(MAX_ALT) }).parse({ expectedAtlasUserId: d.get('expectedAtlasUserId'), description: d.get('description') ?? '' });
+    return { ...parsed, file, name: typeof (file as File).name === 'string' ? (file as File).name : 'upload' };
+  })
+  .handler(async ({ data, context }): Promise<{ ok: true; id: string; preview?: string } | { ok: false; error: Problem | 'too-large' | 'unsupported' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenGet, fedizenUpload, MEDIA_UPLOAD_TYPES } = await import('./fedizen.server');
+    if (!MEDIA_UPLOAD_TYPES.includes(data.file.type)) return { ok: false, error: 'unsupported' };
+    const r0 = await fedizenGet(c.token, '/api/v2/instance').catch(() => null);
+    const ma = (r0?.status === 200 ? (r0.data[0] as { configuration?: { media_attachments?: { image_size_limit?: number | null; video_size_limit?: number | null } | null } | null }) : null)?.configuration?.media_attachments;
+    const video = data.file.type.startsWith('video/');
+    const limit = Math.min(UPLOAD_CEILING, (video ? ma?.video_size_limit : ma?.image_size_limit) || (video ? DEFAULT_LIMITS.videoBytes : DEFAULT_LIMITS.imageBytes));
+    if (data.file.size > limit) return { ok: false, error: 'too-large' };
+    const r = await fedizenUpload(c.token, data.file, data.name, data.description, limit);
+    if (!r.id) return { ok: false, error: r.status === 413 ? 'too-large' : r.status === 422 ? 'unsupported' : problem(r.status) };
+    return { ok: true, id: r.id, ...(r.preview ? { preview: r.preview } : {}) };
+  });
+
+/**
+ * Publishes a new post on Fedizen: text, an optional content warning, an audience, and up to 4 uploaded media.
+ * As on Mastodon, a content warning marks the media sensitive.
+ */
+export const postOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({
+    text: z.string().trim().max(MAX_TEXT),
+    cw: z.string().trim().max(MAX_CW).optional(),
+    visibility: z.enum(['public', 'unlisted', 'private', 'direct']),
+    mediaIds: z.array(ulid).max(4).default([]),
+    sensitive: z.boolean().default(false),
+  }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty post').parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; url?: string } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const media = data.mediaIds.length > 0;
+    const r = await fedizenSend(c.token, 'POST', '/api/v1/statuses', {
+      status: data.text, visibility: data.visibility,
+      ...(data.cw ? { spoiler_text: data.cw } : {}),
+      ...(media ? { media_ids: data.mediaIds, sensitive: data.sensitive || !!data.cw } : {}),
+    });
+    if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
+    const url = typeof r.data?.url === 'string' && /^https:\/\/fedizen\.net\//.test(r.data.url) ? r.data.url : undefined;
+    return { ok: true, ...(url ? { url } : {}) };
   });

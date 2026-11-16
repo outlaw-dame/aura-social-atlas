@@ -7,27 +7,7 @@ import {
 } from 'framework7-react';
 import { supabase } from '@/integrations/supabase/client';
 
-/** Draft-only composer: nothing is published until a social account is connected. */
-export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: () => void }) {
-  const [text, setText] = useState('');
-  return (
-    <Sheet opened={opened} onSheetClosed={onClose} swipeToClose backdrop style={{ height: 'auto' }}>
-      <Block>
-        <div style={{ fontWeight: 600, fontSize: 17, marginBottom: 4 }}>New post</div>
-        <div style={{ fontSize: 13, opacity: 0.6 }}>Nothing is posted yet — publishing arrives when you connect Bluesky or Mastodon.</div>
-      </Block>
-      <List strong inset>
-        <ListInput type="textarea" placeholder="What's worth sharing?" value={text} maxlength={500}
-          onInput={(e: any) => setText(e.target.value)} resizable />
-      </List>
-      <Block style={{ display: 'flex', gap: 8 }}>
-        <Button tonal style={{ flex: 1 }} onClick={onClose}>Cancel</Button>
-        <Button fill style={{ flex: 1 }} disabled={!text.trim()}
-          onClick={() => { f7.toast.show({ text: 'Not posted — connect an account to publish', closeTimeout: 1600 }); setText(''); onClose(); }}>Done</Button>
-      </Block>
-    </Sheet>
-  );
-}
+export { ComposeSheet } from './ComposeSheet';
 
 const PROMPTS = ['What is the open social web?', 'How do Mastodon and Bluesky differ?', 'Explain RSS feeds'];
 
