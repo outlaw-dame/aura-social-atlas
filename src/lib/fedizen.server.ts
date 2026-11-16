@@ -1,3 +1,4 @@
+import { FEDIZEN_USER_AGENT, transportDetail } from './fedizen-http';
 import { FEDIZEN, FEDIZEN_API_SCOPE } from './fedizen-feed';
 import { z } from 'zod';
 
@@ -54,7 +55,7 @@ export async function registerFedizenOAuthApp(
 ): Promise<{ client_id: string; client_secret: string }> {
   const response = await fetcher(`${FEDIZEN}/api/v1/apps`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
     body: JSON.stringify({
       client_name: 'Atlas', redirect_uris: redirectUri,
       scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin,
@@ -65,7 +66,7 @@ export async function registerFedizenOAuthApp(
   });
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});
-    throw new Error('Fedizen OAuth app registration unavailable.');
+    throw new Error(`Fedizen OAuth app registration unavailable (HTTP ${response.status}).`);
   }
   const app = parseFedizenOAuthApp(await readBoundedFedizenJson(response, 32768));
   if (!app) throw new Error('Fedizen returned invalid OAuth app credentials.');
@@ -157,7 +158,7 @@ export async function verifyFedizenReadGrant(
   try {
     const response = await fetcher(`${FEDIZEN}/api/v1/accounts/verify_credentials`, {
       method: 'GET',
-      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       signal: AbortSignal.timeout(10000),
       redirect: 'error',
       cache: 'no-store',
@@ -191,7 +192,7 @@ export async function redeemFedizenReadCode(
   try {
     response = await fetcher(`${FEDIZEN}/oauth/token`, {
       method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+      headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       body: new URLSearchParams({
         grant_type: 'authorization_code', code, redirect_uri: redirectUri,
         client_id: app.client_id, client_secret: app.client_secret,
@@ -435,12 +436,13 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
   try {
     response = await fetch(`${FEDIZEN}${path}`, {
       method: 'GET',
-      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       signal: AbortSignal.timeout(10000),
       redirect: 'error',
       cache: 'no-store',
     });
-  } catch {
+  } catch (e) {
+    console.error('Fedizen read unreachable', { why: transportDetail(e) });
     return { status: 503, data: [] };
   }
 
@@ -525,13 +527,14 @@ export async function fedizenSend(token: string, method: 'POST' | 'PUT' | 'DELET
   try {
     response = await fetch(`${FEDIZEN}${path}`, {
       method,
-      headers: { authorization: `Bearer ${token}`, accept: 'application/json', ...(payload ? { 'content-type': 'application/json' } : {}) },
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT, ...(payload ? { 'content-type': 'application/json' } : {}) },
       body: payload ? JSON.stringify(payload.data) : undefined,
       signal: AbortSignal.timeout(10000),
       redirect: 'error',
       cache: 'no-store',
     });
-  } catch {
+  } catch (e) {
+    console.error('Fedizen write unreachable', { why: transportDetail(e) });
     return { status: 503, data: null };
   }
   if (!response.ok) {
@@ -570,7 +573,7 @@ export async function fedizenUpload(token: string, file: Blob, name: string, des
   try {
     response = await fetch(`${FEDIZEN}/api/v2/media`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       body: form,
       // Bonfire stores and resizes (or transcodes) the file before it answers.
       signal: AbortSignal.timeout(file.type.startsWith('video/') ? 120_000 : 45_000),

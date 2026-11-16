@@ -1,3 +1,4 @@
+import { FEDIZEN_USER_AGENT, transportDetail } from './fedizen-http';
 /**
  * Server-only Bonfire GraphQL transport.
  *
@@ -22,6 +23,8 @@ export class BonfireGraphQLError extends Error {
   constructor(
     public readonly kind: BonfireGraphQLErrorKind,
     public readonly status?: number,
+    /** For a network failure, what the runtime said (transportDetail): nothing from the request itself. */
+    public readonly detail?: string,
   ) {
     super(`Bonfire GraphQL ${kind}`);
     this.name = 'BonfireGraphQLError';
@@ -123,6 +126,7 @@ export async function requestBonfireGraphQL<T>(request: BonfireGraphQLRequest<T>
       const headers: Record<string, string> = {
         'content-type': 'application/json',
         accept: 'application/json',
+        'user-agent': FEDIZEN_USER_AGENT,
       };
       if (accessToken) headers.authorization = `Bearer ${accessToken}`;
       response = await fetchImpl(ENDPOINT, {
@@ -135,9 +139,9 @@ export async function requestBonfireGraphQL<T>(request: BonfireGraphQLRequest<T>
         redirect: 'error',
         cache: 'no-store',
       });
-    } catch {
+    } catch (e) {
       if (signal?.aborted) throw new BonfireGraphQLError('cancelled');
-      if (attempt === maxAttempts - 1) throw new BonfireGraphQLError('network');
+      if (attempt === maxAttempts - 1) throw new BonfireGraphQLError('network', undefined, transportDetail(e));
       await pause();
       continue;
     }

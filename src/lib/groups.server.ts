@@ -1,3 +1,4 @@
+import { FEDIZEN_USER_AGENT } from './fedizen-http';
 /**
  * Groups — public reads from Fedizen's Bonfire GraphQL API (v1.1.0-rc.1). No sign-in: Bonfire applies each
  * group's boundaries for an anonymous reader, so hidden groups and members-only posts are never returned.
@@ -26,7 +27,7 @@ type GqlResult<T> = { data?: T; errors?: { message?: string }[] };
 async function gqlRaw<T>(query: string, variables: Record<string, unknown> = {}): Promise<GqlResult<T> | null> {
   try {
     const res = await (net.fetch ?? fetch)(GRAPHQL, {
-      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
+      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) { console.error(`Fedizen groups request failed [${res.status}]`); return null; }
@@ -37,7 +38,7 @@ async function gqlRaw<T>(query: string, variables: Record<string, unknown> = {})
 async function gql<T>(query: string, variables: Record<string, unknown> = {}): Promise<T | null> {
   try {
     const res = await (net.fetch ?? fetch)(GRAPHQL, {
-      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
+      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) { console.error(`Fedizen groups request failed [${res.status}]`); return null; }
