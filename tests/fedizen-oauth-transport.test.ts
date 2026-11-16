@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import {
   parseFedizenOAuthApp, readBoundedFedizenJson,
-  redeemFedizenReadCode, registerFedizenOAuthApp,
+  redeemFedizenReadCode, registerFedizenOAuthApp, FedizenConnectError,
 } from '../src/lib/fedizen.server';
 
 describe('Fedizen OAuth app-registration response boundary', () => {
@@ -45,6 +45,47 @@ describe('Fedizen OAuth app-registration response boundary', () => {
     expect(calls).toBe(1);
   });
 
+
+  test('classifies HTTP registration refusal without reading or logging its response body', async () => {
+    let calls = 0, cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      cancel() { cancelled = true; },
+    });
+    const fetcher = mock(async () => {
+      calls++;
+      return new Response(body, { status: 403 });
+    }) as typeof fetch;
+    const failure = await registerFedizenOAuthApp('https://atlas.lovable.app/fedizen/callback', fetcher).catch(e => e);
+    expect(failure).toBeInstanceOf(FedizenConnectError);
+    expect(failure.stage).toBe('registration-http');
+    expect(failure.httpStatus).toBe(403);
+    expect(failure.message).not.toContain('private');
+    expect(cancelled).toBe(true);
+    expect(calls).toBe(1);
+  });
+
+  test('network diagnostics never copy secret-bearing runtime error messages', async () => {
+    const secret = 'private-token-in-fetch-error';
+    const fetcher = mock(async () => {
+      throw new Error(`Failed to fetch with Bearer ${secret}; TLS certificate expired`);
+    }) as typeof fetch;
+    const failure = await registerFedizenOAuthApp('https://atlas.lovable.app/fedizen/callback', fetcher).catch(e => e);
+    expect(failure).toBeInstanceOf(FedizenConnectError);
+    expect(failure.stage).toBe('registration-network');
+    expect(failure.transport).toBe('tls');
+    expect(JSON.stringify(failure)).not.toContain(secret);
+    expect(failure.message).not.toContain(secret);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  test('malformed JSON registration responses have an explicit nonsecret failure stage', async () => {
+    const failure = await registerFedizenOAuthApp(
+      'https://atlas.lovable.app/fedizen/callback',
+      mock(async () => new Response('not-json')) as typeof fetch,
+    ).catch(e => e);
+    expect(failure).toBeInstanceOf(FedizenConnectError);
+    expect(failure.stage).toBe('registration-response');
+  });
   test('rejects a 307 without following it', async () => {
     let calls = 0;
     const fetcher = mock(async (_url: RequestInfo | URL, init?: RequestInit) => {

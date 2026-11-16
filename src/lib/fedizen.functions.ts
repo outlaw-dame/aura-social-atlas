@@ -26,9 +26,27 @@ export const startFedizenConnect = createServerFn({ method: 'POST' }).middleware
       process.env['ATLAS_FEDIZEN_CALLBACK_ORIGINS'] ?? '',
     );
     if (!redirect) return { url: null, error: 'This address can’t connect to Fedizen.' };
-    const { startConnect } = await import('./fedizen.server');
+    const { startConnect, FedizenConnectError } = await import('./fedizen.server');
     try { return { url: await startConnect(context.userId, redirect), error: null }; }
-    catch (e) { const { transportDetail } = await import('./fedizen-http'); console.error('Fedizen connection initiation unavailable', { why: transportDetail(e) }); return { url: null, error: 'Fedizen couldn’t be reached. Try again shortly.' }; }
+    catch (e) {
+      const known = e instanceof FedizenConnectError;
+      // No raw Error.message, URL, client secret, grant or remote response.
+      console.error('Fedizen connection initiation unavailable', {
+        stage: known ? e.stage : 'unexpected',
+        ...(known && e.httpStatus ? { httpStatus: e.httpStatus } : {}),
+        ...(known && e.transport ? { transport: e.transport } : {}),
+      });
+      return {
+        url: null,
+        error: known && e.stage === 'storage'
+          ? 'Atlas couldn’t save the Fedizen connection. Please retry shortly.'
+          : known && e.stage === 'registration-http'
+            ? 'Fedizen refused Atlas’s app registration. Please retry shortly.'
+            : known && e.stage === 'registration-response'
+              ? 'Fedizen returned an invalid registration response. Please retry shortly.'
+              : 'Atlas couldn’t contact Fedizen to register the connection. Please retry shortly.',
+      };
+    }
   });
 
 export const finishFedizenConnect = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])

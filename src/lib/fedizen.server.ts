@@ -1,10 +1,27 @@
-import { FEDIZEN_USER_AGENT, transportDetail } from './fedizen-http';
+import { FEDIZEN_USER_AGENT, transportDetail, type FedizenTransportFailure } from './fedizen-http';
 import { FEDIZEN, FEDIZEN_API_SCOPE } from './fedizen-feed';
 import { z } from 'zod';
 
 const b64url = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const random = (n = 32) => b64url(crypto.getRandomValues(new Uint8Array(n)));
 const admin = async () => (await import('@/integrations/supabase/client.server')).supabaseAdmin;
+
+/** Only fixed, non-sensitive failure stages may cross the server logging boundary. */
+export type ConnectFailureStage = 'storage' | 'registration-network' | 'registration-http' | 'registration-response';
+export class FedizenConnectError extends Error {
+  constructor(
+    public readonly stage: ConnectFailureStage,
+    public readonly httpStatus?: number,
+    public readonly transport?: FedizenTransportFailure,
+  ) {
+    super(stage === 'registration-response' ? 'Fedizen returned invalid OAuth app credentials.' :
+      stage === 'registration-http' ? 'Fedizen OAuth app registration unavailable.' :
+      stage === 'registration-network' ? 'Fedizen OAuth app registration network unavailable.' :
+      'Atlas could not prepare the Fedizen connection.');
+    this.name = 'FedizenConnectError';
+  }
+}
+
 
 /**
  * Bounded JSON for the existing Fedizen REST and OAuth transports. All callers
@@ -53,28 +70,35 @@ export async function registerFedizenOAuthApp(
   redirectUri: string,
   fetcher: typeof fetch = fetch,
 ): Promise<{ client_id: string; client_secret: string }> {
-  const response = await fetcher(`${FEDIZEN}/api/v1/apps`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
-    body: JSON.stringify({
-      client_name: 'Atlas', redirect_uris: redirectUri,
-      scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin,
-    }),
-    signal: AbortSignal.timeout(10000),
-    redirect: 'manual',
-    cache: 'no-store',
-  });
+  let response: Response;
+  try {
+    response = await fetcher(`${FEDIZEN}/api/v1/apps`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
+      body: JSON.stringify({
+        client_name: 'Atlas', redirect_uris: redirectUri,
+        scopes: FEDIZEN_API_SCOPE, website: new URL(redirectUri).origin,
+      }),
+      signal: AbortSignal.timeout(10000),
+      redirect: 'manual',
+      cache: 'no-store',
+    });
+  } catch (e) {
+    throw new FedizenConnectError('registration-network', undefined, transportDetail(e));
+  }
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});
-    throw new Error(`Fedizen OAuth app registration unavailable (HTTP ${response.status}).`);
+    throw new FedizenConnectError('registration-http', response.status);
   }
-  const app = parseFedizenOAuthApp(await readBoundedFedizenJson(response, 32768));
-  if (!app) throw new Error('Fedizen returned invalid OAuth app credentials.');
+  let app: ReturnType<typeof parseFedizenOAuthApp>;
+  try { app = parseFedizenOAuthApp(await readBoundedFedizenJson(response, 32768)); }
+  catch { throw new FedizenConnectError('registration-response'); }
+  if (!app) throw new FedizenConnectError('registration-response');
   return app;
 }
 
 async function appFor(redirectUri: string) {
-  const db = await admin();
+  const db = await admin().catch(() => { throw new FedizenConnectError('storage'); });
   // An app registered for fewer scopes can't be granted more, so the scopes it was registered with are kept
   // and a new app is registered when Atlas asks for different ones (migration 0004).
   const lookup = await db.from('fedizen_oauth_apps').select('client_id, client_secret, scopes').eq('redirect_uri', redirectUri).maybeSingle();
@@ -84,17 +108,17 @@ async function appFor(redirectUri: string) {
   const { data, error: lookupError } = legacy
     ? await db.from('fedizen_oauth_apps').select('client_id, client_secret').eq('redirect_uri', redirectUri).maybeSingle()
     : lookup;
-  if (lookupError) throw new Error('Could not read Fedizen OAuth app registration.');
+  if (lookupError) throw new FedizenConnectError('storage');
   if (data && (legacy || (data as { scopes?: string }).scopes === FEDIZEN_API_SCOPE)) {
     const stored = parseFedizenOAuthApp(data);
-    if (!stored) throw new Error('Stored Fedizen OAuth app credentials are invalid.');
+    if (!stored) throw new FedizenConnectError('storage');
     return stored;
   }
   const registered = await registerFedizenOAuthApp(redirectUri);
   const { error: registrationError } = await db.from('fedizen_oauth_apps').upsert(
     legacy ? { redirect_uri: redirectUri, ...registered } : { redirect_uri: redirectUri, ...registered, scopes: FEDIZEN_API_SCOPE },
   );
-  if (registrationError) throw new Error('Could not persist Fedizen OAuth app registration.');
+  if (registrationError) throw new FedizenConnectError('storage');
   return registered;
 }
 
@@ -102,11 +126,11 @@ export async function startConnect(userId: string, redirectUri: string) {
   const app = await appFor(redirectUri);
   const state = random(24); const verifier = random(48);
   const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
-  const db = await admin();
+  const db = await admin().catch(() => { throw new FedizenConnectError('storage'); });
   const { error: clearError } = await db.from('fedizen_oauth_states').delete().eq('user_id', userId);
-  if (clearError) throw new Error('Could not clear previous Fedizen authorization state.');
+  if (clearError) throw new FedizenConnectError('storage');
   const { error: insertError } = await db.from('fedizen_oauth_states').insert({ state, user_id: userId, code_verifier: verifier, redirect_uri: redirectUri });
-  if (insertError) throw new Error('Could not persist Fedizen authorization state.');
+  if (insertError) throw new FedizenConnectError('storage');
   const q = new URLSearchParams({ client_id: app.client_id, redirect_uri: redirectUri, response_type: 'code', scope: FEDIZEN_API_SCOPE, state, code_challenge: challenge, code_challenge_method: 'S256' });
   return `${FEDIZEN}/oauth/authorize?${q}`;
 }
