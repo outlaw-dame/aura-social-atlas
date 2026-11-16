@@ -138,7 +138,8 @@ function parseCanonicalOrigin(value: string): URL | null {
  * Atlas's own Lovable project, the only Lovable hosts a Fedizen callback may return to when
  * ATLAS_FEDIZEN_CALLBACK_ORIGINS isn't set. Any *.lovable.app used to pass, so another Lovable tenant could have
  * Atlas register a Fedizen app that returns grants to it. Lovable's hosts for a project: the editor preview
- * id-preview(-<build>)--<project id>.lovable.app, <project id>.lovableproject.com, preview--<slug>.lovable.app and
+ * id-preview(-<build>)--<project id>.lovable.app, project--<project id>(-dev).lovable.app (also on Supabase's redirect
+ * list), <project id>.lovableproject.com, preview--<slug>.lovable.app and
  * the published <slug>.lovable.app; and Atlas's domain, atlas-social.space. Another domain or a renamed project sets
  * ATLAS_FEDIZEN_CALLBACK_ORIGINS (which then replaces this list).
  */
@@ -150,6 +151,7 @@ export function isAtlasLovableHost(host: string): boolean {
   const h = host.toLowerCase();
   return h === ATLAS_DOMAIN || h === `www.${ATLAS_DOMAIN}` ||
     new RegExp(`^id-preview(?:-[a-z0-9]{1,40})?--${id}\\.lovable\\.app$`).test(h) ||
+    new RegExp(`^project--${id}(?:-dev)?\\.lovable\\.app$`).test(h) ||
     h === `${id}.lovableproject.com` ||
     h === `preview--${slug}.lovable.app` ||
     h === `${slug}.lovable.app`;

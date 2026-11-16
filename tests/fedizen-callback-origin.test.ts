@@ -9,7 +9,8 @@ describe('Fedizen OAuth redirect-origin trust boundary', () => {
   test('accepts only the exact browser request origin on the current Atlas host', () => {
     for (const o of ['https://aura-social-atlas.lovable.app', 'https://preview--aura-social-atlas.lovable.app',
       'https://id-preview--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovable.app', 'https://id-preview-b5bac2df--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovable.app',
-      'https://d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovableproject.com', 'https://atlas-social.space', 'https://www.atlas-social.space'])
+      'https://d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovableproject.com', 'https://atlas-social.space', 'https://www.atlas-social.space',
+      'https://project--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovable.app', 'https://project--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b-dev.lovable.app'])
       expect(allowedCallback(o, o)).toBe(`${o}/fedizen/callback`);
     expect(allowedCallback('http://localhost:3000', 'http://localhost:3000'))
       .toBe('http://localhost:3000/fedizen/callback');
@@ -43,6 +44,8 @@ describe('Fedizen OAuth redirect-origin trust boundary', () => {
     ['https://evil--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovable.app', 'https://evil--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovable.app'],
     ['https://aura-social-atlas.lovable.app.evil.example', 'https://aura-social-atlas.lovable.app.evil.example'],
     ['http://atlas-social.space', 'http://atlas-social.space'],
+    ['https://project--00000000-1c72-40dc-8fa6-0b966befbe5b.lovable.app', 'https://project--00000000-1c72-40dc-8fa6-0b966befbe5b.lovable.app'],
+    ['https://project--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b-evil.lovable.app', 'https://project--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b-evil.lovable.app'],
     ['https://evil.atlas-social.space', 'https://evil.atlas-social.space'],
     ['https://atlas-social.space.evil.example', 'https://atlas-social.space.evil.example'],
   ] as const)('refuses untrusted, noncanonical or cross-origin redirect %#', (client, request) => {
