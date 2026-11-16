@@ -37,6 +37,16 @@ let seq = 0;
  * (lib/prepare-image); files are uploaded when the post is sent, so nothing is left on Fedizen if it isn't, and an
  * upload that already worked isn't repeated when sending is tried again.
  */
+/** A poll being composed. */
+export type ComposePoll = { options: string[]; expiresIn: number; multiple: boolean };
+/** How long a poll runs, as Mastodon offers it (5 minutes to 7 days). */
+export const POLL_DURATIONS = [
+  { seconds: 300, label: '5 minutes' }, { seconds: 1800, label: '30 minutes' }, { seconds: 3600, label: '1 hour' },
+  { seconds: 21_600, label: '6 hours' }, { seconds: 43_200, label: '12 hours' }, { seconds: 86_400, label: '1 day' },
+  { seconds: 259_200, label: '3 days' }, { seconds: 604_800, label: '7 days' },
+] as const;
+export const MAX_POLL_OPTIONS = 4;
+
 export function usePublish() {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();
@@ -55,12 +65,14 @@ export function usePublish() {
   const [audience, setAudienceRaw] = useState<Audience>('public');
   /** The post being quoted (Boost → Quote), shown under the text; quotes are Public or Quiet public only. */
   const [quote, setQuoteRaw] = useState<FedizenPost | null>(null);
-  const setQuote = (q: FedizenPost | null) => { setQuoteRaw(q); if (q && audience !== 'public' && audience !== 'unlisted') setAudienceRaw('public'); };
+  const setQuote = (q: FedizenPost | null) => { setQuoteRaw(q); if (q) setPollRaw(null); if (q && audience !== 'public' && audience !== 'unlisted') setAudienceRaw('public'); };
   const setAudience = (a: Audience) => { if (!quote || a === 'public' || a === 'unlisted') setAudienceRaw(a); };
   const [sensitiveChoice, setSensitive] = useState(false);
   const [quotePolicy, setQuotePolicyRaw] = useState<QuotePolicy>(savedQuotePolicy);
   const setQuotePolicy = (q: QuotePolicy) => { setQuotePolicyRaw(q); saveQuotePolicy(q); };
   const [media, setMedia] = useState<Attachment[]>([]);
+  /** A poll, as Mastodon composes one: 2 to 4 choices, how long it runs, one choice or several. No media alongside. */
+  const [poll, setPollRaw] = useState<ComposePoll | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const ai = useAiRunner();
@@ -73,12 +85,16 @@ export function usePublish() {
   // Who may quote goes through GraphQL createPost, which has no sensitive mark of its own: a post whose media is marked
   // sensitive without a content warning goes through REST, which keeps the mark, and Fedizen's default applies.
   const sensitiveOnly = sensitive && !warning;
-  const viaGraph = (audience === 'public' || audience === 'unlisted') && (!!quote || !sensitiveOnly);
+  // A poll goes through REST: Fedizen's createPoll takes no quote permissions, so its quoting follows Fedizen's default.
+  const viaGraph = !poll && (audience === 'public' || audience === 'unlisted') && (!!quote || !sensitiveOnly);
   /** Why who-may-quote can't be chosen for this post, if it can't. Followers-only and mentions-only posts can't be quoted (as on Mastodon). */
-  const quoteLock: 'private' | 'sensitive' | null = audience === 'private' || audience === 'direct' ? 'private' : viaGraph ? null : 'sensitive';
+  const quoteLock: 'private' | 'sensitive' | 'poll' | null = audience === 'private' || audience === 'direct' ? 'private' : viaGraph ? null : poll ? 'poll' : 'sensitive';
+  const pollChoices = poll ? poll.options.map(o => o.trim()) : [];
+  const pollValid = !poll || (pollChoices.every(Boolean) && pollChoices.length >= 2 && new Set(pollChoices.map(o => o.toLowerCase())).size === pollChoices.length);
 
   const add = (files: FileList | File[]) => {
     setNotice(null);
+    if (poll) { setNotice('A post with a poll can’t have images or video.'); return; }
     const kinds = mediaRef.current.map(m => m.kind);
     for (const file of Array.from(files)) {
       const kind = mediaKind(file.type);
@@ -99,6 +115,7 @@ export function usePublish() {
   /** A GIF from the picker (KLIPY): shown from its preview now, fetched and uploaded by the server when the post is sent. Its title starts the alt text. */
   const addGif = (g: Gif) => {
     setNotice(null);
+    if (poll) { setNotice('A post with a poll can’t have a GIF.'); return false; }
     const why = canAdd(mediaRef.current.map(m => m.kind), 'image');
     if (why) { setNotice(why); return false; }
     setMedia(ms => [...ms, { key: `m${++seq}`, gif: { slug: g.slug }, kind: 'image', url: g.preview.url, alt: g.title.slice(0, MAX_ALT), state: 'ready' }]);
@@ -124,9 +141,11 @@ export function usePublish() {
   const busy = media.some(m => m.state === 'preparing' || m.describing);
   const broken = media.some(m => m.state === 'failed');
   const length = [...text].length;
-  const ready = canPost && !sending && !busy && !broken && (text.trim().length > 0 || media.length > 0) && length <= limits.maxChars && (!cwOn || warning.length > 0);
+  const ready = canPost && !sending && !busy && !broken && (text.trim().length > 0 || media.length > 0 || !!poll) && pollValid && length <= limits.maxChars && (!cwOn || warning.length > 0);
+  const startPoll = () => { if (media.length || quote) return; setPollRaw({ options: ['', ''], expiresIn: POLL_DURATIONS[5].seconds, multiple: false }); };
+  const editPoll = (p: Partial<ComposePoll>) => setPollRaw(cur => (cur ? { ...cur, ...p } : cur));
 
-  const reset = () => { media.forEach(m => { if (m.file) URL.revokeObjectURL(m.url); }); setText(''); setCw(''); setCwOn(false); setSensitive(false); setMedia([]); setNotice(null); setAudienceRaw('public'); setQuoteRaw(null); };
+  const reset = () => { media.forEach(m => { if (m.file) URL.revokeObjectURL(m.url); }); setText(''); setCw(''); setCwOn(false); setSensitive(false); setMedia([]); setNotice(null); setAudienceRaw('public'); setQuoteRaw(null); setPollRaw(null); };
 
   const send = async (): Promise<{ url?: string; id?: string } | null> => {
     if (!user || !ready) return null;
@@ -159,7 +178,7 @@ export function usePublish() {
       const r = viaGraph && (audience === 'public' || audience === 'unlisted')
         ? await createFn({ data: { expectedAtlasUserId: user.id, ...(quote?.statusId ? { quoteId: quote.statusId } : {}), text: text.trim(), visibility: audience, ...(warning ? { cw: warning.slice(0, MAX_CW) } : {}), mediaIds: ids, quotes: quotePolicy } })
           .catch(() => ({ ok: false as const, error: 'unavailable' as const }))
-        : await post({ data: { expectedAtlasUserId: user.id, text: text.trim(), visibility: audience, ...(warning ? { cw: warning.slice(0, MAX_CW) } : {}), mediaIds: ids, sensitive } })
+        : await post({ data: { expectedAtlasUserId: user.id, text: text.trim(), visibility: audience, ...(warning ? { cw: warning.slice(0, MAX_CW) } : {}), mediaIds: ids, sensitive, ...(poll ? { poll: { options: pollChoices, expiresIn: poll.expiresIn, multiple: poll.multiple } } : {}) } })
           .catch(() => ({ ok: false as const, error: 'unavailable' as const }));
       if (!r.ok) { setNotice(LIBRARY_PROBLEM[r.error]); return null; }
       reset();
@@ -176,5 +195,6 @@ export function usePublish() {
     media, add, addGif, gifs: gifsQ.data?.enabled === true, remove, setAlt, generateAlt, canGenerateAlt: ai.ready,
     quotePolicy, setQuotePolicy, quotePolicies: QUOTE_POLICIES, quoteLock,
     notice, clearNotice: () => setNotice(null), sending, ready, length, reset, send,
+    poll, startPoll, editPoll, removePoll: () => setPollRaw(null), canPoll: !media.length && !quote, pollDurations: POLL_DURATIONS, pollValid,
   };
 }

@@ -1,3 +1,4 @@
+import { useFollowRequests } from '@/components/social/useOwnPosts';
 import { openTag } from '@/lib/hashtags';
 import { linkifyPost } from '@/components/social/PostPeople';
 import { useQuery } from '@tanstack/react-query';
@@ -100,6 +101,27 @@ const noticeIcon: Record<string, { ios: string; md: string }> = {
   collection_update: { ios: 'f7:square_stack_3d_up', md: 'material:collections_bookmark' },
 };
 
+/** Phone: people asking to follow you, with Accept and Decline, above Activity (only while there are some). */
+function MobileFollowRequests() {
+  const r = useFollowRequests();
+  if (!r.people.length && !r.readError) return null;
+  return <>
+    <BlockTitle>Follow requests</BlockTitle>
+    {r.readError && <Block>{r.readError}</Block>}
+    <List strong inset dividers mediaList>
+      {r.people.map(p => <ListItem key={p.id} title={p.name} subtitle={p.handle}
+        link="#" onClick={() => openFediProfile({ actor: p.actor, acct: p.acct, name: p.name })}>
+        <span slot="media" className="atlas-activity-media">{p.avatar ? <img src={p.avatar} alt="" width={40} height={40} referrerPolicy="no-referrer" /> : <span className="atlas-activity-initial" aria-hidden="true">{p.name.charAt(0)}</span>}</span>
+        <span slot="footer" className="atlas-request-actions">
+          <Button small fill round disabled={r.busyId === p.id} onClick={(e: { stopPropagation?: () => void }) => { e.stopPropagation?.(); r.answer(p.id, true); }}>Accept</Button>
+          <Button small tonal round disabled={r.busyId === p.id} onClick={(e: { stopPropagation?: () => void }) => { e.stopPropagation?.(); r.answer(p.id, false); }}>Decline</Button>
+        </span>
+      </ListItem>)}
+    </List>
+    {r.error && <Block><p role="alert" style={{ margin: 0 }}>{r.error}</p></Block>}
+  </>;
+}
+
 /** Activity tab: the person's real Fedizen notifications. */
 export function MobileActivity() {
   const f = useFedizen();
@@ -111,8 +133,8 @@ export function MobileActivity() {
     {f.error && <p role="alert" style={{ color: 'var(--f7-theme-color)' }}>{f.error}</p>}
   </Block>;
   const n = f.data.notices;
-  if (!n.length) return <Block strong inset>No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.</Block>;
-  return <List strong inset dividers mediaList className="atlas-activity">
+  if (!n.length) return <><MobileFollowRequests /><Block strong inset>No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.</Block></>;
+  return <><MobileFollowRequests /><List strong inset dividers mediaList className="atlas-activity">
     {n.map(x => {
       const i = noticeIcon[x.type] ?? { ios: 'f7:bell_fill', md: 'material:notifications' };
       // Tapping someone in Activity opens their profile in Atlas (phones have no hover card).
@@ -124,7 +146,7 @@ export function MobileActivity() {
         </span>
       </ListItem>;
     })}
-  </List>;
+  </List></>;
 }
 
 /** Phone: live public Fedizen posts, no sign-in needed. */

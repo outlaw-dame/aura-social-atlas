@@ -376,6 +376,17 @@ const media = z.object({
     small: z.object({ width: z.number().nullish(), height: z.number().nullish() }).partial().nullish().catch(null),
   }).partial().nullish().catch(null),
 });
+const pollSchema = z.object({
+  id: z.string().min(1).max(64),
+  expires_at: z.string().max(40).nullish().catch(null),
+  expired: z.boolean().nullish().catch(null),
+  multiple: z.boolean().nullish().catch(null),
+  votes_count: z.number().int().min(0).nullish().catch(null),
+  voters_count: z.number().int().min(0).nullish().catch(null),
+  voted: z.boolean().nullish().catch(null),
+  own_votes: z.array(z.number().int().min(0).max(100)).max(100).nullish().catch(null),
+  options: z.array(z.object({ title: z.string().max(5000), votes_count: z.number().int().min(0).nullish().catch(null) })).max(100),
+});
 const status = z.object({
   id: z.string().min(1),
   url: z.string().nullish(),
@@ -412,7 +423,10 @@ const status = z.object({
   tags: z.array(z.object({ name: z.string().max(100) })).max(50).nullish().catch(null),
   // Whom the post mentions, as Fedizen resolved them: "@name" in the text opens theirs in Atlas.
   mentions: z.array(z.object({ acct: z.string().max(320).nullish(), username: z.string().max(320).nullish() })).max(50).nullish().catch(null),
-  poll: z.object({ options: z.array(z.object({ title: z.string().max(200) })).max(20) }).nullish().catch(null),
+  // Mastodon Poll (Bonfire: bonfire_poll's Mappers.Poll): its options and counts, and whether the reader voted.
+  poll: pollSchema.nullish().catch(null),
+  /** When the author last edited it (Mastodon), for the "Edited" mark. */
+  edited_at: z.string().max(40).nullish().catch(null),
   // Mastodon 4.5 quotes: { state, quoted_status }. Only the quoted post's own words, never deeper.
   quote: z.object({
     quoted_status: z.object({
@@ -497,6 +511,15 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v2\/instance$/, schema: instanceSchema, single: true },
   // One post, as the person sees it (their like, boost and bookmark, its counts): for group posts read publicly.
   { match: new RegExp(`^/api/v1/statuses/${ID}$`), schema: timelineStatus, single: true },
+  // People asking to follow you (a locked account approves each): Bonfire MastoAccountController.follow_requests.
+  { match: /^\/api\/v1\/follow_requests\?limit=40$/, schema: accountsSchema },
+  // A post's own text and content warning, to edit it (Mastodon: StatusSourcesController; Bonfire: status_source).
+  { match: new RegExp(`^/api/v1/statuses/${ID}/source$`), schema: z.object({ id: z.string().max(64).nullish(), text: z.string().max(20_000), spoiler_text: z.string().max(1000).nullish().catch(null) }), single: true },
+  // A poll's current counts and the reader's votes (Bonfire: MastoPollController.show).
+  { match: new RegExp(`^/api/v1/polls/${ID}$`), schema: pollSchema, single: true },
+  // Posts matching a search (Mastodon v2 search, statuses only; Bonfire: MastoSearchController). The query arrives
+  // percent-encoded.
+  { match: /^\/api\/v2\/search\?q=[A-Za-z0-9_.~%*'()!-]{1,2400}&type=statuses&limit=20$/, schema: z.object({ statuses: z.array(timelineStatus).max(40) }), single: true },
 ];
 
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;
@@ -572,6 +595,14 @@ const title = z.object({ title: z.string().trim().min(1).max(100) }).strict();
  * A post: a reply (in the post's audience or a narrower one) or a new post, with its text, an optional content
  * warning, and up to 4 uploaded media ids marked sensitive or not. Text may be empty only when there is media.
  */
+/** A poll in a new post (Mastodon: poll[options], poll[expires_in], poll[multiple]); Bonfire takes 2 to 100 options. */
+const pollIn = z.object({
+  options: z.array(z.string().trim().min(1).max(200)).min(2).max(4),
+  expires_in: z.number().int().min(300).max(2_629_746),
+  multiple: z.boolean(),
+}).strict();
+const edit = z.object({ status: z.string().trim().max(5000), spoiler_text: z.string().trim().max(500) }).strict().refine(p => p.status.length > 0 || p.spoiler_text.length > 0, 'empty post');
+const votes = z.object({ choices: z.array(z.number().int().min(0).max(99)).min(1).max(100) }).strict();
 const reply = z.object({
   status: z.string().trim().max(5000),
   in_reply_to_id: z.string().regex(new RegExp(`^${ID}$`)).optional(),
@@ -580,7 +611,8 @@ const reply = z.object({
   spoiler_text: z.string().trim().min(1).max(500).optional(),
   media_ids: z.array(z.string().regex(new RegExp(`^${ID}$`))).min(1).max(4).optional(),
   sensitive: z.boolean().optional(),
-}).strict().refine(p => p.status.length > 0 || !!p.media_ids?.length, 'empty post').refine(p => p.sensitive === undefined || !!p.media_ids?.length, 'sensitive without media');
+  poll: pollIn.optional(),
+}).strict().refine(p => p.status.length > 0 || !!p.media_ids?.length || !!p.poll, 'empty post').refine(p => !(p.poll && p.media_ids?.length), 'a poll has no media').refine(p => p.sensitive === undefined || !!p.media_ids?.length, 'sensitive without media');
 const members = z.object({ account_ids: z.array(z.string().regex(new RegExp(`^${ID}$`))).min(1).max(20) }).strict();
 const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTypeAny }[] = [
   { method: 'POST', match: new RegExp(`^/api/v1-bonfire/groups/${ID}/(join|leave)$`) },
@@ -595,6 +627,13 @@ const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTy
   { method: 'DELETE', match: new RegExp(`^/api/v1/lists/${ID}$`) },
   { method: 'POST', match: new RegExp(`^/api/v1/lists/${ID}/accounts$`), body: members },
   { method: 'DELETE', match: new RegExp(`^/api/v1/lists/${ID}/accounts$`), body: members },
+  // Your own posts: delete, and edit their text and content warning (Bonfire: delete_status, update_status).
+  { method: 'DELETE', match: new RegExp(`^/api/v1/statuses/${ID}$`) },
+  { method: 'PUT', match: new RegExp(`^/api/v1/statuses/${ID}$`), body: edit },
+  // Answer someone asking to follow you.
+  { method: 'POST', match: new RegExp(`^/api/v1/follow_requests/${ID}/(authorize|reject)$`) },
+  // Vote in a poll, by option index (Bonfire: MastoPollController.vote).
+  { method: 'POST', match: new RegExp(`^/api/v1/polls/${ID}/votes$`), body: votes },
 ];
 const writeReply = z.object({
   id: z.string().max(64).nullish(),
@@ -610,6 +649,15 @@ const writeReply = z.object({
   /** Boosting answers with the boost, which wraps the post (whose flags and counts are what changed). */
   reblog: z.object({ reblogged: z.boolean().nullish(), reblogs_count: z.number().int().min(0).nullish() }).nullish(),
   group: z.object({ member: z.boolean().nullish() }).nullish(),
+  /** Voting answers with the poll itself. */
+  options: pollSchema.shape.options.nullish().catch(null),
+  votes_count: z.number().int().min(0).nullish().catch(null),
+  voters_count: z.number().int().min(0).nullish().catch(null),
+  voted: z.boolean().nullish().catch(null),
+  own_votes: z.array(z.number().int().min(0).max(100)).max(100).nullish().catch(null),
+  expired: z.boolean().nullish().catch(null),
+  expires_at: z.string().max(40).nullish().catch(null),
+  multiple: z.boolean().nullish().catch(null),
 });
 
 export async function fedizenSend(token: string, method: 'POST' | 'PUT' | 'DELETE', path: string, body?: Record<string, unknown>): Promise<{ status: number; data: Record<string, unknown> | null }> {

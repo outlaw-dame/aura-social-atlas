@@ -3,7 +3,7 @@ import { Block, Button, Icon, List, ListInput, ListItem, Popup, Page, Navbar, Na
 import { GifPicker } from '@/components/social/GifPicker';
 import { MAX_ALT, MAX_CW, PICKER_ACCEPT, altReminderText } from '@/lib/compose-media';
 import { missingAlt, useReading } from '@/lib/reading-prefs';
-import { usePublish, type Audience } from '@/components/social/usePublish';
+import { MAX_POLL_OPTIONS, usePublish, type Audience } from '@/components/social/usePublish';
 import { QuotedPost } from '@/components/social/QuotedPost';
 import { useComposeIntent } from '@/lib/compose-intent';
 
@@ -99,10 +99,14 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
           </figure>)}
         </div>}
         <List strong inset dividers>
-          <ListItem link="#" title={p.media.some(m => m.kind === 'video') || p.media.length >= 4 ? 'Media added' : 'Add photos or a video'} onClick={() => pick.current?.click()} disabled={p.sending}>
+          <ListItem link="#" title={p.media.some(m => m.kind === 'video') || p.media.length >= 4 ? 'Media added' : 'Add photos or a video'} onClick={() => pick.current?.click()} disabled={p.sending || !!p.poll}>
             <Icon slot="media" ios="f7:photo_on_rectangle" md="material:add_photo_alternate" />
           </ListItem>
-          {p.gifs && <ListItem link="#" title="Add a GIF" onClick={() => setGifOpen(true)} disabled={p.sending || mediaFull}>
+          <ListItem title="Poll" footer={!p.poll && !p.canPoll ? 'A poll can’t go with media or a quote' : undefined}>
+            <Icon slot="media" ios="f7:chart_bar" md="material:poll" />
+            <Toggle slot="after" checked={!!p.poll} disabled={p.sending || (!p.poll && !p.canPoll)} onToggleChange={() => (p.poll ? p.removePoll() : p.startPoll())} />
+          </ListItem>
+          {p.gifs && <ListItem link="#" title="Add a GIF" onClick={() => setGifOpen(true)} disabled={p.sending || mediaFull || !!p.poll}>
             <span slot="media" className="atlas-gif-glyph" aria-hidden>GIF</span>
           </ListItem>}
           <ListItem title="Content warning">
@@ -114,14 +118,27 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
             <Toggle slot="after" checked={p.sensitive} disabled={p.sensitiveLocked} onToggleChange={() => p.setSensitive(!p.sensitive)} />
           </ListItem>}
         </List>
+        {p.poll && <List strong inset dividers className="atlas-compose-poll">
+          {p.poll.options.map((o, i) => <ListInput key={i} type="text" placeholder={`Choice ${i + 1}`} value={o} maxlength={200} clearButton={p.poll!.options.length > 2}
+            onInput={(e: { target: { value: string } }) => p.editPoll({ options: p.poll!.options.map((x, k) => (k === i ? e.target.value.slice(0, 200) : x)) })}
+            onInputClear={() => p.editPoll({ options: p.poll!.options.filter((_, k) => k !== i) })} />)}
+          {p.poll.options.length < MAX_POLL_OPTIONS && <ListItem link="#" title="Add a choice" onClick={() => p.editPoll({ options: [...p.poll!.options, ''] })}><Icon slot="media" ios="f7:plus_circle" md="material:add_circle_outline" /></ListItem>}
+          <ListItem title="Runs for" smartSelect smartSelectParams={{ openIn: 'popover', closeOnSelect: true }}>
+            <select value={String(p.poll.expiresIn)} onChange={e => p.editPoll({ expiresIn: Number(e.target.value) })}>
+              {p.pollDurations.map(d => <option key={d.seconds} value={String(d.seconds)}>{d.label}</option>)}
+            </select>
+          </ListItem>
+          <ListItem title="Allow several choices"><Toggle slot="after" checked={p.poll.multiple} onToggleChange={() => p.editPoll({ multiple: !p.poll!.multiple })} /></ListItem>
+          {!p.pollValid && p.poll.options.every(o => o.trim()) && <ListItem footer="Each choice needs to be different." />}
+        </List>}
         <List strong inset dividers>
           {p.audiences.map(a => <ListItem key={a.id} radio radioIcon="end" name="atlas-audience" title={a.label} footer={a.note} checked={p.audience === a.id} onChange={() => p.setAudience(a.id)}>
             <Icon slot="media" ios={AUDIENCE_ICON[a.id].ios} md={AUDIENCE_ICON[a.id].md} />
           </ListItem>)}
         </List>
         <List strong inset>
-          <ListItem link={p.quoteLock ? undefined : '#'} title="Quotes" after={p.quoteLock === 'sensitive' ? 'Fedizen’s default' : p.quotePolicies.find(q => q.id === quoteShown)?.short}
-            footer={p.quoteLock === 'private' ? 'Followers-only and mentions-only posts can’t be quoted' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : undefined}
+          <ListItem link={p.quoteLock ? undefined : '#'} title="Quotes" after={p.quoteLock === 'sensitive' || p.quoteLock === 'poll' ? 'Fedizen’s default' : p.quotePolicies.find(q => q.id === quoteShown)?.short}
+            footer={p.quoteLock === 'private' ? 'Followers-only and mentions-only posts can’t be quoted' : p.quoteLock === 'poll' ? 'Quoting a poll follows your Fedizen default' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : undefined}
             onClick={p.quoteLock || p.sending ? undefined : chooseQuotes}>
             <Icon slot="media" ios="f7:quote_bubble" md="material:format_quote" />
           </ListItem>

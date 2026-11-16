@@ -1,3 +1,4 @@
+import { MobilePostSearch } from './MobilePostSearch';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import Framework7 from 'framework7/lite-bundle';
 import Framework7React, {
@@ -351,7 +352,8 @@ export default function AtlasMobileApp() {
                 </div>
               )}
               <div className="atlas-d-main">
-                <Searchbar placeholder="Search creators" disableButton={false} onInput={(e: any) => setQuery(e.target.value)} onClickClear={() => setQuery('')} />
+                <Searchbar placeholder="Search creators and posts" disableButton={false} onInput={(e: any) => setQuery(e.target.value)} onClickClear={() => setQuery('')} />
+                <MobilePostSearch q={query} />
                 <Block>
                   <Segmented strong round>
                     {networks.map(n => <Button key={n} small active={network === n} onClick={() => setNetwork(n)}>{n.replace(' networks', '')}</Button>)}

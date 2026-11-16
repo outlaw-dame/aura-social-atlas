@@ -1,3 +1,4 @@
+import { PostSearchResults } from './PostSearchResults';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { ArrowUpRight, Bell, Bookmark, Check, CircleUserRound, Compass, Layers, Menu, MessagesSquare, Plus, Rss, Search, Settings, Sparkles, Users, X } from 'lucide-react';
@@ -77,7 +78,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
       <header className="social-header sticky top-0 z-20 flex h-16 items-center gap-2 px-5 sm:gap-3 sm:px-9">
         <Button variant="ghost" size="icon" className="liquid-glass specular shrink-0 rounded-full lg:hidden" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu /></Button>
         <form role="search" onSubmit={e => { e.preventDefault(); setSubmitted(query.trim()); }} className="liquid-glass specular flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-border px-3">
-          <Search className="size-3.5 shrink-0 text-muted-foreground" /><label htmlFor="social-search" className="sr-only">Search creators and topics</label><input id="social-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search voices, ideas, and interests…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+          <Search className="size-3.5 shrink-0 text-muted-foreground" /><label htmlFor="social-search" className="sr-only">Search creators, topics and posts</label><input id="social-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search voices, ideas, and interests…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
           {(query || submitted) && <Button type="button" variant="ghost" size="icon" className="size-6" aria-label="Clear search" onClick={() => { setQuery(''); setSubmitted(''); }}><X /></Button>}
           <Button variant="ghost" type="submit" size="icon" className="size-6" aria-label="Search"><ArrowUpRight /></Button>
         </form>
@@ -100,6 +101,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
         <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-10 xl:grid-cols-[minmax(0,1fr)_260px]">
           <section aria-label="Stories">
             {view === 'discover' && !searchActive && !tagFilter && <GatewayDiscovery />}{view === 'feeds' && !searchActive && !tagFilter && <FeedsView />}{view === 'discover' && !searchActive && !tagFilter && <><Spotlight /><RecentArticles /></>}
+            {submitted && <PostSearchResults q={submitted} />}
             <div className="mb-5 flex items-baseline justify-between"><h2 className="font-serif text-2xl italic">{view === 'discover' ? searchActive ? 'From the community' : 'From our creators' : 'From voices you follow'}</h2><span className="text-[10px] uppercase text-muted-foreground">Sample stories</span></div>
             {feed.length ? <div className="grid gap-x-6 gap-y-9 sm:grid-cols-2">{feed.map((p, i) => {
               const creator = creators.find(c => c.id === p.creatorId);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Ellipsis, EyeOff, Link2, Share } from 'lucide-react';
+import { Ellipsis, EyeOff, Link2, Pencil, Share, Trash2 } from 'lucide-react';
 import { sharePost } from './usePostActions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,12 +9,18 @@ import type { FilterAction, FilterablePost } from '@/lib/content-filter';
 import { useFilterLikeThis } from './useFilterLikeThis';
 import { ACTION_LABEL } from './filter-options';
 import { useAtlasAuth } from './AuthState';
+import { useIsMe } from './useFediProfile';
+import { DeletePostDialog, EditPostDialog } from './OwnPostControls';
+import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 
 /** Desktop: the post's More menu — Share (or Copy link), and "Filter posts like this" when signed in (filters are kept
  *  per account). */
-export function PostMoreMenu({ post }: { post: FilterablePost & { url?: string; author?: string } }) {
+export function PostMoreMenu({ post }: { post: FilterablePost & { url?: string; author?: string; statusId?: string; acct?: string } }) {
   const { user } = useAtlasAuth();
   const [open, setOpen] = useState(false);
+  // Your own posts: Edit and Delete, as Mastodon offers them in a post's menu.
+  const mine = useIsMe(post.acct) && !!post.statusId;
+  const [editing, setEditing] = useState<string | null>(null), [deleting, setDeleting] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const canShare = typeof navigator !== 'undefined' && !!navigator.share;
   if (!post.url && !user) return null;
@@ -23,10 +29,17 @@ export function PostMoreMenu({ post }: { post: FilterablePost & { url?: string; 
       <DropdownMenuTrigger asChild><button type="button" className="atlas-act-more" aria-label={copied ? 'More, link copied' : 'More'}><Ellipsis aria-hidden="true" />{copied && <span className="text-xs">Link copied</span>}</button></DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {post.url && <DropdownMenuItem onSelect={async () => { if ((await sharePost({ url: post.url!, author: post.author ?? '' })) === 'copied') { setCopied(true); setTimeout(() => setCopied(false), 1500); } }}>{canShare ? <><Share />Share</> : <><Link2 />Copy link</>}</DropdownMenuItem>}
-        {user && <DropdownMenuItem onSelect={() => setOpen(true)}><EyeOff />Filter posts like this</DropdownMenuItem>}
+        {user && !mine && <DropdownMenuItem onSelect={() => setOpen(true)}><EyeOff />Filter posts like this</DropdownMenuItem>}
+        {mine && <>
+          <DropdownMenuItem onSelect={() => setEditing(post.statusId!)}><Pencil />Edit</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(post.statusId!)}><Trash2 />Delete</DropdownMenuItem>
+        </>}
       </DropdownMenuContent>
     </DropdownMenu>
     {open && <FilterLikeThisDialog post={post} onClose={() => setOpen(false)} />}
+    {editing && <EditPostDialog statusId={editing} onClose={() => setEditing(null)} />}
+    {deleting && <DeletePostDialog statusId={deleting} onClose={() => setDeleting(null)} />}
   </>;
 }
 
