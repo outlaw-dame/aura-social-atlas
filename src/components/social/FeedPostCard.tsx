@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Globe2, Lock, Repeat2, Tag, AtSign } from 'lucide-react';
+import { Globe2, Lock, Tag, AtSign } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { shortAgo, type ForYouReason } from '@/lib/feed-types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MentionField } from './MentionField';
 import { PostActionBar } from './PostActionBar';
-import { linkifyHashtagsWith } from '@/lib/hashtags';
+import { BoostedBy, canOpen, linkifyPost, openAuthor } from './PostPeople';
 import { useTagLine } from './useFeeds';
 import { CollectionLinks } from './CollectionsDesktop';
 import { PostArticleCard } from './ArticleAuthors';
@@ -65,6 +65,11 @@ function Avatar({ post: p }: { post: FedizenPost }) {
     : <span aria-hidden="true" className="atlas-avatar flex size-10 shrink-0 items-center justify-center bg-muted font-serif text-base">{p.author.charAt(0)}</span>;
 }
 
+/** The author's avatar, name and handle. */
+function Who({ post: p }: { post: FedizenPost }) {
+  return <><Avatar post={p} /><span className="block min-w-0 flex-1 text-sm leading-tight"><span className="atlas-author-name block truncate font-semibold">{p.author}</span><span className="block truncate text-xs text-muted-foreground">{p.handle}</span></span></>;
+}
+
 /** Desktop: Reply, Boost, Like, Save and More (with Share), as on the phone (PostActionBar). */
 function Actions({ post: p, actions }: { post: FedizenPost; actions: FeedActions }) {
   return <PostActionBar post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply} more={<PostMoreMenu post={p} />} />;
@@ -83,14 +88,15 @@ function FeedPostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenP
   return <article className="border-b border-border pb-4">
     <FollowedTagLine tags={tagLine} />
     <ReasonChips reasons={reasons} />
-    {p.boostedBy && <p className="mb-2 flex items-center gap-1 text-[11px] text-muted-foreground"><Repeat2 className="size-3" />{p.boostedBy} boosted</p>}
+    <BoostedBy post={p} className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground" />
     <div className="flex items-center gap-3">
-      <Avatar post={p} />
-      <p className="min-w-0 flex-1 text-sm leading-tight"><span className="block truncate font-semibold">{p.author}</span><span className="block truncate text-xs text-muted-foreground">{p.handle}</span></p>
+      {canOpen(p)
+        ? <button type="button" className="atlas-author-button gap-3" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}><Who post={p} /></button>
+        : <Who post={p} />}
       {ago && <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline" title={p.date ? new Date(p.date).toLocaleString() : undefined}>{ago}</a>}
     </div>
     <AuthorWarning cw={p.cw}>
-    <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{linkifyHashtagsWith(t, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
+    <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{linkifyPost(t, p.mentions, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
     <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl bg-muted object-cover" {...reserve(p.imageSize)} />}</SensitiveMedia>
     <CollectionLinks links={p.collections} />
     <PostArticleCard article={p.article} />

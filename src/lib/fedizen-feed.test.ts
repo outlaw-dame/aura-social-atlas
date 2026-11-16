@@ -56,7 +56,7 @@ describe('Saved and Circles mapping', () => {
   test('circles and people map without unsafe avatars; handles are checked before lookup', async () => {
     const { fromLists, fromAccounts, lookupAcct } = await import('./fedizen-feed');
     deepStrictEqual(fromLists([{ id: '1', title: ' Close friends ' }, { id: '2', title: '' }]), [{ id: '1', title: 'Close friends' }, { id: '2', title: 'Untitled circle' }]);
-    deepStrictEqual(fromAccounts([{ id: 'a', acct: 'ana@lemmy.ca', avatar: 'javascript:x' }, { acct: 'no-id' }] as never), [{ id: 'a', name: 'ana@lemmy.ca', handle: '@ana@lemmy.ca', avatar: undefined }]);
+    deepStrictEqual(fromAccounts([{ id: 'a', acct: 'ana@lemmy.ca', avatar: 'javascript:x' }, { acct: 'no-id' }] as never), [{ id: 'a', name: 'ana', handle: '@ana@lemmy.ca', avatar: undefined }]);
     strictEqual(lookupAcct('@ana@lemmy.ca'), 'ana@lemmy.ca');
     strictEqual(lookupAcct('bo'), 'bo');
     strictEqual(lookupAcct('a/b@x'), null);
@@ -88,5 +88,41 @@ describe('Article links in posts ("More from")', () => {
   test('no article when the post links nowhere', () => {
     const [p] = fromStatuses([{ id: '3', url: 'https://fedizen.net/post/3', content: '<p>plain</p>', created_at: '2026-11-01T00:00:00Z', account: { display_name: 'A', acct: 'a' } }] as never);
     strictEqual('article' in p, false);
+  });
+});
+
+describe('People in Fedizen posts', () => {
+  // Shapes as fedizen.net's /api/v1/timelines/public returns them (Bonfire's Mastodon API).
+  const status = {
+    id: 'r1', created_at: '2026-11-15T00:00:00Z',
+    account: { display_name: 'Anime', acct: 'anime', username: 'anime', avatar: 'https://fedizen.net/a.png', url: 'https://fedizen.net/pub/actors/anime' },
+    reblog: {
+      id: 'o1', created_at: '2026-11-14T00:00:00Z',
+      content: '<p><span class="h-card"><a rel="nofollow noopener" href="/@nedley@mastodon.social">@<span>nedley</span></a></span> Fascinating! <a href="https://example.com/a/b"><span class="invisible">https://</span><span class="ellipsis">example.com/a</span><span class="invisible">/b</span></a></p>',
+      account: { display_name: '', acct: 'THEPIGWHODIDIT@lemmy.world', username: 'THEPIGWHODIDIT@lemmy.world', url: 'https://lemmy.world/u/THEPIGWHODIDIT', uri: 'https://lemmy.world/u/THEPIGWHODIDIT' },
+      mentions: [{ acct: 'nedley@mastodon.social', username: 'nedley@mastodon.social', url: 'https://fedizen.net/@nedley@mastodon.social' }],
+    },
+  };
+  test('a mention reads as written, with no space after the @, and a split link comes back whole', () => {
+    const [p] = fromStatuses([status] as never);
+    deepStrictEqual(p.paragraphs, ['@nedley Fascinating! https://example.com/a/b']);
+    deepStrictEqual(p.mentions, [{ acct: 'nedley@mastodon.social', username: 'nedley' }]);
+  });
+  test('an account with no display name goes by its handle’s first part, not the whole handle', () => {
+    const [p] = fromStatuses([status] as never);
+    strictEqual(p.author, 'THEPIGWHODIDIT');
+    strictEqual(p.handle, '@THEPIGWHODIDIT@lemmy.world');
+    strictEqual(p.acct, 'THEPIGWHODIDIT@lemmy.world');
+    strictEqual(p.actor, 'https://lemmy.world/u/THEPIGWHODIDIT');
+  });
+  test('a boost carries who boosted it: name, avatar, and what opens their profile', () => {
+    const [p] = fromStatuses([status] as never);
+    strictEqual(p.boostedBy, 'Anime');
+    deepStrictEqual(p.booster, { name: 'Anime', avatar: 'https://fedizen.net/a.png', acct: 'anime@fedizen.net', actor: 'https://fedizen.net/pub/actors/anime' });
+  });
+  test('only public https actors are kept', () => {
+    const [p] = fromStatuses([{ id: 'x', content: '<p>x</p>', account: { acct: 'a@b.example', url: 'javascript:alert(1)' } }] as never);
+    strictEqual(p.actor, undefined);
+    strictEqual(p.acct, 'a@b.example');
   });
 });

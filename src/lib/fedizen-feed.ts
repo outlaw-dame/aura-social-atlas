@@ -1,7 +1,7 @@
 /** Browser-safe Fedizen (Mastodon-compatible) feed types, normalizers and redirect allowlist. */
 import { htmlToParagraphs } from './spotlight';
 import { collectionLinksIn, mastodonCollectionApi } from './collections';
-import { isPublicHttpsUrl, type FediAuthor } from './article-author';
+import { isPublicHttpsUrl, parseHandle, type FediAuthor } from './article-author';
 import type { FediEpisode } from './podcast-episode';
 import { videoFromAttachment, watchUrlFor, type FediVideo } from './fedi-video';
 
@@ -25,7 +25,11 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
   return have.has(needed) || (needed.includes(':') && have.has(needed.split(':')[0]));
 }
 
-export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; /** The image's width and height (from Fedizen's media meta), to reserve its space before it loads. */ imageSize?: { w: number; h: number }; /** The author marked its media sensitive. */ sensitive?: boolean; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[];
+export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; /** The image's width and height (from Fedizen's media meta), to reserve its space before it loads. */ imageSize?: { w: number; h: number }; /** The author marked its media sensitive. */ sensitive?: boolean; boostedBy?: string;
+  /** The author's actor and full handle, to open their profile in Atlas. */ actor?: string; acct?: string;
+  /** Who boosted it (boostedBy is their name), to show their avatar and open their profile. */ booster?: FediPerson;
+  /** The people the post mentions, as Fedizen resolved them: "@name" in the text opens theirs. */ mentions?: FediMention[];
+  /** Mastodon collections linked in the post. */ collections?: string[];
   /** A video attached to the post (a federated PeerTube video arrives this way). */ video?: FediVideo;
   /** The article the post links to, and who wrote it as far as Atlas can verify ("More from"). */ article?: PostArticle;
   /** Reply, boost and like counts, and whether the person has liked or boosted it (Fedizen statuses only). */
@@ -34,20 +38,41 @@ export type FedizenPost = { id: string; /** The post itself (the boosted one for
   /** What keyword filters read besides the text: content warning, hashtags, image descriptions, link preview, poll
    *  options, the quoted post's words, and the author's account id (for "except people I follow"). */
   cw?: string; tags?: string[]; alt?: string[]; linkTitle?: string; linkDescription?: string; poll?: string[]; quote?: string; authorId?: string };
+/** Someone shown beside a post (who boosted it), with what opens their profile. */
+export type FediPerson = { name: string; avatar?: string; acct?: string; actor?: string };
+/** A mention: the full handle, and the name it's written as in the text (the handle's first part). */
+export type FediMention = { acct: string; username: string };
 export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; /** The preview's summary and image. */ description?: string; image?: string; /** The preview's author link: checked for an ActivityPub account, never shown as-is. */ authorUrl?: string; authors?: FediAuthor[]; /** A podcast episode Atlas can play in place. */ episode?: FediEpisode; /** A video (PeerTube) Atlas can play in place. */ video?: FediVideo };
 export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string };
 /** A direct conversation (Mastodon `Conversation`): the other people in it and its latest message, as plain text. */
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
-type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string };
+type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string; url?: string | null; uri?: string | null };
 type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; sensitive?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
   replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null;
-  spoiler_text?: string | null; tags?: { name?: string }[] | null; poll?: { options?: { title?: string }[] } | null;
+  spoiler_text?: string | null; tags?: { name?: string }[] | null; mentions?: { acct?: string | null; username?: string | null }[] | null; poll?: { options?: { title?: string }[] } | null;
   quote?: { quoted_status?: { content?: string | null; spoiler_text?: string | null; media_attachments?: { description?: string | null }[] | null } | null } | null };
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
 const http = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
-const name = (a?: Acct) => a?.display_name || a?.username || a?.acct || 'Someone';
+/** Their display name, or else the first part of their handle: Bonfire gives a remote account's full handle as its
+ *  username, and many Lemmy and Pixelfed accounts have no display name. */
+const name = (a?: Acct) => a?.display_name?.trim() || (a?.username || a?.acct || '').replace(/^@/, '').split('@')[0] || 'Someone';
+
+/** A handle as Fedizen gives it, made whole: Fedizen's own members come without the domain. */
+export function fullAcct(raw?: string | null): string | undefined {
+  const v = (raw ?? '').trim().replace(/^@/, '');
+  if (!v) return undefined;
+  return parseHandle(v.includes('@') ? v : `${v}@${new URL(FEDIZEN).hostname}`) ?? undefined;
+}
+const person = (a?: Acct): FediPerson => {
+  const acct = fullAcct(a?.acct), actor = isPublicHttpsUrl(a?.uri) ? a!.uri! : isPublicHttpsUrl(a?.url) ? a!.url! : undefined;
+  return { name: name(a), ...(http(a?.avatar) ? { avatar: http(a?.avatar) } : {}), ...(acct ? { acct } : {}), ...(actor ? { actor } : {}) };
+};
+const mentionsOf = (o: Status): FediMention[] => (o.mentions ?? []).flatMap(m => {
+  const acct = fullAcct(m.acct ?? m.username);
+  return acct ? [{ acct, username: acct.split('@')[0] }] : [];
+});
 
 /** An image's shape from Mastodon-style media meta (original first, then the preview's), if it's sane. */
 export function imageSizeOf(meta: unknown): { w: number; h: number } | undefined {
@@ -68,6 +93,9 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
       ...(() => { const size = imageSizeOf(o.media_attachments?.find(m => m.type === 'image')?.meta); return size ? { imageSize: size } : {}; })(),
       boostedBy: s.reblog ? name(s.account) : undefined,
+      ...(s.reblog ? { booster: person(s.account) } : {}),
+      ...(() => { const a = person(o.account); return { ...(a.acct ? { acct: a.acct } : {}), ...(a.actor ? { actor: a.actor } : {}) }; })(),
+      ...(() => { const m = mentionsOf(o); return m.length ? { mentions: m } : {}; })(),
       ...(o.sensitive === true && o.media_attachments?.length ? { sensitive: true } : {}),
       ...(typeof o.replies_count === 'number' || typeof o.reblogs_count === 'number' || typeof o.favourites_count === 'number'
         ? { counts: { replies: o.replies_count ?? 0, boosts: o.reblogs_count ?? 0, likes: o.favourites_count ?? 0 } } : {}),

@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { ArrowUpRight, Bell, Link2, Repeat2 } from 'lucide-react';
+import { ArrowUpRight, Bell, Link2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFedizen } from './useFedizen';
 import { PublicFedizenFeed } from './PublicFedizenFeed';

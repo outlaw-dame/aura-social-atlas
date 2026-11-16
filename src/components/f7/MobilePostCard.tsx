@@ -4,7 +4,8 @@ import type { FedizenPost } from '@/lib/fedizen-feed';
 import { shortAgo, type ForYouReason } from '@/lib/feed-types';
 import { openCollection } from '@/lib/collections';
 import { openGroup } from '@/lib/groups';
-import { linkifyHashtagsWith, openTag } from '@/lib/hashtags';
+import { openTag } from '@/lib/hashtags';
+import { BoostedBy, canOpen, linkifyPost, openAuthor } from '@/components/social/PostPeople';
 import { useTagLine } from '@/components/social/useFeeds';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { useSaveToggle } from '@/components/social/useFedizenLibrary';
@@ -79,14 +80,15 @@ function MobilePostCardBody({ post: p, actions, reasons, inTag }: { post: Fedize
     <CardContent>
       <FollowedTagLine tags={tagLine} />
       <MobileReasonChips reasons={reasons} />
-      {p.boostedBy && <p className="atlas-post-boosted"><Icon ios="f7:arrow_2_squarepath" md="material:repeat" />{p.boostedBy} boosted</p>}
+      <BoostedBy post={p} className="atlas-post-boosted" />
       <div className="atlas-post-head">
-        <Avatar post={p} />
-        <span className="atlas-post-who"><b>{p.author}</b><small>{p.handle}</small></span>
+        {canOpen(p)
+          ? <button type="button" className="atlas-author-button" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}><Avatar post={p} /><span className="atlas-post-who"><b>{p.author}</b><small>{p.handle}</small></span></button>
+          : <><Avatar post={p} /><span className="atlas-post-who"><b>{p.author}</b><small>{p.handle}</small></span></>}
         {ago && <Link external target="_blank" href={p.url} className="atlas-post-time" aria-label={`Open the post on Fedizen, posted ${p.date ? new Date(p.date).toLocaleString() : ''}`}>{ago}</Link>}
       </div>
       <AuthorWarning cw={p.cw} phone>
-      {p.paragraphs.map((t, i) => <p key={i} className="atlas-post-text">{linkifyHashtagsWith(t, openTag)}</p>)}
+      {p.paragraphs.map((t, i) => <p key={i} className="atlas-post-text">{linkifyPost(t, p.mentions, openTag)}</p>)}
       <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" {...(p.imageSize ? { width: p.imageSize.w, height: p.imageSize.h, style: { aspectRatio: `${p.imageSize.w} / ${p.imageSize.h}` } } : {})} />}</SensitiveMedia>
       {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
         <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />

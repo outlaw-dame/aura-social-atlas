@@ -84,7 +84,7 @@ describe("Profiles shown inside Atlas", () => {
       image: { type: "Image", url: "https://blog.example.org/head.jpg" }, published: "2024-01-02T00:00:00Z",
     }))!;
     expect(p).toMatchObject({ acct: "@jane@blog.example.org", name: "Jane Writer", locked: true, kind: "person", host: "blog.example.org", header: "https://blog.example.org/head.jpg", joined: "2024-01-02T00:00:00Z" });
-    expect(p.bio).toEqual(["Writes things .", "Lives here."]);
+    expect(p.bio).toEqual(["Writes things.", "Lives here."]);
     expect(p.fields).toEqual([{ name: "Site", value: "x.org" }]);
   });
 
