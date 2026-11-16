@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { Card, CardContent } from 'framework7-react';
 import { MediaVeilContext } from '@/components/social/SensitiveMedia';
 import { shortAgo } from '@/lib/feed-types';
-import { WarningMark, hiddenBy, useFilterGate, type GatedPost } from '@/components/social/FilterGate';
+import { hiddenBy, useFilterGate, type GatedPost } from '@/components/social/FilterGate';
+import { WarningPanel } from '@/components/social/ContentWarning';
 
 /**
  * Phone: a post behind the person's filters (see useFilterGate). A hidden or warned post keeps its author line, and in
@@ -21,12 +22,7 @@ export function MobileFilterGate({ post, card = true, children }: { post: GatedP
       <span className="atlas-post-who"><b>{post.author}</b>{post.handle && <small>{post.handle}</small>}</span>
       {ago && <span className="atlas-post-time">{ago}</span>}
     </div>}
-    <button type="button" className="atlas-filter-warning" onClick={g.onShow}>
-      <WarningMark />
-      <b>Content Warning</b>
-      <span>{hiddenBy(g.filter, g.why)}</span>
-      <em>Tap to view</em>
-    </button>
+    <WarningPanel phone title="Content Warning" detail={hiddenBy(g.filter, g.why)} cta="Tap to view" onClick={g.onShow} />
   </>;
   return card ? <Card outline className="atlas-post-card atlas-post-filtered"><CardContent>{body}</CardContent></Card> : <div className="atlas-post-filtered">{body}</div>;
 }

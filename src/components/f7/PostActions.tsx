@@ -66,20 +66,22 @@ export function ReplySheet({ post, onClose }: { post: FedizenPost | null; onClos
   const r = useReply();
   const [text, setText] = useState('');
   const [confirmed, setConfirmed] = useState<string[]>([]);
-  useEffect(() => { if (post) { const m = replyMention(post.handle); setText(m); setConfirmed(m ? [m.trim()] : []); r.clearError(); } }, [post]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [cw, setCw] = useState('');
+  useEffect(() => { if (post) { const m = replyMention(post.handle); setText(m); setConfirmed(m ? [m.trim()] : []); setCw(post.cw ?? ''); r.clearError(); } }, [post]); // eslint-disable-line react-hooks/exhaustive-deps
   const audience = post ? replyVisibility(post) : 'public';
   const send = async () => {
     if (!post) return;
-    const done = await r.reply(post, text);
+    const done = await r.reply(post, text, cw);
     if (done) { f7.toast.create({ text: 'Reply posted', closeTimeout: 1500 }).open(); onClose(); }
   };
   return <Sheet opened={!!post} onSheetClosed={onClose} swipeToClose backdrop style={{ height: 'auto' }} className="atlas-reply-sheet">
     {post && <>
       <Block>
         <div style={{ fontWeight: 600, fontSize: 17 }}>Reply to {post.author}</div>
-        <p className="atlas-reply-quote">{post.paragraphs.join(' ').slice(0, 160)}</p>
+        <p className="atlas-reply-quote">{post.cw ? `Content warning: ${post.cw}` : post.paragraphs.join(' ').slice(0, 160)}</p>
         <div className="atlas-reply-audience"><Icon ios={audience === 'public' ? 'f7:globe' : audience === 'direct' ? 'f7:at' : 'f7:lock'} md={audience === 'public' ? 'material:public' : audience === 'direct' ? 'material:alternate_email' : 'material:lock'} />{AUDIENCE_LABEL[audience]}, like the post</div>
       </Block>
+      {post.cw && <Block className="atlas-reply-cw"><label>Content warning<input value={cw} onChange={e => setCw(e.target.value)} maxLength={500} /></label></Block>}
       <Block className="atlas-reply-field">
         <MentionField value={text} onChange={setText} confirmed={confirmed} onConfirm={t => setConfirmed(c => [...c, t])} autoFocus
           people={[{ handle: post.handle, name: post.author, avatar: post.avatar }]} placeholder="Write your reply" label="Your reply" onSubmit={() => void send()} />

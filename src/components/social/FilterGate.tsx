@@ -3,6 +3,7 @@ import type { FilterablePost, Verdict } from '@/lib/content-filter';
 import { shortAgo } from '@/lib/feed-types';
 import { usePostFilter } from './useIntelligence';
 import { MediaVeilContext } from './SensitiveMedia';
+import { WarningPanel } from './ContentWarning';
 
 /** Why a post was filtered, in a few words: the words that matched, or the AI model that judged it in context. */
 export function filterReason(v: Extract<Verdict, { state: 'filtered' }>, product: string | null): string {
@@ -57,11 +58,6 @@ export function FilterGate({ post, children }: { post: GatedPost; children: Reac
       <p className="min-w-0 flex-1 text-sm leading-tight"><span className="block truncate font-semibold">{post.author}</span>{post.handle && <span className="block truncate text-xs text-muted-foreground">{post.handle}</span>}</p>
       {ago && <span className="shrink-0 text-xs text-muted-foreground">{ago}</span>}
     </div>}
-    <button type="button" onClick={g.onShow} className="mt-3 flex w-full flex-col items-center gap-1 rounded-2xl bg-muted/60 px-6 py-7 text-center transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-      <WarningMark className="mb-1" />
-      <span className="text-base font-semibold">Content Warning</span>
-      <span className="text-sm text-muted-foreground">{hiddenBy(g.filter, g.why)}</span>
-      <span className="mt-1 text-sm font-semibold text-accent">View post</span>
-    </button>
+    <WarningPanel title="Content Warning" detail={hiddenBy(g.filter, g.why)} cta="View post" onClick={g.onShow} />
   </article>;
 }

@@ -14,6 +14,7 @@ import { MobilePostActions, ReplySheet } from './PostActions';
 import { Icon } from './F7Extras';
 import { MobileFilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
+import { AuthorWarning } from '@/components/social/ContentWarning';
 
 /** A group's avatar in a reason chip: its picture, else its initial, as a rounded square (groups are squares). */
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
@@ -84,12 +85,14 @@ function MobilePostCardBody({ post: p, actions, reasons, inTag }: { post: Fedize
         <span className="atlas-post-who"><b>{p.author}</b><small>{p.handle}</small></span>
         {ago && <Link external target="_blank" href={p.url} className="atlas-post-time" aria-label={`Open the post on Fedizen, posted ${p.date ? new Date(p.date).toLocaleString() : ''}`}>{ago}</Link>}
       </div>
+      <AuthorWarning cw={p.cw} phone>
       {p.paragraphs.map((t, i) => <p key={i} className="atlas-post-text">{linkifyHashtagsWith(t, openTag)}</p>)}
       <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia>
       {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
         <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />
       </button>)}
       <ArticleCard article={p.article} />
+      </AuthorWarning>
     </CardContent>
     <CardFooter className="atlas-post-footer"><MobilePostActions post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply} /></CardFooter>
   </Card>;

@@ -190,6 +190,8 @@ export const searchFedizenPeople = createServerFn({ method: 'GET' }).middleware(
 export const replyOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.extend({
     statusId: ulid, text: z.string().trim().min(1).max(5000),
+    /** The reply's content warning: the post's own by default (Mastodon carries it over too). */
+    cw: z.string().trim().max(500).optional(),
     visibility: z.enum(['public', 'unlisted', 'private', 'direct']),
   }).parse(d))
   .handler(async ({ data, context }): Promise<{ ok: true; url?: string } | { ok: false; error: Problem }> => {
@@ -197,7 +199,7 @@ export const replyOnFedizen = createServerFn({ method: 'POST' }).middleware([req
     const c = await connection(context.userId, true);
     if ('error' in c) return { ok: false, error: c.error };
     const { fedizenSend } = await import('./fedizen.server');
-    const r = await fedizenSend(c.token, 'POST', '/api/v1/statuses', { status: data.text, in_reply_to_id: data.statusId, visibility: data.visibility });
+    const r = await fedizenSend(c.token, 'POST', '/api/v1/statuses', { status: data.text, in_reply_to_id: data.statusId, visibility: data.visibility, ...(data.cw ? { spoiler_text: data.cw } : {}) });
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
     const url = typeof r.data?.url === 'string' && /^https:\/\/fedizen\.net\//.test(r.data.url) ? r.data.url : undefined;
     return { ok: true, ...(url ? { url } : {}) };

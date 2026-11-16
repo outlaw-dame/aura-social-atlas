@@ -137,4 +137,12 @@ describe('Likes, boosts and replies', () => {
     expect(body).toEqual({ status: '@rosa lovely', in_reply_to_id: '01A', visibility: 'private' });
     expect(r.data?.url).toBe('https://fedizen.net/post/r1');
   });
+  test('a reply may carry a content warning, and nothing else besides', async () => {
+    let body: unknown;
+    globalThis.fetch = (async (_u: string, init?: RequestInit) => { body = JSON.parse(String(init?.body)); return new Response(JSON.stringify({ id: 'r2' })); }) as unknown as typeof fetch;
+    await fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'agreed', in_reply_to_id: '01A', visibility: 'public', spoiler_text: 'finale spoilers' });
+    expect(body).toEqual({ status: 'agreed', in_reply_to_id: '01A', visibility: 'public', spoiler_text: 'finale spoilers' });
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'x', in_reply_to_id: '01A', visibility: 'public', spoiler_text: 'w', sensitive: true })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'x', in_reply_to_id: '01A', visibility: 'public', spoiler_text: 'w'.repeat(501) })).rejects.toThrow('Unsupported Fedizen write body.');
+  });
 });

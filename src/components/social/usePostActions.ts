@@ -70,11 +70,11 @@ export function useReply() {
   const send = useServerFn(replyOnFedizen);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const reply = async (p: Pick<FedizenPost, 'statusId' | 'visibility' | 'id'>, text: string): Promise<{ url?: string } | null> => {
+  const reply = async (p: Pick<FedizenPost, 'statusId' | 'visibility' | 'id'>, text: string, cw?: string): Promise<{ url?: string } | null> => {
     if (!user || !p.statusId || !text.trim() || sending) return null;
     setSending(true); setError(null);
     try {
-      const r = await send({ data: { expectedAtlasUserId: user.id, statusId: p.statusId, text: text.trim().slice(0, 5000), visibility: replyVisibility(p) } });
+      const r = await send({ data: { expectedAtlasUserId: user.id, statusId: p.statusId, text: text.trim().slice(0, 5000), visibility: replyVisibility(p), ...(cw?.trim() ? { cw: cw.trim().slice(0, 500) } : {}) } });
       if (!r.ok) { setError(LIBRARY_PROBLEM[r.error]); return null; }
       return { url: r.url };
     } catch { setError(LIBRARY_PROBLEM.unavailable); return null; } finally { setSending(false); }

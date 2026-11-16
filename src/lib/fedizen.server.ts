@@ -439,6 +439,8 @@ const reply = z.object({
   status: z.string().trim().min(1).max(5000),
   in_reply_to_id: z.string().regex(new RegExp(`^${ID}$`)),
   visibility: z.enum(['public', 'unlisted', 'private', 'direct']),
+  /** A content warning (Mastodon: spoiler_text; Bonfire stores it as the post's summary). */
+  spoiler_text: z.string().trim().min(1).max(500).optional(),
 }).strict();
 const members = z.object({ account_ids: z.array(z.string().regex(new RegExp(`^${ID}$`))).min(1).max(20) }).strict();
 const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTypeAny }[] = [

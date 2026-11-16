@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { htmlToParagraphs } from './spotlight';
 
 export type TagPost = {
-  id: string; url: string; createdAt: string; text: string[];
+  id: string; url: string; createdAt: string; text: string[]; /** The author's content warning. */ cw?: string;
   author: { name: string; acct: string; avatar: string; url: string };
   image?: string; /** The author marked its media sensitive. */ sensitive?: boolean; replies: number; boosts: number; favourites: number;
 };
@@ -30,7 +30,7 @@ export const getTagFeed = createServerFn({ method: 'GET' })
       const img = s.media_attachments.find(m => m.type === 'image' && m.preview_url)?.preview_url ?? undefined;
       return {
         id: s.id, url: s.url ?? s.uri, createdAt: s.created_at,
-        text: s.spoiler_text ? [`Content warning: ${s.spoiler_text}`] : htmlToParagraphs(s.content),
+        text: htmlToParagraphs(s.content), ...(s.spoiler_text?.trim() ? { cw: s.spoiler_text.trim() } : {}),
         author: { name: s.account.display_name || s.account.username, acct: `@${acct}`, avatar: s.account.avatar, url: s.account.url },
         image: img, ...(s.sensitive === true && img ? { sensitive: true } : {}), replies: s.replies_count, boosts: s.reblogs_count, favourites: s.favourites_count,
       };

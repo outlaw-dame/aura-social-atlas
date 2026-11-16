@@ -6,6 +6,7 @@ import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from '@/components/soci
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { MobileFilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
+import { AuthorWarning } from '@/components/social/ContentWarning';
 
 /**
  * Phone: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -58,9 +59,8 @@ export function FediProfilePopup({ target, onClose }: { target: FediProfileTarge
         <BlockTitle>{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</BlockTitle>
         <FilterPlaceProvider place="account">{p.posts.map(post => <MobileFilterGate key={post.id} post={post}><Block strong inset className="atlas-fedi-post">
           {post.title && <h2>{post.title}</h2>}
-          {post.cw ? <details><summary>Content warning: {post.cw}</summary>{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</details>
-            : post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}
-          <SensitiveMedia sensitive={post.sensitive} cta="Tap to view">{post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia>
+          <AuthorWarning cw={post.cw} phone>{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}
+          <SensitiveMedia sensitive={post.sensitive} cta="Tap to view">{post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia></AuthorWarning>
           <p className="atlas-fedi-note">{day(post.date)} · <Link external target="_blank" href={post.url}>Original</Link></p>
         </Block></MobileFilterGate>)}</FilterPlaceProvider>
         {!p.posts.length && <Block>{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</Block>}

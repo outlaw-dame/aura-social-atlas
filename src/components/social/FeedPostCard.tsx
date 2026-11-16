@@ -16,6 +16,7 @@ import { FilterGate } from './FilterGate';
 import { PostMoreMenu } from './FilterLikeThis';
 import { AUDIENCE_LABEL, compactCount, replyMention, replyVisibility, sharePost, useReactions, useReply } from './usePostActions';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
+import { AuthorWarning } from '@/components/social/ContentWarning';
 
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
   const [broken, setBroken] = useState(false);
@@ -105,10 +106,12 @@ function FeedPostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenP
       <p className="min-w-0 flex-1 text-sm leading-tight"><span className="block truncate font-semibold">{p.author}</span><span className="block truncate text-xs text-muted-foreground">{p.handle}</span></p>
       {ago && <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline" title={p.date ? new Date(p.date).toLocaleString() : undefined}>{ago}</a>}
     </div>
+    <AuthorWarning cw={p.cw}>
     <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{linkifyHashtagsWith(t, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
     <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}</SensitiveMedia>
     <CollectionLinks links={p.collections} />
     <PostArticleCard article={p.article} />
+    </AuthorWarning>
     <Actions post={p} actions={actions} />
   </article>;
 }
@@ -120,17 +123,21 @@ function ReplyDialog({ post, onClose }: { post: FedizenPost | null; onClose: () 
   const r = useReply();
   const [text, setText] = useState('');
   const [confirmed, setConfirmed] = useState<string[]>([]);
-  useEffect(() => { if (post) { const m = replyMention(post.handle); setText(m); setConfirmed(m ? [m.trim()] : []); r.clearError(); } }, [post]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [cw, setCw] = useState('');
+  useEffect(() => { if (post) { const m = replyMention(post.handle); setText(m); setConfirmed(m ? [m.trim()] : []); setCw(post.cw ?? ''); r.clearError(); } }, [post]); // eslint-disable-line react-hooks/exhaustive-deps
   const audience = post ? replyVisibility(post) : 'public';
   const Aud = AUDIENCE_ICON[audience];
-  const send = async () => { if (post && (await r.reply(post, text))) onClose(); };
+  const send = async () => { if (post && (await r.reply(post, text, cw))) onClose(); };
   return <Dialog open={!!post} onOpenChange={o => { if (!o) onClose(); }}>
     <DialogContent className="sm:max-w-lg">
       {post && <>
         <DialogHeader>
           <DialogTitle>Reply to {post.author}</DialogTitle>
-          <DialogDescription className="line-clamp-2">{post.paragraphs.join(' ')}</DialogDescription>
+          <DialogDescription className="line-clamp-2">{post.cw ? `Content warning: ${post.cw}` : post.paragraphs.join(' ')}</DialogDescription>
         </DialogHeader>
+        {post.cw && <label className="block text-xs font-medium text-muted-foreground">Content warning
+          <input value={cw} onChange={e => setCw(e.target.value)} maxLength={500} className="mt-1 block w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+        </label>}
         <MentionField value={text} onChange={setText} confirmed={confirmed} onConfirm={t => setConfirmed(c => [...c, t])} autoFocus
           people={[{ handle: post.handle, name: post.author, avatar: post.avatar }]} placeholder="Write your reply" label="Your reply" onSubmit={() => void send()} />
         <p className="flex items-center gap-1 text-xs text-muted-foreground"><Aud className="size-3.5" />{AUDIENCE_LABEL[audience]}, like the post</p>
