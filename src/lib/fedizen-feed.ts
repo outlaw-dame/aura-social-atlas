@@ -31,8 +31,9 @@ export type FedizenPost = { id: string; /** The post itself (the boosted one for
   /** Reply, boost and like counts, and whether the person has liked or boosted it (Fedizen statuses only). */
   counts?: { replies: number; boosts: number; likes: number }; liked?: boolean; boosted?: boolean;
   /** Who can see it; a reply keeps to this audience. */ visibility?: 'public' | 'unlisted' | 'private' | 'direct';
-  /** What keyword filters read besides the text: content warning, hashtags, image descriptions, link title. */
-  cw?: string; tags?: string[]; alt?: string[]; linkTitle?: string };
+  /** What keyword filters read besides the text: content warning, hashtags, image descriptions, link preview, poll
+   *  options, the quoted post's words, and the author's account id (for "except people I follow"). */
+  cw?: string; tags?: string[]; alt?: string[]; linkTitle?: string; linkDescription?: string; poll?: string[]; quote?: string; authorId?: string };
 export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; /** The preview's summary and image. */ description?: string; image?: string; /** The preview's author link: checked for an ActivityPub account, never shown as-is. */ authorUrl?: string; authors?: FediAuthor[]; /** A podcast episode Atlas can play in place. */ episode?: FediEpisode; /** A video (PeerTube) Atlas can play in place. */ video?: FediVideo };
 export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string };
 /** A direct conversation (Mastodon `Conversation`): the other people in it and its latest message, as plain text. */
@@ -41,7 +42,8 @@ export type FedizenConversation = { id: string; unread: boolean; people: { name:
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string };
 type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
   replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null;
-  spoiler_text?: string | null; tags?: { name?: string }[] | null };
+  spoiler_text?: string | null; tags?: { name?: string }[] | null; poll?: { options?: { title?: string }[] } | null;
+  quote?: { quoted_status?: { content?: string | null; spoiler_text?: string | null; media_attachments?: { description?: string | null }[] | null } | null } | null };
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
 const http = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
@@ -63,6 +65,15 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
       ...(() => { const t = (o.tags ?? []).map(x => x.name).filter((n): n is string => !!n); return t.length ? { tags: t } : {}; })(),
       ...(() => { const a = (o.media_attachments ?? []).map(m => m.description?.trim()).filter((d): d is string => !!d); return a.length ? { alt: a } : {}; })(),
       ...(o.card?.title ? { linkTitle: o.card.title } : {}),
+      ...(o.card?.description ? { linkDescription: o.card.description } : {}),
+      ...(o.account?.id ? { authorId: o.account.id } : {}),
+      ...(() => { const p = (o.poll?.options ?? []).map(x => x.title?.trim()).filter((t): t is string => !!t); return p.length ? { poll: p } : {}; })(),
+      ...(() => {
+        const q = o.quote?.quoted_status;
+        if (!q) return {};
+        const text = [q.spoiler_text ?? '', ...htmlToParagraphs(q.content ?? ''), ...(q.media_attachments ?? []).map(m => m.description ?? '')].map(t => t.trim()).filter(Boolean).join('\n');
+        return text ? { quote: text.slice(0, 2000) } : {};
+      })(),
       ...(() => { for (const m of o.media_attachments ?? []) { const v = videoFromAttachment(m, http(o.url) ?? http(o.uri) ?? FEDIZEN); if (v) return { video: v }; } return {}; })(),
       ...(() => { const c = collectionLinksIn(o.content ?? ''); return c.length ? { collections: c } : {}; })(),
       ...(() => { const a = articleOf(o); return a ? { article: a } : {}; })(),

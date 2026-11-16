@@ -12,7 +12,8 @@ import { CollectionLinks } from './CollectionsDesktop';
 import { PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
 import { useSaveToggle } from './useFedizenLibrary';
-import { usePostFilter } from './useIntelligence';
+import { FilterGate } from './FilterGate';
+import { PostMoreMenu } from './FilterLikeThis';
 import { AUDIENCE_LABEL, compactCount, replyMention, replyVisibility, sharePost, useReactions, useReply } from './usePostActions';
 
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
@@ -80,25 +81,14 @@ function Actions({ post: p, actions }: { post: FedizenPost; actions: FeedActions
     <button type="button" className={`${actionClass} ml-auto`} aria-label="Share" onClick={async () => { if ((await sharePost(p)) === 'copied') { setCopied(true); setTimeout(() => setCopied(false), 1500); } }}>
       <Share className="size-4" />{copied && 'Link copied'}
     </button>
+    <PostMoreMenu post={p} />
   </div>;
 }
 
 /** Desktop: one post in a feed — author, text, media or link preview — with the standard post actions. */
-/** A post one of the person's filters set to "warn" caught (Mastodon's "Filtered: …", "Show anyway"). */
-function FilteredNotice({ filter, onShow }: { filter: string; onShow: () => void }) {
-  return <div className="flex items-center gap-3 border-b border-border pb-4 text-sm text-muted-foreground">
-    <span className="min-w-0 flex-1 truncate">Filtered: {filter}</span>
-    <Button variant="ghost" size="sm" className="rounded-full" onClick={onShow}>Show anyway</Button>
-  </div>;
-}
-
-/** Desktop: one post, unless the person's keyword filters hide it (or show it behind a notice). */
+/** Desktop: one post, unless the person's keyword filters hide it (or show it behind a notice, or blur its media). */
 export function FeedPostCard(props: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {
-  const verdict = usePostFilter(props.post);
-  const [shown, setShown] = useState(false);
-  if (verdict.state === 'pending' || (verdict.state === 'filtered' && verdict.action === 'hide')) return null;
-  if (verdict.state === 'filtered' && !shown) return <FilteredNotice filter={verdict.filter.text} onShow={() => setShown(true)} />;
-  return <FeedPostCardBody {...props} />;
+  return <FilterGate post={props.post}><FeedPostCardBody {...props} /></FilterGate>;
 }
 
 function FeedPostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {

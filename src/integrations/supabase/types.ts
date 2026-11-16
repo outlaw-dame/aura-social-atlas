@@ -81,9 +81,12 @@ export type Database = {
         Row: {
           action: string
           created_at: string
+          except_following: boolean
+          expires_at: string | null
           expansions: Json
           id: string
           kind: string
+          places: string[]
           semantic: boolean
           text: string
           user_id: string
@@ -91,9 +94,12 @@ export type Database = {
         Insert: {
           action?: string
           created_at?: string
+          except_following?: boolean
+          expires_at?: string | null
           expansions?: Json
           id?: string
           kind: string
+          places?: string[]
           semantic?: boolean
           text: string
           user_id: string
@@ -101,9 +107,12 @@ export type Database = {
         Update: {
           action?: string
           created_at?: string
+          except_following?: boolean
+          expires_at?: string | null
           expansions?: Json
           id?: string
           kind?: string
+          places?: string[]
           semantic?: boolean
           text?: string
           user_id?: string

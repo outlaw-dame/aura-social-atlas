@@ -1,9 +1,9 @@
 /** Intelligence settings, keys and filters as stored; server-only helpers for intelligence.functions.ts and /api/chat. */
 import { supabaseAdmin } from '@/integrations/supabase/client.server';
-import { ProviderError } from './llm.server';
+import { ProviderError } from './llm';
 import { VaultError, credentialFor, savedKeys, vaultReady, type Credential } from './vault.server';
 import type { ProviderId } from './providers';
-import { MAX_FILTERS, type ContentFilter } from '../content-filter';
+import { FILTER_PLACES, MAX_FILTERS, type ContentFilter, type FilterPlace } from '../content-filter';
 import type { AiProblem, IntelligenceStatus } from '../intelligence.functions';
 
 /** A provider or storage failure as a code the page can explain; anything unexpected is "unavailable". */
@@ -22,13 +22,15 @@ export async function readSettings(userId: string): Promise<SettingsRow> {
   return data ?? { enabled: false, provider: null, model: null, deep_matching: false };
 }
 
+/** Settings as the page sees them. `available` means the tables exist; `serverKeys` that keys can be kept here. */
 export async function status(userId: string): Promise<IntelligenceStatus> {
-  const off: IntelligenceStatus = { available: false, enabled: false, provider: null, model: null, deepMatching: false, keys: [] };
-  if (!(await vaultReady())) return off;
+  const off: IntelligenceStatus = { available: false, serverKeys: false, enabled: false, provider: null, model: null, deepMatching: false, keys: [] };
   try {
-    const [s, keys] = await Promise.all([readSettings(userId), savedKeys(userId)]);
+    const s = await readSettings(userId);
+    const serverKeys = await vaultReady();
+    const keys = serverKeys ? await savedKeys(userId) : [];
     const provider = keys.some(k => k.provider === s.provider) ? (s.provider as ProviderId) : null;
-    return { available: true, enabled: s.enabled, provider, model: provider ? s.model : null, deepMatching: s.deep_matching, keys: keys.map(({ provider, hint, models }) => ({ provider, hint, models })) };
+    return { available: true, serverKeys, enabled: s.enabled, provider, model: provider ? s.model : null, deepMatching: s.deep_matching, keys: keys.map(({ provider, hint, models }) => ({ provider, hint, models })) };
   } catch {
     return off;
   }
@@ -45,16 +47,20 @@ export async function activeModel(userId: string): Promise<ActiveModel> {
   return { credential, model: s.model, deepMatching: s.deep_matching };
 }
 
-type FilterRow = { id: string; text: string; kind: string; action: string; semantic: boolean; expansions: unknown };
+type FilterRow = { id: string; text: string; kind: string; action: string; semantic: boolean; expansions: unknown; places: string[] | null; expires_at: string | null; except_following: boolean };
 const fromRow = (r: FilterRow): ContentFilter => ({
-  id: r.id, text: r.text, kind: r.kind as ContentFilter['kind'], action: r.action === 'warn' ? 'warn' : 'hide', semantic: r.semantic,
+  id: r.id, text: r.text, kind: r.kind as ContentFilter['kind'], action: r.action === 'warn' || r.action === 'blur' ? r.action : 'hide', semantic: r.semantic,
   expansions: Array.isArray(r.expansions) ? r.expansions.filter((x): x is string => typeof x === 'string') : [],
+  places: (r.places ?? [...FILTER_PLACES]).filter((p): p is FilterPlace => (FILTER_PLACES as readonly string[]).includes(p)),
+  expiresAt: r.expires_at, exceptFollowing: r.except_following,
 });
 
+export const FILTER_COLUMNS = 'id, text, kind, action, semantic, expansions, places, expires_at, except_following';
+
 export async function filtersOf(userId: string): Promise<ContentFilter[]> {
-  const { data, error } = await supabaseAdmin.from('atlas_content_filters').select('id, text, kind, action, semantic, expansions').eq('user_id', userId).order('created_at').limit(MAX_FILTERS);
+  const { data, error } = await supabaseAdmin.from('atlas_content_filters').select(FILTER_COLUMNS).eq('user_id', userId).order('created_at').limit(MAX_FILTERS);
   if (error) throw Object.assign(new Error('storage'), { storage: true });
-  return (data ?? []).map(fromRow);
+  return (data ?? []).map(r => fromRow(r as unknown as FilterRow));
 }
 
 /** For the assistant chat route: the key and model to stream with, or why there are none. */

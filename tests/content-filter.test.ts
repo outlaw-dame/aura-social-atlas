@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { compileFilters, filterKind, filtersVersion, fold, hashtagWords, keywordPattern, lexicalHits, lintFilters, normalizeFilterText, parseFilterList, postText, type ContentFilter, type FilterablePost } from '../src/lib/content-filter';
+import { applies, compileFilters, filterKind, filtersVersion, fold, fromMastodonExport, hashtagWords, keywordPattern, lexicalHits, lintFilters, normalizeFilterText, parseFilterList, postText, strongest, toMastodonExport, type ContentFilter, type FilterablePost } from '../src/lib/content-filter';
 
-const f = (text: string, extra: Partial<ContentFilter> = {}): ContentFilter => ({ id: text, text, kind: filterKind(text), action: 'hide', semantic: false, expansions: [], ...extra });
+const f = (text: string, extra: Partial<ContentFilter> = {}): ContentFilter => ({ id: text, text, kind: filterKind(text), action: 'hide', semantic: false, expansions: [], places: ['home', 'public', 'account'], expiresAt: null, exceptFollowing: false, ...extra });
 const post = (text: string, extra: Partial<FilterablePost> = {}): FilterablePost => ({ id: '1', paragraphs: [text], ...extra });
 const hits = (filters: ContentFilter[], p: FilterablePost) => lexicalHits(compileFilters(filters), p).map(h => `${h.filterId}:${h.via}`);
 
@@ -72,4 +72,57 @@ describe('looking over a list', () => {
   test('text for the model is capped', () => {
     expect(postText(post('x'.repeat(3000))).length).toBe(1500);
   });
+});
+
+describe('what Bluesky and Mastodon taught', () => {
+  test('words in scripts without spaces match anywhere (Bluesky)', () => {
+    expect(hits([f('政治')], post('今日は政治について話そう'))).toEqual(['政治:keyword']);
+    expect(hits([f('선거')], post('선거가 다가온다'))).toEqual(['선거:keyword']);
+    expect(hits([f('การเมือง')], post('วันนี้คุยเรื่องการเมือง'))).toEqual(['การเมือง:keyword']);
+  });
+  test('letters split by dots or hyphens read as the word, but a slash stays (Bluesky)', () => {
+    expect(hits([f('nft')], post('buy n-f-t now'))).toEqual(['nft:keyword']);
+    expect(hits([f('spam')], post('s.p.a.m'))).toEqual(['spam:keyword']);
+    expect(hits([f('andor')], post('and/or'))).toEqual([]);
+  });
+  test('reads the quoted post, link description and poll options', () => {
+    expect(hits([f('election')], post('look', { quote: 'Election night thread' }))).toEqual(['election:keyword']);
+    expect(hits([f('recipe')], post('look', { linkTitle: 'Dinner', linkDescription: 'A quick recipe' }))).toEqual(['recipe:keyword']);
+    expect(hits([f('pineapple')], post('Pizza?', { poll: ['Pineapple', 'No'] }))).toEqual(['pineapple:keyword']);
+  });
+  test('the matched words are reported, for “why was this filtered”', () => {
+    const [h] = lexicalHits(compileFilters([f('spoiler*')]), post('Huge SPOILERS ahead'));
+    expect(h.term).toBe('spoilers');
+  });
+  test('expiry and places', () => {
+    const past = new Date(Date.now() - 1000).toISOString(), future = new Date(Date.now() + 60_000).toISOString();
+    expect(applies(f('a', { expiresAt: past }), 'home')).toBe(false);
+    expect(applies(f('a', { expiresAt: future }), 'home')).toBe(true);
+    expect(applies(f('a', { places: ['public'] }), 'home')).toBe(false);
+  });
+  test('hide beats a warning, a warning beats blurred media', () => {
+    expect(strongest([f('a', { action: 'blur' }), f('b', { action: 'warn' })])?.id).toBe('b');
+    expect(strongest([f('a', { action: 'warn' }), f('b', { action: 'hide' })])?.id).toBe('b');
+  });
+});
+
+describe('Mastodon import and export', () => {
+  test('round trip keeps action, places, expiry, wildcards and wordings', () => {
+    const exp = new Date(Date.now() + 86_400_000).toISOString();
+    const out = toMastodonExport([f('spoiler*', { action: 'warn', places: ['home'], expiresAt: exp, expansions: ['finale leak'] })]);
+    expect(out.custom_filters[0]).toMatchObject({ title: 'spoiler*', action: 'warn', context: ['home'], expires_at: exp });
+    expect(out.custom_filters[0].keywords_attributes).toEqual([{ keyword: 'spoiler', whole_word: false }, { keyword: 'finale leak', whole_word: true }]);
+    const back = fromMastodonExport(JSON.parse(JSON.stringify(out)))!;
+    expect(back.map(b => b.text)).toEqual(['*spoiler*', 'finale leak']);
+    expect(back[0]).toMatchObject({ action: 'warn', places: ['home'], expiresAt: exp });
+  });
+  test('reads a real Mastodon export; unknown contexts fall back to everywhere; junk is refused', () => {
+    const real = { custom_filters: [{ title: 'Politics', expires_at: null, context: ['notifications', 'thread'], action: 'hide', keywords_attributes: [{ keyword: 'senate', whole_word: true }], statuses: ['https://x/1'] }] };
+    expect(fromMastodonExport(real)).toEqual([{ text: 'senate', action: 'hide', places: ['home', 'public', 'account'], expiresAt: null }]);
+    expect(fromMastodonExport({ nope: 1 })).toBeNull();
+  });
+});
+
+test('a two-character word in a script without spaces is not "very short"', () => {
+  expect(lintFilters([f('政治')])).toEqual([]);
 });

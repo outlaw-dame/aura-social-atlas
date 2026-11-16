@@ -33,7 +33,9 @@ export type DiscoveryView = 'feeds' | 'discover' | 'groups' | 'activity' | 'mess
  *  profile (Saved is a tab there; follows open from its Following count), then Settings. */
 export function Discovery({ view = 'discover', profileSection, groupId }: { view?: DiscoveryView; profileSection?: ProfileSection; groupId?: string }) {
   const state = useSocial();
-  const aiReady = intelligenceReady(useIntelligence().data);
+  // The assistant answers through /api/chat, so it needs a key kept on Atlas's server.
+  const ai = useIntelligence().data;
+  const aiReady = intelligenceReady(ai) && ai?.active?.where === 'server';
   const auth = useAtlasAuth();
   const [query, setQuery] = useState('');
   const [submitted, setSubmitted] = useState('');

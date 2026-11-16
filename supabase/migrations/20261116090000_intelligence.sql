@@ -33,9 +33,17 @@ create table if not exists public.atlas_content_filters (
   user_id uuid not null references auth.users (id) on delete cascade,
   text text not null check (length(text) between 1 and 200),
   kind text not null check (kind in ('word', 'phrase', 'hashtag', 'topic')),
-  action text not null default 'hide' check (action in ('hide', 'warn')),
+  -- hide: gone from feeds; warn: behind "Filtered: …"; blur: images and video hidden (Mastodon's three actions).
+  action text not null default 'hide' check (action in ('hide', 'warn', 'blur')),
   semantic boolean not null default true,
+  -- Other wordings the AI model found; the person can edit them.
   expansions jsonb not null default '[]'::jsonb check (jsonb_typeof(expansions) = 'array'),
+  -- Where it applies, after Mastodon's contexts: home (Following, For You, circles), public, account (profiles).
+  places text[] not null default array['home', 'public', 'account'] check (places <@ array['home', 'public', 'account'] and cardinality(places) > 0),
+  -- When it stops applying (null: never), like Mastodon's and Bluesky's expiring filters.
+  expires_at timestamptz,
+  -- Skip posts from people the person follows (Bluesky's "exclude users you follow").
+  except_following boolean not null default false,
   created_at timestamptz not null default now()
 );
 create unique index if not exists atlas_content_filters_user_text on public.atlas_content_filters (user_id, lower(text));

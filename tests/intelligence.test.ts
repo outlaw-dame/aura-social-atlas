@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { openRow, sealCredential, VaultError } from '../src/lib/intelligence/vault.server';
-import { completeJson, listModels, openAiBase, parseJsonReply, ProviderError } from '../src/lib/intelligence/llm.server';
+import { completeJson, listModels, openAiBase, parseJsonReply, ProviderError } from '../src/lib/intelligence/llm';
 import { chatModels, defaultModel, keyHint, PROVIDER_IDS } from '../src/lib/intelligence/providers';
 
 const SECRET = 'test-secret-with-at-least-thirty-two-characters!!';
@@ -99,5 +99,28 @@ describe('models', () => {
     expect(chatModels('openai', ['gpt-5.6', 'text-embedding-3-small', 'gpt-5.6-terra', 'dall-e-3'])).toEqual(['gpt-5.6-terra', 'gpt-5.6']);
     expect(defaultModel('google', ['gemini-3.8-pro', 'gemini-3.8-flash', 'gemini-3.8-flash-image'])).toBe('gemini-3.8-flash');
     expect(keyHint('sk-abcdefgh1234')).toBe('…1234');
+  });
+});
+
+describe('browser calls (keys kept on the device)', () => {
+  test('Anthropic gets its direct-browser header only in a browser; Cloudflare is refused there', async () => {
+    const g = globalThis as unknown as { window?: unknown; document?: unknown };
+    g.window = {}; g.document = {};
+    try {
+      const seen: Record<string, string>[] = [];
+      globalThis.fetch = (async (_u: string, init: RequestInit) => { seen.push(init.headers as Record<string, string>); return new Response(JSON.stringify({ data: [{ id: 'claude-haiku-5-5' }] })); }) as typeof fetch;
+      await listModels({ provider: 'anthropic', key: 'sk-ant-x' });
+      expect(seen[0]['anthropic-dangerous-direct-browser-access']).toBe('true');
+      const e = await listModels({ provider: 'cloudflare', key: 'k', account: '0123456789abcdef0123456789abcdef' }).catch(x => x);
+      expect(e.code).toBe('browser-blocked');
+      globalThis.fetch = (async () => { throw new TypeError('Failed to fetch'); }) as unknown as typeof fetch;
+      expect((await listModels({ provider: 'mistral', key: 'k' }).catch(x => x)).code).toBe('browser-blocked');
+    } finally { delete g.window; delete g.document; }
+  });
+  test('on the server, no browser header', async () => {
+    const seen: Record<string, string>[] = [];
+    globalThis.fetch = (async (_u: string, init: RequestInit) => { seen.push(init.headers as Record<string, string>); return new Response(JSON.stringify({ data: [] })); }) as typeof fetch;
+    await listModels({ provider: 'anthropic', key: 'sk-ant-x' });
+    expect(seen[0]['anthropic-dangerous-direct-browser-access']).toBeUndefined();
   });
 });

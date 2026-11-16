@@ -36,7 +36,7 @@ export const Route = createFileRoute("/api/chat")({
           return new Response(ai.problem === "not-ready" ? "Turn on Intelligence and add an API key in Settings" : "The AI service isn't available right now", { status: 409 });
         }
         const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
-        const { openAiBase } = await import("@/lib/intelligence/llm.server");
+        const { openAiBase } = await import("@/lib/intelligence/llm");
         // Every provider here takes OpenAI-style chat with streaming and tools; for Anthropic that's its OpenAI SDK
         // compatibility layer. The base URL is fixed per provider, so the key only goes to its own provider.
         const provider = createOpenAICompatible({ name: ai.credential.provider, baseURL: openAiBase(ai.credential), apiKey: ai.credential.key });

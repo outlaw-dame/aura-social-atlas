@@ -11,6 +11,8 @@ import { ArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { Icon } from './F7Extras';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
+import { FilterPlaceProvider } from '@/components/social/useIntelligence';
+import { MobileFilterGate } from './FilterGate';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 
@@ -115,14 +117,14 @@ export function MobilePublicFedizen() {
     {q.isLoading ? <Block strong inset>Loading public posts…</Block>
       : q.isError || q.data?.error ? <Block strong inset>Fedizen couldn’t be reached right now. <Link onClick={() => q.refetch()}>Try again</Link></Block>
       : !list.length ? <Block strong inset>No public posts on Fedizen yet.</Block>
-      : list.slice(0, 8).map(p => <Card key={p.id} outline>
+      : <FilterPlaceProvider place="public">{list.slice(0, 8).map(p => <MobileFilterGate key={p.id} post={p}><Card outline>
         <CardContent>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} className="atlas-avatar" style={{ objectFit: 'cover' }} referrerPolicy="no-referrer" />}<span><b>{p.author}</b> <span style={{ opacity: .6 }}>{p.handle}</span></span></div>
           {p.paragraphs.slice(0, 5).map((t, i) => <p key={i} style={{ lineHeight: 1.5, overflowWrap: 'anywhere' }}>{t}</p>)}
           {p.image && <img src={p.image} alt="" loading="lazy" style={{ width: '100%', borderRadius: 12 }} referrerPolicy="no-referrer" />}
         </CardContent>
         <CardFooter><span style={{ fontSize: 12, opacity: .6 }}>{when(p.date)}</span><Link external target="_blank" href={p.url}>Open</Link></CardFooter>
-      </Card>)}
+      </Card></MobileFilterGate>)}</FilterPlaceProvider>}
   </>;
 }
 

@@ -1,19 +1,23 @@
-import { compileFilters, filtersVersion, hash, lexicalHits, postTags, postText, strongest, type ContentFilter, type FilterablePost, type LexicalHit, type Verdict } from './content-filter';
+import { applies, compileFilters, filtersVersion, hash, lexicalHits, postTags, postText, strongest, type ContentFilter, type FilterablePost, type FilterPlace, type FilterReason, type LexicalHit, type Verdict } from './content-filter';
 
 /**
- * Applies keyword filters to the posts a feed shows. Browser-side, no React (FilterProvider wires it up).
+ * Applies keyword filters to the posts a feed shows. Browser-side, no React (ContentFilterProvider wires it up).
  *
  * - Keyword-only filters (or Intelligence off): a post is filtered at once when its words match.
  * - Filters checked in context: a post whose words match waits (hidden) until the AI model confirms or clears it,
  *   in batches of up to 16 posts. With deep matching on, every other public post is also checked, but stays visible
  *   meanwhile, so the feed never waits on the AI.
- * - Direct messages are never sent to the AI; keywords alone decide for them.
+ * - Your own posts are never filtered. Direct messages are never sent to the AI; keywords alone decide for them.
+ * - A filter applies only in its places and until it expires. One that skips people you follow waits for Fedizen to
+ *   say whether you follow the author.
  * - If the AI can't answer, filters fall back to their words: nothing a keyword catches slips through.
  * - Verdicts are remembered per post text and filter version (memory, plus this tab's sessionStorage).
  */
 
 export type Judge = (posts: { n: number; text: string; hashtags: string[]; candidates: string[] }[]) => Promise<{ n: number; matches: string[] }[] | null>;
-export type EngineConfig = { filters: ContentFilter[]; ai: boolean; deep: boolean; judge?: Judge; scope?: string };
+/** Whether the person follows an account: true/false once known, undefined while asking. */
+export type FollowLookup = { get(accountId: string): boolean | undefined; request(accountId: string): void };
+export type EngineConfig = { filters: ContentFilter[]; ai: boolean; deep: boolean; judge?: Judge; following?: FollowLookup; scope?: string };
 
 type Pending = { key: string; post: FilterablePost; candidates: string[] };
 
@@ -27,6 +31,7 @@ export class FilterEngine {
   private ai = false;
   private deep = false;
   private judge?: Judge;
+  private following?: FollowLookup;
   private version = '';
   /** AI verdicts: filter ids each post matches, by cache key. */
   private results = new Map<string, string[]>();
@@ -42,6 +47,7 @@ export class FilterEngine {
   configure(c: EngineConfig) {
     const version = filtersVersion(c.filters, `${c.ai}:${c.deep}:${c.scope ?? ''}`);
     this.judge = c.judge;
+    this.following = c.following;
     if (version === this.version) return;
     this.version = version;
     this.filters = c.filters;
@@ -57,31 +63,62 @@ export class FilterEngine {
 
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
   getRevision = () => this.revision;
+  /** Something outside changed (who you follow, the time): evaluate again. */
+  refresh() { this.emit(); }
   private emit() { this.revision++; for (const fn of this.listeners) fn(); }
 
   private key(p: FilterablePost) { return `${this.version}|${p.statusId ?? p.id}|${hash(postText(p))}`; }
 
-  /** What the feed does with this post right now. Pure: call `request` (in an effect) to have the AI check it. */
-  evaluate(p: FilterablePost): Verdict {
-    if (!this.filters.length) return { state: 'clear' };
-    const hits = lexicalHits(this.compiled, p);
-    const plain = (h: LexicalHit[]) => h.map(x => this.byId.get(x.filterId)!).filter(Boolean);
-    const filtered = (fs: ContentFilter[]): Verdict => { const f = strongest(fs); return f ? { state: 'filtered', action: f.action, filter: f } : { state: 'clear' }; };
-    const usesAi = this.ai && p.visibility !== 'direct';
-    if (!usesAi) return filtered(plain(hits));
-    // Keyword-only filters decide at once; filters checked in context wait for the AI.
-    const keywordOnly = plain(hits).filter(f => !f.semantic);
-    const key = this.key(p);
-    const judged = this.results.get(key);
-    if (judged) return filtered([...keywordOnly, ...judged.map(id => this.byId.get(id)).filter((f): f is ContentFilter => !!f)]);
-    const candidates = plain(hits).filter(f => f.semantic);
-    if (this.failed.has(key)) return filtered([...keywordOnly, ...candidates]);
-    if (keywordOnly.length && keywordOnly.some(f => f.action === 'hide')) return filtered(keywordOnly);
-    return candidates.length ? { state: 'pending' } : filtered(keywordOnly);
+  /** Filters that apply to this post here and now; undefined while it's unknown whether you follow its author. */
+  private live(p: FilterablePost, place: FilterPlace): Set<string> | undefined {
+    const now = Date.now(), out = new Set<string>();
+    let unknown = false;
+    for (const f of this.filters) {
+      if (!applies(f, place, now)) continue;
+      if (f.exceptFollowing && p.authorId) {
+        const follows = this.following?.get(p.authorId);
+        if (follows === undefined && this.following) { unknown = true; out.add(f.id); continue; }
+        if (follows) continue;
+      }
+      out.add(f.id);
+    }
+    return unknown ? undefined : out;
   }
 
-  /** Queues the post for the AI when it needs checking (words matched a filter, or deep matching is on). */
-  request(p: FilterablePost) {
+  /** What the feed does with this post right now. Pure: call `request` (in an effect) to have the AI check it. */
+  evaluate(p: FilterablePost, place: FilterPlace = 'home'): Verdict {
+    if (!this.filters.length || p.mine) return { state: 'clear' };
+    const known = this.live(p, place);
+    const liveIds = known ?? new Set(this.filters.filter(f => applies(f, place)).map(f => f.id));
+    const hits = lexicalHits(this.compiled, p).filter(h => liveIds.has(h.filterId));
+    const usesAi = this.ai && p.visibility !== 'direct';
+    // A match on a filter that skips people you follow waits until Fedizen says whether you follow the author.
+    if (!known && hits.some(h => this.byId.get(h.filterId)?.exceptFollowing)) return { state: 'pending' };
+    const word = (h: LexicalHit): [ContentFilter, FilterReason] => [this.byId.get(h.filterId)!, { by: 'words', term: h.term }];
+    const pick = (found: [ContentFilter, FilterReason][]): Verdict => {
+      const f = strongest(found.map(x => x[0]));
+      return f ? { state: 'filtered', action: f.action, filter: f, reason: found.find(x => x[0] === f)![1] } : { state: 'clear' };
+    };
+    if (!usesAi) return pick(hits.map(word));
+    // Keyword-only filters decide at once; filters checked in context wait for the AI.
+    const keywordOnly = hits.filter(h => !this.byId.get(h.filterId)!.semantic).map(word);
+    const key = this.key(p);
+    const judged = this.results.get(key);
+    if (judged) {
+      const byAi = judged.filter(id => liveIds.has(id)).map(id => this.byId.get(id)).filter((f): f is ContentFilter => !!f)
+        .map((f): [ContentFilter, FilterReason] => { const h = hits.find(x => x.filterId === f.id); return [f, h ? { by: 'words', term: h.term } : { by: 'ai' }]; });
+      return pick([...keywordOnly, ...byAi]);
+    }
+    const candidates = hits.filter(h => this.byId.get(h.filterId)!.semantic).map(word);
+    if (this.failed.has(key)) return pick([...keywordOnly, ...candidates]);
+    if (keywordOnly.some(([f]) => f.action === 'hide')) return pick(keywordOnly);
+    return candidates.length ? { state: 'pending' } : pick(keywordOnly);
+  }
+
+  /** Queues the post for the AI when it needs checking, and asks whether you follow its author when a filter needs it. */
+  request(p: FilterablePost, place: FilterPlace = 'home') {
+    if (!this.filters.length || p.mine) return;
+    if (p.authorId && this.following && this.filters.some(f => f.exceptFollowing && applies(f, place)) && this.following.get(p.authorId) === undefined) this.following.request(p.authorId);
     if (!this.ai || !this.judge || p.visibility === 'direct') return;
     const key = this.key(p);
     if (this.results.has(key) || this.failed.has(key) || this.queue.has(key) || this.inFlight.has(key)) return;

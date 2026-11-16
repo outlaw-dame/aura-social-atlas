@@ -1,18 +1,23 @@
 /**
- * Talking to the AI provider with someone's own key. Server-only.
+ * Talking to the AI provider with someone's own key: on Atlas's server for keys kept there, and in the browser for a
+ * key kept on the device only (see device-keys.ts).
  *
- * Every endpoint is fixed here per provider: nothing the browser sends becomes part of a URL except a Cloudflare
+ * Every endpoint is fixed here per provider: nothing a request carries becomes part of a URL except a Cloudflare
  * account id, which must be 32 hex characters. So a key only ever goes to its own provider (no SSRF, no key
- * forwarding), and requests carry a timeout and capped sizes.
+ * forwarding), and requests carry a timeout and capped sizes. From a browser, Anthropic requires the
+ * anthropic-dangerous-direct-browser-access header; Cloudflare's API doesn't allow browser calls at all.
  */
-import { CLOUDFLARE_ACCOUNT, type ProviderId } from './providers';
-import type { Credential } from './vault.server';
+import { CLOUDFLARE_ACCOUNT, type Credential, type ProviderId } from './providers';
 
 export const ANTHROPIC_VERSION = '2026-10-21';
 
 export class ProviderError extends Error {
-  constructor(public code: 'bad-key' | 'no-access' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model', public status?: number) { super(code); }
+  constructor(public code: 'bad-key' | 'no-access' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'browser-blocked', public status?: number) { super(code); }
 }
+
+const inBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
+/** Providers whose API a web page may call directly (CORS). Cloudflare's REST API doesn't allow it. */
+export const BROWSER_CAPABLE: Record<ProviderId, boolean> = { anthropic: true, openai: true, google: true, mistral: true, moonshot: true, cloudflare: false };
 
 /** The OpenAI-compatible base URL for a credential (Anthropic: its OpenAI SDK compatibility layer, used for chat). */
 export function openAiBase(c: Credential): string {
@@ -31,7 +36,7 @@ export function openAiBase(c: Credential): string {
 
 function headers(c: Credential): Record<string, string> {
   return c.provider === 'anthropic'
-    ? { 'x-api-key': c.key, 'anthropic-version': ANTHROPIC_VERSION, 'content-type': 'application/json' }
+    ? { 'x-api-key': c.key, 'anthropic-version': ANTHROPIC_VERSION, 'content-type': 'application/json', ...(inBrowser() ? { 'anthropic-dangerous-direct-browser-access': 'true' } : {}) }
     : { authorization: `Bearer ${c.key}`, 'content-type': 'application/json' };
 }
 
@@ -44,6 +49,7 @@ function failure(status: number): ProviderError {
 }
 
 async function call(url: string, c: Credential, init: { method?: string; body?: unknown; timeout?: number } = {}): Promise<unknown> {
+  if (inBrowser() && !BROWSER_CAPABLE[c.provider]) throw new ProviderError('browser-blocked');
   let res: Response;
   try {
     res = await fetch(url, {
@@ -52,9 +58,12 @@ async function call(url: string, c: Credential, init: { method?: string; body?: 
       ...(init.body ? { body: JSON.stringify(init.body) } : {}),
       signal: AbortSignal.timeout(init.timeout ?? 30_000),
       redirect: 'error',
+      // From a browser: no cookies, and no Referer telling the provider which page called.
+      ...(inBrowser() ? { credentials: 'omit' as const, referrerPolicy: 'no-referrer' as const } : {}),
     });
-  } catch {
-    throw new ProviderError('unavailable');
+  } catch (e) {
+    // In a browser, a request the provider's CORS rules refuse fails as a TypeError before any response arrives.
+    throw new ProviderError(inBrowser() && e instanceof TypeError ? 'browser-blocked' : 'unavailable');
   }
   if (!res.ok) {
     // Read (and drop) the body: provider error text can echo request content, so it's never passed on or logged.

@@ -122,7 +122,7 @@ export default function AtlasMobileApp() {
   const { followed, saved, canSave, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled: assistantWanted } = useSocial();
   // The assistant answers with the person's own key: only there once Intelligence is on with a key.
   const intelligence = useIntelligence();
-  const assistantEnabled = assistantWanted && intelligenceReady(intelligence.data);
+  const assistantEnabled = assistantWanted && intelligenceReady(intelligence.data) && intelligence.data?.active?.where === 'server';
   const auth = useAtlasAuth() as { user?: { email?: string } | null; profile?: { display_name: string | null; avatar_key: string | null } | null; signOut?: () => Promise<void> };
   const [query, setQuery] = useState('');
   const [composeOpen, setComposeOpen] = useState(false);

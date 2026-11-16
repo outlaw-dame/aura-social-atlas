@@ -2,6 +2,8 @@ import { Block, BlockFooter, BlockTitle, Button, Card, CardContent, CardFooter, 
 import { useState } from 'react';
 import { useGroup, useGroupMembership, useGroupsDirectory, useLatestInGroups } from '@/components/social/useGroups';
 import { groupAccessLabel, groupHandle, groupMembersLine, matchesGroup, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
+import { FilterPlaceProvider } from '@/components/social/useIntelligence';
+import { MobileFilterGate } from './FilterGate';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 const meta = (g: Group) => [groupMembersLine(g), groupAccessLabel(g)].filter(Boolean).join(' · ');
@@ -23,6 +25,10 @@ function GroupBanner({ g }: { g: Group }) {
 }
 
 function PostCard({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
+  return <FilterPlaceProvider place="public"><MobileFilterGate post={p}><PostCardBody p={p} showGroup={showGroup} /></MobileFilterGate></FilterPlaceProvider>;
+}
+
+function PostCardBody({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
   return <Card outline className="atlas-group-post">
     <CardContent>
       <div className="atlas-group-post-head">

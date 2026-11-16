@@ -2,17 +2,19 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { API_KEY, CLOUDFLARE_ACCOUNT, PROVIDER_IDS, type ProviderId } from './intelligence/providers';
-import { MAX_FILTERS, filterKind, normalizeFilterText, type ContentFilter, type FilterAction } from './content-filter';
+import { FILTER_PLACES, MAX_EXPANSIONS, MAX_FILTERS, filterKind, normalizeFilterText, type ContentFilter } from './content-filter';
 
 /**
  * Intelligence: opt-in AI in Atlas with the person's own key. Off until they turn it on, and nothing is sent to an AI
- * provider before then. Keys are encrypted on the server and never come back to the browser (vault.server.ts).
+ * provider before then. Keys kept on Atlas's server are encrypted there and never come back to the browser
+ * (vault.server.ts); a key kept on the device only never reaches these functions (device-keys.ts).
  */
 
-export type AiProblem = 'not-configured' | 'not-ready' | 'bad-key' | 'no-access' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'storage';
+export type AiProblem = 'not-configured' | 'not-ready' | 'bad-key' | 'no-access' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'browser-blocked' | 'storage';
 export type SavedKey = { provider: ProviderId; hint: string; models: string[] };
 export type IntelligenceStatus = {
-  /** The server is set up to keep keys (its encryption secret and tables exist). */ available: boolean;
+  /** Atlas's Intelligence tables exist (settings and filters can be kept). */ available: boolean;
+  /** The server can keep keys (its encryption secret is set). */ serverKeys: boolean;
   enabled: boolean; provider: ProviderId | null; model: string | null; deepMatching: boolean; keys: SavedKey[];
 };
 
@@ -32,9 +34,11 @@ export const saveAiKey = createServerFn({ method: 'POST' }).middleware([requireS
   .handler(async ({ data, context }): Promise<{ status: IntelligenceStatus } | { error: AiProblem }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     if (data.provider === 'cloudflare' && !data.account) return { error: 'bad-key' };
+    const { vaultReady } = await import('./intelligence/vault.server');
+    if (!(await vaultReady())) return { error: 'not-configured' };
     const credential = { provider: data.provider, key: data.key, ...(data.provider === 'cloudflare' ? { account: data.account } : {}) };
     try {
-      const { listModels } = await import('./intelligence/llm.server');
+      const { listModels } = await import('./intelligence/llm');
       const { storeCredential } = await import('./intelligence/vault.server');
       const { chatModels, keyHint } = await import('./intelligence/providers');
       const models = chatModels(data.provider, await listModels(credential)).slice(0, 200);
@@ -92,9 +96,27 @@ export const listContentFilters = createServerFn({ method: 'GET' }).middleware([
     try { return { filters: await (await store()).filtersOf(context.userId) }; } catch { return { error: 'not-configured' }; }
   });
 
-/** Adds filters (one, or a pasted list); ones already there are left as they are. */
+const Place = z.enum(FILTER_PLACES as [string, ...string[]]);
+const Options = {
+  action: z.enum(['hide', 'warn', 'blur']),
+  places: z.array(Place).min(1).max(3),
+  expiresAt: z.string().datetime().nullable(),
+  exceptFollowing: z.boolean(),
+};
+const Wordings = z.array(z.string().max(120)).max(MAX_EXPANSIONS);
+/** Wordings as the person edited them: cleaned, at most 60 characters each, no repeats, not the filter itself. */
+function cleanWordings(list: string[], own: string): string[] {
+  const seen = new Set([own.toLowerCase()]), out: string[] = [];
+  for (const w of list) {
+    const t = normalizeFilterText(w)?.slice(0, 60);
+    if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); out.push(t); }
+  }
+  return out.slice(0, MAX_EXPANSIONS);
+}
+
+/** Adds filters (one, a pasted list, or an import); ones already there are left as they are. */
 export const addContentFilters = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, texts: z.array(z.string().max(400)).min(1).max(MAX_FILTERS), action: z.enum(['hide', 'warn']) }).parse(d))
+  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, texts: z.array(z.string().max(400)).min(1).max(MAX_FILTERS), ...Options }).parse(d))
   .handler(async ({ data, context }): Promise<{ filters: ContentFilter[] } | { error: AiProblem }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     try {
@@ -105,7 +127,7 @@ export const addContentFilters = createServerFn({ method: 'POST' }).middleware([
         const text = normalizeFilterText(raw);
         if (!text || have.has(text.toLowerCase())) continue;
         have.add(text.toLowerCase());
-        rows.push({ user_id: context.userId, text, kind: filterKind(text), action: data.action as FilterAction, semantic: true });
+        rows.push({ user_id: context.userId, text, kind: filterKind(text), action: data.action, semantic: true, places: data.places, expires_at: data.expiresAt, except_following: data.exceptFollowing });
       }
       const room = Math.max(0, MAX_FILTERS - existing.length);
       if (rows.length) {
@@ -119,13 +141,23 @@ export const addContentFilters = createServerFn({ method: 'POST' }).middleware([
     }
   });
 
+/** Changes a filter: what it does, where and until when, whether it's checked in context, its wordings. */
 export const updateContentFilter = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, id: Uid, action: z.enum(['hide', 'warn']).optional(), semantic: z.boolean().optional() }).parse(d))
+  .inputValidator(d => z.object({
+    expectedAtlasUserId: Uid, id: Uid, semantic: z.boolean().optional(), expansions: Wordings.optional(),
+    action: Options.action.optional(), places: Options.places.optional(), expiresAt: Options.expiresAt.optional(), exceptFollowing: Options.exceptFollowing.optional(),
+  }).parse(d))
   .handler(async ({ data, context }) => {
     sameSession(data.expectedAtlasUserId, context.userId);
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-    const patch = { ...(data.action ? { action: data.action } : {}), ...(data.semantic !== undefined ? { semantic: data.semantic } : {}) };
-    if (Object.keys(patch).length) await supabaseAdmin.from('atlas_content_filters').update(patch).eq('id', data.id).eq('user_id', context.userId);
+    const own = (await (await store()).filtersOf(context.userId)).find(f => f.id === data.id);
+    const patch = {
+      ...(data.action ? { action: data.action } : {}), ...(data.semantic !== undefined ? { semantic: data.semantic } : {}),
+      ...(data.expansions && own ? { expansions: cleanWordings(data.expansions, own.text) } : {}),
+      ...(data.places ? { places: data.places } : {}), ...(data.expiresAt !== undefined ? { expires_at: data.expiresAt } : {}),
+      ...(data.exceptFollowing !== undefined ? { except_following: data.exceptFollowing } : {}),
+    };
+    if (own && Object.keys(patch).length) await supabaseAdmin.from('atlas_content_filters').update(patch).eq('id', data.id).eq('user_id', context.userId);
     return { filters: await (await store()).filtersOf(context.userId) };
   });
 
@@ -148,7 +180,7 @@ export const expandContentFilter = createServerFn({ method: 'POST' }).middleware
       if ('problem' in ai) return { error: ai.problem };
       const f = (await (await store()).filtersOf(context.userId)).find(x => x.id === data.id);
       if (!f) return { filters: await (await store()).filtersOf(context.userId) };
-      const { expandFilter } = await import('./intelligence/tasks.server');
+      const { expandFilter } = await import('./intelligence/tasks');
       const expansions = await expandFilter(ai.credential, ai.model, f);
       const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
       await supabaseAdmin.from('atlas_content_filters').update({ expansions }).eq('id', f.id).eq('user_id', context.userId);
@@ -173,15 +205,8 @@ export const judgeFilteredPosts = createServerFn({ method: 'POST' }).middleware(
     try {
       const ai = await (await store()).activeModel(context.userId);
       if ('problem' in ai) return { error: ai.problem };
-      const filters = (await (await store()).filtersOf(context.userId)).filter(f => f.semantic);
-      if (!filters.length) return { verdicts: data.posts.map(p => ({ n: p.n, matches: [] })) };
-      const known = new Set(filters.map(f => f.id));
-      const posts = data.posts.map(p => ({ ...p, candidates: p.candidates.filter(id => known.has(id)) }))
-        .filter(p => ai.deepMatching || p.candidates.length);
-      if (!posts.length) return { verdicts: data.posts.map(p => ({ n: p.n, matches: [] })) };
-      const { judgePosts } = await import('./intelligence/tasks.server');
-      const found = await judgePosts(ai.credential, ai.model, filters, posts, ai.deepMatching);
-      return { verdicts: data.posts.map(p => ({ n: p.n, matches: found.get(p.n) ?? [] })) };
+      const { judgeWith } = await import('./intelligence/tasks');
+      return { verdicts: await judgeWith(ai.credential, ai.model, await (await store()).filtersOf(context.userId), data.posts, ai.deepMatching) };
     } catch (e) {
       return { error: (await store()).problem(e) };
     }
@@ -197,10 +222,45 @@ export const suggestContentFilters = createServerFn({ method: 'POST' }).middlewa
       if ('problem' in ai) return { error: ai.problem };
       const filters = await (await store()).filtersOf(context.userId);
       if (!filters.length) return { suggestions: [], cautions: [] };
-      const { suggestFilters } = await import('./intelligence/tasks.server');
+      const { suggestFilters } = await import('./intelligence/tasks');
       return await suggestFilters(ai.credential, ai.model, filters);
     } catch (e) {
       return { error: (await store()).problem(e) };
     }
   });
 
+
+/** "Filter posts like this": a topic filter describing the post, for the person to edit before adding. */
+export const describePostForFilter = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, text: z.string().min(1).max(1600) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ filter: string } | { error: AiProblem }> => {
+    sameSession(data.expectedAtlasUserId, context.userId);
+    try {
+      const ai = await (await store()).activeModel(context.userId);
+      if ('problem' in ai) return { error: ai.problem };
+      const { describePost } = await import('./intelligence/tasks');
+      return { filter: await describePost(ai.credential, ai.model, data.text) };
+    } catch (e) {
+      return { error: (await store()).problem(e) };
+    }
+  });
+
+/**
+ * Which of these accounts the person follows on Fedizen, for filters that skip people they follow. Reads
+ * /api/v1/accounts/relationships (40 ids at most, already on the READS allowlist). Unknown when not connected.
+ */
+export const followingAmong = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, ids: z.array(z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)).min(1).max(40) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ following: Record<string, boolean> } | { error: 'not-connected' | 'unavailable' }> => {
+    sameSession(data.expectedAtlasUserId, context.userId);
+    const { tokenFor, fedizenGet } = await import('./fedizen.server');
+    const t = await tokenFor(context.userId);
+    if (!t) return { error: 'not-connected' };
+    const q = [...new Set(data.ids)].map(id => `id%5B%5D=${encodeURIComponent(id)}`).join('&');
+    const r = await fedizenGet(t.access_token, `/api/v1/accounts/relationships?${q}`).catch(() => null);
+    if (!r || r.status !== 200) return { error: 'unavailable' };
+    const following: Record<string, boolean> = {};
+    for (const id of data.ids) following[id] = false;
+    for (const rel of r.data as { id: string; following?: boolean | null }[]) if (rel.id in following) following[rel.id] = rel.following === true;
+    return { following };
+  });

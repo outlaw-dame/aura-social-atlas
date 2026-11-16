@@ -309,6 +309,18 @@ const status = z.object({
     description: z.string().max(1000).nullish().catch(null),
     image: z.string().max(2048).nullish().catch(null),
   }).nullish().catch(null),
+  // What keyword filters read besides the text (each fails on its own to null).
+  spoiler_text: z.string().max(1000).nullish().catch(null),
+  tags: z.array(z.object({ name: z.string().max(100) })).max(50).nullish().catch(null),
+  poll: z.object({ options: z.array(z.object({ title: z.string().max(200) })).max(20) }).nullish().catch(null),
+  // Mastodon 4.5 quotes: { state, quoted_status }. Only the quoted post's own words, never deeper.
+  quote: z.object({
+    quoted_status: z.object({
+      content: z.string().max(20_000).nullish().catch(null),
+      spoiler_text: z.string().max(1000).nullish().catch(null),
+      media_attachments: z.array(z.object({ description: z.string().max(1500).nullish().catch(null) })).max(20).nullish().catch(null),
+    }).nullish().catch(null),
+  }).nullish().catch(null),
 });
 // The REST client only reads one reblog level. Avoid unbounded recursion.
 const timelineStatus = status.extend({ reblog: status.nullish() });

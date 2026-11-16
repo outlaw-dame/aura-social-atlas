@@ -3,6 +3,8 @@ import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
 import { followLabels } from '@/lib/follow-labels';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from '@/components/social/useFediProfile';
+import { FilterPlaceProvider } from '@/components/social/useIntelligence';
+import { MobileFilterGate } from './FilterGate';
 
 /**
  * Phone: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -53,13 +55,13 @@ export function FediProfilePopup({ target, onClose }: { target: FediProfileTarge
         {p.bio.length > 0 && <Block className="atlas-fedi-bio">{p.bio.map((t, i) => <p key={i}>{t}</p>)}</Block>}
         {p.fields.length > 0 && <List strong inset dividers>{p.fields.map(f => <ListItem key={f.name} header={f.name} title={f.value} />)}</List>}
         <BlockTitle>{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</BlockTitle>
-        {p.posts.map(post => <Block key={post.id} strong inset className="atlas-fedi-post">
+        <FilterPlaceProvider place="account">{p.posts.map(post => <MobileFilterGate key={post.id} post={post}><Block strong inset className="atlas-fedi-post">
           {post.title && <h2>{post.title}</h2>}
           {post.cw ? <details><summary>Content warning: {post.cw}</summary>{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</details>
             : post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}
           {post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}
           <p className="atlas-fedi-note">{day(post.date)} · <Link external target="_blank" href={post.url}>Original</Link></p>
-        </Block>)}
+        </Block></MobileFilterGate>)}</FilterPlaceProvider>
         {!p.posts.length && <Block>{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</Block>}
         <Block><Link external target="_blank" href={p.url}>View on {p.host}</Link></Block>
       </>}

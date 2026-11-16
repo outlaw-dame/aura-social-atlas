@@ -13,6 +13,7 @@ import { FeedPostCard, useFeedPostActions } from '@/components/social/FeedPostCa
 import { getTagFeed } from '@/lib/tag-feed.functions';
 import { linkifyHashtags } from '@/lib/hashtags';
 import { NetworkBadge } from '@/lib/networks';
+import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 
 export const Route = createFileRoute('/tags/$tag')({
   head: ({ params }) => {
@@ -73,7 +74,7 @@ function FedizenTagPosts({ posts, tag, failed, problem, retry }: { posts: Fedize
   if (problem) return <Reconnect message={FEED_PROBLEM[problem]} tag={tag} />;
   return <>
     {actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}
-    {posts.length ? <div className="space-y-6">{posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} inTag={tag.replace(/^#/, '').toLowerCase()} />)}</div>
+    {posts.length ? <div className="space-y-6"><FilterPlaceProvider place="public">{posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} inTag={tag.replace(/^#/, '').toLowerCase()} />)}</FilterPlaceProvider></div>
       : <p className="text-sm text-muted-foreground">No posts you can see are tagged {tag} yet.</p>}
     {actions.dialog}
   </>;

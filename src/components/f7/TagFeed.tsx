@@ -6,6 +6,7 @@ import { useFollowedTagList, useTagFollow, useTagFollowState } from '@/component
 import { hashtagLabel, TagText } from '@/lib/hashtags';
 import { pushPage, tagPageUrl } from './navigation';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
+import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 
 /**
  * Phone: a hashtag's feed, opened from a hashtag in a post or a followed-tag line. It's a page pushed onto the main
@@ -42,7 +43,7 @@ export function TagFeedPage({ f7route }: { f7route?: { params: { tag?: string } 
           : q.isError || q.data?.error === 'unavailable' ? <Block strong inset>{FEED_PROBLEM.unavailable} <Link onClick={() => void q.refetch()}>Try again</Link></Block>
           : q.data?.error ? <Block strong inset><p style={{ marginTop: 0 }}>{FEED_PROBLEM[q.data.error]}</p><ConnectFedizen /></Block>
           : !q.data?.posts.length ? <Block strong inset>No posts you can see are tagged {tag} yet.</Block>
-          : q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} inTag={tag} />)}
+          : <FilterPlaceProvider place="public">{q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} inTag={tag} />)}</FilterPlaceProvider>}
         {actions.sheet}
       </>}
     </Page>;

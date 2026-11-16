@@ -5,6 +5,8 @@ import type { FedizenPost } from '@/lib/fedizen-feed';
 import type { useSaveToggle } from '@/components/social/useFedizenLibrary';
 import { AUDIENCE_LABEL, compactCount, replyMention, replyVisibility, sharePost, useReactions, useReply } from '@/components/social/usePostActions';
 import { Icon } from './F7Extras';
+import { useAtlasAuth } from '@/components/social/AuthState';
+import { useFilterLikeThis } from '@/components/social/useFilterLikeThis';
 
 type Save = ReturnType<typeof useSaveToggle>;
 type Reactions = ReturnType<typeof useReactions>;
@@ -19,6 +21,18 @@ export function MobilePostActions({ post: p, save, reactions, onReply }: { post:
   const like = reactions.state(p, 'like'), boost = reactions.state(p, 'boost');
   const saved = save.isSaved(p);
   const boostable = p.visibility !== 'private' && p.visibility !== 'direct';
+  const { user } = useAtlasAuth();
+  const like_ = useFilterLikeThis();
+  /** "Filter posts like this": a first draft from the AI model (or the post's hashtag), edited before it's added. */
+  const filterLikeThis = async () => {
+    const wait = f7.dialog.preloader('Thinking…');
+    const d = await like_.draft(p);
+    wait.close();
+    f7.dialog.prompt(d.error ?? 'A word, phrase, #hashtag or topic. Change it any time in Keyword filters.', 'Filter posts like this', async v => {
+      const err = await like_.add(v, 'hide');
+      f7.toast.create({ text: err ?? 'Filter added', closeTimeout: 1500 }).open();
+    }, () => {}, d.text);
+  };
   return <div className="atlas-post-actions" role="group" aria-label="Post actions">
     {acts && <>
       <Link onClick={() => onReply(p)} aria-label={`Reply${p.counts?.replies ? `, ${p.counts.replies} replies` : ''}`}>
@@ -41,6 +55,9 @@ export function MobilePostActions({ post: p, save, reactions, onReply }: { post:
       const r = await sharePost(p);
       if (r === 'copied') f7.toast.create({ text: 'Link copied', closeTimeout: 1500 }).open();
     }}><Icon ios="f7:square_arrow_up" md="material:share" /></Link>
+    {user && <Link aria-label="More" onClick={() => f7.actions.create({ buttons: [[{ text: 'Filter posts like this', onClick: () => void filterLikeThis() }], [{ text: 'Cancel', strong: true }]] }).open()}>
+      <Icon ios="f7:ellipsis" md="material:more_horiz" />
+    </Link>}
   </div>;
 }
 

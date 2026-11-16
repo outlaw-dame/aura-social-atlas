@@ -1,6 +1,6 @@
 /**
  * The AI services someone can bring their own key for. Browser-safe: names, what a key looks like and where to get
- * one. Endpoints live server-side only (llm.server.ts), fixed per provider, so a key is only ever sent to its own
+ * one. Endpoints live in llm.ts, fixed per provider, so a key is only ever sent to its own
  * provider's API.
  *
  * Sources (checked November 2026):
@@ -35,6 +35,9 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
   moonshot: { id: 'moonshot', name: 'Moonshot AI', product: 'Kimi', keyUrl: 'https://platform.kimi.ai/docs/get-your-api-key', keyPlaceholder: 'sk-…' },
   cloudflare: { id: 'cloudflare', name: 'Cloudflare', product: 'Workers AI', keyUrl: 'https://dash.cloudflare.com/profile/api-tokens', keyPlaceholder: 'API token with Workers AI access', needsAccount: true },
 };
+
+/** A provider key and, for Cloudflare, the account it belongs to. */
+export type Credential = { provider: ProviderId; key: string; account?: string };
 
 export const isProviderId = (v: unknown): v is ProviderId => typeof v === 'string' && (PROVIDER_IDS as readonly string[]).includes(v);
 

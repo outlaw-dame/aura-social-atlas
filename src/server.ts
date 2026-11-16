@@ -37,12 +37,27 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   });
 }
 
+/**
+ * Baseline hardening for pages. A strict script-src would need a nonce on every hydration script TanStack Start
+ * inlines, and a connect-src allowlist would break federated video (hls.js fetches manifests from any PeerTube host),
+ * so the policy covers what's safe everywhere: no plugins, no <base> hijacking, no MIME sniffing, and no full URLs in
+ * the Referer sent to other sites. Keys kept on the device stay a readable-by-the-page trade-off, which Settings says.
+ */
+function withSecurityHeaders(response: Response): Response {
+  if (!(response.headers.get("content-type") ?? "").includes("text/html")) return response;
+  const out = new Response(response.body, response);
+  if (!out.headers.has("content-security-policy")) out.headers.set("content-security-policy", "object-src 'none'; base-uri 'self'");
+  out.headers.set("x-content-type-options", "nosniff");
+  if (!out.headers.has("referrer-policy")) out.headers.set("referrer-policy", "strict-origin-when-cross-origin");
+  return out;
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       console.error(error);
       return new Response(renderErrorPage(), {

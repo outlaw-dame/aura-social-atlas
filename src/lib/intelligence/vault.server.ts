@@ -9,12 +9,12 @@
  * - A fresh random 96-bit IV per encryption (NIST SP 800-38D §8.2.2).
  * - key_id names the secret that encrypted a row. Rotating: set the new secret, move the old one to
  *   ATLAS_AI_KEY_SECRET_PREVIOUS; rows still decrypt and are re-encrypted with the new secret the next time they're read.
- * - Keys are never returned to the browser, logged, or sent anywhere but their own provider (llm.server.ts).
+ * - Keys are never returned to the browser, logged, or sent anywhere but their own provider (llm.ts).
  */
 import { supabaseAdmin } from '@/integrations/supabase/client.server';
-import type { ProviderId } from './providers';
+import type { Credential, ProviderId } from './providers';
 
-export type Credential = { provider: ProviderId; key: string; account?: string };
+export type { Credential };
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 const b64 = (u: Uint8Array) => btoa(String.fromCharCode(...u));

@@ -4,6 +4,8 @@ import { ArrowLeft, ArrowUpRight, Check, Copy, Hash, Lock, Megaphone, Search, Us
 import { Button } from '@/components/ui/button';
 import { useGroup, useGroupMembership, useGroupsDirectory, useLatestInGroups } from './useGroups';
 import { groupAccessLabel, groupHandle, groupMembersLine, matchesGroup, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
+import { FilterPlaceProvider } from './useIntelligence';
+import { FilterGate } from './FilterGate';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 
@@ -30,6 +32,10 @@ function Access({ g }: { g: Group }) {
 }
 
 function Post({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
+  return <FilterPlaceProvider place="public"><FilterGate post={p}><PostBody p={p} showGroup={showGroup} /></FilterGate></FilterPlaceProvider>;
+}
+
+function PostBody({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
   return <article className="border-b border-border py-5">
     <p className="flex items-center gap-2 text-xs">
       {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" className="size-8 atlas-avatar object-cover" /> : <span aria-hidden="true" className="social-avatar size-8 font-serif">{p.author.charAt(0)}</span>}
