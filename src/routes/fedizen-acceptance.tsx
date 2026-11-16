@@ -108,7 +108,7 @@ function FedizenAcceptancePage() {
             <section className="mt-8 rounded-lg border border-border p-5" aria-labelledby="connect-heading">
               <h2 id="connect-heading" className="font-medium">1. Connect Fedizen</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Opens Fedizen to approve read-only access. After approving you’ll land on Following; come back here to run the checks.
+                Opens Fedizen to approve the permissions Atlas currently requests (read, write, and follow). These diagnostics only read data and never post. After approving you’ll land on Following; return here to run the checks.
               </p>
               {embedded ? (
                 <p className="mt-4 text-sm">
