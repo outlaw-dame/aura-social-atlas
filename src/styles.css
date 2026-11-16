@@ -666,11 +666,15 @@ html.atlas-rail .atlas-mini { left: calc(var(--f7-panel-width, 88px) + 8px); }
 /* Post cards in Feeds: author row, text, media or link preview, then the standard actions. */
 .atlas-post-card .card-content { padding-bottom: 4px; }
 /* A post a "warn" filter caught: one quiet line, like Mastodon's "Filtered: …" with "Show anyway". */
-.atlas-post-filtered-row { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
 .atlas-post-filtered .card-content { padding-bottom: 16px; }
-.atlas-post-filtered-row > span { flex: 1; min-width: 0; }
-.atlas-post-filtered-row > span > * { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.atlas-post-filtered-row small { font-size: 13px; opacity: .8; }
+/* The hidden post's notice: a centred warning mark, title, reason and Tap to view (as Bluesky clients on iOS do). */
+.atlas-filter-warning { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; margin-top: 12px; padding: 26px 20px; border: 0; border-radius: 16px; font: inherit; text-align: center; color: inherit; cursor: pointer;
+  background: color-mix(in oklab, currentColor 5%, transparent); }
+.atlas-filter-warning svg { margin-bottom: 4px; }
+.atlas-filter-warning b { font-size: 17px; font-weight: 600; }
+.atlas-filter-warning span { font-size: 15px; line-height: 1.35; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
+.atlas-filter-warning em { margin-top: 6px; font-style: normal; font-size: 15px; font-weight: 600; color: var(--f7-theme-color); }
+.atlas-filter-warning:active { opacity: .7; }
 /* "blur" filters (Mastodon 4.4): the post shows, its images and video don't, until shown. Avatars stay. */
 .atlas-filter-blur :is(img, video, picture, canvas):not(.atlas-avatar, .atlas-avatar *, .atlas-post-avatar, [class*="avatar"]) { filter: blur(28px) saturate(.6); pointer-events: none; }
 .atlas-filter-blur :is(iframe) { visibility: hidden; }
