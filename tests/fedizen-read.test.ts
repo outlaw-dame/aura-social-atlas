@@ -40,6 +40,19 @@ describe('Fedizen read-side failure isolation', () => {
     expect(urls).toEqual(['https://fedizen.net/api/v1/timelines/home?limit=20']);
   });
 
+  test('keeps what opens profiles in Atlas: mentions and the actor', async () => {
+    // As fedizen.net's /api/v1/timelines answer (Bonfire's Mastodon API).
+    const body = [{ id: 'o1', content: '<p>@<span>nedley</span> hi</p>',
+      account: { acct: 'ai6yr@m.ai6yr.org', username: 'ai6yr', url: 'https://m.ai6yr.org/users/ai6yr', uri: 'https://m.ai6yr.org/users/ai6yr' },
+      mentions: [{ acct: 'nedley@mastodon.social', username: 'nedley@mastodon.social', url: 'https://fedizen.net/@nedley@mastodon.social', id: 'x' }] }];
+    globalThis.fetch = mock(async () => new Response(JSON.stringify(body), { status: 200 })) as typeof fetch;
+    const r = await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20');
+    const s = r.data[0] as { mentions?: unknown; account?: { url?: string; uri?: string } };
+    expect(s.mentions).toEqual([{ acct: 'nedley@mastodon.social', username: 'nedley@mastodon.social' }]);
+    expect(s.account?.url).toBe('https://m.ai6yr.org/users/ai6yr');
+    expect(s.account?.uri).toBe('https://m.ai6yr.org/users/ai6yr');
+  });
+
   test('rejects object-shaped HTTP 200 payload as upstream failure', async () => {
     globalThis.fetch = mock(async () => new Response('{"error":"secret"}', { status: 200 })) as typeof fetch;
     expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 502, data: [] });
