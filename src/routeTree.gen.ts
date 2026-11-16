@@ -25,6 +25,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as FedizenCallbackRouteImport } from './routes/fedizen.callback'
+import { Route as FedizenAcceptanceRouteImport } from './routes/fedizen-acceptance'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
 import { Route as SettingsHashtagsRouteImport } from './routes/settings.hashtags'
@@ -112,6 +113,11 @@ const FedizenCallbackRoute = FedizenCallbackRouteImport.update({
   path: '/fedizen/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FedizenAcceptanceRoute = FedizenAcceptanceRouteImport.update({
+  id: '/fedizen-acceptance',
+  path: '/fedizen-acceptance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -160,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
@@ -183,6 +190,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
@@ -208,6 +216,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
@@ -234,6 +243,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/api/chat'
     | '/fedizen/callback'
+    | '/fedizen-acceptance'
     | '/settings/appearance'
     | '/settings/hashtags'
     | '/settings/intelligence'
@@ -257,6 +267,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/api/chat'
     | '/fedizen/callback'
+    | '/fedizen-acceptance'
     | '/settings/appearance'
     | '/settings/hashtags'
     | '/settings/intelligence'
@@ -281,6 +292,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/api/chat'
     | '/fedizen/callback'
+    | '/fedizen-acceptance'
     | '/settings/appearance'
     | '/settings/hashtags'
     | '/settings/intelligence'
@@ -306,6 +318,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiChatRoute: typeof ApiChatRoute
   FedizenCallbackRoute: typeof FedizenCallbackRoute
+  FedizenAcceptanceRoute: typeof FedizenAcceptanceRoute
   TagsTagRoute: typeof TagsTagRoute
 }
 
@@ -423,6 +436,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FedizenCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/fedizen-acceptance': {
+      id: '/fedizen-acceptance'
+      path: '/fedizen-acceptance'
+      fullPath: '/fedizen-acceptance'
+      preLoaderRoute: typeof FedizenAcceptanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings/': {
       id: '/settings/'
       path: '/'
@@ -505,6 +525,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiChatRoute: ApiChatRoute,
   FedizenCallbackRoute: FedizenCallbackRoute,
+  FedizenAcceptanceRoute: FedizenAcceptanceRoute,
   TagsTagRoute: TagsTagRoute,
 }
 export const routeTree = rootRouteImport
