@@ -12,13 +12,20 @@ const server = () => import('./collections.server');
 /** Every personal function names the Atlas account it acts for; a switched session is refused, as for Fedizen. */
 const me = z.object({ expectedAtlasUserId: uuid });
 
+/** What to log about a failure: a database error code (eg. PGRST205, missing table) or the error class, never its
+ * message, which can carry rows, URLs or remote responses. */
+const logSafe = (e: unknown) => {
+  const code = e && typeof e === 'object' && typeof (e as { code?: unknown }).code === 'string' ? (e as { code: string }).code.slice(0, 16) : undefined;
+  return code ? { code } : { kind: e instanceof Error ? e.name : 'unknown' };
+};
+
 /** The signed-in person's collections (with pending items). Empty if the collections table isn't there yet. */
 export const getMyCollections = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.parse(d))
   .handler(async ({ data, context }): Promise<{ collections: Collection[]; error?: string }> => {
     assertSession(data.expectedAtlasUserId, context.userId);
     try { return { collections: await (await server()).listMine(context.userId, origin()) }; }
-    catch (e) { console.error(e); return { collections: [], error: 'Collections aren’t available right now.' }; }
+    catch (e) { console.error('Collections unavailable', logSafe(e)); return { collections: [], error: 'Collections aren’t available right now.' }; }
   });
 
 /** Opens a collection by its Atlas id, or a shared Mastodon collection link. Public, like Mastodon's. */
@@ -27,7 +34,7 @@ export const getCollection = createServerFn({ method: 'GET' })
   .handler(async ({ data }): Promise<Collection | null> => {
     const s = await server();
     try { return data.id ? await s.getOne(data.id, null, origin()) : await s.readMastodonCollection(data.link!); }
-    catch (e) { console.error(e); return null; }
+    catch (e) { console.error('Collection unavailable', logSafe(e)); return null; }
   });
 
 /** A Mastodon account's public collections (for its profile). */

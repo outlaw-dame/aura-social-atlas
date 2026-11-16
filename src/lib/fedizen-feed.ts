@@ -134,6 +134,23 @@ function parseCanonicalOrigin(value: string): URL | null {
   }
 }
 
+/**
+ * Atlas's own Lovable project, the only Lovable hosts a Fedizen callback may return to when
+ * ATLAS_FEDIZEN_CALLBACK_ORIGINS isn't set. Any *.lovable.app used to pass, so another Lovable tenant could have
+ * Atlas register a Fedizen app that returns grants to it. Lovable's hosts for a project: the editor preview
+ * id-preview(-<build>)--<project id>.lovable.app, <project id>.lovableproject.com, preview--<slug>.lovable.app and
+ * the published <slug>.lovable.app. A renamed project or a custom domain sets ATLAS_FEDIZEN_CALLBACK_ORIGINS.
+ */
+export const ATLAS_LOVABLE_PROJECT = { id: 'd3fdefe8-1c72-40dc-8fa6-0b966befbe5b', slug: 'aura-social-atlas' } as const;
+export function isAtlasLovableHost(host: string): boolean {
+  const { id, slug } = ATLAS_LOVABLE_PROJECT;
+  const h = host.toLowerCase();
+  return new RegExp(`^id-preview(?:-[a-z0-9]{1,40})?--${id}\\.lovable\\.app$`).test(h) ||
+    h === `${id}.lovableproject.com` ||
+    h === `preview--${slug}.lovable.app` ||
+    h === `${slug}.lovable.app`;
+}
+
 export function allowedCallback(
   requestedOrigin: string,
   requestOrigin: string | null,
@@ -151,10 +168,8 @@ export function allowedCallback(
       return parsed !== null && parsed.protocol === 'https:' && parsed.origin === requested.origin;
     });
   } else {
-    const host = requested.hostname;
-    allowed = (requested.protocol === 'https:' &&
-      (host.endsWith('.lovable.app') || host.endsWith('.lovableproject.com'))) ||
-      (requested.protocol === 'http:' && host === 'localhost');
+    allowed = (requested.protocol === 'https:' && isAtlasLovableHost(requested.hostname)) ||
+      (requested.protocol === 'http:' && requested.hostname === 'localhost');
   }
   return allowed ? `${requested.origin}/fedizen/callback` : null;
 }
