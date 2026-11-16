@@ -40,3 +40,17 @@ describe('Fedizen HTTP transport', () => {
     expect(transportDetail(new Error('mystery error with private token=123'))).toBe('network');
   });
 });
+
+describe('fetch options Cloudflare Workers accept', () => {
+  test('no server-side fetch uses redirect: "error" (workerd throws on it)', async () => {
+    const { readdirSync, readFileSync, statSync } = await import('node:fs');
+    const walk = (d: string): string[] => readdirSync(d).flatMap(n => { const p = `${d}/${n}`; return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(n) && !/\.test\./.test(n) ? [p] : []; });
+    const offenders = walk('src').filter(f => /redirect:\s*['"]error['"]/.test(readFileSync(f, 'utf8')));
+    expect(offenders).toEqual([]);
+  });
+  test('the runtime refusing an option is told apart', async () => {
+    const { transportDetail } = await import('../src/lib/fedizen-http');
+    expect(transportDetail(new TypeError('Invalid redirect value, must be one of "follow" or "manual"'))).toBe('unsupported');
+    expect(transportDetail(new Error("The 'cache' field on 'RequestInitializerDict' is not implemented."))).toBe('network');
+  });
+});

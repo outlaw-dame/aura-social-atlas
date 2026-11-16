@@ -23,7 +23,7 @@ describe('server-only Bonfire GraphQL transport', () => {
       requestCount++;
       expect(String(url)).toBe('https://fedizen.net/api/graphql');
       expect(init?.method).toBe('POST');
-      expect(init?.redirect).toBe('error');
+      expect(init?.redirect).toBe('manual');
       expect(init?.cache).toBe('no-store');
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer opaque-token');
       expect(JSON.parse(String(init?.body)).query).toContain('AtlasTest');

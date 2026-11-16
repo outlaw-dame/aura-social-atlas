@@ -57,7 +57,7 @@ async function call(url: string, c: Credential, init: { method?: string; body?: 
       headers: headers(c),
       ...(init.body ? { body: JSON.stringify(init.body) } : {}),
       signal: AbortSignal.timeout(init.timeout ?? 30_000),
-      redirect: 'error',
+      redirect: 'manual',
       // From a browser: no cookies, and no Referer telling the provider which page called.
       ...(inBrowser() ? { credentials: 'omit' as const, referrerPolicy: 'no-referrer' as const } : {}),
     });
