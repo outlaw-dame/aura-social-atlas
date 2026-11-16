@@ -42,3 +42,13 @@
 - Prefer exact scoped session/owner checks, no raw token logs, bounded timeouts, no automatic retry of OAuth code redemption or writes, bounded idempotent query retries only.
 - Maintain a CI green candidate and pinned Railway deployment SHA; use one Virginia replica with private Cloudflare tunnel, no public origin and no private-data edge cache.
 - Document observed results and blockers in https://github.com/outlaw-dame/aura-social-atlas/issues/123. Preserve CI and review evidence and never equate offline tests to live Fedizen user approval.
+
+## Cloudflare Workers fetch redirect compatibility — 2026-11-16
+
+- **Root cause of the Lovable runtime failures identified:** Cloudflare Workers rejects `fetch(url, {redirect: 'error'})` at Request construction before any HTTP request is sent. Node/Bun CI accepts this standard mode, so host-independent CI could not reproduce it. [Cloudflare Workers Request documentation](https://developers.cloudflare.com/workers/runtime-apis/request/) explicitly instructs using `redirect: 'manual'` and checking the HTTP status.
+- [PR #149](https://github.com/outlaw-dame/aura-social-atlas/pull/149) merged to `main` (commit `b5bac2dfa9fa304de270207a4c39b8497ca3e15b`); same source changes merged to isolated staging via [PR #152](https://github.com/outlaw-dame/aura-social-atlas/pull/152). Client fetches now request `manual` and their response handlers reject unsuccessful 3xx rather than following redirected URLs carrying a token or authorization data.
+- PR #149's Fedizen REST, public GraphQL/OIDC and Atlas/gateway GitHub CI all passed. The Codex review automation could not run because of account usage limits; this is **not** a passed Codex security review.
+- Cloudflare Workers supports `cache: 'no-store'` if compatibility date is November 11, 2024 or newer, or `cache_option_enabled` is configured. A separate compatibility failure remains possible on older Workers deployments. Do not remove privacy-related `no-store` without checking the hosting runtime.
+- The fix is strongly supported by Cloudflare upstream source and docs; a logged-in **Lovable** browser recheck after the synchronized revision is still required before marking that environment as independently verified. The Railway Node public-GraphQL route was already reachable, and its staging deployment will be repinned after exact-head CI.
+- **Unchanged private acceptance blockers:** staging-specific Supabase secret, enabled custom OIDC provider + dedicated client, and a real consented user grant. Do not reuse Lovable database or extract credentials with SQL. The native GraphQL feature flag stays disabled.
+
