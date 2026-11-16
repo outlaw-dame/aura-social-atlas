@@ -38,13 +38,21 @@ export function defaultAvatarKey(seed: string): string {
  * every avatar <img> in <picture>, one capture-phase listener swaps a preset's AVIF for its WebP copy if it fails.
  */
 const WEBP_FOR = new Map(AVATAR_PRESETS.map(p => [new URL(p.src, 'http://x').pathname, p.webp]));
+function swapToWebp(img: HTMLImageElement) {
+  const webp = WEBP_FOR.get(new URL(img.currentSrc || img.src, location.href).pathname);
+  if (webp && img.getAttribute('src') !== webp) img.src = webp;
+}
+/** Server-rendered avatars can fail before this module runs (slow script, no AVIF): their error event has already
+ *  fired and hydration won't retry an unchanged URL, so sweep for preset images that finished without a picture. */
+function recoverFailed() {
+  for (const img of Array.from(document.images)) if (img.complete && img.naturalWidth === 0) swapToWebp(img);
+}
 function installAvifFallback() {
   if (typeof window === 'undefined') return;
-  window.addEventListener('error', e => {
-    const img = e.target;
-    if (!(img instanceof HTMLImageElement)) return;
-    const webp = WEBP_FOR.get(new URL(img.currentSrc || img.src, location.href).pathname);
-    if (webp && img.getAttribute('src') !== webp) img.src = webp;
-  }, true);
+  window.addEventListener('error', e => { if (e.target instanceof HTMLImageElement) swapToWebp(e.target); }, true);
+  recoverFailed();
+  if (document.readyState !== 'complete') window.addEventListener('load', recoverFailed, { once: true });
+  // After hydration too, in case React re-applied the original src.
+  window.setTimeout(recoverFailed, 0);
 }
 installAvifFallback();
