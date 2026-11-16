@@ -85,7 +85,7 @@ function FeedPostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenP
   const ago = shortAgo(p.date);
   const tagLine = useTagLine(p, reasons).filter(t => t !== inTag);
   const navigate = useNavigate();
-  return <article className="border-b border-border pb-4">
+  return <article className="border-b border-border pb-4" data-status-id={p.statusId}>
     <FollowedTagLine tags={tagLine} />
     <ReasonChips reasons={reasons} />
     <BoostedBy post={p} className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground" />

@@ -555,7 +555,7 @@ export const postOnFedizen = createServerFn({ method: 'POST' }).middleware([requ
     mediaIds: z.array(ulid).max(4).default([]),
     sensitive: z.boolean().default(false),
   }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty post').parse(d))
-  .handler(async ({ data, context }): Promise<{ ok: true; url?: string } | { ok: false; error: Problem }> => {
+  .handler(async ({ data, context }): Promise<{ ok: true; url?: string; id?: string } | { ok: false; error: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId, true);
     if ('error' in c) return { ok: false, error: c.error };
@@ -568,7 +568,8 @@ export const postOnFedizen = createServerFn({ method: 'POST' }).middleware([requ
     });
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
     const url = typeof r.data?.url === 'string' && /^https:\/\/fedizen\.net\//.test(r.data.url) ? r.data.url : undefined;
-    return { ok: true, ...(url ? { url } : {}) };
+    const id = typeof r.data?.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(r.data.id) ? r.data.id : undefined;
+    return { ok: true, ...(url ? { url } : {}), ...(id ? { id } : {}) };
   });
 
 
@@ -586,7 +587,7 @@ export const createPostOnFedizen = createServerFn({ method: 'POST' }).middleware
     mediaIds: z.array(ulid).max(4).default([]),
     quotes: z.enum(['anyone', 'ask', 'nobody']),
   }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty post').parse(d))
-  .handler(async ({ data, context }): Promise<{ ok: true; url?: string } | { ok: false; error: Problem }> => {
+  .handler(async ({ data, context }): Promise<{ ok: true; url?: string; id?: string } | { ok: false; error: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId, true);
     if ('error' in c) return { ok: false, error: c.error };
@@ -605,7 +606,8 @@ export const createPostOnFedizen = createServerFn({ method: 'POST' }).middleware
         validate: v => z.object({ createPost: z.object({ id: z.string().max(64), activity: z.object({ canonicalUri: z.string().max(2048).nullish() }).nullish() }) }).parse(v).createPost,
       });
       const url = r.activity?.canonicalUri && /^https:\/\/fedizen\.net\//.test(r.activity.canonicalUri) ? r.activity.canonicalUri : undefined;
-      return { ok: true, ...(url ? { url } : {}) };
+      const id = /^[A-Za-z0-9_-]{1,64}$/.test(r.id) ? r.id : undefined;
+      return { ok: true, ...(url ? { url } : {}), ...(id ? { id } : {}) };
     } catch (e) {
       const status = e instanceof BonfireGraphQLError ? e.status : undefined;
       return { ok: false, error: status ? problem(status) : 'unavailable' };

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { parseArticleHead } from "../src/lib/article-author";
 import { clearAuthorCache, resolveArticleAuthors, resolveAuthorsFor, type Lookup } from "../src/lib/article-author.server";
 import { claimedAcct, postsFromOutbox, profileFromActor } from "../src/lib/fedi-profile";
-import { _clearFediProfileCache, loadFediProfile } from "../src/lib/fedi-profile.server";
+import { _clearFediProfileCache, bannerFromMastodonApi, loadFediProfile } from "../src/lib/fedi-profile.server";
 
 type Fake = { status?: number; type?: string; body?: unknown; delayMs?: number };
 function net(routes: Record<string, Fake>) {
@@ -159,5 +159,22 @@ describe("Profiles shown inside Atlas", () => {
     const { fetchImpl, seen } = net({});
     expect(await loadFediProfile({ actor: "https://10.0.0.5/users/x" }, 500, fetchImpl, dns)).toBeNull();
     expect(seen).toEqual([]);
+  });
+});
+
+describe("Banners Bonfire doesn't federate", () => {
+  // fedizen.net's actor has no `image`; its Mastodon API has the banner as `header` (seen live).
+  const ID = "https://fedizen.net/pub/person/01M49WEJ63T6BS62EAA337YGTT";
+  const LOOKUP = "https://fedizen.net/api/v1/accounts/lookup?acct=damon";
+  const HEADER = "https://fedizen.net/files/redir/s3/data/uploads/01M49WEJ63T6BS62EAA337YGTT/banners/b.jpeg";
+  test("takes the header when the account is this actor", async () => {
+    const { fetchImpl } = net({ [LOOKUP]: { type: "application/json", body: { id: "01M49WEJ63T6BS62EAA337YGTT", header: HEADER } } });
+    expect(await bannerFromMastodonApi({ preferredUsername: "damon" }, ID, fetchImpl, dns)).toBe(HEADER);
+  });
+  test("ignores another account's, and Mastodon's placeholder", async () => {
+    const other = net({ [LOOKUP]: { type: "application/json", body: { id: "SOMEONEELSE", header: HEADER } } });
+    expect(await bannerFromMastodonApi({ preferredUsername: "damon" }, ID, other.fetchImpl, dns)).toBeUndefined();
+    const missing = net({ [LOOKUP]: { type: "application/json", body: { id: "01M49WEJ63T6BS62EAA337YGTT", header: "https://fedizen.net/headers/original/missing.png" } } });
+    expect(await bannerFromMastodonApi({ preferredUsername: "damon" }, ID, missing.fetchImpl, dns)).toBeUndefined();
   });
 });
