@@ -32,8 +32,16 @@ describe('who may quote (lib/quote-policy)', () => {
     expect(LOCAL_CIRCLE).toBe('3SERSFR0MY0VR10CA11NSTANCE');
     expect(FEDIVERSE_CIRCLE).toBe('7EDERATEDW1THANACT1V1TYPVB');
   });
-  test('anyone: everyone may quote', () => expect(quotePermissions('anyone')).toEqual([{ permission: 'quote', can: everyone }]));
-  test('ask: everyone may ask, and the author approves', () => expect(quotePermissions('ask')).toEqual([{ permission: 'request', can: everyone }]));
+  test('anyone: everyone may quote', () => expect(quotePermissions('anyone')).toEqual([{ permission: 'quote', can: everyone, cannot: [] }]));
+  test('ask: everyone may ask, and the author approves', () => expect(quotePermissions('ask')).toEqual([{ permission: 'request', can: everyone, cannot: [] }]));
   test('nobody: no one may quote or ask, whatever the preset grants', () =>
-    expect(quotePermissions('nobody')).toEqual([{ permission: 'quote', cannot: everyone }, { permission: 'request', cannot: everyone }]));
+    expect(quotePermissions('nobody')).toEqual([{ permission: 'quote', can: [], cannot: everyone }, { permission: 'request', can: [], cannot: everyone }]));
+});
+
+describe('Fedizen accepts the permissions', () => {
+  // bonfire_social's create_post matches each entry on %{permission:, can:, cannot:}; a missing key is a 500.
+  test('every entry names both can and cannot', () => {
+    for (const p of ['anyone', 'ask', 'nobody'] as const)
+      for (const e of quotePermissions(p)) expect(Array.isArray(e.can) && Array.isArray(e.cannot)).toBe(true);
+  });
 });
