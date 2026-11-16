@@ -65,7 +65,7 @@ export function FedizenFeed() {
           </div>
         )}</div>
       <aside><h3 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><Bell className="size-3" />Activity</h3>
-        {notices.length ? <ul className="space-y-3">{notices.map(n => <li key={n.id} className="flex gap-2 text-xs">{n.avatar && <img src={n.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-6 shrink-0 atlas-avatar object-cover" />}<span><span className="font-semibold">{n.author}</span> <span className="text-muted-foreground">{n.text}</span></span></li>)}</ul> : <p className="text-xs text-muted-foreground">No new activity.</p>}
+        {notices.length ? <ul className="space-y-3">{notices.map(n => <li key={n.id} className="flex gap-2 text-xs">{n.avatar ? <img src={n.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-6 shrink-0 atlas-avatar object-cover" /> : <span aria-hidden="true" className="atlas-avatar flex size-6 shrink-0 items-center justify-center bg-muted font-serif text-[11px]">{n.author.charAt(0)}</span>}<span><span className="font-semibold">{n.author}</span> <span className="text-muted-foreground">{n.text}</span></span></li>)}</ul> : <p className="text-xs text-muted-foreground">No new activity.</p>}
         <Button variant="link" size="sm" className="mt-4 px-0 text-xs text-muted-foreground" onClick={() => void f.disconnect()} disabled={f.actionBusy}>{f.actionBusy ? 'Disconnecting…' : 'Disconnect Fedizen'}</Button>
       </aside>
     </div>

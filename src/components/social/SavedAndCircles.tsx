@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Bookmark, CircleDashed, Minus, Pin, PinOff, Plus, UsersRound } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { BoostedBy, canOpen, linkifyPost, openAuthor } from './PostPeople';
+import { ProfileHoverCard } from './ProfileHoverCard';
 import { pinCircle, unpinCircle, usePinnedCircles } from '@/lib/feed-types';
 import { useAtlasAuth } from './AuthState';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,7 @@ function PostRow({ p, save }: { p: FedizenPost; save: ReturnType<typeof useSaveT
   return <article className="border-b border-border pb-5">
     <BoostedBy post={p} className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground" />
     <p className="flex items-center gap-2 text-xs">{canOpen(p)
-      ? <button type="button" className="atlas-author-button gap-2" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}>{who}</button>
+      ? <ProfileHoverCard target={{ actor: p.actor, acct: p.acct, name: p.author }}><button type="button" className="atlas-author-button gap-2" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}>{who}</button></ProfileHoverCard>
       : who}<span className="text-muted-foreground">{p.handle} · {when(p.date)}</span></p>
     <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{linkifyPost(t, p.mentions, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
     {p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}

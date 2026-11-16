@@ -108,7 +108,7 @@ export const getFedizenHome = createServerFn({ method: 'GET' }).middleware([requ
     canWrite: hasScope(t.scope, 'write'),
     nativeReadEnabled: process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'] === 'verified',
     posts: await withArticleAuthors(fromStatuses(home.data as never)),
-    notices: fromNotifications(notes.data as never),
+    notices: await withActorAvatars(fromNotifications(notes.data as never)),
     ...(home.next ? { next: home.next } : {}),
     error,
   };
@@ -147,7 +147,7 @@ export const getFedizenHomeLatest = createServerFn({ method: 'GET' }).middleware
     if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
     return {
       posts: await withArticleAuthors(fromStatuses(r.data as never), 1200), ...(r.next ? { next: r.next } : {}),
-      ...(n?.status === 200 ? { notices: fromNotifications(n.data as never) } : {}),
+      ...(n?.status === 200 ? { notices: await withActorAvatars(fromNotifications(n.data as never), 800) } : {}),
     };
   });
 
@@ -158,6 +158,54 @@ export const getFedizenHomeLatest = createServerFn({ method: 'GET' }).middleware
  * and time budget, so a slow publisher never holds up the feed: what isn't ready shows on the next load.
  */
 async function withArticleAuthors(posts: FedizenPost[], budgetMs = 2000): Promise<FedizenPost[]> {
+  // Authors' and boosters' real avatars where Fedizen gave its placeholder, alongside the article work.
+  const [withAuthors, faces] = await Promise.all([withArticleAuthorsOnly(posts, budgetMs), actorAvatars(posts.flatMap(p => [
+    ...(!p.avatar && p.actor ? [p.actor] : []), ...(p.booster && !p.booster.avatar && p.booster.actor ? [p.booster.actor] : []),
+  ]), Math.min(budgetMs, 1500))]);
+  if (!faces.size) return withAuthors;
+  return withAuthors.map(p => {
+    const a = !p.avatar && p.actor ? faces.get(p.actor) : undefined;
+    const b = p.booster && !p.booster.avatar && p.booster.actor ? faces.get(p.booster.actor) : undefined;
+    return a || b ? { ...p, ...(a ? { avatar: a } : {}), ...(b && p.booster ? { booster: { ...p.booster, avatar: b } } : {}) } : p;
+  });
+}
+
+/** Notices' real avatars where Fedizen gave its placeholder. */
+async function withActorAvatars(notices: FedizenNotice[], budgetMs = 1200): Promise<FedizenNotice[]> {
+  const faces = await actorAvatars(notices.flatMap(n => (!n.avatar && n.actor ? [n.actor] : [])), budgetMs);
+  return faces.size ? notices.map(n => (!n.avatar && n.actor && faces.get(n.actor) ? { ...n, avatar: faces.get(n.actor) } : n)) : notices;
+}
+
+/**
+ * The avatar an actor itself publishes (its `icon`), for accounts Fedizen shows with its placeholder picture. Read
+ * through the guarded fetch (public hosts only, size and time limits, no cookies), cached per isolate, and bounded by
+ * a time budget: one that isn't back in time shows its initial now and its picture on the next load.
+ */
+const avatarCache = new Map<string, { at: number; url: string | null }>();
+async function actorAvatars(actors: string[], budgetMs: number): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const todo: string[] = [];
+  for (const a of [...new Set(actors)].slice(0, 24)) {
+    const hit = avatarCache.get(a);
+    if (hit && Date.now() - hit.at < (hit.url ? 6 * 3600_000 : 3600_000)) { if (hit.url) out.set(a, hit.url); } else todo.push(a);
+  }
+  if (!todo.length) return out;
+  const { fetchActor } = await import('./article-author.server');
+  const { isPublicHttpsUrl } = await import('./article-author');
+  const work = Promise.all(todo.map(async a => {
+    const actor = await fetchActor(a).catch(() => null);
+    const icon = actor ? [actor.icon].flat()[0] : undefined;
+    const raw = typeof icon === 'string' ? icon : icon && typeof icon === 'object' ? (icon as { url?: unknown }).url : undefined;
+    const url = typeof raw === 'string' && isPublicHttpsUrl(raw) && raw.length <= 2048 ? raw : null;
+    if (avatarCache.size >= 1000) avatarCache.delete(avatarCache.keys().next().value as string);
+    avatarCache.set(a, { at: Date.now(), url });
+    if (url) out.set(a, url);
+  }));
+  await Promise.race([work, new Promise(r => setTimeout(r, budgetMs))]);
+  return new Map(out);
+}
+
+async function withArticleAuthorsOnly(posts: FedizenPost[], budgetMs = 2000): Promise<FedizenPost[]> {
   const urls = posts.map(p => p.article?.url).filter((u): u is string => !!u);
   if (!urls.length) return posts;
   const { resolveAuthorsFor, mediaFor } = await import('./article-author.server');

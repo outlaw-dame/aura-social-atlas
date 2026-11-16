@@ -27,7 +27,7 @@ function Avatar({ p }: { p: FediProfile }) {
   return <span aria-hidden="true" className="atlas-avatar flex size-20 items-center justify-center bg-muted font-serif text-3xl ring-4 ring-background">{p.name.charAt(0)}</span>;
 }
 
-function Follow({ p }: { p: FediProfile }) {
+export function Follow({ p }: { p: FediProfile }) {
   const me = useIsMe(p.acct);
   const f = useFediFollow(p.acctVerified && !me ? p.acct : undefined, p.actor);
   const words = followLabels(p.kind, p.locked);

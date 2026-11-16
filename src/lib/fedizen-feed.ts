@@ -43,7 +43,7 @@ export type FediPerson = { name: string; avatar?: string; acct?: string; actor?:
 /** A mention: the full handle, and the name it's written as in the text (the handle's first part). */
 export type FediMention = { acct: string; username: string };
 export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; /** The preview's summary and image. */ description?: string; image?: string; /** The preview's author link: checked for an ActivityPub account, never shown as-is. */ authorUrl?: string; authors?: FediAuthor[]; /** A podcast episode Atlas can play in place. */ episode?: FediEpisode; /** A video (PeerTube) Atlas can play in place. */ video?: FediVideo };
-export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string };
+export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string; /** Who did it, to open their profile in Atlas. */ acct?: string; actor?: string };
 /** A direct conversation (Mastodon `Conversation`): the other people in it and its latest message, as plain text. */
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
@@ -55,6 +55,12 @@ type Status = { id: string; url?: string | null; uri?: string; created_at?: stri
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
 const http = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
+/** Fedizen's stand-in picture for an account whose own it hasn't fetched (often a Lemmy or PieFed account). It isn't
+ *  their avatar: Atlas reads theirs from their actor instead (withActorAvatars), or shows their initial. */
+export function isPlaceholderAvatar(u?: string | null): boolean {
+  try { const x = new URL(u ?? ''); return x.hostname === new URL(FEDIZEN).hostname && x.pathname === '/images/avatar.png'; } catch { return false; }
+}
+const avatarOf = (a?: Acct) => { const u = http(a?.avatar); return u && !isPlaceholderAvatar(u) ? u : undefined; };
 /** Their display name, or else the first part of their handle. Bonfire gives a remote account's full handle as its
  *  username, and for accounts with no display name (many Lemmy and PieFed ones) as its display name too, so a
  *  display name that is just the handle counts as none ("Unboxious", not "Unboxious@ani.social" twice). */
@@ -74,7 +80,8 @@ export function fullAcct(raw?: string | null): string | undefined {
 }
 const person = (a?: Acct): FediPerson => {
   const acct = fullAcct(a?.acct), actor = isPublicHttpsUrl(a?.uri) ? a!.uri! : isPublicHttpsUrl(a?.url) ? a!.url! : undefined;
-  return { name: name(a), ...(http(a?.avatar) ? { avatar: http(a?.avatar) } : {}), ...(acct ? { acct } : {}), ...(actor ? { actor } : {}) };
+  const avatar = avatarOf(a);
+  return { name: name(a), ...(avatar ? { avatar } : {}), ...(acct ? { acct } : {}), ...(actor ? { actor } : {}) };
 };
 const mentionsOf = (o: Status): FediMention[] => (o.mentions ?? []).flatMap(m => {
   const acct = fullAcct(m.acct ?? m.username);
@@ -95,7 +102,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
   return list.map(s => {
     const o = s.reblog ?? s;
     return {
-      id: s.id, statusId: o.id, bookmarked: o.bookmarked === true || s.bookmarked === true, author: name(o.account), handle: `@${o.account?.acct ?? ''}`, avatar: http(o.account?.avatar),
+      id: s.id, statusId: o.id, bookmarked: o.bookmarked === true || s.bookmarked === true, author: name(o.account), handle: `@${o.account?.acct ?? ''}`, avatar: avatarOf(o.account),
       paragraphs: htmlToParagraphs(o.content ?? ''), url: http(o.url) ?? http(o.uri) ?? FEDIZEN, date: o.created_at,
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
       ...(() => { const size = imageSizeOf(o.media_attachments?.find(m => m.type === 'image')?.meta); return size ? { imageSize: size } : {}; })(),
@@ -131,7 +138,8 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
 const verbs: Record<string, string> = { favourite: 'liked your post', reblog: 'boosted your post', follow: 'followed you', mention: 'mentioned you', status: 'posted', poll: 'poll ended', follow_request: 'asked to follow you', added_to_collection: 'added you to a collection', collection_update: 'updated a collection you’re in' };
 export function fromNotifications(list: Notice[]): FedizenNotice[] {
   return list.map(n => ({
-    id: n.id, type: n.type ?? 'other', author: name(n.account), avatar: http(n.account?.avatar), date: n.created_at,
+    id: n.id, type: n.type ?? 'other', author: name(n.account), avatar: avatarOf(n.account), date: n.created_at,
+    ...(() => { const a = person(n.account); return { ...(a.acct ? { acct: a.acct } : {}), ...(a.actor ? { actor: a.actor } : {}) }; })(),
     text: `${verbs[n.type ?? ''] ?? 'interacted with you'}${n.status?.content ? ` — ${htmlToParagraphs(n.status.content).join(' ').slice(0, 140)}` : ''}`,
   }));
 }

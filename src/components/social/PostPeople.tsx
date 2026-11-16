@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import type { FediMention, FediPerson, FedizenPost } from '@/lib/fedizen-feed';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { linkifyHashtagsWith } from '@/lib/hashtags';
+import { ProfileHoverCard } from './ProfileHoverCard';
 
 /**
  * The people in a post — its author, who boosted it, whom it mentions — each opening their profile in Atlas
@@ -104,8 +105,8 @@ export function BoostedBy({ post: p, className }: { post: FedizenPost; className
   return <p className={className}>
     <RefreshCw aria-hidden="true" className="atlas-boost-icon" />
     {canOpen(who)
-      ? <button type="button" className="atlas-boost-who" aria-label={`${who.name}, who boosted this. Open their profile`}
-        onClick={e => { e.stopPropagation(); openFediProfile({ actor: who.actor, acct: who.acct, name: who.name }); }}>{label}</button>
+      ? <ProfileHoverCard target={{ actor: who.actor, acct: who.acct, name: who.name }}><button type="button" className="atlas-boost-who" aria-label={`${who.name}, who boosted this. Open their profile`}
+        onClick={e => { e.stopPropagation(); openFediProfile({ actor: who.actor, acct: who.acct, name: who.name }); }}>{label}</button></ProfileHoverCard>
       : <span className="atlas-boost-who">{label}</span>}
     <span>boosted</span>
   </p>;
