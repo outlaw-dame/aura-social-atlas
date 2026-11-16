@@ -1,12 +1,12 @@
 import { Link } from '@tanstack/react-router';
-import { ArrowUpRight, AtSign, Bell, BarChart3, Heart, Layers3, Link2, PenLine, Repeat2, UserPlus } from 'lucide-react';
+import { ArrowUpRight, AtSign, Bell, BarChart3, Heart, Layers3, Link2, PenLine, RefreshCw, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFedizen } from './useFedizen';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 const kinds: Record<string, { icon: typeof Bell; color: string }> = {
   favourite: { icon: Heart, color: '#e0245e' },
-  reblog: { icon: Repeat2, color: '#17bf63' },
+  reblog: { icon: RefreshCw, color: '#17bf63' },
   follow: { icon: UserPlus, color: '#6364ff' },
   follow_request: { icon: UserPlus, color: '#6364ff' },
   mention: { icon: AtSign, color: 'var(--accent)' },

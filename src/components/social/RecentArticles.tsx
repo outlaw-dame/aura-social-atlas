@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ArrowUpRight, BookOpen, Heart, MessageCircle, Repeat2, X } from 'lucide-react';
+import { ArrowUpRight, BookOpen, Heart, MessageCircle, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getRecentArticles } from '@/lib/bonfire.functions';
 import { openFediProfile } from '@/lib/fedi-profile';
@@ -33,7 +33,7 @@ export function RecentArticles() {
           <h2 id="article-title" className="font-serif text-3xl leading-tight">{open.title}</h2>
           <div className="mt-5 space-y-4 text-[15px] leading-relaxed">{open.paragraphs.map((p, i) => <p key={i}>{p}</p>)}</div>
         </div>
-        <div className="flex items-center justify-between border-t border-border px-5 py-3 text-xs text-muted-foreground"><span className="flex items-center gap-3"><span className="flex items-center gap-1"><Heart className="size-3.5" />{open.likes}</span><span className="flex items-center gap-1"><Repeat2 className="size-3.5" />{open.boosts}</span><span className="flex items-center gap-1"><MessageCircle className="size-3.5" />{open.replies}</span></span><Button asChild size="sm" variant="outline"><a href={open.url} target="_blank" rel="noopener noreferrer">Open on Fedizen<ArrowUpRight /></a></Button></div>
+        <div className="flex items-center justify-between border-t border-border px-5 py-3 text-xs text-muted-foreground"><span className="flex items-center gap-3"><span className="flex items-center gap-1"><Heart className="size-3.5" />{open.likes}</span><span className="flex items-center gap-1"><RefreshCw className="size-3.5" />{open.boosts}</span><span className="flex items-center gap-1"><MessageCircle className="size-3.5" />{open.replies}</span></span><Button asChild size="sm" variant="outline"><a href={open.url} target="_blank" rel="noopener noreferrer">Open on Fedizen<ArrowUpRight /></a></Button></div>
       </section>
     </div>}
   </section>;

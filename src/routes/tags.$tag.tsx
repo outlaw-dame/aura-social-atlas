@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowUpRight, Link2, MessageCircle, Repeat2, Star } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Link2, MessageCircle, RefreshCw, Star } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { FEED_PROBLEM, useTagFeed } from '@/components/social/useFeeds';
@@ -113,7 +113,7 @@ function PublicTagPage({ tag }: { tag: string }) {
       <SensitiveMedia sensitive={p.sensitive}>{p.image && <img src={p.image} alt="" className="mt-3 max-h-96 w-full rounded-xl object-cover" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia></AuthorWarning>
       <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-3 flex gap-5 text-xs text-muted-foreground hover:text-foreground" aria-label="Open original post">
         <span className="flex items-center gap-1"><MessageCircle className="size-3.5" />{p.replies}</span>
-        <span className="flex items-center gap-1"><Repeat2 className="size-3.5" />{p.boosts}</span>
+        <span className="flex items-center gap-1"><RefreshCw className="size-3.5" />{p.boosts}</span>
         <span className="flex items-center gap-1"><Star className="size-3.5" />{p.favourites}</span>
       </a>
     </li>)}</ol>

@@ -3,6 +3,8 @@ import { Block, BlockFooter, BlockTitle, Button, Icon, Link, List, ListInput, Li
 import { pinCircle, unpinCircle, usePinnedCircles } from '@/lib/feed-types';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import type { FedizenPost } from '@/lib/fedizen-feed';
+import { openTag } from '@/lib/hashtags';
+import { BoostedBy, canOpen, linkifyPost, openAuthor } from '@/components/social/PostPeople';
 import { ArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { LIBRARY_PROBLEM, useCircleActions, useCircleMembers, useFedizenCircles, useFedizenSaved, useSaveToggle } from '@/components/social/useFedizenLibrary';
@@ -35,9 +37,11 @@ export function MobileSaved({ stories }: { stories?: React.ReactNode }) {
     {(q.data?.error || q.isError) && <p role="alert" className="atlas-library-note">{LIBRARY_PROBLEM[q.data?.error ?? 'unavailable']}</p>}
     {save.error && <p role="alert" className="atlas-library-error">{save.error}</p>}
     {posts.map(p => <article key={p.id} className="atlas-saved-post">
-      {p.boostedBy && <p className="atlas-saved-boost">↻ {p.boostedBy} boosted</p>}
-      <div className="atlas-saved-head">{p.avatar && <img src={p.avatar} alt="" width={32} height={32} />}<span><b>{p.author}</b> <span>{p.handle} · {when(p.date)}</span></span></div>
-      {p.paragraphs.map((t, i) => <p key={i}>{t}</p>)}
+      <BoostedBy post={p} className="atlas-saved-boost" />
+      <div className="atlas-saved-head">{canOpen(p)
+        ? <button type="button" className="atlas-author-button" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} />}<span><b>{p.author}</b> <span>{p.handle} · {when(p.date)}</span></span></button>
+        : <>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} />}<span><b>{p.author}</b> <span>{p.handle} · {when(p.date)}</span></span></>}</div>
+      {p.paragraphs.map((t, i) => <p key={i}>{linkifyPost(t, p.mentions, openTag)}</p>)}
       {p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-saved-image" src={p.image} alt="" loading="lazy" />}
       <ArticleCard article={p.article} />
       <div className="atlas-saved-actions"><SaveLink post={p} save={save} /><Link external target="_blank" href={p.url}>Open</Link></div>

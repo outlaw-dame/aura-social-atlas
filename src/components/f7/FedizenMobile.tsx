@@ -88,7 +88,7 @@ export function MobileFedizenFeed() {
 
 const noticeIcon: Record<string, { ios: string; md: string }> = {
   favourite: { ios: 'f7:heart_fill', md: 'material:favorite' },
-  reblog: { ios: 'f7:arrow_2_squarepath', md: 'material:repeat' },
+  reblog: { ios: 'f7:arrow_2_circlepath', md: 'material:sync' },
   follow: { ios: 'f7:person_badge_plus_fill', md: 'material:person_add' },
   follow_request: { ios: 'f7:person_badge_plus', md: 'material:person_add_alt' },
   mention: { ios: 'f7:at', md: 'material:alternate_email' },

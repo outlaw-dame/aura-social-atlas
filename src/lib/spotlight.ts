@@ -94,10 +94,14 @@ export type BonfireActivityNode = {
 
 const decode = (s: string) => s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&[a-z#0-9]+;/gi, ' ');
 
+const INLINE_TAG = /<\/?(?:a|span|b|strong|i|em|u|s|del|ins|code|small|sub|sup|mark|abbr|bdi|bdo|cite|data|dfn|kbd|q|samp|time|var)(?:\s[^>]*)?>/gi;
+
 /** Converts remote HTML to plain paragraphs so nothing from the remote server is rendered as markup. */
 export function htmlToParagraphs(html = ''): string[] {
   return html.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '').split(/<\/(?:p|h[1-6]|li|blockquote)>|<br\s*\/?>/i)
-    .map(chunk => decode(chunk.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim())
+    // Inline tags join their text as written ("@<span>nedley</span>" → "@nedley", and a Mastodon link's
+    // invisible "https://" parts back into one URL); any other tag is a word break.
+    .map(chunk => decode(chunk.replace(INLINE_TAG, '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 }
 

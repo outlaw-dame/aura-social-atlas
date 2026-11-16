@@ -654,7 +654,7 @@ html.atlas-rail .atlas-mini { left: calc(var(--f7-panel-width, 88px) + 8px); }
 .atlas-library-heading { margin: 20px 16px 8px; font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted-foreground); }
 .atlas-saved-post { margin: 0 16px; padding: 14px 0; border-bottom: .5px solid var(--border); font-size: 15px; line-height: 1.5; }
 .atlas-saved-post p { margin: 8px 0; }
-.atlas-saved-boost { font-size: 11px; color: var(--muted-foreground); }
+.atlas-saved-boost { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted-foreground); }
 .atlas-saved-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .atlas-saved-head img { border-radius: 16px; object-fit: cover; }
 .atlas-saved-head span span { color: var(--muted-foreground); }
@@ -707,7 +707,7 @@ span.atlas-post-avatar { display: inline-flex; align-items: center; justify-cont
 .atlas-post-time { flex: none; align-self: flex-start; font-size: 13px; color: var(--f7-text-color) !important; opacity: .55; padding: 2px 0 8px 8px; }
 .atlas-post-text { font-size: 16px; line-height: 1.45; margin: 10px 0 0; overflow-wrap: anywhere; }
 .atlas-post-image { display: block; width: 100%; height: auto; max-height: 520px; object-fit: cover; margin-top: 10px; border-radius: 14px; background: rgba(127,127,127,.12); }
-.atlas-post-boosted { display: flex; align-items: center; gap: 4px; margin: 0 0 8px; font-size: 12px; opacity: .6; }
+.atlas-post-boosted { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 12px; opacity: .6; }
 .atlas-post-boosted .icon { font-size: 13px; }
 .atlas-post-footer { padding-top: 0 !important; padding-bottom: 2px !important; min-height: 0 !important; }
 .atlas-post-footer::before { display: none !important; }
@@ -791,6 +791,21 @@ span.atlas-rich-face { display: inline-flex; align-items: center; justify-conten
 .atlas-post-tagline button { display: inline-flex; align-items: center; gap: 4px; width: auto; min-height: 24px; margin: -3px 0; padding: 0; border: 0; background: none; color: var(--f7-text-color, inherit); opacity: .6; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .atlas-post-tagline .icon { font-size: 14px; }
 .atlas-post-text .atlas-hashtag, .atlas-post-text .atlas-hashtag-btn { color: var(--f7-theme-color, var(--accent)); font-weight: 500; }
+.atlas-post-text .atlas-mention { color: var(--f7-theme-color, var(--accent)); }
+
+/* People in a post (PostPeople.tsx): mentions and the "boosted" row open profiles in Atlas. */
+.atlas-mention { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); font-weight: 500; cursor: pointer; width: auto; text-align: start; }
+.atlas-mention:hover { text-decoration: underline; }
+.atlas-boost-icon { width: 12px; height: 12px; flex: none; }
+.atlas-boost-who { display: inline-flex; align-items: center; gap: 5px; min-width: 0; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; width: auto; }
+.atlas-boost-who b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.atlas-boost-who { cursor: pointer; }
+button.atlas-boost-who:hover b { text-decoration: underline; }
+.atlas-boost-face { width: 16px; height: 16px; flex: none; object-fit: cover; border-radius: var(--atlas-avatar-radius, 50%) !important; background: var(--muted, rgba(127,127,127,.15)); }
+.atlas-boost-initial { display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; }
+.atlas-author-button { display: flex; align-items: center; gap: inherit; min-width: 0; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-align: start; cursor: pointer; width: auto; }
+.atlas-author-fill { flex: 1 1 auto; }
+.atlas-author-button:hover b, .atlas-author-button:hover .atlas-author-name { text-decoration: underline; }
 
 /* Phone: the stack of pushed pages (a hashtag's feed) laid over the tabs, under the tab bar (z-index 600). Its root
    page is empty and transparent; until something is pushed the whole view lets touches through to the tabs. */
