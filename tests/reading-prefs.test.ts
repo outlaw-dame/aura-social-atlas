@@ -3,7 +3,7 @@ import { DEFAULT_READING, parseReading, veilReason } from '../src/lib/reading-pr
 
 describe('reading preferences (Mastodon: reading:expand:spoilers, reading:expand:media)', () => {
   test('stored values are read back; anything else falls back to the defaults', () => {
-    expect(parseReading(JSON.stringify({ expandWarnings: true, media: 'hide_all' }))).toEqual({ expandWarnings: true, media: 'hide_all', altReminder: true, blurStrangers: false });
+    expect(parseReading(JSON.stringify({ expandWarnings: true, media: 'hide_all' }))).toEqual({ expandWarnings: true, media: 'hide_all', altReminder: true, blurStrangers: false, slowMode: false });
     expect(parseReading(JSON.stringify({ expandWarnings: 'yes', media: 'everything' }))).toEqual(DEFAULT_READING);
     expect(parseReading('{not json')).toEqual(DEFAULT_READING);
     expect(parseReading(null)).toEqual(DEFAULT_READING);

@@ -70,6 +70,8 @@ export type FedizenHome = {
   /** Server-authoritative rollout gate; prevents unnecessary native requests while disabled. */
   nativeReadEnabled?: boolean;
   posts: FedizenPost[];
+  /** The cursor for the next (older) page of Home, from Fedizen's Link header. */
+  next?: string;
   notices: FedizenNotice[];
   error?: 'expired' | 'unavailable';
 };
@@ -89,9 +91,47 @@ export const getFedizenHome = createServerFn({ method: 'GET' }).middleware([requ
     nativeReadEnabled: process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'] === 'verified',
     posts: await withArticleAuthors(fromStatuses(home.data as never)),
     notices: fromNotifications(notes.data as never),
+    ...(home.next ? { next: home.next } : {}),
     error,
   };
 });
+
+/** An older page of Home (max_id cursor from the previous page's Link header), loaded before the reader reaches it. */
+export const getFedizenHomePage = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: z.string().uuid(), max: z.string().min(1).max(512) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; next?: string; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor, fedizenGet, PAGE_CURSOR } = await import('./fedizen.server');
+    const cursor = encodeURIComponent(data.max);
+    if (!PAGE_CURSOR.test(cursor)) return { posts: [], error: 'unavailable' };
+    const t = await tokenFor(context.userId);
+    if (!t) return { posts: [], error: 'not-connected' };
+    const r = await fedizenGet(t.access_token, `/api/v1/timelines/home?limit=20&max_id=${cursor}`).catch(() => null);
+    if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
+    return { posts: await withArticleAuthors(fromStatuses(r.data as never)), ...(r.next ? { next: r.next } : {}) };
+  });
+
+/**
+ * The newest page of Home only (no notifications), for the background check for new posts. The browser works out
+ * which are new against what it shows, so this needs no cursor and can't miss posts if Fedizen's cursors change.
+ */
+export const getFedizenHomeLatest = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; notices?: FedizenNotice[]; next?: string; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor, fedizenGet } = await import('./fedizen.server');
+    const t = await tokenFor(context.userId);
+    if (!t) return { posts: [], error: 'not-connected' };
+    const [r, n] = await Promise.all([
+      fedizenGet(t.access_token, '/api/v1/timelines/home?limit=20').catch(() => null),
+      fedizenGet(t.access_token, '/api/v1/notifications?limit=20').catch(() => null),
+    ]);
+    if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
+    return {
+      posts: await withArticleAuthors(fromStatuses(r.data as never), 1200), ...(r.next ? { next: r.next } : {}),
+      ...(n?.status === 200 ? { notices: fromNotifications(n.data as never) } : {}),
+    };
+  });
 
 /**
  * "More from" for links in posts, as Mastodon shows under a link preview, but verified the Atlas way: the article's

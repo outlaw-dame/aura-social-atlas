@@ -21,6 +21,13 @@ export function MobileReadingSettings() {
       </ListItem>
     </List>
     <BlockFooter>{MEDIA_DISPLAY.find(m => m.id === r.media)?.note} Media your keyword filters hide stays hidden either way.</BlockFooter>
+    <BlockTitle>Home</BlockTitle>
+    <List strong inset dividers>
+      <ListItem title="Slow mode">
+        <Toggle slot="after" checked={r.slowMode} onToggleChange={() => setReading({ slowMode: !r.slowMode })} />
+      </ListItem>
+    </List>
+    <BlockFooter>New posts always wait behind “New posts” until you tap it. When it’s off, they slide in when you’re at the top.</BlockFooter>
     <BlockTitle>Posting</BlockTitle>
     <List strong inset dividers>
       <ListItem title="Alt text reminder">

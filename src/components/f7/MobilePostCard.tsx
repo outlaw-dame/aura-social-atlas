@@ -87,7 +87,7 @@ function MobilePostCardBody({ post: p, actions, reasons, inTag }: { post: Fedize
       </div>
       <AuthorWarning cw={p.cw} phone>
       {p.paragraphs.map((t, i) => <p key={i} className="atlas-post-text">{linkifyHashtagsWith(t, openTag)}</p>)}
-      <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia>
+      <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" {...(p.imageSize ? { width: p.imageSize.w, height: p.imageSize.h, style: { aspectRatio: `${p.imageSize.w} / ${p.imageSize.h}` } } : {})} />}</SensitiveMedia>
       {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
         <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />
       </button>)}

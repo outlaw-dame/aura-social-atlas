@@ -25,7 +25,7 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
   return have.has(needed) || (needed.includes(':') && have.has(needed.split(':')[0]));
 }
 
-export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; /** The author marked its media sensitive. */ sensitive?: boolean; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[];
+export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; /** The image's width and height (from Fedizen's media meta), to reserve its space before it loads. */ imageSize?: { w: number; h: number }; /** The author marked its media sensitive. */ sensitive?: boolean; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[];
   /** A video attached to the post (a federated PeerTube video arrives this way). */ video?: FediVideo;
   /** The article the post links to, and who wrote it as far as Atlas can verify ("More from"). */ article?: PostArticle;
   /** Reply, boost and like counts, and whether the person has liked or boosted it (Fedizen statuses only). */
@@ -49,6 +49,16 @@ type Notice = { id: string; type?: string; created_at?: string; account?: Acct; 
 const http = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
 const name = (a?: Acct) => a?.display_name || a?.username || a?.acct || 'Someone';
 
+/** An image's shape from Mastodon-style media meta (original first, then the preview's), if it's sane. */
+export function imageSizeOf(meta: unknown): { w: number; h: number } | undefined {
+  const m = meta as { original?: { width?: unknown; height?: unknown } | null; small?: { width?: unknown; height?: unknown } | null } | null | undefined;
+  for (const s of [m?.original, m?.small]) {
+    const w = Number(s?.width), h = Number(s?.height);
+    if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 && w <= 100_000 && h <= 100_000 && w / h < 20 && h / w < 20) return { w: Math.round(w), h: Math.round(h) };
+  }
+  return undefined;
+}
+
 export function fromStatuses(list: Status[]): FedizenPost[] {
   return list.map(s => {
     const o = s.reblog ?? s;
@@ -56,6 +66,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
       id: s.id, statusId: o.id, bookmarked: o.bookmarked === true || s.bookmarked === true, author: name(o.account), handle: `@${o.account?.acct ?? ''}`, avatar: http(o.account?.avatar),
       paragraphs: htmlToParagraphs(o.content ?? ''), url: http(o.url) ?? http(o.uri) ?? FEDIZEN, date: o.created_at,
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
+      ...(() => { const size = imageSizeOf(o.media_attachments?.find(m => m.type === 'image')?.meta); return size ? { imageSize: size } : {}; })(),
       boostedBy: s.reblog ? name(s.account) : undefined,
       ...(o.sensitive === true && o.media_attachments?.length ? { sensitive: true } : {}),
       ...(typeof o.replies_count === 'number' || typeof o.reblogs_count === 'number' || typeof o.favourites_count === 'number'

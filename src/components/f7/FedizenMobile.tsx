@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Block, BlockTitle, Button, Card, CardContent, CardFooter, Link, List, ListItem, Navbar, NavRight, Page, Popup } from 'framework7-react';
 import { getRecentArticles, getFedizenPublic } from '@/lib/bonfire.functions';
 import type { BonfireArticle } from '@/lib/spotlight';
@@ -15,6 +15,7 @@ import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { MobileFilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
+import { useHomeTimeline } from '@/components/social/useHomeTimeline';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 
@@ -56,6 +57,9 @@ export function MobileRecentArticles() {
 export function MobileFedizenFeed() {
   const f = useFedizen();
   const actions = useMobilePostActions();
+  const list = useRef<HTMLDivElement>(null);
+  const live = !!f.data?.connected && !f.data.error;
+  const tl = useHomeTimeline(f.data, live, list, f.updatedAt);
   return <>
     <BlockTitle>Your Fedizen feed</BlockTitle>
     {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
@@ -66,8 +70,17 @@ export function MobileFedizenFeed() {
         {f.embedded ? <Button fill round external target="_blank" href={`${window.location.origin}/app`}>Open Atlas in a new tab to connect</Button> : <Button fill round onClick={f.connect}>Connect Fedizen</Button>}
         {f.error && <p role="alert" style={{ color: 'var(--f7-theme-color)' }}>{f.error}</p>}
       </Block>
-      : !f.data.posts.length ? <Block strong inset>Your Fedizen timeline is empty.</Block>
-      : f.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}
+      : !tl.posts.length ? <Block strong inset>Your Fedizen timeline is empty.</Block>
+      : <div ref={list} className="atlas-home-list">
+        {/* New posts wait here until asked for (Bonfire: "Show N new activities"; Mastodon: "N new items"). */}
+        {tl.newCount > 0 && <div className="atlas-new-posts"><button type="button" onClick={tl.reveal}><Icon ios="f7:arrow_up" md="material:arrow_upward" />{tl.newCount === 1 ? '1 new post' : `${tl.newCount}${tl.gap ? '+' : ''} new posts`}</button></div>}
+        {tl.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}
+        {tl.hasOlder && <div ref={tl.sentinel} className="atlas-older">
+          {tl.olderFailed ? <span>Couldn’t load older posts. <Link onClick={() => void tl.loadOlder()}>Try again</Link></span>
+            : tl.loadingOlder ? <span><span className="preloader preloader-small" /> Loading older posts…</span>
+            : <Link onClick={() => void tl.loadOlder()}>Load older posts</Link>}
+        </div>}
+      </div>}
     {(!f.signedIn || (!f.loading && (!f.data?.connected || f.data.error === 'expired'))) && <MobilePublicFedizen />}
     {actions.sheet}
   </>;

@@ -108,13 +108,16 @@ function FeedPostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenP
     </div>
     <AuthorWarning cw={p.cw}>
     <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{linkifyHashtagsWith(t, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
-    <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}</SensitiveMedia>
+    <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl bg-muted object-cover" {...reserve(p.imageSize)} />}</SensitiveMedia>
     <CollectionLinks links={p.collections} />
     <PostArticleCard article={p.article} />
     </AuthorWarning>
     <Actions post={p} actions={actions} />
   </article>;
 }
+
+/** Width, height and aspect ratio for an image whose size is known, so the card keeps its height while it loads. */
+const reserve = (size?: { w: number; h: number }) => (size ? { width: size.w, height: size.h, style: { aspectRatio: `${size.w} / ${size.h}` } } : {});
 
 const AUDIENCE_ICON = { public: Globe2, unlisted: Globe2, private: Lock, direct: AtSign } as const;
 

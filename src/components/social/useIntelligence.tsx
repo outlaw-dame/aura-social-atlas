@@ -341,6 +341,21 @@ export function useNotFollowed(post: { authorId?: string; handle?: string }, act
   return env.following.get(id) !== true;
 }
 
+/**
+ * How many of these posts the person would actually see in Home under their filters (hidden ones and ones still
+ * being checked by the AI model don't count). Starts the checks too, so new posts are judged before they're shown.
+ */
+export function useShownCount(posts: (FilterablePost & { handle?: string })[]): number {
+  const env = useContext(EngineContext);
+  const revision = useSyncExternalStore(env?.engine.subscribe ?? noop, env?.engine.getRevision ?? zero, zero);
+  const subjects = useMemo(() => posts.map(p => (isOwnPost(p.handle, env?.me ?? null) ? { ...p, mine: true } : p)), [posts, env?.me]);
+  useEffect(() => { for (const p of subjects) env?.engine.request(p, 'home'); }, [env, subjects]);
+  return useMemo(() => {
+    if (!env) return subjects.length;
+    return subjects.filter(p => { const v = env.engine.evaluate(p, 'home'); return v.state === 'clear' || (v.state === 'filtered' && v.action !== 'hide'); }).length;
+  }, [env, subjects, revision]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 const CLEAR: Verdict = { state: 'clear' };
 const noop = () => () => {};
 const zero = () => 0;

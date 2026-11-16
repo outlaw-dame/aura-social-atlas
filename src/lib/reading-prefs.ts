@@ -21,8 +21,9 @@ export type MediaDisplay = (typeof MEDIA_DISPLAY)[number]['id'];
  * `altReminder` (Posting): before a post with media that has no alt text goes out, ask first — on by default, as
  * Ivory's "Alt Text Reminder" is.
  */
-export type ReadingPrefs = { expandWarnings: boolean; media: MediaDisplay; altReminder: boolean; blurStrangers: boolean };
-export const DEFAULT_READING: ReadingPrefs = { expandWarnings: false, media: 'default', altReminder: true, blurStrangers: false };
+/** `slowMode` (Mastodon's setting_use_pending_items): new posts always wait behind "N new posts", even at the top. */
+export type ReadingPrefs = { expandWarnings: boolean; media: MediaDisplay; altReminder: boolean; blurStrangers: boolean; slowMode: boolean };
+export const DEFAULT_READING: ReadingPrefs = { expandWarnings: false, media: 'default', altReminder: true, blurStrangers: false, slowMode: false };
 const KEY = 'atlas-reading';
 
 export function parseReading(raw: string | null): ReadingPrefs {
@@ -33,6 +34,7 @@ export function parseReading(raw: string | null): ReadingPrefs {
       media: MEDIA_DISPLAY.some(m => m.id === v.media) ? v.media as MediaDisplay : 'default',
       altReminder: v.altReminder !== false,
       blurStrangers: v.blurStrangers === true,
+      slowMode: v.slowMode === true,
     };
   } catch { return DEFAULT_READING; }
 }

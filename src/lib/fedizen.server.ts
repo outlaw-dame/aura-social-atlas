@@ -280,6 +280,8 @@ const media = z.object({
   meta: z.object({
     duration: z.union([z.number(), z.string().max(40)]).nullish().catch(null),
     original: z.object({ width: z.number().nullish(), height: z.number().nullish() }).partial().nullish().catch(null),
+    // The preview's size (Mastodon: meta.small), used to reserve an image's space before it loads.
+    small: z.object({ width: z.number().nullish(), height: z.number().nullish() }).partial().nullish().catch(null),
   }).partial().nullish().catch(null),
 });
 const status = z.object({
@@ -375,6 +377,8 @@ const instanceSchema = z.object({
 });
 const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v1\/timelines\/home\?limit=20$/, schema: homeSchema },
+  // The next (older) page of Home, from the cursor Fedizen's Link header gave (rel="next", max_id).
+  { match: /^\/api\/v1\/timelines\/home\?limit=20&max_id=[A-Za-z0-9_\-.~=%]{1,512}$/, schema: homeSchema },
   { match: /^\/api\/v1\/notifications\?limit=20$/, schema: notificationsSchema },
   { match: /^\/api\/v1\/conversations\?limit=30$/, schema: conversationsSchema },
   { match: new RegExp(`^/api/v1/accounts/relationships\\?id%5B%5D=${ID}(&id%5B%5D=${ID}){0,39}$`), schema: relationshipsSchema },
@@ -401,7 +405,29 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
 
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;
 
-export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {
+/** A page cursor from a Link header (Bonfire's are opaque Paginator cursors, "g3…"; Mastodon's are ids). */
+export const PAGE_CURSOR = /^[A-Za-z0-9_\-.~=%]{1,512}$/;
+
+/**
+ * The next (older) and previous (newer) page cursors from a Mastodon-style Link header, taken only from links on
+ * Fedizen itself (max_id for rel="next", min_id for rel="prev"), and only when they look like cursors.
+ */
+export function pageCursors(link: string | null): { next?: string; prev?: string } {
+  const out: { next?: string; prev?: string } = {};
+  if (!link || link.length > 8192) return out;
+  for (const part of link.split(',')) {
+    const m = part.match(/<([^>]+)>\s*;\s*rel="?(next|prev)"?/);
+    if (!m) continue;
+    let u: URL;
+    try { u = new URL(m[1]); } catch { continue; }
+    if (u.origin !== FEDIZEN) continue;
+    const v = u.searchParams.get(m[2] === 'next' ? 'max_id' : 'min_id');
+    if (v && PAGE_CURSOR.test(encodeURIComponent(v))) out[m[2] as 'next' | 'prev'] = v;
+  }
+  return out;
+}
+
+export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[]; next?: string; prev?: string }> {
   const read = READS.find(r => r.match.test(path));
   if (!read) throw new Error('Unsupported Fedizen read path.');
 
@@ -433,7 +459,7 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
   }
   const parsed = read.schema.safeParse(payload);
   if (!parsed.success) return { status: 502, data: [] };
-  return { status: 200, data: read.single ? [parsed.data] : parsed.data as unknown[] };
+  return { status: 200, data: read.single ? [parsed.data] : parsed.data as unknown[], ...pageCursors(response.headers.get('link')) };
 }
 
 /**

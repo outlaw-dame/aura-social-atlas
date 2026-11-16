@@ -706,7 +706,7 @@ span.atlas-post-avatar { display: inline-flex; align-items: center; justify-cont
 .atlas-post-who small { font-size: 13px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .atlas-post-time { flex: none; align-self: flex-start; font-size: 13px; color: var(--f7-text-color) !important; opacity: .55; padding: 2px 0 8px 8px; }
 .atlas-post-text { font-size: 16px; line-height: 1.45; margin: 10px 0 0; overflow-wrap: anywhere; }
-.atlas-post-image { display: block; width: 100%; margin-top: 10px; border-radius: 14px; }
+.atlas-post-image { display: block; width: 100%; height: auto; max-height: 520px; object-fit: cover; margin-top: 10px; border-radius: 14px; background: rgba(127,127,127,.12); }
 .atlas-post-boosted { display: flex; align-items: center; gap: 4px; margin: 0 0 8px; font-size: 12px; opacity: .6; }
 .atlas-post-boosted .icon { font-size: 13px; }
 .atlas-post-footer { padding-top: 0 !important; padding-bottom: 2px !important; min-height: 0 !important; }
@@ -834,3 +834,11 @@ html.atlas-stack-open .view.atlas-stack { pointer-events: auto; }
 .atlas-compose-error { display: block; margin: 4px 0 0; font-size: 13px; color: var(--f7-color-red, #ff3b30); }
 .atlas-compose-foot { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 13px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
 .atlas-compose-cw .item-input-wrap input { color: inherit; }
+
+/* Home: new posts wait behind a pill (Bonfire's "Show N new activities"), and older posts load ahead (phone). */
+.atlas-new-posts { position: sticky; top: 8px; /* sticks below the navbar: the page's top padding already clears it */ z-index: 20; display: flex; justify-content: center; height: 0; overflow: visible; }
+.atlas-new-posts button { flex: none; width: auto; display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 18px; background: var(--f7-theme-color); color: #fff; font: inherit; font-size: 15px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.18); cursor: pointer; }
+.atlas-new-posts button i { font-size: 16px; }
+.atlas-new-posts button:active { opacity: .85; }
+.atlas-older { display: flex; justify-content: center; padding: 12px 16px 24px; font-size: 14px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
+.atlas-older span { display: flex; align-items: center; gap: 8px; }
