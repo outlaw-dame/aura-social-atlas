@@ -3,8 +3,10 @@ import { Block, Button, Link, Sheet, f7 } from 'framework7-react';
 import { MentionField } from '@/components/social/MentionField';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import type { useSaveToggle } from '@/components/social/useFedizenLibrary';
-import { AUDIENCE_LABEL, compactCount, replyMention, replyVisibility, sharePost, useReactions, useReply } from '@/components/social/usePostActions';
+import { AUDIENCE_LABEL, replyMention, replyVisibility, sharePost, useReactions, useReply } from '@/components/social/usePostActions';
 import { Icon } from './F7Extras';
+import { Ellipsis } from 'lucide-react';
+import { PostActionBar } from '@/components/social/PostActionBar';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useFilterLikeThis } from '@/components/social/useFilterLikeThis';
 
@@ -12,9 +14,9 @@ type Save = ReturnType<typeof useSaveToggle>;
 type Reactions = ReturnType<typeof useReactions>;
 
 /**
- * Phone: the standard post actions — Reply, Boost, Like, Save, Share — as an icon row with counts. Reply, Boost, Like
- * and Save act on Fedizen as the person (signed in, connected); Share works for everyone. A post Fedizen's API can't
- * address (no status id) offers Share only.
+ * Phone: the standard post actions — Reply, Boost, Like, Save, and More with Share — laid out and confirmed as on
+ * desktop (PostActionBar). Reply, Boost, Like and Save act on Fedizen as the person (signed in, connected); Share works
+ * for everyone. A post Fedizen's API can't address (no status id) offers More only.
  */
 export function MobilePostActions({ post: p, save, reactions, onReply }: { post: FedizenPost; save: Save; reactions: Reactions; onReply: (p: FedizenPost) => void }) {
   const acts = !!p.statusId && reactions.canAct;
@@ -33,32 +35,12 @@ export function MobilePostActions({ post: p, save, reactions, onReply }: { post:
       f7.toast.create({ text: err ?? 'Filter added', closeTimeout: 1500 }).open();
     }, () => {}, d.text);
   };
-  return <div className="atlas-post-actions" role="group" aria-label="Post actions">
-    {acts && <>
-      <Link onClick={() => onReply(p)} aria-label={`Reply${p.counts?.replies ? `, ${p.counts.replies} replies` : ''}`}>
-        <Icon ios="f7:bubble_left" md="material:chat_bubble_outline" /><span>{compactCount(p.counts?.replies ?? 0)}</span>
-      </Link>
-      <Link onClick={() => boostable && void reactions.toggle(p, 'boost')} aria-pressed={boost.on} aria-disabled={boost.pending || !boostable}
-        className={`${boost.on ? 'on' : ''}${boost.pending || !boostable ? ' disabled' : ''}`} aria-label={`${boost.on ? 'Undo boost' : 'Boost'}${boost.count ? `, ${boost.count}` : ''}`}>
-        <Icon ios="f7:arrow_2_squarepath" md="material:repeat" /><span>{compactCount(boost.count)}</span>
-      </Link>
-      <Link onClick={() => void reactions.toggle(p, 'like')} aria-pressed={like.on} aria-disabled={like.pending}
-        className={`${like.on ? 'on' : ''}${like.pending ? ' disabled' : ''}`} aria-label={`${like.on ? 'Unlike' : 'Like'}${like.count ? `, ${like.count}` : ''}`}>
-        <Icon ios={like.on ? 'f7:heart_fill' : 'f7:heart'} md={like.on ? 'material:favorite' : 'material:favorite_border'} /><span>{compactCount(like.count)}</span>
-      </Link>
-      {save.canSave && <Link onClick={() => void save.toggle(p)} aria-pressed={saved} aria-disabled={save.isPending(p)}
-        className={`${saved ? 'on' : ''}${save.isPending(p) ? ' disabled' : ''}`} aria-label={saved ? 'Remove from saved' : 'Save'}>
-        <Icon ios={saved ? 'f7:bookmark_fill' : 'f7:bookmark'} md={saved ? 'material:bookmark' : 'material:bookmark_border'} />
-      </Link>}
-    </>}
-    <Link className="atlas-post-share" aria-label="Share" onClick={async () => {
-      const r = await sharePost(p);
-      if (r === 'copied') f7.toast.create({ text: 'Link copied', closeTimeout: 1500 }).open();
-    }}><Icon ios="f7:square_arrow_up" md="material:share" /></Link>
-    {user && <Link aria-label="More" onClick={() => f7.actions.create({ buttons: [[{ text: 'Filter posts like this', onClick: () => void filterLikeThis() }], [{ text: 'Cancel', strong: true }]] }).open()}>
-      <Icon ios="f7:ellipsis" md="material:more_horiz" />
-    </Link>}
-  </div>;
+  const more = () => f7.actions.create({ buttons: [[
+    { text: typeof navigator !== 'undefined' && 'share' in navigator ? 'Share' : 'Copy link', onClick: async () => { if ((await sharePost(p)) === 'copied') f7.toast.create({ text: 'Link copied', closeTimeout: 1500 }).open(); } },
+    ...(user ? [{ text: 'Filter posts like this', onClick: () => void filterLikeThis() }] : []),
+  ], [{ text: 'Cancel', strong: true }]] }).open();
+  return <PostActionBar post={p} save={save} reactions={reactions} onReply={onReply}
+    more={<button type="button" className="atlas-act-more" aria-label="More" onClick={more}><Ellipsis aria-hidden="true" /></button>} />;
 }
 
 /** Phone: reply to a post, in its audience. Opens with the author's handle, as every Mastodon client does. */

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { MoreHorizontal, EyeOff } from 'lucide-react';
+import { Ellipsis, EyeOff, Link2, Share } from 'lucide-react';
+import { sharePost } from './usePostActions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -9,15 +10,21 @@ import { useFilterLikeThis } from './useFilterLikeThis';
 import { ACTION_LABEL } from './filter-options';
 import { useAtlasAuth } from './AuthState';
 
-/** Desktop: the post's More menu, with "Filter posts like this". Signed in only (filters are kept per account). */
-export function PostMoreMenu({ post }: { post: FilterablePost }) {
+/** Desktop: the post's More menu — Share (or Copy link), and "Filter posts like this" when signed in (filters are kept
+ *  per account). */
+export function PostMoreMenu({ post }: { post: FilterablePost & { url?: string; author?: string } }) {
   const { user } = useAtlasAuth();
   const [open, setOpen] = useState(false);
-  if (!user) return null;
+  const [copied, setCopied] = useState(false);
+  const canShare = typeof navigator !== 'undefined' && !!navigator.share;
+  if (!post.url && !user) return null;
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger asChild><button type="button" className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" aria-label="More"><MoreHorizontal className="size-4" /></button></DropdownMenuTrigger>
-      <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => setOpen(true)}><EyeOff />Filter posts like this</DropdownMenuItem></DropdownMenuContent>
+      <DropdownMenuTrigger asChild><button type="button" className="atlas-act-more" aria-label={copied ? 'More, link copied' : 'More'}><Ellipsis aria-hidden="true" />{copied && <span className="text-xs">Link copied</span>}</button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {post.url && <DropdownMenuItem onSelect={async () => { if ((await sharePost({ url: post.url!, author: post.author ?? '' })) === 'copied') { setCopied(true); setTimeout(() => setCopied(false), 1500); } }}>{canShare ? <><Share />Share</> : <><Link2 />Copy link</>}</DropdownMenuItem>}
+        {user && <DropdownMenuItem onSelect={() => setOpen(true)}><EyeOff />Filter posts like this</DropdownMenuItem>}
+      </DropdownMenuContent>
     </DropdownMenu>
     {open && <FilterLikeThisDialog post={post} onClose={() => setOpen(false)} />}
   </>;
