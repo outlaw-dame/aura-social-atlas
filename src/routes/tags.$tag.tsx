@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowUpRight, Link2, MessageCircle, RefreshCw, Star } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
@@ -11,7 +11,8 @@ import { useFedizen } from '@/components/social/useFedizen';
 import { Button } from '@/components/ui/button';
 import { FeedPostCard, useFeedPostActions } from '@/components/social/FeedPostCard';
 import { getTagFeed } from '@/lib/tag-feed.functions';
-import { linkifyHashtags } from '@/lib/hashtags';
+import { linkifyPost } from '@/components/social/PostPeople';
+import { openFediProfile } from '@/lib/fedi-profile';
 import { NetworkBadge } from '@/lib/networks';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
@@ -93,6 +94,7 @@ function Reconnect({ message, tag }: { message: string; tag: string }) {
 }
 
 function PublicTagPage({ tag }: { tag: string }) {
+  const navigate = useNavigate();
   const { data, isLoading, error } = useQuery({ queryKey: ['tag-feed', tag], queryFn: () => getTagFeed({ data: { tag } }), staleTime: 60_000 });
   return <main className="mx-auto min-h-dvh max-w-2xl px-4 py-6">
     <Link to="/" className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />Discover</Link>
@@ -104,12 +106,12 @@ function PublicTagPage({ tag }: { tag: string }) {
     {error && <p className="text-sm text-muted-foreground">This hashtag feed couldn't be loaded. Please try again shortly.</p>}
     {data && !data.length && <p className="text-sm text-muted-foreground">No public posts are tagged {tag} yet.</p>}
     <ol className="divide-y divide-border">{data?.map(p => <li key={p.id} className="py-5">
-      <a href={p.author.url} target="_blank" rel="noopener noreferrer" className="mb-3 flex items-center gap-3">
+      <button type="button" onClick={() => openFediProfile({ actor: p.author.url, acct: p.author.acct, name: p.author.name })} aria-label={`${p.author.name} ${p.author.acct}. Open their profile`} className="atlas-author-button mb-3 flex w-full items-center gap-3 text-left">
         <img src={p.author.avatar} alt="" width={40} height={40} className="size-10 atlas-avatar object-cover ring-1 ring-border" loading="lazy" referrerPolicy="no-referrer" />
         <span className="min-w-0"><span className="block truncate text-sm font-semibold">{p.author.name}</span><span className="block truncate text-xs text-muted-foreground">{p.author.acct}</span></span>
         <time className="ml-auto shrink-0 text-[11px] text-muted-foreground" dateTime={p.createdAt}>{new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time>
-      </a>
-      <AuthorWarning cw={p.cw}><div className="space-y-2 break-words text-sm leading-relaxed">{p.text.map((t, i) => <p key={i}>{linkifyHashtags(t)}</p>)}</div>
+      </button>
+      <AuthorWarning cw={p.cw}><div className="space-y-2 break-words text-sm leading-relaxed">{p.text.map((t, i) => <p key={i}>{linkifyPost(t, undefined, t2 => void navigate({ to: '/tags/$tag', params: { tag: t2 } }))}</p>)}</div>
       <SensitiveMedia sensitive={p.sensitive}>{p.image && <img src={p.image} alt="" className="mt-3 max-h-96 w-full rounded-xl object-cover" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia></AuthorWarning>
       <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-3 flex gap-5 text-xs text-muted-foreground hover:text-foreground" aria-label="Open original post">
         <span className="flex items-center gap-1"><MessageCircle className="size-3.5" />{p.replies}</span>

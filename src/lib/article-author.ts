@@ -333,6 +333,41 @@ export function parseArticleHead(
   return { apAlternate, creators: [...new Set(creators)].slice(0, MAX_AUTHORS), authorLinks };
 }
 
+/** A link preview read from a page's own head (Open Graph, then Twitter cards, then <title>), as Mastodon builds
+ *  its cards (app/lib/link_details_extractor.rb). Plain text only, clipped; the image only as a public https URL. */
+export type PagePreview = { title: string; description?: string; image?: string; provider?: string };
+
+export function parsePagePreview(html: string, pageUrl: string): PagePreview | null {
+  const end = html.search(/<\/head\s*>/i);
+  const head = (end > 0 ? html.slice(0, end) : html).slice(0, 262_144);
+  const meta = new Map<string, string>();
+  for (const m of tags(head, "meta")) {
+    const key = (m.property ?? m.name ?? "").toLowerCase();
+    if (key && m.content && !meta.has(key)) meta.set(key, m.content);
+  }
+  const clean = (v: string | undefined, n: number) => {
+    const t = decodeEntities((v ?? "").replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Math.min(Number(d), 0x10ffff))))
+      .replace(/<[^>]*>/g, "").replace(/\p{Cc}|[\u202a-\u202e\u2066-\u2069]/gu, " ").replace(/\s+/g, " ").trim();
+    return t ? t.slice(0, n) : undefined;
+  };
+  const titleTag = /<title\b[^>]*>([\s\S]{0,1000}?)<\/title>/i.exec(head)?.[1];
+  const title = clean(meta.get("og:title") ?? meta.get("twitter:title") ?? titleTag, 300);
+  if (!title) return null;
+  const description = clean(meta.get("og:description") ?? meta.get("twitter:description") ?? meta.get("description"), 400);
+  const provider = clean(meta.get("og:site_name") ?? meta.get("application-name"), 100);
+  let image: string | undefined;
+  const rawImage = meta.get("og:image:secure_url") ?? meta.get("og:image") ?? meta.get("og:image:url") ?? meta.get("twitter:image") ?? meta.get("twitter:image:src");
+  if (rawImage) {
+    try {
+      const u = new URL(rawImage, pageUrl);
+      if (isPublicHttpsUrl(u.href) && u.href.length <= 2048) image = u.href;
+    } catch {
+      /* ignore */
+    }
+  }
+  return { title, ...(description ? { description } : {}), ...(image ? { image } : {}), ...(provider ? { provider } : {}) };
+}
+
 /** WebFinger JRD → the ActivityPub actor URL. */
 export function actorFromWebfinger(jrd: unknown): string | null {
   if (!isObj(jrd)) return null;

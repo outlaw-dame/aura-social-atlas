@@ -796,6 +796,9 @@ span.atlas-rich-face { display: inline-flex; align-items: center; justify-conten
 /* People in a post (PostPeople.tsx): mentions and the "boosted" row open profiles in Atlas. */
 .atlas-mention { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); font-weight: 500; cursor: pointer; width: auto; text-align: start; }
 .atlas-mention:hover { text-decoration: underline; }
+.atlas-post-link { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+.atlas-post-link:hover { text-decoration: underline; }
+.atlas-post-text .atlas-post-link { color: var(--f7-theme-color, var(--accent)); }
 .atlas-boost-icon { width: 12px; height: 12px; flex: none; }
 .atlas-boost-who { display: inline-flex; align-items: center; gap: 5px; min-width: 0; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; width: auto; }
 .atlas-boost-who b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

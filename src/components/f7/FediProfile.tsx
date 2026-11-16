@@ -1,3 +1,5 @@
+import { openTag } from '@/lib/hashtags';
+import { linkifyPost } from '@/components/social/PostPeople';
 import { Block, BlockTitle, Button, Icon, Link, List, ListItem, Navbar, NavRight, Page, Popup } from 'framework7-react';
 import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
 import { followLabels } from '@/lib/follow-labels';
@@ -55,12 +57,12 @@ export function FediProfilePopup({ target, onClose }: { target: FediProfileTarge
           {p.podcast.category && <ListItem header="Category" title={p.podcast.category} />}
           {p.podcast.feed && <ListItem link={p.podcast.feed} external target="_blank" title="RSS feed"><Icon slot="media" ios="f7:dot_radiowaves_left_right" md="material:rss_feed" /></ListItem>}
         </List>}
-        {p.bio.length > 0 && <Block className="atlas-fedi-bio">{p.bio.map((t, i) => <p key={i}>{t}</p>)}</Block>}
+        {p.bio.length > 0 && <Block className="atlas-fedi-bio">{p.bio.map((t, i) => <p key={i}>{linkifyPost(t, undefined, tag => { onClose(); openTag(tag); })}</p>)}</Block>}
         {p.fields.length > 0 && <List strong inset dividers>{p.fields.map(f => <ListItem key={f.name} header={f.name} title={f.value} />)}</List>}
         <BlockTitle>{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</BlockTitle>
         <FilterPlaceProvider place="account">{p.posts.map(post => <MobileFilterGate key={post.id} post={post}><Block strong inset className="atlas-fedi-post">
           {post.title && <h2>{post.title}</h2>}
-          <AuthorWarning cw={post.cw} phone>{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}
+          <AuthorWarning cw={post.cw} phone>{post.paragraphs.map((t, i) => <p key={i}>{linkifyPost(t, undefined, tag => { onClose(); openTag(tag); })}</p>)}
           <SensitiveMedia sensitive={post.sensitive} cta="Tap to view">{post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia></AuthorWarning>
           <p className="atlas-fedi-note">{day(post.date)} · <Link external target="_blank" href={post.url}>Original</Link></p>
         </Block></MobileFilterGate>)}</FilterPlaceProvider>

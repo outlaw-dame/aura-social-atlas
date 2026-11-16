@@ -1,3 +1,5 @@
+import { linkifyPost } from './PostPeople';
+import { useNavigate } from '@tanstack/react-router';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Check, Copy, Hash, Lock, Megaphone, Search, Users } from 'lucide-react';
@@ -37,13 +39,14 @@ function Post({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
 }
 
 function PostBody({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
+  const navigate = useNavigate();
   return <article className="border-b border-border py-5">
     <p className="flex items-center gap-2 text-xs">
       {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" className="size-8 atlas-avatar object-cover" /> : <span aria-hidden="true" className="social-avatar size-8 font-serif">{p.author.charAt(0)}</span>}
       <span className="min-w-0"><span className="font-semibold">{p.author}</span>{showGroup && p.group && <span className="text-muted-foreground"> in {p.group}</span>}
         <span className="block truncate text-muted-foreground">{p.handle}{p.date ? ` · ${when(p.date)}` : ''}</span></span>
     </p>
-    <div className="mt-3 space-y-2 text-sm leading-relaxed [overflow-wrap:anywhere]">{p.paragraphs.slice(0, 6).map((t, i) => <p key={i}>{t}</p>)}</div>
+    <div className="mt-3 space-y-2 text-sm leading-relaxed [overflow-wrap:anywhere]">{p.paragraphs.slice(0, 6).map((t, i) => <p key={i}>{linkifyPost(t, undefined, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
     <SensitiveMedia>{p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}</SensitiveMedia>
     <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Open on Fedizen<ArrowUpRight className="size-3" /></a>
   </article>;
