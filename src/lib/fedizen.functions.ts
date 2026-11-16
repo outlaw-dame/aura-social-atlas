@@ -28,7 +28,7 @@ export const startFedizenConnect = createServerFn({ method: 'POST' }).middleware
     if (!redirect) return { url: null, error: 'This address can’t connect to Fedizen.' };
     const { startConnect } = await import('./fedizen.server');
     try { return { url: await startConnect(context.userId, redirect), error: null }; }
-    catch { console.error('Fedizen connection initiation unavailable'); return { url: null, error: 'Fedizen couldn’t be reached. Try again shortly.' }; }
+    catch (e) { const { transportDetail } = await import('./fedizen-http'); console.error('Fedizen connection initiation unavailable', { why: transportDetail(e) }); return { url: null, error: 'Fedizen couldn’t be reached. Try again shortly.' }; }
   });
 
 export const finishFedizenConnect = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])

@@ -1,3 +1,4 @@
+import { FEDIZEN_USER_AGENT, transportDetail } from './fedizen-http';
 /**
  * Groups — public reads from Fedizen's Bonfire GraphQL API (v1.1.0-rc.1). No sign-in: Bonfire applies each
  * group's boundaries for an anonymous reader, so hidden groups and members-only posts are never returned.
@@ -26,25 +27,25 @@ type GqlResult<T> = { data?: T; errors?: { message?: string }[] };
 async function gqlRaw<T>(query: string, variables: Record<string, unknown> = {}): Promise<GqlResult<T> | null> {
   try {
     const res = await (net.fetch ?? fetch)(GRAPHQL, {
-      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
+      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) { console.error(`Fedizen groups request failed [${res.status}]`); return null; }
     return await res.json() as GqlResult<T>;
-  } catch (e) { console.error('Fedizen groups fetch error', e); return null; }
+  } catch (e) { console.error('Fedizen groups fetch error', { kind: transportDetail(e) }); return null; }
 }
 
 async function gql<T>(query: string, variables: Record<string, unknown> = {}): Promise<T | null> {
   try {
     const res = await (net.fetch ?? fetch)(GRAPHQL, {
-      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
+      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) { console.error(`Fedizen groups request failed [${res.status}]`); return null; }
     const json = await res.json() as { data?: T; errors?: unknown };
-    if (json.errors || !json.data) { console.error('Fedizen groups GraphQL error', JSON.stringify(json.errors).slice(0, 500)); return null; }
+    if (json.errors || !json.data) { console.error('Fedizen groups GraphQL error', { kind: 'graphql' }); return null; }
     return json.data;
-  } catch (e) { console.error('Fedizen groups fetch error', e); return null; }
+  } catch (e) { console.error('Fedizen groups fetch error', { kind: transportDetail(e) }); return null; }
 }
 
 /** Posts reach a group through the group's boost, so the booster is the group, not a person who boosted. */

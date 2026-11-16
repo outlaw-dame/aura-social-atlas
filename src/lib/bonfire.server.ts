@@ -1,5 +1,5 @@
 import { fromBonfireArticles, fromBonfirePosts, type BonfireActivityNode } from './spotlight';
-import { requestBonfireGraphQL } from './bonfire-graphql.server';
+import { BonfireGraphQLError, requestBonfireGraphQL } from './bonfire-graphql.server';
 import { publicFeedDocument, validatedBonfireNodes, type PublicFeedName } from './bonfire/graphql/operations';
 import type { RecentArticlesResult, PublicFeedResult } from './bonfire.functions';
 
@@ -31,8 +31,10 @@ async function readPublicFeed<T>(
     // Normalize inside the same failure boundary: nested remote fields can be
     // malformed even after the top-level GraphQL edge shape is valid.
     return normalize(nodes);
-  } catch {
-    console.error('Bonfire public feed unavailable', { feed: name });
+  } catch (e) {
+    // Why, without the response: GraphQL errors and bodies can carry private data.
+    const why = e instanceof BonfireGraphQLError ? { kind: e.kind, status: e.status, detail: e.detail } : { kind: 'normalize' };
+    console.error('Bonfire public feed unavailable', { feed: name, ...why });
     return null;
   }
 }
