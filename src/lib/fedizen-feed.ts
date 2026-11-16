@@ -29,6 +29,8 @@ export type FedizenPost = { id: string; /** The post itself (the boosted one for
   /** The author's actor and full handle, to open their profile in Atlas. */ actor?: string; acct?: string;
   /** Who boosted it (boostedBy is their name), to show their avatar and open their profile. */ booster?: FediPerson;
   /** The people the post mentions, as Fedizen resolved them: "@name" in the text opens theirs. */ mentions?: FediMention[];
+  /** The post this one replies to: its id, and the post itself once Atlas has read it from Fedizen (absent when
+   *  Fedizen won't show it to the reader, eg. its author is blocked). */ replyTo?: { statusId: string; post?: FedizenPost };
   /** Mastodon collections linked in the post. */ collections?: string[];
   /** A video attached to the post (a federated PeerTube video arrives this way). */ video?: FediVideo;
   /** The article the post links to, and who wrote it as far as Atlas can verify ("More from"). */ article?: PostArticle;
@@ -50,7 +52,7 @@ export type FedizenConversation = { id: string; unread: boolean; people: { name:
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string; url?: string | null; uri?: string | null };
 type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; sensitive?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
   replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null;
-  spoiler_text?: string | null; tags?: { name?: string }[] | null; mentions?: { acct?: string | null; username?: string | null }[] | null; poll?: { options?: { title?: string }[] } | null;
+  in_reply_to_id?: string | null; spoiler_text?: string | null; tags?: { name?: string }[] | null; mentions?: { acct?: string | null; username?: string | null }[] | null; poll?: { options?: { title?: string }[] } | null;
   quote?: { quoted_status?: { content?: string | null; spoiler_text?: string | null; media_attachments?: { description?: string | null }[] | null } | null } | null };
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
@@ -110,6 +112,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
       ...(s.reblog ? { booster: person(s.account) } : {}),
       ...(() => { const a = person(o.account); return { ...(a.acct ? { acct: a.acct } : {}), ...(a.actor ? { actor: a.actor } : {}) }; })(),
       ...(() => { const m = mentionsOf(o); return m.length ? { mentions: m } : {}; })(),
+      ...(o.in_reply_to_id && /^[A-Za-z0-9_-]{1,64}$/.test(o.in_reply_to_id) ? { replyTo: { statusId: o.in_reply_to_id } } : {}),
       ...(o.sensitive === true && o.media_attachments?.length ? { sensitive: true } : {}),
       ...(typeof o.replies_count === 'number' || typeof o.reblogs_count === 'number' || typeof o.favourites_count === 'number'
         ? { counts: { replies: o.replies_count ?? 0, boosts: o.reblogs_count ?? 0, likes: o.favourites_count ?? 0 } } : {}),

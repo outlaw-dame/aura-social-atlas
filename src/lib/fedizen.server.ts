@@ -394,6 +394,8 @@ const status = z.object({
   favourited: z.boolean().nullish().catch(null),
   reblogged: z.boolean().nullish().catch(null),
   visibility: z.enum(['public', 'unlisted', 'private', 'direct']).nullish().catch(null),
+  /** The post this one replies to, shown above it in feeds (fetched from Fedizen as the reader may see it). */
+  in_reply_to_id: z.string().max(64).nullish().catch(null),
   /** The link preview Bonfire builds for the post's first link (no `authors`: Atlas works those out itself). */
   // Each field fails on its own (to null), so one odd preview never empties a feed.
   card: z.object({

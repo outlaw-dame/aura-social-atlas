@@ -107,7 +107,7 @@ export const getFedizenHome = createServerFn({ method: 'GET' }).middleware([requ
     accountHandle: t.account_handle,
     canWrite: hasScope(t.scope, 'write'),
     nativeReadEnabled: process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'] === 'verified',
-    posts: await withArticleAuthors(fromStatuses(home.data as never)),
+    posts: await withArticleAuthors(fromStatuses(home.data as never), 2000, t.access_token),
     notices: await withActorAvatars(fromNotifications(notes.data as never)),
     ...(home.next ? { next: home.next } : {}),
     error,
@@ -126,7 +126,7 @@ export const getFedizenHomePage = createServerFn({ method: 'GET' }).middleware([
     if (!t) return { posts: [], error: 'not-connected' };
     const r = await fedizenGet(t.access_token, `/api/v1/timelines/home?limit=20&max_id=${cursor}`).catch(() => null);
     if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
-    return { posts: await withArticleAuthors(fromStatuses(r.data as never)), ...(r.next ? { next: r.next } : {}) };
+    return { posts: await withArticleAuthors(fromStatuses(r.data as never), 2000, t.access_token), ...(r.next ? { next: r.next } : {}) };
   });
 
 /**
@@ -146,7 +146,7 @@ export const getFedizenHomeLatest = createServerFn({ method: 'GET' }).middleware
     ]);
     if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
     return {
-      posts: await withArticleAuthors(fromStatuses(r.data as never), 1200), ...(r.next ? { next: r.next } : {}),
+      posts: await withArticleAuthors(fromStatuses(r.data as never), 1200, t.access_token), ...(r.next ? { next: r.next } : {}),
       ...(n?.status === 200 ? { notices: await withActorAvatars(fromNotifications(n.data as never), 800) } : {}),
     };
   });
@@ -157,7 +157,39 @@ export const getFedizenHomeLatest = createServerFn({ method: 'GET' }).middleware
  * account is on the article's host or lists its domain (attributionDomains). Shares the Spotlight resolver's cache
  * and time budget, so a slow publisher never holds up the feed: what isn't ready shows on the next load.
  */
-async function withArticleAuthors(posts: FedizenPost[], budgetMs = 2000): Promise<FedizenPost[]> {
+async function withArticleAuthors(posts: FedizenPost[], budgetMs = 2000, token?: string): Promise<FedizenPost[]> {
+  const enriched = await withArticleAuthorsAndFaces(posts, budgetMs);
+  return token ? withReplyParents(enriched, token, Math.min(budgetMs, 1500)) : enriched;
+}
+
+/**
+ * The post each reply answers, shown above it in feeds as Ivory and Phanpy do (Bonfire's own feed shows only "reply
+ * in thread"). Read from Fedizen with the reader's own connection, so Fedizen's boundaries and blocks decide: a parent
+ * it won't show (a blocked author or instance, a post the reader may not see) is simply left out. A parent already on
+ * the page is reused. At most 12 per page, in parallel, within a time budget.
+ */
+async function withReplyParents(posts: FedizenPost[], token: string, budgetMs: number): Promise<FedizenPost[]> {
+  const onPage = new Map(posts.map(p => [p.statusId ?? p.id, p]));
+  const wanted = [...new Set(posts.flatMap(p => (p.replyTo && !onPage.has(p.replyTo.statusId) ? [p.replyTo.statusId] : [])))].slice(0, 12);
+  const found = new Map<string, FedizenPost>();
+  if (wanted.length) {
+    const { fedizenGet } = await import('./fedizen.server');
+    const work = Promise.all(wanted.map(async id => {
+      const r = await fedizenGet(token, `/api/v1/statuses/${id}`).catch(() => null);
+      const parent = r?.status === 200 ? fromStatuses(r.data as never)[0] : undefined;
+      if (parent) found.set(id, parent);
+    }));
+    await Promise.race([work, new Promise(res => setTimeout(res, budgetMs))]);
+  }
+  return posts.map(p => {
+    if (!p.replyTo) return p;
+    const parent = found.get(p.replyTo.statusId) ?? onPage.get(p.replyTo.statusId);
+    // One level: the parent's own parent isn't carried.
+    return parent ? { ...p, replyTo: { statusId: p.replyTo.statusId, post: { ...parent, replyTo: undefined } } } : p;
+  });
+}
+
+async function withArticleAuthorsAndFaces(posts: FedizenPost[], budgetMs = 2000): Promise<FedizenPost[]> {
   // Authors' and boosters' real avatars where Fedizen gave its placeholder, alongside the article work.
   const [withAuthors, faces] = await Promise.all([withArticleAuthorsOnly(posts, budgetMs), actorAvatars(posts.flatMap(p => [
     ...(!p.avatar && p.actor ? [p.actor] : []), ...(p.booster && !p.booster.avatar && p.booster.actor ? [p.booster.actor] : []),
@@ -251,7 +283,7 @@ export const getFedizenSaved = createServerFn({ method: 'GET' }).middleware([req
     if ('error' in c) return { posts: [], error: c.error };
     const { fedizenGet } = await import('./fedizen.server');
     const r = await fedizenGet(c.token, '/api/v1/bookmarks?limit=40');
-    return r.status === 200 ? { posts: await withArticleAuthors(fromStatuses(r.data as never).map(p => ({ ...p, bookmarked: true }))) } : { posts: [], error: problem(r.status) };
+    return r.status === 200 ? { posts: await withArticleAuthors(fromStatuses(r.data as never).map(p => ({ ...p, bookmarked: true })), 2000, c.token) } : { posts: [], error: problem(r.status) };
   });
 
 /** Bookmark or unbookmark a Fedizen post. */
@@ -527,7 +559,7 @@ export const getFedizenTagFeed = createServerFn({ method: 'GET' }).middleware([r
     const { fedizenGet } = await import('./fedizen.server');
     const r = await fedizenGet(c.token, `/api/v1/timelines/tag/${encodeURIComponent(data.tag)}?limit=20`).catch(() => null);
     if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
-    return { posts: await withArticleAuthors(fromStatuses(r.data as never)) };
+    return { posts: await withArticleAuthors(fromStatuses(r.data as never), 2000, c.token) };
   });
 
 /** A circle's feed: posts from the people in it (Bonfire serves circles as Mastodon lists). */
@@ -541,7 +573,7 @@ export const getCircleFeed = createServerFn({ method: 'GET' }).middleware([requi
     const r = await fedizenGet(c.token, `/api/v1/timelines/list/${data.id}?limit=20`);
     if (r.status === 404) return { posts: [], error: 'not-found' };
     if (r.status !== 200) return { posts: [], error: problem(r.status) };
-    return { posts: await withArticleAuthors(fromStatuses(r.data as never)) };
+    return { posts: await withArticleAuthors(fromStatuses(r.data as never), 2000, c.token) };
   });
 
 

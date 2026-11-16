@@ -115,7 +115,9 @@ export function MobileActivity() {
   return <List strong inset dividers mediaList className="atlas-activity">
     {n.map(x => {
       const i = noticeIcon[x.type] ?? { ios: 'f7:bell_fill', md: 'material:notifications' };
-      return <ListItem key={x.id} title={x.author} after={when(x.date)} text={x.text}>
+      // Tapping someone in Activity opens their profile in Atlas (phones have no hover card).
+      const who = x.acct || x.actor ? { actor: x.actor, acct: x.acct, name: x.author } : null;
+      return <ListItem key={x.id} title={x.author} after={when(x.date)} text={x.text} {...(who ? { link: '#', onClick: (e: { preventDefault?: () => void }) => { e.preventDefault?.(); openFediProfile(who); } } : {})}>
         <span slot="media" className="atlas-activity-media">
           {x.avatar ? <img src={x.avatar} alt="" width={40} height={40} referrerPolicy="no-referrer" /> : <span className="atlas-activity-initial" aria-hidden="true">{x.author.charAt(0)}</span>}
           <span className={`atlas-activity-kind atlas-activity-${x.type}`}><Icon ios={i.ios} md={i.md} /></span>

@@ -9,6 +9,7 @@ import { MentionField } from './MentionField';
 import { PostActionBar } from './PostActionBar';
 import { BoostedBy, canOpen, linkifyPost, openAuthor } from './PostPeople';
 import { ProfileHoverCard } from './ProfileHoverCard';
+import { ReplyParent } from './ReplyParent';
 import { useTagLine } from './useFeeds';
 import { CollectionLinks } from './CollectionsDesktop';
 import { PostArticleCard } from './ArticleAuthors';
@@ -90,6 +91,7 @@ function FeedPostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenP
     <FollowedTagLine tags={tagLine} />
     <ReasonChips reasons={reasons} />
     <BoostedBy post={p} className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground" />
+    {p.replyTo?.post && <ReplyParent post={p.replyTo.post} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} Gate={FilterGate} />}
     <div className="flex items-center gap-3">
       {canOpen(p)
         ? <ProfileHoverCard target={{ actor: p.actor, acct: p.acct, name: p.author }}><button type="button" className="atlas-author-button atlas-author-fill gap-3" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}><Who post={p} /></button></ProfileHoverCard>

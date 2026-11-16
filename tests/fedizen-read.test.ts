@@ -42,7 +42,7 @@ describe('Fedizen read-side failure isolation', () => {
 
   test('keeps what opens profiles in Atlas: mentions and the actor', async () => {
     // As fedizen.net's /api/v1/timelines answer (Bonfire's Mastodon API).
-    const body = [{ id: 'o1', content: '<p>@<span>nedley</span> hi</p>',
+    const body = [{ id: 'o1', in_reply_to_id: '01PARENT', content: '<p>@<span>nedley</span> hi</p>',
       account: { acct: 'ai6yr@m.ai6yr.org', username: 'ai6yr', url: 'https://m.ai6yr.org/users/ai6yr', uri: 'https://m.ai6yr.org/users/ai6yr' },
       mentions: [{ acct: 'nedley@mastodon.social', username: 'nedley@mastodon.social', url: 'https://fedizen.net/@nedley@mastodon.social', id: 'x' }] }];
     globalThis.fetch = mock(async () => new Response(JSON.stringify(body), { status: 200 })) as typeof fetch;
@@ -51,6 +51,7 @@ describe('Fedizen read-side failure isolation', () => {
     expect(s.mentions).toEqual([{ acct: 'nedley@mastodon.social', username: 'nedley@mastodon.social' }]);
     expect(s.account?.url).toBe('https://m.ai6yr.org/users/ai6yr');
     expect(s.account?.uri).toBe('https://m.ai6yr.org/users/ai6yr');
+    expect((s as { in_reply_to_id?: string }).in_reply_to_id).toBe('01PARENT');
   });
 
   test('rejects object-shaped HTTP 200 payload as upstream failure', async () => {
