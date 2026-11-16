@@ -9,7 +9,7 @@ import { episodeFromObject, type FediEpisode } from "./podcast-episode";
 import { episodeVideo, videoFromObject, type FediVideo } from "./fedi-video";
 
 /** Something playable found while resolving a link: a podcast episode or a video. */
-export type FoundMedia = { episode?: FediEpisode; video?: FediVideo };
+export type FoundMedia = { episode?: FediEpisode; video?: FediVideo; /** The page's own link preview, for a link Fedizen made no card for. */ preview?: PagePreview };
 import {
   MAX_AUTHORS,
   actorFromWebfinger,
@@ -24,7 +24,9 @@ import {
   normalizeHost,
   parseArticleHead,
   parseHandle,
+  parsePagePreview,
   type FediAuthor,
+  type PagePreview,
 } from "./article-author";
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -306,6 +308,8 @@ export async function resolveArticleAuthors(
   if (!page.type.includes("html"))
     return (await fromAuthorLinks(hinted, articleUrl, fetchImpl, lookup)).slice(0, MAX_AUTHORS);
   const head = parseArticleHead(page.text, articleUrl);
+  const preview = parsePagePreview(page.text, articleUrl);
+  if (preview && onMedia) onMedia({ preview });
   if (head.apAlternate) {
     const ap = await safeFetch(head.apAlternate, AP_ACCEPT, fetchImpl, lookup);
     if (ap && isJsonType(ap.type)) {
@@ -382,8 +386,10 @@ export async function resolveAuthorsFor(
 /** Episodes and videos found while resolving authors, keyed by the link that was resolved (same lifetime as credits). */
 const media = new Map<string, { at: number; found: FoundMedia }>();
 function rememberMedia(url: string, found: FoundMedia) {
-  if (media.size >= MAX_ENTRIES) media.delete(media.keys().next().value as string);
-  media.set(url, { at: Date.now(), found });
+  // One link can yield a preview and then a playable episode or video: keep both.
+  const prev = media.get(url)?.found;
+  if (!prev && media.size >= MAX_ENTRIES) media.delete(media.keys().next().value as string);
+  media.set(url, { at: Date.now(), found: { ...prev, ...found } });
 }
 export function mediaFor(url: string): FoundMedia | undefined {
   const e = media.get(url);

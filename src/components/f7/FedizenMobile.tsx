@@ -1,3 +1,5 @@
+import { openTag } from '@/lib/hashtags';
+import { linkifyPost } from '@/components/social/PostPeople';
 import { useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { Block, BlockTitle, Button, Card, CardContent, CardFooter, Link, List, ListItem, Navbar, NavRight, Page, Popup } from 'framework7-react';
@@ -135,7 +137,7 @@ export function MobilePublicFedizen() {
       : <FilterPlaceProvider place="public">{list.slice(0, 8).map(p => <MobileFilterGate key={p.id} post={p}><Card outline>
         <CardContent>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} className="atlas-avatar" style={{ objectFit: 'cover' }} referrerPolicy="no-referrer" />}<span><b>{p.author}</b> <span style={{ opacity: .6 }}>{p.handle}</span></span></div>
-          <AuthorWarning cw={p.cw} phone>{p.paragraphs.slice(0, 5).map((t, i) => <p key={i} style={{ lineHeight: 1.5, overflowWrap: 'anywhere' }}>{t}</p>)}
+          <AuthorWarning cw={p.cw} phone>{p.paragraphs.slice(0, 5).map((t, i) => <p key={i} style={{ lineHeight: 1.5, overflowWrap: 'anywhere' }}>{linkifyPost(t, p.mentions, openTag)}</p>)}
           <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.image && <img src={p.image} alt="" loading="lazy" style={{ width: '100%', borderRadius: 12 }} referrerPolicy="no-referrer" />}</SensitiveMedia></AuthorWarning>
         </CardContent>
         <CardFooter><span style={{ fontSize: 12, opacity: .6 }}>{when(p.date)}</span><Link external target="_blank" href={p.url}>Open</Link></CardFooter>

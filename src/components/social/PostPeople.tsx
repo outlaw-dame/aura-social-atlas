@@ -18,8 +18,48 @@ export function mentionFor(written: string, mentions: FediMention[]): FediMentio
   return w.includes('@') ? mentions.find(m => m.acct.toLowerCase() === w) : mentions.find(m => m.username.toLowerCase() === w);
 }
 
-/** A post's text with its mentions and hashtags as buttons. Only mentions Fedizen resolved become buttons. */
+/** A web address in a post's text. Fedizen's HTML is flattened to text first, so its links come back as written. */
+const URL_RE = /\bhttps?:\/\/[^\s<>"]+/gi;
+
+/** A link without what usually follows it in a sentence: closing punctuation, or a ")" it didn't open. */
+export function trimUrl(raw: string): string {
+  let u = raw;
+  for (;;) {
+    const before = u;
+    u = u.replace(/[.,;:!?'"\u2019\u201d\u00bb]+$/u, '');
+    if (u.endsWith(')') && (u.match(/\(/g) ?? []).length < (u.match(/\)/g) ?? []).length) u = u.slice(0, -1);
+    if (u === before) return u;
+  }
+}
+
+/** How a link reads in a post, as Mastodon shows it: no scheme or "www.", and long ones cut to 30 characters. */
+export function shownUrl(href: string): string {
+  const s = href.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+  return s.length > 30 ? `${s.slice(0, 30)}…` : s;
+}
+
+/** A post's text with its links, mentions and hashtags live. Links open in a new tab; mentions (only those
+ *  Fedizen resolved) open profiles in Atlas; hashtags open their feed in Atlas. */
 export function linkifyPost(text: string, mentions: FediMention[] | undefined, onTag: (tag: string) => void): ReactNode[] {
+  const out: ReactNode[] = [];
+  let at = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    const href = trimUrl(m[0]);
+    let ok = false;
+    try { ok = /^https?:$/.test(new URL(href).protocol); } catch { ok = false; }
+    if (!ok) continue;
+    const start = m.index!;
+    if (start > at) out.push(<Fragment key={`p${at}`}>{linkifyPeople(text.slice(at, start), mentions, onTag)}</Fragment>);
+    out.push(<a key={`u${start}`} href={href} target="_blank" rel="noopener noreferrer nofollow ugc" className="atlas-post-link" title={href}
+      onClick={e => e.stopPropagation()}>{shownUrl(href)}</a>);
+    at = start + href.length;
+  }
+  if (at < text.length) out.push(<Fragment key={`p${at}`}>{linkifyPeople(text.slice(at), mentions, onTag)}</Fragment>);
+  return out;
+}
+
+/** Text with no links: mentions Fedizen resolved as profile buttons, hashtags as feed buttons. */
+function linkifyPeople(text: string, mentions: FediMention[] | undefined, onTag: (tag: string) => void): ReactNode[] {
   if (!mentions?.length) return linkifyHashtagsWith(text, onTag);
   const out: ReactNode[] = [];
   let at = 0;

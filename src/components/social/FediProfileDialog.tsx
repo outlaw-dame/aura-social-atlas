@@ -1,3 +1,5 @@
+import { useNavigate } from '@tanstack/react-router';
+import { linkifyPost } from './PostPeople';
 import { useState } from 'react';
 import { ArrowUpRight, BadgeCheck, Bot, Clapperboard, Lock, Mic, Rss, UserCheck, UserPlus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -42,6 +44,8 @@ function Follow({ p }: { p: FediProfile }) {
 
 export function FediProfileDialog({ target, onClose }: { target: FediProfileTarget | null; onClose: () => void }) {
   const q = useFediProfile(target);
+  const navigate = useNavigate();
+  const onTag = (tag: string) => { onClose(); void navigate({ to: '/tags/$tag', params: { tag } }); };
   const p = q.data?.profile;
   return <Dialog open={!!target} onOpenChange={o => { if (!o) onClose(); }}>
     <DialogContent className="max-h-[88vh] max-w-xl overflow-y-auto rounded-3xl p-0">
@@ -71,7 +75,7 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
             {p.podcast.category && <span>{p.podcast.category}</span>}
             {p.podcast.feed && <a href={p.podcast.feed} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground"><Rss className="size-3" />RSS feed</a>}
           </p>}
-          {p.bio.length > 0 && <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.bio.map((t, i) => <p key={i}>{t}</p>)}</div>}
+          {p.bio.length > 0 && <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.bio.map((t, i) => <p key={i}>{linkifyPost(t, undefined, onTag)}</p>)}</div>}
           {p.fields.length > 0 && <dl className="mt-4 divide-y divide-border rounded-2xl border border-border text-sm">
             {p.fields.map(f => <div key={f.name} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2"><dt className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">{f.name}</dt><dd className="[overflow-wrap:anywhere]">{f.value}</dd></div>)}
           </dl>}
@@ -84,7 +88,7 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</h3>
             <FilterPlaceProvider place="account">{p.posts.map(post => <FilterGate key={post.id} post={post}><article className="border-t border-border pt-4">
               {post.title && <h3 className="font-serif text-xl">{post.title}</h3>}
-              <AuthorWarning cw={post.cw}><div className="mt-1 space-y-2 text-sm leading-relaxed">{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div>
+              <AuthorWarning cw={post.cw}><div className="mt-1 space-y-2 text-sm leading-relaxed">{post.paragraphs.map((t, i) => <p key={i}>{linkifyPost(t, undefined, onTag)}</p>)}</div>
               <SensitiveMedia sensitive={post.sensitive}>{post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-72 w-full rounded-2xl object-cover" />}</SensitiveMedia></AuthorWarning>
               <p className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">{day(post.date)}<a href={post.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">Original<ArrowUpRight className="size-3" /></a></p>
             </article></FilterGate>)}</FilterPlaceProvider>

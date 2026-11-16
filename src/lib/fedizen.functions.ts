@@ -169,7 +169,12 @@ async function withArticleAuthors(posts: FedizenPost[], budgetMs = 2000): Promis
     const m = mediaFor(p.article.url);
     // A post that already carries the video as an attachment needn't show it twice.
     const video = p.video ? undefined : m?.video;
-    return a.length || m?.episode || video ? { ...p, article: { ...p.article, ...(a.length ? { authors: a } : {}), ...(m?.episode ? { episode: m.episode } : {}), ...(video ? { video } : {}) } } : p;
+    // Fedizen made no card for this link: the page's own preview (read while resolving its authors) stands in.
+    const preview: { title?: string; description?: string; image?: string; provider?: string } = !p.article.title && m?.preview ? {
+      title: m.preview.title, ...(m.preview.description ? { description: m.preview.description } : {}),
+      ...(m.preview.image ? { image: m.preview.image } : {}), ...(m.preview.provider ? { provider: m.preview.provider } : {}),
+    } : {};
+    return a.length || m?.episode || video || preview.title ? { ...p, article: { ...p.article, ...preview, ...(a.length ? { authors: a } : {}), ...(m?.episode ? { episode: m.episode } : {}), ...(video ? { video } : {}) } } : p;
   });
 }
 
