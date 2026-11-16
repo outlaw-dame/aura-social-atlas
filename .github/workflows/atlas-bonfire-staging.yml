@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - staging/atlas-bonfire-client
+      - staging/atlas-bonfire-client-v2
   pull_request:
     branches:
       - main
