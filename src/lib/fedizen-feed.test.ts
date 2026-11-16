@@ -145,3 +145,12 @@ describe('Avatars Fedizen stands in for', () => {
     deepStrictEqual([n.avatar, n.acct, n.actor], [undefined, 'roydbt@lemmy.zip', 'https://lemmy.zip/u/roydbt']);
   });
 });
+
+describe('Replies', () => {
+  test('a reply carries the id of the post it answers', () => {
+    const [p] = fromStatuses([{ id: 'r', content: '<p>yes</p>', in_reply_to_id: '01M7K5N4W0F0RCC9F5D3PS2GG5', account: { acct: 'alice' } }] as never);
+    deepStrictEqual(p.replyTo, { statusId: '01M7K5N4W0F0RCC9F5D3PS2GG5' });
+    const [q] = fromStatuses([{ id: 'q', content: '<p>x</p>', in_reply_to_id: '../../etc', account: { acct: 'alice' } }] as never);
+    strictEqual(q.replyTo, undefined);
+  });
+});

@@ -798,6 +798,20 @@ span.atlas-rich-face { display: inline-flex; align-items: center; justify-conten
 .atlas-mention:hover { text-decoration: underline; }
 .atlas-post-link { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
 .atlas-post-link:hover { text-decoration: underline; }
+/* A reply's parent above it (ReplyParent.tsx), joined to the reply by a thread line under its avatar. */
+.atlas-reply-parent { position: relative; margin-bottom: 10px; padding-left: 0; }
+.atlas-reply-parent::before { content: ""; position: absolute; left: 15px; top: 38px; bottom: -10px; width: 2px; border-radius: 1px; background: var(--border, rgba(127,127,127,.3)); }
+.atlas-reply-parent-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.atlas-reply-parent-avatar { width: 32px; height: 32px; flex: none; object-fit: cover; background: var(--muted, rgba(127,127,127,.15)); }
+.atlas-reply-parent-initial { display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+.atlas-reply-parent-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-reply-parent-who b { font-weight: 600; }
+.atlas-reply-parent-who span { opacity: .6; }
+.atlas-reply-parent-time { flex: none; margin-left: auto; font-size: 12px; opacity: .6; }
+.atlas-reply-parent-body { margin-left: 40px; font-size: 14px; line-height: 1.45; opacity: .85; overflow-wrap: anywhere; }
+.atlas-reply-parent-body p { margin: 2px 0 0; }
+.atlas-reply-parent-cw { font-style: italic; }
+.atlas-reply-parent-image { display: block; margin-top: 6px; max-height: 140px; max-width: 100%; border-radius: 10px; object-fit: cover; }
 /* "View" after posting: the new post, marked briefly where it is in the feed. */
 .atlas-post-flash { animation: atlas-post-flash 2.4s ease-out; border-radius: 12px; outline: none; }
 @keyframes atlas-post-flash { 0%, 40% { background: color-mix(in oklab, var(--accent) 12%, transparent); } 100% { background: transparent; } }

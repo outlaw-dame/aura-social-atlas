@@ -6,6 +6,7 @@ import { openCollection } from '@/lib/collections';
 import { openGroup } from '@/lib/groups';
 import { openTag } from '@/lib/hashtags';
 import { BoostedBy, canOpen, linkifyPost, openAuthor } from '@/components/social/PostPeople';
+import { ReplyParent } from '@/components/social/ReplyParent';
 import { useTagLine } from '@/components/social/useFeeds';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { useSaveToggle } from '@/components/social/useFedizenLibrary';
@@ -81,6 +82,7 @@ function MobilePostCardBody({ post: p, actions, reasons, inTag }: { post: Fedize
       <FollowedTagLine tags={tagLine} />
       <MobileReasonChips reasons={reasons} />
       <BoostedBy post={p} className="atlas-post-boosted" />
+      {p.replyTo?.post && <ReplyParent post={p.replyTo.post} onTag={openTag} Gate={({ post, children }) => <MobileFilterGate post={post} card={false}>{children}</MobileFilterGate>} />}
       <div className="atlas-post-head">
         {canOpen(p)
           ? <button type="button" className="atlas-author-button atlas-author-fill" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}><Avatar post={p} /><span className="atlas-post-who"><b>{p.author}</b><small>{p.handle}</small></span></button>
