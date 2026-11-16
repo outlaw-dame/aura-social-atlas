@@ -55,9 +55,16 @@ type Status = { id: string; url?: string | null; uri?: string; created_at?: stri
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
 const http = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
-/** Their display name, or else the first part of their handle: Bonfire gives a remote account's full handle as its
- *  username, and many Lemmy and Pixelfed accounts have no display name. */
-const name = (a?: Acct) => a?.display_name?.trim() || (a?.username || a?.acct || '').replace(/^@/, '').split('@')[0] || 'Someone';
+/** Their display name, or else the first part of their handle. Bonfire gives a remote account's full handle as its
+ *  username, and for accounts with no display name (many Lemmy and PieFed ones) as its display name too, so a
+ *  display name that is just the handle counts as none ("Unboxious", not "Unboxious@ani.social" twice). */
+const name = (a?: Acct) => {
+  const handle = (s?: string | null) => (s ?? '').trim().replace(/^@/, '').toLowerCase();
+  const dn = a?.display_name?.trim();
+  // Only a full handle (with its server) counts: a display name "Anime" for @anime is a real one.
+  const isHandle = !!dn && handle(dn).includes('@') && [a?.acct, a?.username].some(h => handle(h) === handle(dn));
+  return (!isHandle && dn) || (a?.username || a?.acct || '').replace(/^@/, '').split('@')[0] || 'Someone';
+};
 
 /** A handle as Fedizen gives it, made whole: Fedizen's own members come without the domain. */
 export function fullAcct(raw?: string | null): string | undefined {

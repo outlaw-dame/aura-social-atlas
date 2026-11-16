@@ -115,6 +115,12 @@ describe('People in Fedizen posts', () => {
     strictEqual(p.acct, 'THEPIGWHODIDIT@lemmy.world');
     strictEqual(p.actor, 'https://lemmy.world/u/THEPIGWHODIDIT');
   });
+  test('a display name that is only the handle counts as none (Bonfire, for Lemmy and PieFed accounts)', () => {
+    const [p] = fromStatuses([{ id: 'u', content: '<p>x</p>', account: { display_name: 'Unboxious@ani.social', acct: 'Unboxious@ani.social', username: 'Unboxious@ani.social' } }] as never);
+    strictEqual(p.author, 'Unboxious');
+    const [q] = fromStatuses([{ id: 'v', content: '<p>x</p>', account: { display_name: 'Chris Pirillo', acct: 'ChrisPirillo@mastodon.social', username: 'ChrisPirillo' } }] as never);
+    strictEqual(q.author, 'Chris Pirillo');
+  });
   test('a boost carries who boosted it: name, avatar, and what opens their profile', () => {
     const [p] = fromStatuses([status] as never);
     strictEqual(p.boostedBy, 'Anime');
