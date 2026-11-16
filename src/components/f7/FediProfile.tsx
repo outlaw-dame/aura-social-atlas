@@ -2,7 +2,7 @@ import { Block, BlockTitle, Button, Icon, Link, List, ListItem, Navbar, NavRight
 import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
 import { followLabels } from '@/lib/follow-labels';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
-import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from '@/components/social/useFediProfile';
+import { FOLLOW_PROBLEM, useFediFollow, useFediProfile, useIsMe } from '@/components/social/useFediProfile';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { MobileFilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
@@ -17,9 +17,10 @@ const n = (v?: number) => (v == null ? null : new Intl.NumberFormat(undefined, {
 const day = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '');
 
 function Follow({ p }: { p: FediProfile }) {
-  const f = useFediFollow(p.acctVerified ? p.acct : undefined, p.actor);
+  const me = useIsMe(p.acct);
+  const f = useFediFollow(p.acctVerified && !me ? p.acct : undefined, p.actor);
   const words = followLabels(p.kind, p.locked);
-  if (!f.signedIn) return null;
+  if (!f.signedIn || me) return null;
   const on = f.state === 'following', asked = f.state === 'requested';
   if (!p.acctVerified) return <p className="atlas-fedi-note">{FOLLOW_PROBLEM.unverified}</p>;
   return <>

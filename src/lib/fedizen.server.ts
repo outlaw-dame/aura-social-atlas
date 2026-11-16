@@ -358,6 +358,9 @@ const account = z.object({
   username: z.string().nullish(),
   acct: z.string().nullish(),
   avatar: z.string().nullish(),
+  // The actor (Bonfire gives its id as `url`; Mastodon adds `uri`), so a name opens the profile in Atlas.
+  url: z.string().max(2048).nullish().catch(null),
+  uri: z.string().max(2048).nullish().catch(null),
 });
 const media = z.object({
   type: z.string().nullish(),
@@ -405,6 +408,8 @@ const status = z.object({
   // What keyword filters read besides the text (each fails on its own to null).
   spoiler_text: z.string().max(1000).nullish().catch(null),
   tags: z.array(z.object({ name: z.string().max(100) })).max(50).nullish().catch(null),
+  // Whom the post mentions, as Fedizen resolved them: "@name" in the text opens theirs in Atlas.
+  mentions: z.array(z.object({ acct: z.string().max(320).nullish(), username: z.string().max(320).nullish() })).max(50).nullish().catch(null),
   poll: z.object({ options: z.array(z.object({ title: z.string().max(200) })).max(20) }).nullish().catch(null),
   // Mastodon 4.5 quotes: { state, quoted_status }. Only the quoted post's own words, never deeper.
   quote: z.object({
