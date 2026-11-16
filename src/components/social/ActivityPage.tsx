@@ -1,4 +1,7 @@
 import { Link } from '@tanstack/react-router';
+import { useState } from 'react';
+import { openFediProfile } from '@/lib/fedi-profile';
+import { ProfileHoverCard } from './ProfileHoverCard';
 import { ArrowUpRight, AtSign, Bell, BarChart3, Heart, Layers3, Link2, PenLine, RefreshCw, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFedizen } from './useFedizen';
@@ -34,13 +37,23 @@ export function ActivityPage() {
   if (!list.length) return note('No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.');
   return <ul className="divide-y divide-border">{list.map(n => {
     const k = kinds[n.type ?? ''] ?? { icon: Bell, color: 'var(--accent)' };
-    return <li key={n.id} className="flex gap-4 py-4">
-      <span className="relative size-10 shrink-0">
-        {n.avatar ? <img src={n.avatar} alt="" referrerPolicy="no-referrer" className="size-10 atlas-avatar object-cover" /> : <span className="social-avatar size-10 font-serif text-lg" aria-hidden="true">{n.author.charAt(0)}</span>}
+    const who = n.acct || n.actor ? { actor: n.actor, acct: n.acct, name: n.author } : null;
+    const face = <span className="relative size-10 shrink-0">
+        <Face avatar={n.avatar} name={n.author} />
         <span className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full text-white ring-2 ring-background" style={{ background: k.color }}><k.icon className="size-3" aria-hidden="true" /></span>
-      </span>
-      <div className="min-w-0 flex-1"><p className="flex items-baseline justify-between gap-3 text-sm"><span className="font-semibold">{n.author}</span><span className="shrink-0 text-xs text-muted-foreground">{when(n.date)}</span></p>
+      </span>;
+    return <li key={n.id} className="flex gap-4 py-4">
+      {who ? <ProfileHoverCard target={who}><button type="button" className="shrink-0 rounded-full" onClick={() => openFediProfile(who)} aria-label={`${n.author}. Open their profile`}>{face}</button></ProfileHoverCard> : face}
+      <div className="min-w-0 flex-1"><p className="flex items-baseline justify-between gap-3 text-sm">{who ? <ProfileHoverCard target={who}><button type="button" className="font-semibold hover:underline" onClick={() => openFediProfile(who)}>{n.author}</button></ProfileHoverCard> : <span className="font-semibold">{n.author}</span>}<span className="shrink-0 text-xs text-muted-foreground">{when(n.date)}</span></p>
         <p className="mt-0.5 text-sm text-muted-foreground [overflow-wrap:anywhere]">{n.text}</p></div>
     </li>;
   })}</ul>;
+}
+
+/** An avatar, or the initial when there's none or it won't load. */
+function Face({ avatar, name }: { avatar?: string; name: string }) {
+  const [broken, setBroken] = useState(false);
+  return avatar && !broken
+    ? <img src={avatar} alt="" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="size-10 atlas-avatar object-cover" />
+    : <span className="social-avatar size-10 font-serif text-lg" aria-hidden="true">{name.charAt(0)}</span>;
 }

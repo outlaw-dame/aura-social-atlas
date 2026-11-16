@@ -132,3 +132,16 @@ describe('People in Fedizen posts', () => {
     strictEqual(p.acct, 'a@b.example');
   });
 });
+
+describe('Avatars Fedizen stands in for', () => {
+  test("Fedizen's placeholder picture isn't anyone's avatar", async () => {
+    const { isPlaceholderAvatar, fromNotifications } = await import('./fedizen-feed');
+    strictEqual(isPlaceholderAvatar('https://fedizen.net/images/avatar.png'), true);
+    strictEqual(isPlaceholderAvatar('https://lemmy.ca/pictrs/image/a.png'), false);
+    const [p] = fromStatuses([{ id: 'p', content: '<p>x</p>', account: { acct: 'roydbt@lemmy.zip', avatar: 'https://fedizen.net/images/avatar.png', url: 'https://lemmy.zip/u/roydbt' } }] as never);
+    strictEqual(p.avatar, undefined);
+    strictEqual(p.actor, 'https://lemmy.zip/u/roydbt');
+    const [n] = fromNotifications([{ id: 'n', type: 'favourite', account: { acct: 'roydbt@lemmy.zip', avatar: 'https://fedizen.net/images/avatar.png', url: 'https://lemmy.zip/u/roydbt' } }] as never);
+    deepStrictEqual([n.avatar, n.acct, n.actor], [undefined, 'roydbt@lemmy.zip', 'https://lemmy.zip/u/roydbt']);
+  });
+});
