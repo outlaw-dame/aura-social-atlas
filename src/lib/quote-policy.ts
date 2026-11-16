@@ -31,14 +31,22 @@ export const LOCAL_CIRCLE = '3SERSFR0MY0VR10CA11NSTANCE';
 export const FEDIVERSE_CIRCLE = '7EDERATEDW1THANACT1V1TYPVB';
 const EVERYONE = [LOCAL_CIRCLE, FEDIVERSE_CIRCLE];
 
-export type BoundaryPermission = { permission: 'quote' | 'request'; can?: string[]; cannot?: string[] };
+export type BoundaryPermission = { permission: 'quote' | 'request'; can: string[]; cannot: string[] };
 
-/** The `createPost(permissions:)` that make a post's quoting follow the choice, whatever the preset grants. */
+/**
+ * The `createPost(permissions:)` that make a post's quoting follow the choice, whatever the preset grants.
+ *
+ * Every entry carries both `can` and `cannot`, even when one is empty: bonfire_social's `create_post/2` reads each
+ * entry with the pattern `%{permission: verb, can: can_ids, cannot: cannot_ids}`, and Absinthe leaves out input
+ * fields the client didn't send, so an entry missing either key fails that match and Fedizen answers 500 without
+ * posting (seen live on fedizen.net; bonfire_social lib/api/social_api_graphql.ex, and its post_boundary_test.exs
+ * always sends both).
+ */
 export function quotePermissions(policy: QuotePolicy): BoundaryPermission[] {
   switch (policy) {
-    case 'anyone': return [{ permission: 'quote', can: EVERYONE }];
-    case 'ask': return [{ permission: 'request', can: EVERYONE }];
-    case 'nobody': return [{ permission: 'quote', cannot: EVERYONE }, { permission: 'request', cannot: EVERYONE }];
+    case 'anyone': return [{ permission: 'quote', can: EVERYONE, cannot: [] }];
+    case 'ask': return [{ permission: 'request', can: EVERYONE, cannot: [] }];
+    case 'nobody': return [{ permission: 'quote', can: [], cannot: EVERYONE }, { permission: 'request', can: [], cannot: EVERYONE }];
   }
 }
 
