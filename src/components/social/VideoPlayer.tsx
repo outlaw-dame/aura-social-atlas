@@ -12,6 +12,49 @@ import { claimMedia, releaseMedia } from '@/lib/media-focus';
  * itself fall back to PeerTube's own embedded player, on the video's own server.
  */
 export function VideoPlayer({ video, className = '' }: { video: FediVideo; className?: string }) {
+  if (video.gif) return <GifVideo video={video} className={className} />;
+  return <FullVideo video={video} className={className} />;
+}
+
+/**
+ * A GIF as Mastodon delivers it: the server has already turned the GIF into a small H.264 video ("gifv"), so it plays
+ * as Mastodon's own web app shows one — inline, muted, looping, no controls, a GIF label — rather than as a video with
+ * a play button and the mini player. It plays only while on screen, and not on its own under Reduce Motion: then a tap
+ * plays or pauses it.
+ */
+function GifVideo({ video, className }: { video: FediVideo; className: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [reduced, setReduced] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const on = () => setReduced(mq.matches);
+    on(); mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  // Always pause off screen (including one started by a tap under Reduce Motion); only start on its own without it.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => { if (!e.isIntersecting) el.pause(); else if (!reduced) void el.play().catch(() => {}); }, { threshold: 0.25 });
+    io.observe(el);
+    return () => { io.disconnect(); el.pause(); };
+  }, [reduced]);
+  const toggle = () => { const el = ref.current; if (!el) return; if (el.paused) void el.play().catch(() => {}); else el.pause(); };
+  const ratio = video.aspect ?? 1;
+  return <section className={`atlas-video atlas-gif ${className}`} aria-label={video.title ? `GIF: ${video.title}` : 'GIF'}>
+    <div className="atlas-video-frame" style={{ aspectRatio: String(ratio), maxWidth: `max(240px, calc((100dvh - 190px) * ${ratio.toFixed(4)}))` }}>
+      <button type="button" className="atlas-gif-toggle" onClick={toggle} aria-label={`${playing ? 'Pause' : 'Play'} ${video.title ? `GIF: ${video.title}` : 'GIF'}`}>
+        <video ref={ref} src={video.sources[0]?.src} poster={video.poster} muted loop playsInline preload="metadata" disablePictureInPicture
+          onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} aria-hidden="true" className="atlas-gif-video" />
+        {!playing && reduced && <span className="atlas-video-play" aria-hidden="true"><Play /></span>}
+      </button>
+      <span className="atlas-video-badge atlas-gif-badge" aria-hidden="true">GIF</span>
+    </div>
+  </section>;
+}
+
+function FullVideo({ video, className }: { video: FediVideo; className: string }) {
   const s = useVideoState();
   const mine = s.video?.url === video.url;
   const slot = useRef<HTMLDivElement>(null);

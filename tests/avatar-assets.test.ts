@@ -9,10 +9,12 @@ describe("Bundled avatar presets are web-sized AVIF with WebP fallbacks", () => 
       expect(src).toContain(`@/assets/avatars/avatar-${n}.avif`);
       expect(src).toContain(`@/assets/avatars/avatar-${n}.webp`);
     }
-    expect(src).toContain("installAvifFallback()");
-    // Server-rendered avatars that failed before the script ran are swept up too.
-    expect(src).toMatch(/function recoverFailed[\s\S]*img\.complete && img\.naturalWidth === 0/);
-    expect(src).toMatch(/installAvifFallback\(\) \{[\s\S]*recoverFailed\(\);[\s\S]*setTimeout\(recoverFailed, 0\)/);
+    expect(src).toContain("registerImageFallbacks(AVATAR_PRESETS.map(p => [p.src, p.webp]))");
+    // The shared fallback also sweeps server-rendered images that failed before the script ran.
+    const fb = readFileSync("src/lib/image-fallback.ts", "utf8");
+    expect(fb).toMatch(/function recoverFailed[\s\S]*img\.complete && img\.naturalWidth === 0/);
+    expect(fb).toMatch(/addEventListener\('error'[\s\S]*true\)/);
+    expect(fb).toContain("setTimeout(recoverFailed, 0)");
   });
   test("each file is a real AVIF / WebP and small", () => {
     for (let n = 1; n <= 4; n++) {

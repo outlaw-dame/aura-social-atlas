@@ -1,7 +1,15 @@
-import architecture from '@/assets/news-architecture.jpg';
+// Sample photos: AVIF where it pays (scripts/encode-photos.py: SSIM ≥ 0.985 against the JPEG, ≥ 20 % smaller), with
+// the JPEG as the fallback for browsers that can't decode AVIF. The star field stays JPEG: no AVIF reached that bar.
+import architecture from '@/assets/news-architecture.avif';
+import design from '@/assets/news-design.avif';
+import travel from '@/assets/news-travel.avif';
 import space from '@/assets/news-space.jpg';
-import design from '@/assets/news-design.jpg';
-import travel from '@/assets/news-travel.jpg';
+import architectureJpg from '@/assets/news-architecture.jpg';
+import designJpg from '@/assets/news-design.jpg';
+import travelJpg from '@/assets/news-travel.jpg';
+import { registerImageFallbacks } from './image-fallback';
+
+registerImageFallbacks([[architecture, architectureJpg], [design, designJpg], [travel, travelJpg]]);
 
 export const networks = ['All networks', 'Bluesky', 'Mastodon', 'RSS', 'Podcasts'] as const;
 export const topics = ['All topics', 'Design', 'Science', 'Culture', 'Travel'] as const;

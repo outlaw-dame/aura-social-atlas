@@ -22,6 +22,8 @@ export type FediVideo = {
   /** Width ÷ height, for the frame before the video loads. */
   aspect?: number;
   live?: boolean;
+  /** An animated GIF that Mastodon (or Bonfire) transcoded to video ("gifv"): plays inline, muted and looping. */
+  gif?: true;
   /** The channel (PeerTube) or account it's from, verified by the caller. */
   creator?: FediAuthor;
 };
@@ -109,6 +111,7 @@ export function videoFromAttachment(a: { type?: string | null; url?: string | nu
     url: pageUrl, title: cleanText(a.description ?? '', 200) || undefined, poster: isPublicHttpsUrl(a.preview_url) ? a.preview_url : undefined,
     sources: isHls ? [] : [{ src }], hls: isHls ? src : undefined,
     duration: durationSeconds(meta.duration), aspect: w && h ? w / h : undefined,
+    ...(a.type === 'gifv' && !isHls ? { gif: true as const } : {}),
   };
 }
 
