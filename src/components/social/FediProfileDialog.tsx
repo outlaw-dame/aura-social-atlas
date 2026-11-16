@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
 import { followLabels } from '@/lib/follow-labels';
 import { VideoPlayer } from './VideoPlayer';
-import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from './useFediProfile';
+import { FOLLOW_PROBLEM, useFediFollow, useFediProfile, useIsMe } from './useFediProfile';
 import { FilterPlaceProvider } from './useIntelligence';
 import { FilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
@@ -26,9 +26,10 @@ function Avatar({ p }: { p: FediProfile }) {
 }
 
 function Follow({ p }: { p: FediProfile }) {
-  const f = useFediFollow(p.acctVerified ? p.acct : undefined, p.actor);
+  const me = useIsMe(p.acct);
+  const f = useFediFollow(p.acctVerified && !me ? p.acct : undefined, p.actor);
   const words = followLabels(p.kind, p.locked);
-  if (!f.signedIn) return null;
+  if (!f.signedIn || me) return null;
   const on = f.state === 'following', asked = f.state === 'requested';
   if (!p.acctVerified) return <p className="max-w-56 text-right text-xs text-muted-foreground">{FOLLOW_PROBLEM.unverified}</p>;
   return <div className="flex flex-col items-end gap-1">

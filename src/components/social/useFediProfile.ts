@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { getFediFollow, getFediProfile, setFediFollow, type FollowState } from '@/lib/fedi-profile.functions';
+import { getFedizenStatus } from '@/lib/fedizen.functions';
+import { fullAcct } from '@/lib/fedizen-feed';
 import { OPEN_FEDI_PROFILE_EVENT, type FediProfileTarget } from '@/lib/fedi-profile';
 import { useAtlasAuth } from './AuthState';
 
@@ -33,6 +35,16 @@ export const FOLLOW_PROBLEM = {
   'not-found': 'Fedizen couldn’t find this account yet.',
   unverified: 'Their server didn’t confirm this handle, so Atlas won’t follow it for you.',
 } as const;
+
+/** Whether this handle is the reader's own Fedizen account (their own profile offers no Follow). */
+export function useIsMe(acct: string | undefined) {
+  const { user } = useAtlasAuth();
+  const statusFn = useServerFn(getFedizenStatus);
+  // Same query (key and function) as the rest of Atlas reads Fedizen's connection status with.
+  const status = useQuery({ queryKey: ['fedizen-status', user?.id], queryFn: () => statusFn(), enabled: !!user, staleTime: 60_000 });
+  const mine = fullAcct(status.data?.handle), theirs = fullAcct(acct);
+  return !!mine && !!theirs && mine.toLowerCase() === theirs.toLowerCase();
+}
 
 /** Follow state on the reader's Fedizen account, and the toggle. Only for a handle confirmed to be this actor's. */
 export function useFediFollow(acct: string | undefined, actor: string | undefined) {
