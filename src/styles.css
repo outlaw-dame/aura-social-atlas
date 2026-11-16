@@ -870,3 +870,29 @@ html.atlas-stack-open .view.atlas-stack { pointer-events: auto; }
   .atlas-act.pop[data-kind="boost"] svg { animation: atlas-boosted .7s cubic-bezier(.3, .8, .3, 1); }
   .atlas-act.pop[data-kind="save"] svg { animation: atlas-saved .8s cubic-bezier(.3, .8, .3, 1); }
 }
+
+/* A quoted post in the composer (QuotedPost), desktop and phone. */
+.atlas-quoted { position: relative; margin: 12px 0 0; overflow: hidden; border: 1px solid color-mix(in srgb, currentColor 16%, transparent); border-radius: 16px; background: color-mix(in srgb, currentColor 3%, transparent); }
+.atlas-quoted-body { display: flex; gap: 10px; padding: 12px 14px; }
+.atlas-quoted-avatar { flex: none; width: 36px; height: 36px; object-fit: cover; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, currentColor 10%, transparent); font-weight: 600; }
+.atlas-quoted-main { min-width: 0; flex: 1; }
+.atlas-quoted-who { margin: 0; display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 14px; white-space: nowrap; }
+.atlas-quoted-who b { flex: none; max-width: 65%; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.atlas-quoted-who span { opacity: .6; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.atlas-quoted-who time { margin-left: auto; padding-left: 6px; opacity: .6; flex: none; }
+.atlas-quoted-text { margin: 4px 0 0; font-size: 14px; line-height: 1.4; white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; opacity: .9; }
+.atlas-quoted-image { display: block; width: 100%; height: 96px; object-fit: cover; }
+.atlas-quoted-remove { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; font-size: 17px; line-height: 26px; cursor: pointer; }
+.atlas-quoted-remove { flex: none; }
+/* The Boost menu: Quote, and Boost or Undo boost (BoostMenu). */
+.atlas-boost-menu { position: fixed; z-index: 13000; min-width: 200px; padding: 6px; border-radius: 16px; background: color-mix(in srgb, var(--atlas-menu-bg, #fff) 88%, transparent); color: var(--atlas-menu-fg, #111);
+  box-shadow: 0 12px 40px rgba(0,0,0,.22), 0 0 0 .5px rgba(0,0,0,.08); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); }
+.dark .atlas-boost-menu, .theme-dark .atlas-boost-menu { --atlas-menu-bg: #2a2a2e; --atlas-menu-fg: #f2f2f5; box-shadow: 0 12px 40px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08); }
+.atlas-boost-menu button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 14px; border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; font-size: 16px; text-align: left; cursor: pointer; }
+.atlas-boost-menu button svg { width: 20px; height: 20px; stroke-width: 1.8; flex: none; }
+.atlas-boost-menu button:hover, .atlas-boost-menu button:focus-visible { background: color-mix(in srgb, currentColor 9%, transparent); outline: none; }
+.atlas-boost-menu button:disabled { opacity: .4; cursor: default; }
+.atlas-boost-menu small { display: block; font-size: 12px; opacity: .6; }
+.atlas-compose-quote { margin: -8px 16px 16px; }
+.atlas-compose-quote .atlas-quoted { margin-top: 0; background: var(--f7-list-strong-bg-color, transparent); }
+.atlas-quoted:has(.atlas-quoted-remove) .atlas-quoted-who { padding-right: 28px; }

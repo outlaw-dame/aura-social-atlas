@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Block, Button, Icon, List, ListInput, ListItem, Popup, Page, Navbar, NavLeft, NavRight, Link, Toggle, f7 } from 'framework7-react';
 import { MAX_ALT, MAX_CW, PICKER_ACCEPT, altReminderText } from '@/lib/compose-media';
 import { missingAlt, useReading } from '@/lib/reading-prefs';
-import { AUDIENCES, usePublish, type Audience } from '@/components/social/usePublish';
+import { usePublish, type Audience } from '@/components/social/usePublish';
+import { QuotedPost } from '@/components/social/QuotedPost';
+import { useComposeIntent } from '@/lib/compose-intent';
 
 const AUDIENCE_ICON: Record<Audience, { ios: string; md: string }> = {
   public: { ios: 'f7:globe', md: 'material:public' }, unlisted: { ios: 'f7:moon', md: 'material:nights_stay' },
@@ -16,6 +18,14 @@ const AUDIENCE_ICON: Record<Audience, { ios: string; md: string }> = {
  */
 export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const p = usePublish();
+  // Boost → Quote on any post: the app opens this sheet; attach the post.
+  const intent = useComposeIntent();
+  const lastIntent = useRef(0);
+  useEffect(() => {
+    if (!intent || intent.n === lastIntent.current) return;
+    lastIntent.current = intent.n;
+    p.setQuote(intent.quote);
+  }, [intent]); // eslint-disable-line react-hooks/exhaustive-deps
   const pick = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState('');
   const over = p.length > p.limits.maxChars;
@@ -38,9 +48,11 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
       ],
     }).open();
   };
-  return <Popup opened={opened} onPopupClosed={onClose} swipeToClose="to-bottom" className="atlas-compose" push>
+  // A quote is for this time only: closing without posting drops it (the text stays as a draft).
+  const closed = () => { if (p.quote && !p.sending) p.setQuote(null); onClose(); };
+  return <Popup opened={opened} onPopupClosed={closed} swipeToClose="to-bottom" className="atlas-compose" push>
     <Page>
-      <Navbar title={p.canPost ? 'New post' : 'Draft'}>
+      <Navbar title={p.quote ? 'Quote post' : p.canPost ? 'New post' : 'Draft'}>
         <NavLeft><Link onClick={onClose}>Cancel</Link></NavLeft>
         <NavRight>{p.canPost
           ? <Button fill small round disabled={!p.ready || over} onClick={() => void send()} className="atlas-compose-post">{p.sending ? 'Posting…' : 'Post'}</Button>
@@ -54,8 +66,9 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
           <ListInput type="text" label="Content warning" placeholder="What it’s about" value={p.cw} maxlength={MAX_CW} onInput={(e: { target: HTMLInputElement }) => p.setCw(e.target.value)} clearButton />
         </List>}
         <List strong inset>
-          <ListInput type="textarea" placeholder="What’s on your mind?" value={p.text} onInput={(e: { target: HTMLTextAreaElement }) => p.setText(e.target.value)} resizable inputStyle={{ minHeight: 120 }} />
+          <ListInput type="textarea" placeholder={p.quote ? 'Add your thoughts' : 'What’s on your mind?'} value={p.text} onInput={(e: { target: HTMLTextAreaElement }) => p.setText(e.target.value)} resizable inputStyle={{ minHeight: 120 }} />
         </List>
+        {p.quote && <div className="atlas-compose-quote"><QuotedPost post={p.quote} onRemove={p.sending ? undefined : () => p.setQuote(null)} /></div>}
         {p.media.length > 0 && <div className={`atlas-compose-media ${p.media.length > 1 ? 'is-grid' : ''}`}>
           {p.media.map(m => <figure key={m.key}>
             <div className="atlas-compose-thumb">
@@ -90,7 +103,7 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
           </ListItem>}
         </List>
         <List strong inset dividers>
-          {AUDIENCES.map(a => <ListItem key={a.id} radio radioIcon="end" name="atlas-audience" title={a.label} footer={a.note} checked={p.audience === a.id} onChange={() => p.setAudience(a.id)}>
+          {p.audiences.map(a => <ListItem key={a.id} radio radioIcon="end" name="atlas-audience" title={a.label} footer={a.note} checked={p.audience === a.id} onChange={() => p.setAudience(a.id)}>
             <Icon slot="media" ios={AUDIENCE_ICON[a.id].ios} md={AUDIENCE_ICON[a.id].md} />
           </ListItem>)}
         </List>

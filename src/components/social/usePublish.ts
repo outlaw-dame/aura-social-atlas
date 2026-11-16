@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { getFedizenComposeLimits, getFedizenStatus, postOnFedizen, uploadFedizenMedia } from '@/lib/fedizen.functions';
+import { getFedizenComposeLimits, getFedizenStatus, postOnFedizen, quoteOnFedizen, uploadFedizenMedia } from '@/lib/fedizen.functions';
+import type { FedizenPost } from '@/lib/fedizen-feed';
 import { DEFAULT_LIMITS, MAX_ALT, MAX_CW, canAdd, effectiveSensitive, formatBytes, mediaKind } from '@/lib/compose-media';
 import { ImageTooLarge, describable, prepareImage } from '@/lib/prepare-image';
 import { useAtlasAuth } from './AuthState';
@@ -34,7 +35,7 @@ export function usePublish() {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();
   const statusFn = useServerFn(getFedizenStatus), limitsFn = useServerFn(getFedizenComposeLimits);
-  const upload = useServerFn(uploadFedizenMedia), post = useServerFn(postOnFedizen);
+  const upload = useServerFn(uploadFedizenMedia), post = useServerFn(postOnFedizen), quoteFn = useServerFn(quoteOnFedizen);
   const status = useQuery({ queryKey: ['fedizen-status', user?.id], queryFn: () => statusFn(), enabled: !!user, staleTime: 60_000 });
   const canPost = !!status.data?.connected && !!status.data?.canWrite;
   const limitsQ = useQuery({ queryKey: ['fedizen-compose-limits', user?.id], queryFn: () => limitsFn({ data: { expectedAtlasUserId: user!.id } }), enabled: !!user && canPost, staleTime: 3_600_000 });
@@ -43,7 +44,11 @@ export function usePublish() {
   const [text, setText] = useState('');
   const [cw, setCw] = useState('');
   const [cwOn, setCwOn] = useState(false);
-  const [audience, setAudience] = useState<Audience>('public');
+  const [audience, setAudienceRaw] = useState<Audience>('public');
+  /** The post being quoted (Boost → Quote), shown under the text; quotes are Public or Quiet public only. */
+  const [quote, setQuoteRaw] = useState<FedizenPost | null>(null);
+  const setQuote = (q: FedizenPost | null) => { setQuoteRaw(q); if (q && audience !== 'public' && audience !== 'unlisted') setAudienceRaw('public'); };
+  const setAudience = (a: Audience) => { if (!quote || a === 'public' || a === 'unlisted') setAudienceRaw(a); };
   const [sensitiveChoice, setSensitive] = useState(false);
   const [media, setMedia] = useState<Attachment[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
@@ -97,7 +102,7 @@ export function usePublish() {
   const length = [...text].length;
   const ready = canPost && !sending && !busy && !broken && (text.trim().length > 0 || media.length > 0) && length <= limits.maxChars && (!cwOn || warning.length > 0);
 
-  const reset = () => { media.forEach(m => URL.revokeObjectURL(m.url)); setText(''); setCw(''); setCwOn(false); setSensitive(false); setMedia([]); setNotice(null); setAudience('public'); };
+  const reset = () => { media.forEach(m => URL.revokeObjectURL(m.url)); setText(''); setCw(''); setCwOn(false); setSensitive(false); setMedia([]); setNotice(null); setAudienceRaw('public'); setQuoteRaw(null); };
 
   const send = async (): Promise<{ url?: string } | null> => {
     if (!user || !ready) return null;
@@ -122,8 +127,11 @@ export function usePublish() {
         patch(m.key, { state: 'uploaded', mediaId: r.id });
         ids.push(r.id);
       }
-      const r = await post({ data: { expectedAtlasUserId: user.id, text: text.trim(), visibility: audience, ...(warning ? { cw: warning.slice(0, MAX_CW) } : {}), mediaIds: ids, sensitive } })
-        .catch(() => ({ ok: false as const, error: 'unavailable' as const }));
+      const r = quote?.statusId && (audience === 'public' || audience === 'unlisted')
+        ? await quoteFn({ data: { expectedAtlasUserId: user.id, statusId: quote.statusId, text: text.trim(), visibility: audience, ...(warning ? { cw: warning.slice(0, MAX_CW) } : {}), mediaIds: ids } })
+          .catch(() => ({ ok: false as const, error: 'unavailable' as const }))
+        : await post({ data: { expectedAtlasUserId: user.id, text: text.trim(), visibility: audience, ...(warning ? { cw: warning.slice(0, MAX_CW) } : {}), mediaIds: ids, sensitive } })
+          .catch(() => ({ ok: false as const, error: 'unavailable' as const }));
       if (!r.ok) { setNotice(LIBRARY_PROBLEM[r.error]); return null; }
       reset();
       void qc.invalidateQueries({ queryKey: ['fedizen-home', user.id] });
@@ -133,7 +141,8 @@ export function usePublish() {
 
   return {
     signedIn: !!user, canPost, connected: !!status.data?.connected, limits,
-    text, setText, cw, setCw, cwOn, setCwOn, audience, setAudience,
+    text, setText, cw, setCw, cwOn, setCwOn, audience, setAudience, quote, setQuote,
+    audiences: quote ? AUDIENCES.filter(a => a.id === 'public' || a.id === 'unlisted') : AUDIENCES,
     sensitive, sensitiveLocked: media.length > 0 && warning.length > 0, setSensitive,
     media, add, remove, setAlt, generateAlt, canGenerateAlt: ai.ready,
     notice, clearNotice: () => setNotice(null), sending, ready, length, reset, send,

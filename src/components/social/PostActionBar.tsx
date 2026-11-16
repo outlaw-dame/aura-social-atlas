@@ -1,5 +1,7 @@
-import { useRef, useState, type ReactNode } from 'react';
-import { Bookmark, Heart, MessageCircle, RefreshCw } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { Bookmark, Heart, MessageCircle, Quote, RefreshCw } from 'lucide-react';
+import { requestQuote } from '@/lib/compose-intent';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import type { useSaveToggle } from './useFedizenLibrary';
 import { compactCount, type useReactions } from './usePostActions';
@@ -31,11 +33,10 @@ export function PostActionBar({ post: p, save, reactions, onReply, more }: { pos
       <button type="button" className="atlas-act" data-kind="reply" onClick={() => onReply(p)} aria-label={`Reply${p.counts?.replies ? `, ${p.counts.replies} replies` : ''}`}>
         <MessageCircle aria-hidden="true" /><span>{p.counts?.replies ? compactCount(p.counts.replies) : ''}</span>
       </button>
-      <button type="button" className={`atlas-act${pop === 'boost' ? ' pop' : ''}`} data-kind="boost" aria-pressed={boost.on} disabled={boost.pending || !boostable}
-        title={boostable ? undefined : 'Only public posts can be boosted'} aria-label={`${boost.on ? 'Undo boost' : 'Boost'}${boost.count ? `, ${boost.count}` : ''}`}
-        onClick={() => { if (!boost.on) celebrate('boost'); void reactions.toggle(p, 'boost'); }}>
-        <RefreshCw aria-hidden="true" /><span>{boost.count ? compactCount(boost.count) : ''}</span>
-      </button>
+      <BoostMenu on={boost.on} disabled={boost.pending || !boostable} count={boost.count} pop={pop === 'boost'}
+        title={boostable ? undefined : 'Only public posts can be boosted or quoted'}
+        onBoost={() => { if (!boost.on) celebrate('boost'); void reactions.toggle(p, 'boost'); }}
+        onQuote={() => requestQuote(p)} />
       <button type="button" className={`atlas-act${pop === 'like' ? ' pop' : ''}`} data-kind="like" aria-pressed={like.on} disabled={like.pending}
         aria-label={`${like.on ? 'Unlike' : 'Like'}${like.count ? `, ${like.count}` : ''}`}
         onClick={() => { if (!like.on) celebrate('like'); void reactions.toggle(p, 'like'); }}>
@@ -48,4 +49,53 @@ export function PostActionBar({ post: p, save, reactions, onReply, more }: { pos
     </> : <span className="atlas-act-gap" />}
     {more}
   </div>;
+}
+
+/**
+ * Boost opens a small menu, as Mastodon 4.5 clients (Ivory, Phanpy, Elk) do now that posts can be quoted: Quote, which
+ * opens the composer with the post attached, and Boost or Undo boost. Drawn over the page (a portal), so a card's
+ * clipping can't cut it off; Escape or a tap elsewhere closes it, and focus returns to the button.
+ */
+function BoostMenu({ on, disabled, count, pop, title, onBoost, onQuote }: { on: boolean; disabled: boolean; count: number; pop: boolean; title?: string; onBoost: () => void; onQuote: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [at, setAt] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
+  const button = useRef<HTMLButtonElement>(null), menu = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!open || !button.current) return;
+    const r = button.current.getBoundingClientRect(), w = 220, h = 112;
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
+    setAt(r.top > h + 16 ? { left, bottom: window.innerHeight - r.top + 6 } : { left, top: r.bottom + 6 });
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    menu.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });
+    const close = (e: Event) => { if (!menu.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node)) setOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); button.current?.focus(); } };
+    // Close when the post actually moves away (a scroll), not on the small scroll or resize focusing can cause.
+    const from = button.current?.getBoundingClientRect().top ?? 0;
+    const away = () => { if (Math.abs((button.current?.getBoundingClientRect().top ?? from) - from) > 12) setOpen(false); };
+    document.addEventListener('pointerdown', close, true);
+    document.addEventListener('keydown', key);
+    window.addEventListener('scroll', away, true);
+    return () => { document.removeEventListener('pointerdown', close, true); document.removeEventListener('keydown', key); window.removeEventListener('scroll', away, true); };
+  }, [open]);
+  const pick = (f: () => void) => () => { setOpen(false); button.current?.focus(); f(); };
+  return <>
+    <button ref={button} type="button" className={`atlas-act${pop ? ' pop' : ''}`} data-kind="boost" aria-pressed={on} disabled={disabled} title={title}
+      aria-haspopup="menu" aria-expanded={open} aria-label={`${on ? 'Boosted' : 'Boost or quote'}${count ? `, ${count}` : ''}`} onClick={() => setOpen(o => !o)}>
+      <RefreshCw aria-hidden="true" /><span>{count ? compactCount(count) : ''}</span>
+    </button>
+    {open && typeof document !== 'undefined' && createPortal(
+      <div ref={menu} role="menu" className="atlas-boost-menu" style={at ? { left: at.left, top: at.top, bottom: at.bottom } : { visibility: 'hidden' }}
+        onKeyDown={e => {
+          if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+          e.preventDefault();
+          const items = [...(menu.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])];
+          const i = items.indexOf(document.activeElement as HTMLButtonElement);
+          items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
+        }}>
+        <button type="button" role="menuitem" onClick={pick(onQuote)}><Quote aria-hidden="true" />Quote</button>
+        <button type="button" role="menuitem" onClick={pick(onBoost)}><RefreshCw aria-hidden="true" />{on ? 'Undo boost' : 'Boost'}</button>
+      </div>, document.body)}
+  </>;
 }

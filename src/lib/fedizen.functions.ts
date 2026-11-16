@@ -547,3 +547,41 @@ export const postOnFedizen = createServerFn({ method: 'POST' }).middleware([requ
     const url = typeof r.data?.url === 'string' && /^https:\/\/fedizen\.net\//.test(r.data.url) ? r.data.url : undefined;
     return { ok: true, ...(url ? { url } : {}) };
   });
+
+
+/**
+ * Quotes a post on Fedizen: the person's text (and content warning, and up to 4 uploaded media) with the quoted post
+ * attached below it, as Mastodon 4.5's quote posts. Through Bonfire GraphQL (QUOTE_POST_DOCUMENT says why). Only
+ * Public or Quiet public, as on Mastodon; if the quoted author must approve quotes, Bonfire sends them a request.
+ */
+export const quoteOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({
+    statusId: ulid,
+    text: z.string().trim().max(MAX_TEXT),
+    cw: z.string().trim().max(MAX_CW).optional(),
+    visibility: z.enum(['public', 'unlisted']),
+    mediaIds: z.array(ulid).max(4).default([]),
+  }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty quote').parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; url?: string } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { requestBonfireGraphQL, BonfireGraphQLError } = await import('./bonfire-graphql.server');
+    const { QUOTE_POST_DOCUMENT } = await import('./bonfire/graphql/operations');
+    try {
+      const r = await requestBonfireGraphQL({
+        operation: 'mutation', document: QUOTE_POST_DOCUMENT, accessToken: c.token,
+        variables: {
+          postContent: { htmlBody: data.text, ...(data.cw ? { summary: data.cw } : {}) },
+          boundary: data.visibility, quoteId: data.statusId,
+          ...(data.mediaIds.length ? { uploadedMedia: data.mediaIds } : {}),
+        },
+        validate: v => z.object({ createPost: z.object({ id: z.string().max(64), activity: z.object({ canonicalUri: z.string().max(2048).nullish() }).nullish() }) }).parse(v).createPost,
+      });
+      const url = r.activity?.canonicalUri && /^https:\/\/fedizen\.net\//.test(r.activity.canonicalUri) ? r.activity.canonicalUri : undefined;
+      return { ok: true, ...(url ? { url } : {}) };
+    } catch (e) {
+      const status = e instanceof BonfireGraphQLError ? e.status : undefined;
+      return { ok: false, error: status ? problem(status) : 'unavailable' };
+    }
+  });

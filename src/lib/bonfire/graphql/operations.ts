@@ -86,3 +86,15 @@ export const NATIVE_POST_BY_ID_DOCUMENT = `query AtlasNativePostById($id:ID!) {
     }
   }
 }`;
+
+/**
+ * Quote a post (FEP-044f): Bonfire's `createPost` with `quoteId`. Fedizen's Mastodon REST `POST /api/v1/statuses`
+ * doesn't take Mastodon 4.5's `quoted_status_id` (bonfire_posts masto_adapter.ex builds a post from status,
+ * spoiler_text, media_ids and in_reply_to_id only), so quotes go through GraphQL, as Bonfire's own composer does.
+ * Arguments from bonfire_social social_api_graphql.ex (`create_post`: post_content, boundary, uploaded_media,
+ * quote_id), in the camelCase Fedizen's schema uses (the observed documents above).
+ * `boundary` takes the same presets the REST adapter maps visibilities to: "public" or "unlisted".
+ */
+export const QUOTE_POST_DOCUMENT = `mutation AtlasQuotePost($postContent: PostContentInput!, $boundary: String, $quoteId: ID, $uploadedMedia: [ID]) {
+  createPost(postContent: $postContent, boundary: $boundary, quoteId: $quoteId, uploadedMedia: $uploadedMedia) { id activity { canonicalUri } }
+}`;

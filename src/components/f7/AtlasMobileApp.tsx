@@ -45,6 +45,7 @@ import { useDeviceProfile } from '@/lib/use-device-profile';
 import { VideoDock } from '@/components/social/VideoDock';
 import { registerAppServiceWorker } from '@/lib/register-sw';
 import { MobileReadingSettings } from './ReadingSettings';
+import { useComposeIntent } from '@/lib/compose-intent';
 
 Framework7.use(Framework7React);
 
@@ -127,6 +128,9 @@ export default function AtlasMobileApp() {
   const auth = useAtlasAuth() as { user?: { email?: string } | null; profile?: { display_name: string | null; avatar_key: string | null } | null; signOut?: () => Promise<void> };
   const [query, setQuery] = useState('');
   const [composeOpen, setComposeOpen] = useState(false);
+  // Boost → Quote on any post opens the composer (ComposeSheet attaches the post).
+  const composeIntent = useComposeIntent();
+  useEffect(() => { if (composeIntent) setComposeOpen(true); }, [composeIntent]);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [collectionOpen, setCollectionOpen] = useState<{ collection?: Collection; id?: string; link?: string } | null>(null);
   const [groupOpen, setGroupOpen] = useState<Group | null>(null);

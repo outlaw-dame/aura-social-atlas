@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MAX_ALT, MAX_CW, PICKER_ACCEPT, altReminderText } from '@/lib/compose-media';
-import { AUDIENCES, usePublish, type Audience } from './usePublish';
+import { usePublish, type Audience } from './usePublish';
+import { QuotedPost } from './QuotedPost';
 
 const AUDIENCE_ICON: Record<Audience, typeof Globe2> = { public: Globe2, unlisted: MoonStar, private: Lock, direct: AtSign };
 
@@ -35,9 +36,10 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
           className="w-full rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring" />
       </label>}
       <label htmlFor="compose-post" className="sr-only">Your post</label>
-      <textarea ref={inputRef} id="compose-post" value={p.text} onChange={e => p.setText(e.target.value)} placeholder="What’s on your mind?"
+      <textarea ref={inputRef} id="compose-post" value={p.text} onChange={e => p.setText(e.target.value)} placeholder={p.quote ? 'Add your thoughts' : 'What’s on your mind?'}
         onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } }}
-        className="h-32 w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-muted-foreground" />
+        className={`${p.quote ? 'h-20' : 'h-32'} w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-muted-foreground`} />
+      {p.quote && <QuotedPost post={p.quote} onRemove={p.sending ? undefined : () => p.setQuote(null)} />}
       {p.media.length > 0 && <ul className={`grid gap-2 ${p.media.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`} aria-label="Attached media">
         {p.media.map(m => <li key={m.key} className="space-y-1">
           <div className="relative overflow-hidden rounded-xl bg-muted">
@@ -76,7 +78,7 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
         <SelectTrigger aria-label="Who can see it" className="h-8 w-auto gap-1.5 border-0 bg-transparent px-2 text-xs shadow-none">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>{AUDIENCES.map(a => { const I = AUDIENCE_ICON[a.id]; return <SelectItem key={a.id} value={a.id}><span className="flex items-center gap-2"><I className="size-3.5" />{a.label}</span></SelectItem>; })}</SelectContent>
+        <SelectContent>{p.audiences.map(a => { const I = AUDIENCE_ICON[a.id]; return <SelectItem key={a.id} value={a.id}><span className="flex items-center gap-2"><I className="size-3.5" />{a.label}</span></SelectItem>; })}</SelectContent>
       </Select>
       <span className={`ml-auto px-2 text-xs tabular-nums ${over ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite">{p.limits.maxChars - p.length}</span>
       <Button size="sm" disabled={!p.ready || over} onClick={() => void send()}>{p.sending ? <><Loader2 className="animate-spin" />Posting…</> : 'Post'}</Button>
