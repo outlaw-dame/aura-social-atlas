@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import type { ForYouPost } from './feed-types';
+import { DEFAULT_LIMITS, MAX_ALT, MAX_CW, MAX_TEXT, UPLOAD_CEILING, type ComposeLimits } from './compose-media';
 import { allowedCallback, assertFedizenSessionIntent, creditsBesidesAuthor, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
 
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
@@ -69,6 +70,8 @@ export type FedizenHome = {
   /** Server-authoritative rollout gate; prevents unnecessary native requests while disabled. */
   nativeReadEnabled?: boolean;
   posts: FedizenPost[];
+  /** The cursor for the next (older) page of Home, from Fedizen's Link header. */
+  next?: string;
   notices: FedizenNotice[];
   error?: 'expired' | 'unavailable';
 };
@@ -88,9 +91,47 @@ export const getFedizenHome = createServerFn({ method: 'GET' }).middleware([requ
     nativeReadEnabled: process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'] === 'verified',
     posts: await withArticleAuthors(fromStatuses(home.data as never)),
     notices: fromNotifications(notes.data as never),
+    ...(home.next ? { next: home.next } : {}),
     error,
   };
 });
+
+/** An older page of Home (max_id cursor from the previous page's Link header), loaded before the reader reaches it. */
+export const getFedizenHomePage = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: z.string().uuid(), max: z.string().min(1).max(512) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; next?: string; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor, fedizenGet, PAGE_CURSOR } = await import('./fedizen.server');
+    const cursor = encodeURIComponent(data.max);
+    if (!PAGE_CURSOR.test(cursor)) return { posts: [], error: 'unavailable' };
+    const t = await tokenFor(context.userId);
+    if (!t) return { posts: [], error: 'not-connected' };
+    const r = await fedizenGet(t.access_token, `/api/v1/timelines/home?limit=20&max_id=${cursor}`).catch(() => null);
+    if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
+    return { posts: await withArticleAuthors(fromStatuses(r.data as never)), ...(r.next ? { next: r.next } : {}) };
+  });
+
+/**
+ * The newest page of Home only (no notifications), for the background check for new posts. The browser works out
+ * which are new against what it shows, so this needs no cursor and can't miss posts if Fedizen's cursors change.
+ */
+export const getFedizenHomeLatest = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; notices?: FedizenNotice[]; next?: string; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor, fedizenGet } = await import('./fedizen.server');
+    const t = await tokenFor(context.userId);
+    if (!t) return { posts: [], error: 'not-connected' };
+    const [r, n] = await Promise.all([
+      fedizenGet(t.access_token, '/api/v1/timelines/home?limit=20').catch(() => null),
+      fedizenGet(t.access_token, '/api/v1/notifications?limit=20').catch(() => null),
+    ]);
+    if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
+    return {
+      posts: await withArticleAuthors(fromStatuses(r.data as never), 1200), ...(r.next ? { next: r.next } : {}),
+      ...(n?.status === 200 ? { notices: fromNotifications(n.data as never) } : {}),
+    };
+  });
 
 /**
  * "More from" for links in posts, as Mastodon shows under a link preview, but verified the Atlas way: the article's
@@ -190,6 +231,8 @@ export const searchFedizenPeople = createServerFn({ method: 'GET' }).middleware(
 export const replyOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.extend({
     statusId: ulid, text: z.string().trim().min(1).max(5000),
+    /** The reply's content warning: the post's own by default (Mastodon carries it over too). */
+    cw: z.string().trim().max(500).optional(),
     visibility: z.enum(['public', 'unlisted', 'private', 'direct']),
   }).parse(d))
   .handler(async ({ data, context }): Promise<{ ok: true; url?: string } | { ok: false; error: Problem }> => {
@@ -197,7 +240,7 @@ export const replyOnFedizen = createServerFn({ method: 'POST' }).middleware([req
     const c = await connection(context.userId, true);
     if ('error' in c) return { ok: false, error: c.error };
     const { fedizenSend } = await import('./fedizen.server');
-    const r = await fedizenSend(c.token, 'POST', '/api/v1/statuses', { status: data.text, in_reply_to_id: data.statusId, visibility: data.visibility });
+    const r = await fedizenSend(c.token, 'POST', '/api/v1/statuses', { status: data.text, in_reply_to_id: data.statusId, visibility: data.visibility, ...(data.cw ? { spoiler_text: data.cw } : {}) });
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
     const url = typeof r.data?.url === 'string' && /^https:\/\/fedizen\.net\//.test(r.data.url) ? r.data.url : undefined;
     return { ok: true, ...(url ? { url } : {}) };
@@ -428,4 +471,172 @@ export const getCircleFeed = createServerFn({ method: 'GET' }).middleware([requi
     if (r.status === 404) return { posts: [], error: 'not-found' };
     if (r.status !== 200) return { posts: [], error: problem(r.status) };
     return { posts: await withArticleAuthors(fromStatuses(r.data as never)) };
+  });
+
+
+/** What Fedizen takes in a post: its upload size limits (capped by what Atlas relays) and length. */
+export const getFedizenComposeLimits = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<ComposeLimits> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return DEFAULT_LIMITS;
+    const { fedizenGet } = await import('./fedizen.server');
+    const r = await fedizenGet(c.token, '/api/v2/instance').catch(() => null);
+    const conf = (r?.status === 200 ? (r.data[0] as { configuration?: { statuses?: { max_characters?: number | null } | null; media_attachments?: { image_size_limit?: number | null; video_size_limit?: number | null } | null } | null }) : null)?.configuration;
+    const cap = (n: number | null | undefined, fallback: number) => Math.min(UPLOAD_CEILING, n && n > 0 ? n : fallback);
+    return {
+      imageBytes: cap(conf?.media_attachments?.image_size_limit, DEFAULT_LIMITS.imageBytes),
+      videoBytes: cap(conf?.media_attachments?.video_size_limit, DEFAULT_LIMITS.videoBytes),
+      maxChars: Math.min(MAX_TEXT, conf?.statuses?.max_characters ?? MAX_TEXT),
+    };
+  });
+
+/**
+ * Uploads one image or video for a post, with its alt text (multipart, relayed to Fedizen's /api/v2/media). The
+ * size limit is Fedizen's own, read again here rather than trusted from the browser.
+ */
+export const uploadFedizenMedia = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => {
+    if (!(d instanceof FormData)) throw new Error('Expected a form.');
+    const file = d.get('file');
+    if (!(file instanceof Blob)) throw new Error('Expected a file.');
+    const parsed = me.extend({ description: z.string().max(MAX_ALT) }).parse({ expectedAtlasUserId: d.get('expectedAtlasUserId'), description: d.get('description') ?? '' });
+    return { ...parsed, file, name: typeof (file as File).name === 'string' ? (file as File).name : 'upload' };
+  })
+  .handler(async ({ data, context }): Promise<{ ok: true; id: string; preview?: string } | { ok: false; error: Problem | 'too-large' | 'unsupported' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenGet, fedizenUpload, MEDIA_UPLOAD_TYPES } = await import('./fedizen.server');
+    if (!MEDIA_UPLOAD_TYPES.includes(data.file.type)) return { ok: false, error: 'unsupported' };
+    const r0 = await fedizenGet(c.token, '/api/v2/instance').catch(() => null);
+    const ma = (r0?.status === 200 ? (r0.data[0] as { configuration?: { media_attachments?: { image_size_limit?: number | null; video_size_limit?: number | null } | null } | null }) : null)?.configuration?.media_attachments;
+    const video = data.file.type.startsWith('video/');
+    const limit = Math.min(UPLOAD_CEILING, (video ? ma?.video_size_limit : ma?.image_size_limit) || (video ? DEFAULT_LIMITS.videoBytes : DEFAULT_LIMITS.imageBytes));
+    if (data.file.size > limit) return { ok: false, error: 'too-large' };
+    const r = await fedizenUpload(c.token, data.file, data.name, data.description, limit);
+    if (!r.id) return { ok: false, error: r.status === 413 ? 'too-large' : r.status === 422 ? 'unsupported' : problem(r.status) };
+    return { ok: true, id: r.id, ...(r.preview ? { preview: r.preview } : {}) };
+  });
+
+/**
+ * Publishes a new post on Fedizen: text, an optional content warning, an audience, and up to 4 uploaded media.
+ * As on Mastodon, a content warning marks the media sensitive.
+ */
+export const postOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({
+    text: z.string().trim().max(MAX_TEXT),
+    cw: z.string().trim().max(MAX_CW).optional(),
+    visibility: z.enum(['public', 'unlisted', 'private', 'direct']),
+    mediaIds: z.array(ulid).max(4).default([]),
+    sensitive: z.boolean().default(false),
+  }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty post').parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; url?: string } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const media = data.mediaIds.length > 0;
+    const r = await fedizenSend(c.token, 'POST', '/api/v1/statuses', {
+      status: data.text, visibility: data.visibility,
+      ...(data.cw ? { spoiler_text: data.cw } : {}),
+      ...(media ? { media_ids: data.mediaIds, sensitive: data.sensitive || !!data.cw } : {}),
+    });
+    if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
+    const url = typeof r.data?.url === 'string' && /^https:\/\/fedizen\.net\//.test(r.data.url) ? r.data.url : undefined;
+    return { ok: true, ...(url ? { url } : {}) };
+  });
+
+
+/**
+ * A new Public or Quiet public post through Bonfire GraphQL `createPost` (CREATE_POST_DOCUMENT says why not REST):
+ * the person's text, content warning and up to 4 uploaded media, who may quote it (lib/quote-policy), and, when
+ * quoting, the quoted post (FEP-044f; if its author must approve quotes, Bonfire sends them a request).
+ */
+export const createPostOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({
+    quoteId: ulid.optional(),
+    text: z.string().trim().max(MAX_TEXT),
+    cw: z.string().trim().max(MAX_CW).optional(),
+    visibility: z.enum(['public', 'unlisted']),
+    mediaIds: z.array(ulid).max(4).default([]),
+    quotes: z.enum(['anyone', 'ask', 'nobody']),
+  }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty post').parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; url?: string } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { requestBonfireGraphQL, BonfireGraphQLError } = await import('./bonfire-graphql.server');
+    const { CREATE_POST_DOCUMENT } = await import('./bonfire/graphql/operations');
+    const { quotePermissions } = await import('./quote-policy');
+    try {
+      const r = await requestBonfireGraphQL({
+        operation: 'mutation', document: CREATE_POST_DOCUMENT, accessToken: c.token,
+        variables: {
+          postContent: { htmlBody: data.text, ...(data.cw ? { summary: data.cw } : {}) },
+          boundary: data.visibility, permissions: quotePermissions(data.quotes),
+          ...(data.quoteId ? { quoteId: data.quoteId } : {}),
+          ...(data.mediaIds.length ? { uploadedMedia: data.mediaIds } : {}),
+        },
+        validate: v => z.object({ createPost: z.object({ id: z.string().max(64), activity: z.object({ canonicalUri: z.string().max(2048).nullish() }).nullish() }) }).parse(v).createPost,
+      });
+      const url = r.activity?.canonicalUri && /^https:\/\/fedizen\.net\//.test(r.activity.canonicalUri) ? r.activity.canonicalUri : undefined;
+      return { ok: true, ...(url ? { url } : {}) };
+    } catch (e) {
+      const status = e instanceof BonfireGraphQLError ? e.status : undefined;
+      return { ok: false, error: status ? problem(status) : 'unavailable' };
+    }
+  });
+
+type GifProblem = 'not-configured' | 'busy' | 'unavailable';
+
+/**
+ * GIFs for the composer's picker from KLIPY (lib/klipy.server): trending with no `q`, else a search. Signed-in only,
+ * so Atlas's KLIPY key is spent on its own people; KLIPY sees Atlas's server, not the person.
+ */
+export const getGifs = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({
+    q: z.string().trim().max(100).default(''),
+    page: z.number().int().min(1).max(40).default(1),
+    locale: z.string().regex(/^[a-z]{2}_[A-Z]{2}$/).optional(),
+  }).parse(d))
+  .handler(async ({ data }): Promise<{ ok: true; gifs: import('./klipy.server').Gif[]; hasNext: boolean } | { ok: false; error: GifProblem }> => {
+    const { listGifs, KlipyError } = await import('./klipy.server');
+    try { return { ok: true, ...(await listGifs(data.q, data.page, data.locale)) }; }
+    catch (e) { return { ok: false, error: e instanceof KlipyError ? e.reason : 'unavailable' }; }
+  });
+
+/** Whether this Atlas has a KLIPY key, so the composer offers GIFs at all. */
+export const getGifsEnabled = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async () => {
+  const { klipyKey } = await import('./klipy.server');
+  return { enabled: !!klipyKey() };
+});
+
+/**
+ * Puts a KLIPY GIF on Fedizen as an image of the person's, with its alt text, when the post is sent: the server looks
+ * the GIF up by slug (never a URL from the browser), takes the largest size within Fedizen's image limit, checks
+ * it really is a GIF, and uploads it as any other image. Answers the media id to attach.
+ */
+export const attachGifOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ slug: z.string().regex(/^[A-Za-z0-9_-]{1,200}$/), description: z.string().max(MAX_ALT) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; id: string } | { ok: false; error: Problem | GifProblem | 'too-large' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenGet, fedizenUpload } = await import('./fedizen.server');
+    const k = await import('./klipy.server');
+    const r0 = await fedizenGet(c.token, '/api/v2/instance').catch(() => null);
+    const limit = Math.min(UPLOAD_CEILING, (r0?.status === 200 ? (r0.data[0] as { configuration?: { media_attachments?: { image_size_limit?: number | null } | null } | null }) : null)?.configuration?.media_attachments?.image_size_limit || DEFAULT_LIMITS.imageBytes);
+    try {
+      const file = k.pickFile(await k.gifItem(data.slug), limit);
+      if (!file) return { ok: false, error: 'too-large' };
+      const gif = await k.downloadGif(file.url, limit);
+      const r = await fedizenUpload(c.token, gif, `${data.slug}.gif`, data.description, limit);
+      if (!r.id) return { ok: false, error: r.status === 413 ? 'too-large' : problem(r.status) };
+      await k.countShare(data.slug);
+      return { ok: true, id: r.id };
+    } catch (e) {
+      return { ok: false, error: k.isTooLarge(e) ? 'too-large' : e instanceof k.KlipyError ? e.reason : 'unavailable' };
+    }
   });

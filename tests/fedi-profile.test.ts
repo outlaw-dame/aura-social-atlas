@@ -93,7 +93,7 @@ describe("Profiles shown inside Atlas", () => {
     expect(claimedAcct(jane())).toBe("jane@blog.example.org");
   });
 
-  test("keeps only the author's own public posts; folds content warnings; hides sensitive images", () => {
+  test("keeps only the author's own public posts; folds content warnings; marks sensitive images for a veil", () => {
     const note = (id: string, o: Record<string, unknown> = {}, act: Record<string, unknown> = {}) => ({
       type: "Create", to: [PUBLIC], ...act,
       object: { id: `https://blog.example.org/n/${id}`, type: "Note", attributedTo: JANE, to: [PUBLIC], content: `<p>post ${id}</p>`, published: "2026-11-01T00:00:00Z", ...o },
@@ -108,7 +108,7 @@ describe("Profiles shown inside Atlas", () => {
       { type: "Create", to: [PUBLIC], object: { id: "https://blog.example.org/a/6", type: "Article", attributedTo: JANE, to: [PUBLIC], name: "Long read", summary: "<p>Standfirst</p>", content: "<p>body</p>" } },
     ] }, JANE);
     expect(posts.map(p => p.id.split("/").pop())).toEqual(["1", "4", "6"]);
-    expect(posts[1]).toMatchObject({ cw: "spoilers", image: undefined, paragraphs: ["post 4"] });
+    expect(posts[1]).toMatchObject({ cw: "spoilers", image: "https://blog.example.org/i.png", sensitive: true, paragraphs: ["post 4"] });
     expect(posts[2]).toMatchObject({ title: "Long read", paragraphs: ["Standfirst"] });
   });
 

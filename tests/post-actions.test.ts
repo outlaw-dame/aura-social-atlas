@@ -62,3 +62,15 @@ describe("New since your last visit", () => {
     expect(shortAgo(undefined, now)).toBe("");
   });
 });
+
+test("media the author marked sensitive is flagged for a veil; a post without media is not", () => {
+  const img = [{ type: "image", url: "https://fedizen.net/m/1.jpg", preview_url: "https://fedizen.net/m/1s.jpg" }];
+  const [a, b, c] = fromStatuses([
+    { id: "1", content: "<p>x</p>", sensitive: true, media_attachments: img },
+    { id: "2", content: "<p>x</p>", sensitive: true },
+    { id: "3", content: "<p>x</p>", sensitive: false, media_attachments: img },
+  ] as never);
+  expect(a).toMatchObject({ sensitive: true, image: "https://fedizen.net/m/1s.jpg" });
+  expect(b.sensitive).toBeUndefined();
+  expect(c.sensitive).toBeUndefined();
+});

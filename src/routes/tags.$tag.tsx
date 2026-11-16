@@ -13,6 +13,9 @@ import { FeedPostCard, useFeedPostActions } from '@/components/social/FeedPostCa
 import { getTagFeed } from '@/lib/tag-feed.functions';
 import { linkifyHashtags } from '@/lib/hashtags';
 import { NetworkBadge } from '@/lib/networks';
+import { FilterPlaceProvider } from '@/components/social/useIntelligence';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
+import { AuthorWarning } from '@/components/social/ContentWarning';
 
 export const Route = createFileRoute('/tags/$tag')({
   head: ({ params }) => {
@@ -73,7 +76,7 @@ function FedizenTagPosts({ posts, tag, failed, problem, retry }: { posts: Fedize
   if (problem) return <Reconnect message={FEED_PROBLEM[problem]} tag={tag} />;
   return <>
     {actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}
-    {posts.length ? <div className="space-y-6">{posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} inTag={tag.replace(/^#/, '').toLowerCase()} />)}</div>
+    {posts.length ? <div className="space-y-6"><FilterPlaceProvider place="public">{posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} inTag={tag.replace(/^#/, '').toLowerCase()} />)}</FilterPlaceProvider></div>
       : <p className="text-sm text-muted-foreground">No posts you can see are tagged {tag} yet.</p>}
     {actions.dialog}
   </>;
@@ -106,8 +109,8 @@ function PublicTagPage({ tag }: { tag: string }) {
         <span className="min-w-0"><span className="block truncate text-sm font-semibold">{p.author.name}</span><span className="block truncate text-xs text-muted-foreground">{p.author.acct}</span></span>
         <time className="ml-auto shrink-0 text-[11px] text-muted-foreground" dateTime={p.createdAt}>{new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time>
       </a>
-      <div className="space-y-2 break-words text-sm leading-relaxed">{p.text.map((t, i) => <p key={i}>{linkifyHashtags(t)}</p>)}</div>
-      {p.image && <img src={p.image} alt="" className="mt-3 max-h-96 w-full rounded-xl object-cover" loading="lazy" referrerPolicy="no-referrer" />}
+      <AuthorWarning cw={p.cw}><div className="space-y-2 break-words text-sm leading-relaxed">{p.text.map((t, i) => <p key={i}>{linkifyHashtags(t)}</p>)}</div>
+      <SensitiveMedia sensitive={p.sensitive}>{p.image && <img src={p.image} alt="" className="mt-3 max-h-96 w-full rounded-xl object-cover" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia></AuthorWarning>
       <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-3 flex gap-5 text-xs text-muted-foreground hover:text-foreground" aria-label="Open original post">
         <span className="flex items-center gap-1"><MessageCircle className="size-3.5" />{p.replies}</span>
         <span className="flex items-center gap-1"><Repeat2 className="size-3.5" />{p.boosts}</span>

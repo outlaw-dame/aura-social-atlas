@@ -29,6 +29,12 @@ const DOCUMENT = `query AtlasReadOnlyRootContract {
   postContentInput: __type(name: "PostContentInput") {
     kind inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
   }
+  boundaryPermissionInput: __type(name: "BoundaryPermissionInput") {
+    kind inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
+  }
+  circleFilters: __type(name: "CircleFilters") {
+    kind inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
+  }
   meType: __type(name: "Me") {
     kind fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } args { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } }
   }
@@ -188,6 +194,11 @@ export function summarizeSchema(payload) {
     postContentInput: postContentFields,
     postFiltersInput, characterFiltersInput, activityFilterInput,
     nestedTypes,
+    // Names only, to tell which optional extensions (eg. circles) this build carries; not part of the fingerprint.
+    rootQueryNames: queries.fields.map(x => x.name).sort(),
+    rootMutationNames: mutations.fields.map(x => x.name).sort(),
+    boundaryPermissionInput: inspectInput(payload?.data?.boundaryPermissionInput),
+    circleFiltersInput: inspectInput(payload?.data?.circleFilters),
     // Counts and names are schema metadata only, never user content.
   };
 }

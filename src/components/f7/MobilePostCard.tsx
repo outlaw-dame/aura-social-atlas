@@ -12,6 +12,9 @@ import { useReactions } from '@/components/social/usePostActions';
 import { ArticleCard } from './ArticleAuthors';
 import { MobilePostActions, ReplySheet } from './PostActions';
 import { Icon } from './F7Extras';
+import { MobileFilterGate } from './FilterGate';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
+import { AuthorWarning } from '@/components/social/ContentWarning';
 
 /** A group's avatar in a reason chip: its picture, else its initial, as a rounded square (groups are squares). */
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
@@ -64,7 +67,12 @@ function Avatar({ post: p }: { post: FedizenPost }) {
 }
 
 /** Phone: one post in a feed — author, text, media or link preview — with the standard post actions. */
-export function MobilePostCard({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string }) {
+/** Phone: one post, unless the person's keyword filters hide it (or show it behind a notice, or blur its media). */
+export function MobilePostCard(props: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string }) {
+  return <MobileFilterGate post={props.post}><MobilePostCardBody {...props} /></MobileFilterGate>;
+}
+
+function MobilePostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string }) {
   const ago = shortAgo(p.date);
   const tagLine = useTagLine(p, reasons).filter(t => t !== inTag);
   return <Card outline className="atlas-post-card">
@@ -77,12 +85,14 @@ export function MobilePostCard({ post: p, actions, reasons, inTag }: { post: Fed
         <span className="atlas-post-who"><b>{p.author}</b><small>{p.handle}</small></span>
         {ago && <Link external target="_blank" href={p.url} className="atlas-post-time" aria-label={`Open the post on Fedizen, posted ${p.date ? new Date(p.date).toLocaleString() : ''}`}>{ago}</Link>}
       </div>
+      <AuthorWarning cw={p.cw} phone>
       {p.paragraphs.map((t, i) => <p key={i} className="atlas-post-text">{linkifyHashtagsWith(t, openTag)}</p>)}
-      {p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+      <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" {...(p.imageSize ? { width: p.imageSize.w, height: p.imageSize.h, style: { aspectRatio: `${p.imageSize.w} / ${p.imageSize.h}` } } : {})} />}</SensitiveMedia>
       {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
         <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />
       </button>)}
       <ArticleCard article={p.article} />
+      </AuthorWarning>
     </CardContent>
     <CardFooter className="atlas-post-footer"><MobilePostActions post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply} /></CardFooter>
   </Card>;

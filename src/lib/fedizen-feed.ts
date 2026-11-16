@@ -25,24 +25,39 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
   return have.has(needed) || (needed.includes(':') && have.has(needed.split(':')[0]));
 }
 
-export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[];
+export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; /** The image's width and height (from Fedizen's media meta), to reserve its space before it loads. */ imageSize?: { w: number; h: number }; /** The author marked its media sensitive. */ sensitive?: boolean; boostedBy?: string; /** Mastodon collections linked in the post. */ collections?: string[];
   /** A video attached to the post (a federated PeerTube video arrives this way). */ video?: FediVideo;
   /** The article the post links to, and who wrote it as far as Atlas can verify ("More from"). */ article?: PostArticle;
   /** Reply, boost and like counts, and whether the person has liked or boosted it (Fedizen statuses only). */
   counts?: { replies: number; boosts: number; likes: number }; liked?: boolean; boosted?: boolean;
-  /** Who can see it; a reply keeps to this audience. */ visibility?: 'public' | 'unlisted' | 'private' | 'direct' };
+  /** Who can see it; a reply keeps to this audience. */ visibility?: 'public' | 'unlisted' | 'private' | 'direct';
+  /** What keyword filters read besides the text: content warning, hashtags, image descriptions, link preview, poll
+   *  options, the quoted post's words, and the author's account id (for "except people I follow"). */
+  cw?: string; tags?: string[]; alt?: string[]; linkTitle?: string; linkDescription?: string; poll?: string[]; quote?: string; authorId?: string };
 export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; /** The preview's summary and image. */ description?: string; image?: string; /** The preview's author link: checked for an ActivityPub account, never shown as-is. */ authorUrl?: string; authors?: FediAuthor[]; /** A podcast episode Atlas can play in place. */ episode?: FediEpisode; /** A video (PeerTube) Atlas can play in place. */ video?: FediVideo };
 export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string };
 /** A direct conversation (Mastodon `Conversation`): the other people in it and its latest message, as plain text. */
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string };
-type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
-  replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null };
+type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; sensitive?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
+  replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null;
+  spoiler_text?: string | null; tags?: { name?: string }[] | null; poll?: { options?: { title?: string }[] } | null;
+  quote?: { quoted_status?: { content?: string | null; spoiler_text?: string | null; media_attachments?: { description?: string | null }[] | null } | null } | null };
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
 const http = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
 const name = (a?: Acct) => a?.display_name || a?.username || a?.acct || 'Someone';
+
+/** An image's shape from Mastodon-style media meta (original first, then the preview's), if it's sane. */
+export function imageSizeOf(meta: unknown): { w: number; h: number } | undefined {
+  const m = meta as { original?: { width?: unknown; height?: unknown } | null; small?: { width?: unknown; height?: unknown } | null } | null | undefined;
+  for (const s of [m?.original, m?.small]) {
+    const w = Number(s?.width), h = Number(s?.height);
+    if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 && w <= 100_000 && h <= 100_000 && w / h < 20 && h / w < 20) return { w: Math.round(w), h: Math.round(h) };
+  }
+  return undefined;
+}
 
 export function fromStatuses(list: Status[]): FedizenPost[] {
   return list.map(s => {
@@ -51,11 +66,26 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
       id: s.id, statusId: o.id, bookmarked: o.bookmarked === true || s.bookmarked === true, author: name(o.account), handle: `@${o.account?.acct ?? ''}`, avatar: http(o.account?.avatar),
       paragraphs: htmlToParagraphs(o.content ?? ''), url: http(o.url) ?? http(o.uri) ?? FEDIZEN, date: o.created_at,
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
+      ...(() => { const size = imageSizeOf(o.media_attachments?.find(m => m.type === 'image')?.meta); return size ? { imageSize: size } : {}; })(),
       boostedBy: s.reblog ? name(s.account) : undefined,
+      ...(o.sensitive === true && o.media_attachments?.length ? { sensitive: true } : {}),
       ...(typeof o.replies_count === 'number' || typeof o.reblogs_count === 'number' || typeof o.favourites_count === 'number'
         ? { counts: { replies: o.replies_count ?? 0, boosts: o.reblogs_count ?? 0, likes: o.favourites_count ?? 0 } } : {}),
       ...(o.favourited === true ? { liked: true } : {}), ...(o.reblogged === true ? { boosted: true } : {}),
       ...(o.visibility ? { visibility: o.visibility } : {}),
+      ...(o.spoiler_text?.trim() ? { cw: o.spoiler_text.trim() } : {}),
+      ...(() => { const t = (o.tags ?? []).map(x => x.name).filter((n): n is string => !!n); return t.length ? { tags: t } : {}; })(),
+      ...(() => { const a = (o.media_attachments ?? []).map(m => m.description?.trim()).filter((d): d is string => !!d); return a.length ? { alt: a } : {}; })(),
+      ...(o.card?.title ? { linkTitle: o.card.title } : {}),
+      ...(o.card?.description ? { linkDescription: o.card.description } : {}),
+      ...(o.account?.id ? { authorId: o.account.id } : {}),
+      ...(() => { const p = (o.poll?.options ?? []).map(x => x.title?.trim()).filter((t): t is string => !!t); return p.length ? { poll: p } : {}; })(),
+      ...(() => {
+        const q = o.quote?.quoted_status;
+        if (!q) return {};
+        const text = [q.spoiler_text ?? '', ...htmlToParagraphs(q.content ?? ''), ...(q.media_attachments ?? []).map(m => m.description ?? '')].map(t => t.trim()).filter(Boolean).join('\n');
+        return text ? { quote: text.slice(0, 2000) } : {};
+      })(),
       ...(() => { for (const m of o.media_attachments ?? []) { const v = videoFromAttachment(m, http(o.url) ?? http(o.uri) ?? FEDIZEN); if (v) return { video: v }; } return {}; })(),
       ...(() => { const c = collectionLinksIn(o.content ?? ''); return c.length ? { collections: c } : {}; })(),
       ...(() => { const a = articleOf(o); return a ? { article: a } : {}; })(),

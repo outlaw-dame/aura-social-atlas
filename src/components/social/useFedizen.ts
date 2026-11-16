@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { clearHomeCache, readHomeCache, writeHomeCache } from '@/lib/home-timeline';
 import { useAtlasAuth } from './AuthState';
 import { disconnectFedizen, getFedizenHome, getFedizenMessages, startFedizenConnect, type FedizenHome } from '@/lib/fedizen.functions';
 import { getNativeBonfireSnapshot, getNativeBonfireHomeContinuation } from '@/lib/bonfire-private.functions';
@@ -19,6 +20,9 @@ export function useFedizen() {
   const pending = useRef(false);
   const id = user?.id;
   const key = ['fedizen-home', id] as const;
+  // Home opens on what was last seen on this device (lib/home-timeline), then the reader's background check
+  // (useHomeTimeline) finds what's new, so the feed is never swapped out from under someone mid-read.
+  const cached = typeof window !== 'undefined' && id ? readHomeCache<FedizenHome>(id) : null;
   const q = useQuery({
     queryKey: key,
     queryFn: () => {
@@ -26,8 +30,18 @@ export function useFedizen() {
       return home({ data: { expectedAtlasUserId: id } });
     },
     enabled: !!id,
-    staleTime: 60_000,
+    ...(cached?.data.connected ? { initialData: cached.data, initialDataUpdatedAt: cached.savedAt } : {}),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
+  // Keep it for next time: only a connected, error-free Home, and only under this Atlas account.
+  useEffect(() => {
+    if (!id || !q.data) return;
+    if (!q.data.connected) { clearHomeCache(id); return; }
+    if (q.data.error) return;
+    const t = setTimeout(() => writeHomeCache(id, q.data), 800);
+    return () => clearTimeout(t);
+  }, [id, q.data]);
   const nativeKey = ['bonfire-native-home', id] as const;
   const nativeQuery = useInfiniteQuery({
     queryKey: nativeKey,
@@ -65,6 +79,8 @@ export function useFedizen() {
     signedIn: !!id,
     loading: !!id && q.isLoading,
     data: q.data,
+    /** When the first page was fetched (or saved on this device, when Home opened on that). */
+    updatedAt: q.dataUpdatedAt,
     native: mergeNativeBonfirePages(q.data ?? { connected: false, accountHandle: null, posts: [], notices: [] }, nativeQuery.data?.pages),
     loadingMoreNative: nativeQuery.isFetchingNextPage,
     hasMoreNative: nativeQuery.hasNextPage,
@@ -125,6 +141,7 @@ export function useFedizen() {
           connected: false, accountHandle: null, posts: [], notices: [],
         };
         qc.setQueryData(key, disconnected);
+        clearHomeCache(id);
       } catch {
         setActionError({ userId: id, message: 'Could not disconnect Fedizen. Please try again.' });
       } finally {

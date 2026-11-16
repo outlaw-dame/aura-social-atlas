@@ -1,6 +1,7 @@
 // Session state for Atlas accounts. One subscription, shared through context.
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { clearHomeCache } from '@/lib/home-timeline';
 import { supabase } from '@/integrations/supabase/client';
 import { readOAuthError } from '@/lib/bonfire-auth';
 import { observeSession } from '@/lib/auth-session';
@@ -60,6 +61,8 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
     const priorId = previousUser.current;
     previousUser.current = userId ?? null;
     if (priorId && priorId !== userId) {
+      // Home kept on this device for the prior account goes too (signing out, or switching account).
+      clearHomeCache(priorId);
       // Both REST and native GraphQL results can contain private data. Drop
       // only the prior account's keys so switching accounts never reuses them.
       for (const prefix of ['fedizen-home', 'bonfire-native-home']) {
@@ -91,6 +94,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const signOut = async () => {
+    if (session?.user.id) clearHomeCache(session.user.id);
     await supabase.auth.signOut();
     setSession(null);
     setProfileRecord(null);

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Block, BlockFooter, BlockTitle, Button, Icon, Link, List, ListInput, ListItem, Navbar, NavRight, Page, Popup, f7 } from 'framework7-react';
-import { FEDIZEN_BLOCKED_URL, FEDIZEN_KEYWORD_FILTERS_URL } from '@/lib/fedizen-feed';
+import { FEDIZEN_BLOCKED_URL } from '@/lib/fedizen-feed';
+import { pushPage } from './navigation';
 import { LIBRARY_PROBLEM, useBlockActions, useFedizenBlocks } from '@/components/social/useFedizenLibrary';
 import { useAtlasAuth } from '@/components/social/AuthState';
 
 /**
  * Phone: Settings → Moderation. Three separate lists, where Bonfire shows blocked people and instances in one.
- * Blocked people are read and changed here; keyword filters and blocked instances open Fedizen's own pages, since
- * Bonfire v1.1.0-rc.1 has no client API for them yet.
+ * Blocked people are read and changed here; keyword filters are Atlas's own (a pushed page); blocked instances open
+ * Fedizen's page, since Bonfire v1.1.0-rc.1 has no client API for them yet.
  */
 export function ModerationPopup({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { user } = useAtlasAuth();
@@ -24,7 +25,7 @@ export function ModerationPopup({ opened, onClose }: { opened: boolean; onClose:
 
       <BlockTitle>Keyword filters</BlockTitle>
       <List strong inset dividers>
-        <ListItem link={FEDIZEN_KEYWORD_FILTERS_URL} external target="_blank" title="Edit on Fedizen" footer="Hide posts that contain words or phrases you choose.">
+        <ListItem link="#" title="Keyword filters" footer="Hide posts about things you’d rather not see." onClick={() => { onClose(); pushPage('/keyword-filters/'); }}>
           <Icon slot="media" ios="f7:text_badge_xmark" md="material:filter_alt" />
         </ListItem>
       </List>
@@ -55,7 +56,7 @@ export function ModerationPopup({ opened, onClose }: { opened: boolean; onClose:
           <Icon slot="media" ios="f7:globe" md="material:public_off" />
         </ListItem>
       </List>
-      <BlockFooter>Fedizen keeps keyword filters and blocked instances; Atlas can’t show or change them yet.</BlockFooter>
+      <BlockFooter>Fedizen keeps blocked instances; Atlas can’t show or change them yet.</BlockFooter>
     </Page>
   </Popup>;
 }

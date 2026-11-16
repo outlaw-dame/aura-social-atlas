@@ -6,6 +6,10 @@ import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
 import { followLabels } from '@/lib/follow-labels';
 import { VideoPlayer } from './VideoPlayer';
 import { FOLLOW_PROBLEM, useFediFollow, useFediProfile } from './useFediProfile';
+import { FilterPlaceProvider } from './useIntelligence';
+import { FilterGate } from './FilterGate';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
+import { AuthorWarning } from '@/components/social/ContentWarning';
 
 /**
  * Desktop: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -77,13 +81,12 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
           </p>
           <section className="mt-6 space-y-5" aria-label={`Recent posts by ${p.name}`}>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</h3>
-            {p.posts.map(post => <article key={post.id} className="border-t border-border pt-4">
+            <FilterPlaceProvider place="account">{p.posts.map(post => <FilterGate key={post.id} post={post}><article className="border-t border-border pt-4">
               {post.title && <h3 className="font-serif text-xl">{post.title}</h3>}
-              {post.cw ? <details className="mt-1 text-sm"><summary className="cursor-pointer text-muted-foreground">Content warning: {post.cw}</summary><div className="mt-2 space-y-2 leading-relaxed">{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div></details>
-                : <div className="mt-1 space-y-2 text-sm leading-relaxed">{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div>}
-              {post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-72 w-full rounded-2xl object-cover" />}
+              <AuthorWarning cw={post.cw}><div className="mt-1 space-y-2 text-sm leading-relaxed">{post.paragraphs.map((t, i) => <p key={i}>{t}</p>)}</div>
+              <SensitiveMedia sensitive={post.sensitive}>{post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-72 w-full rounded-2xl object-cover" />}</SensitiveMedia></AuthorWarning>
               <p className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">{day(post.date)}<a href={post.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">Original<ArrowUpRight className="size-3" /></a></p>
-            </article>)}
+            </article></FilterGate>)}</FilterPlaceProvider>
             {!p.posts.length && <p className="border-t border-border pt-4 text-sm text-muted-foreground">{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</p>}
           </section>
           <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">View on {p.host}<ArrowUpRight className="size-3" /></a>

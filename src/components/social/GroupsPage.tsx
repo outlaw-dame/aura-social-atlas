@@ -4,6 +4,9 @@ import { ArrowLeft, ArrowUpRight, Check, Copy, Hash, Lock, Megaphone, Search, Us
 import { Button } from '@/components/ui/button';
 import { useGroup, useGroupMembership, useGroupsDirectory, useLatestInGroups } from './useGroups';
 import { groupAccessLabel, groupHandle, groupMembersLine, matchesGroup, membershipLabel, type Group, type GroupPost } from '@/lib/groups';
+import { FilterPlaceProvider } from './useIntelligence';
+import { FilterGate } from './FilterGate';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 
@@ -30,6 +33,10 @@ function Access({ g }: { g: Group }) {
 }
 
 function Post({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
+  return <FilterPlaceProvider place="public"><FilterGate post={p}><PostBody p={p} showGroup={showGroup} /></FilterGate></FilterPlaceProvider>;
+}
+
+function PostBody({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
   return <article className="border-b border-border py-5">
     <p className="flex items-center gap-2 text-xs">
       {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" className="size-8 atlas-avatar object-cover" /> : <span aria-hidden="true" className="social-avatar size-8 font-serif">{p.author.charAt(0)}</span>}
@@ -37,7 +44,7 @@ function Post({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
         <span className="block truncate text-muted-foreground">{p.handle}{p.date ? ` · ${when(p.date)}` : ''}</span></span>
     </p>
     <div className="mt-3 space-y-2 text-sm leading-relaxed [overflow-wrap:anywhere]">{p.paragraphs.slice(0, 6).map((t, i) => <p key={i}>{t}</p>)}</div>
-    {p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
+    <SensitiveMedia>{p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}</SensitiveMedia>
     <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Open on Fedizen<ArrowUpRight className="size-3" /></a>
   </article>;
 }

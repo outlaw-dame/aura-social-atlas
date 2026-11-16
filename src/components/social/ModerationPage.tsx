@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { ArrowUpRight, Ban, Globe2, Plus, TextSearch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FEDIZEN_BLOCKED_URL, FEDIZEN_KEYWORD_FILTERS_URL } from '@/lib/fedizen-feed';
+import { FEDIZEN_BLOCKED_URL } from '@/lib/fedizen-feed';
+import { KeywordFilters } from './KeywordFilters';
 import { LIBRARY_PROBLEM, useBlockActions, useFedizenBlocks } from './useFedizenLibrary';
 import { useAtlasAuth } from './AuthState';
 
 /**
  * Settings → Moderation: three separate lists, where Bonfire shows blocked people and instances in one.
- * Blocked people are read and changed here (Mastodon API, which Bonfire v1.1.0-rc.1 serves). Keyword filters and
- * blocked instances have no client API in rc.1, so those lists open Fedizen's own pages until Bonfire adds one.
+ * Blocked people are read and changed here (Mastodon API, which Bonfire v1.1.0-rc.1 serves). Keyword filters are
+ * Atlas's own (KeywordFilters): Bonfire lists /api/v2/filters as "coming soon", and its own filters match words without
+ * context. Blocked instances have no client API yet, so that list opens Fedizen's page.
  */
 
 function Section({ icon: Icon, title, detail, children }: { icon: typeof Ban; title: string; detail: string; children: React.ReactNode }) {
@@ -31,8 +33,8 @@ export function ModerationPage() {
   const people = q.data?.people ?? [];
   const canWrite = !!q.data?.canWrite;
   return <div className="mt-6">
-    <Section icon={TextSearch} title="Keyword filters" detail="Hide posts that contain words or phrases you choose. Fedizen keeps this list; Atlas can’t change it yet.">
-      <OnFedizen href={FEDIZEN_KEYWORD_FILTERS_URL} label="Edit keyword filters on Fedizen" />
+    <Section icon={TextSearch} title="Keyword filters" detail="Hide posts about things you’d rather not see, in every Atlas feed.">
+      <KeywordFilters />
     </Section>
 
     <Section icon={Ban} title="Blocked people" detail="They can’t follow you or see your posts, and you won’t see theirs.">

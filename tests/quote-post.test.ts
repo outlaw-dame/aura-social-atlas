@@ -1,0 +1,39 @@
+import { describe, expect, test } from 'bun:test';
+import { CREATE_POST_DOCUMENT } from '../src/lib/bonfire/graphql/operations';
+import { requestBonfireGraphQL } from '../src/lib/bonfire-graphql.server';
+import { FEDIVERSE_CIRCLE, LOCAL_CIRCLE, quotePermissions } from '../src/lib/quote-policy';
+
+describe('new posts through Bonfire createPost (quotes and who may quote)', () => {
+  test('the mutation names Bonfire’s arguments in the schema’s camelCase', () => {
+    for (const arg of ['createPost(', 'postContent: $postContent', 'boundary: $boundary', 'quoteId: $quoteId', 'uploadedMedia: $uploadedMedia', 'permissions: $permissions', '[BoundaryPermissionInput]', 'canonicalUri'])
+      expect(CREATE_POST_DOCUMENT).toContain(arg);
+  });
+  test('sent once (a mutation is never retried), with the token, and its answer validated', async () => {
+    let calls = 0, sent: any, auth = '';
+    const fetchImpl = (async (_u: string, init: RequestInit) => {
+      calls++; sent = JSON.parse(String(init.body)); auth = (init.headers as Record<string, string>).authorization;
+      return new Response(JSON.stringify({ data: { createPost: { id: '01Q', activity: { canonicalUri: 'https://fedizen.net/post/01Q' } } } }));
+    }) as unknown as typeof fetch;
+    const variables = { postContent: { htmlBody: 'So good' }, boundary: 'public', quoteId: '01A', permissions: quotePermissions('ask') };
+    const r = await requestBonfireGraphQL({
+      operation: 'mutation', document: CREATE_POST_DOCUMENT, accessToken: 'tok', fetchImpl, variables,
+      validate: v => (v as { createPost: { id: string } }).createPost,
+    });
+    expect(r.id).toBe('01Q');
+    expect(calls).toBe(1);
+    expect(auth).toBe('Bearer tok');
+    expect(sent.variables).toEqual(variables);
+  });
+});
+
+describe('who may quote (lib/quote-policy)', () => {
+  const everyone = [LOCAL_CIRCLE, FEDIVERSE_CIRCLE];
+  test('Bonfire’s built-in circles for this instance and the fediverse', () => {
+    expect(LOCAL_CIRCLE).toBe('3SERSFR0MY0VR10CA11NSTANCE');
+    expect(FEDIVERSE_CIRCLE).toBe('7EDERATEDW1THANACT1V1TYPVB');
+  });
+  test('anyone: everyone may quote', () => expect(quotePermissions('anyone')).toEqual([{ permission: 'quote', can: everyone }]));
+  test('ask: everyone may ask, and the author approves', () => expect(quotePermissions('ask')).toEqual([{ permission: 'request', can: everyone }]));
+  test('nobody: no one may quote or ask, whatever the preset grants', () =>
+    expect(quotePermissions('nobody')).toEqual([{ permission: 'quote', cannot: everyone }, { permission: 'request', cannot: everyone }]));
+});

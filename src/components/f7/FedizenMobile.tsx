@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Block, BlockTitle, Button, Card, CardContent, CardFooter, Link, List, ListItem, Navbar, NavRight, Page, Popup } from 'framework7-react';
 import { getRecentArticles, getFedizenPublic } from '@/lib/bonfire.functions';
 import type { BonfireArticle } from '@/lib/spotlight';
@@ -11,6 +11,11 @@ import { ArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { Icon } from './F7Extras';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
+import { FilterPlaceProvider } from '@/components/social/useIntelligence';
+import { MobileFilterGate } from './FilterGate';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
+import { AuthorWarning } from '@/components/social/ContentWarning';
+import { useHomeTimeline } from '@/components/social/useHomeTimeline';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 
@@ -52,6 +57,9 @@ export function MobileRecentArticles() {
 export function MobileFedizenFeed() {
   const f = useFedizen();
   const actions = useMobilePostActions();
+  const list = useRef<HTMLDivElement>(null);
+  const live = !!f.data?.connected && !f.data.error;
+  const tl = useHomeTimeline(f.data, live, list, f.updatedAt);
   return <>
     <BlockTitle>Your Fedizen feed</BlockTitle>
     {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
@@ -62,8 +70,17 @@ export function MobileFedizenFeed() {
         {f.embedded ? <Button fill round external target="_blank" href={`${window.location.origin}/app`}>Open Atlas in a new tab to connect</Button> : <Button fill round onClick={f.connect}>Connect Fedizen</Button>}
         {f.error && <p role="alert" style={{ color: 'var(--f7-theme-color)' }}>{f.error}</p>}
       </Block>
-      : !f.data.posts.length ? <Block strong inset>Your Fedizen timeline is empty.</Block>
-      : f.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}
+      : !tl.posts.length ? <Block strong inset>Your Fedizen timeline is empty.</Block>
+      : <div ref={list} className="atlas-home-list">
+        {/* New posts wait here until asked for (Bonfire: "Show N new activities"; Mastodon: "N new items"). */}
+        {tl.newCount > 0 && <div className="atlas-new-posts"><button type="button" onClick={tl.reveal}><Icon ios="f7:arrow_up" md="material:arrow_upward" />{tl.newCount === 1 ? '1 new post' : `${tl.newCount}${tl.gap ? '+' : ''} new posts`}</button></div>}
+        {tl.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}
+        {tl.hasOlder && <div ref={tl.sentinel} className="atlas-older">
+          {tl.olderFailed ? <span>Couldn’t load older posts. <Link onClick={() => void tl.loadOlder()}>Try again</Link></span>
+            : tl.loadingOlder ? <span><span className="preloader preloader-small" /> Loading older posts…</span>
+            : <Link onClick={() => void tl.loadOlder()}>Load older posts</Link>}
+        </div>}
+      </div>}
     {(!f.signedIn || (!f.loading && (!f.data?.connected || f.data.error === 'expired'))) && <MobilePublicFedizen />}
     {actions.sheet}
   </>;
@@ -115,14 +132,14 @@ export function MobilePublicFedizen() {
     {q.isLoading ? <Block strong inset>Loading public posts…</Block>
       : q.isError || q.data?.error ? <Block strong inset>Fedizen couldn’t be reached right now. <Link onClick={() => q.refetch()}>Try again</Link></Block>
       : !list.length ? <Block strong inset>No public posts on Fedizen yet.</Block>
-      : list.slice(0, 8).map(p => <Card key={p.id} outline>
+      : <FilterPlaceProvider place="public">{list.slice(0, 8).map(p => <MobileFilterGate key={p.id} post={p}><Card outline>
         <CardContent>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} className="atlas-avatar" style={{ objectFit: 'cover' }} referrerPolicy="no-referrer" />}<span><b>{p.author}</b> <span style={{ opacity: .6 }}>{p.handle}</span></span></div>
-          {p.paragraphs.slice(0, 5).map((t, i) => <p key={i} style={{ lineHeight: 1.5, overflowWrap: 'anywhere' }}>{t}</p>)}
-          {p.image && <img src={p.image} alt="" loading="lazy" style={{ width: '100%', borderRadius: 12 }} referrerPolicy="no-referrer" />}
+          <AuthorWarning cw={p.cw} phone>{p.paragraphs.slice(0, 5).map((t, i) => <p key={i} style={{ lineHeight: 1.5, overflowWrap: 'anywhere' }}>{t}</p>)}
+          <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.image && <img src={p.image} alt="" loading="lazy" style={{ width: '100%', borderRadius: 12 }} referrerPolicy="no-referrer" />}</SensitiveMedia></AuthorWarning>
         </CardContent>
         <CardFooter><span style={{ fontSize: 12, opacity: .6 }}>{when(p.date)}</span><Link external target="_blank" href={p.url}>Open</Link></CardFooter>
-      </Card>)}
+      </Card></MobileFilterGate>)}</FilterPlaceProvider>}
   </>;
 }
 

@@ -280,6 +280,8 @@ const media = z.object({
   meta: z.object({
     duration: z.union([z.number(), z.string().max(40)]).nullish().catch(null),
     original: z.object({ width: z.number().nullish(), height: z.number().nullish() }).partial().nullish().catch(null),
+    // The preview's size (Mastodon: meta.small), used to reserve an image's space before it loads.
+    small: z.object({ width: z.number().nullish(), height: z.number().nullish() }).partial().nullish().catch(null),
   }).partial().nullish().catch(null),
 });
 const status = z.object({
@@ -290,6 +292,8 @@ const status = z.object({
   content: z.string().nullish(),
   account: account.nullish(),
   media_attachments: z.array(media).nullish(),
+  /** The author marked the media sensitive: shown behind a veil. */
+  sensitive: z.boolean().nullish().catch(null),
   bookmarked: z.boolean().nullish(),
   // Counts and the person's own reactions (Bonfire's status mapper fills all five); each fails on its own to null.
   replies_count: z.number().int().min(0).nullish().catch(null),
@@ -308,6 +312,18 @@ const status = z.object({
     author_url: z.string().max(2048).nullish().catch(null),
     description: z.string().max(1000).nullish().catch(null),
     image: z.string().max(2048).nullish().catch(null),
+  }).nullish().catch(null),
+  // What keyword filters read besides the text (each fails on its own to null).
+  spoiler_text: z.string().max(1000).nullish().catch(null),
+  tags: z.array(z.object({ name: z.string().max(100) })).max(50).nullish().catch(null),
+  poll: z.object({ options: z.array(z.object({ title: z.string().max(200) })).max(20) }).nullish().catch(null),
+  // Mastodon 4.5 quotes: { state, quoted_status }. Only the quoted post's own words, never deeper.
+  quote: z.object({
+    quoted_status: z.object({
+      content: z.string().max(20_000).nullish().catch(null),
+      spoiler_text: z.string().max(1000).nullish().catch(null),
+      media_attachments: z.array(z.object({ description: z.string().max(1500).nullish().catch(null) })).max(20).nullish().catch(null),
+    }).nullish().catch(null),
   }).nullish().catch(null),
 });
 // The REST client only reads one reblog level. Avoid unbounded recursion.
@@ -350,8 +366,19 @@ const TAG = '[A-Za-z0-9_%]{1,1200}';
 const followedTagsSchema = z.array(z.object({ name: z.string().min(1).max(100) })).max(200);
 /** Every private read Atlas makes, each with the schema its answer must match. Anything else is refused. */
 const ACCT = '[A-Za-z0-9_.%-]{1,64}(%40[A-Za-z0-9.-]{1,253})?';
+const instanceSchema = z.object({
+  configuration: z.object({
+    statuses: z.object({ max_characters: z.number().int().positive().nullish().catch(null) }).partial().nullish().catch(null),
+    media_attachments: z.object({
+      image_size_limit: z.number().positive().nullish().catch(null),
+      video_size_limit: z.number().positive().nullish().catch(null),
+    }).partial().nullish().catch(null),
+  }).partial().nullish().catch(null),
+});
 const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v1\/timelines\/home\?limit=20$/, schema: homeSchema },
+  // The next (older) page of Home, from the cursor Fedizen's Link header gave (rel="next", max_id).
+  { match: /^\/api\/v1\/timelines\/home\?limit=20&max_id=[A-Za-z0-9_\-.~=%]{1,512}$/, schema: homeSchema },
   { match: /^\/api\/v1\/notifications\?limit=20$/, schema: notificationsSchema },
   { match: /^\/api\/v1\/conversations\?limit=30$/, schema: conversationsSchema },
   { match: new RegExp(`^/api/v1/accounts/relationships\\?id%5B%5D=${ID}(&id%5B%5D=${ID}){0,39}$`), schema: relationshipsSchema },
@@ -370,13 +397,37 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: new RegExp(`^/api/v1/timelines/tag/${TAG}\\?limit=(10|20)$`), schema: homeSchema },
   // A circle's timeline (Bonfire: MastoListController.list_timeline over Circles), for circles pinned to Feeds.
   { match: new RegExp(`^/api/v1/timelines/list/${ID}\\?limit=20$`), schema: homeSchema },
+  // What the server takes in a post: its upload size limits and length (Bonfire: InstanceAdapter), for the composer.
+  { match: /^\/api\/v2\/instance$/, schema: instanceSchema, single: true },
   // One post, as the person sees it (their like, boost and bookmark, its counts): for group posts read publicly.
   { match: new RegExp(`^/api/v1/statuses/${ID}$`), schema: timelineStatus, single: true },
 ];
 
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;
 
-export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[] }> {
+/** A page cursor from a Link header (Bonfire's are opaque Paginator cursors, "g3…"; Mastodon's are ids). */
+export const PAGE_CURSOR = /^[A-Za-z0-9_\-.~=%]{1,512}$/;
+
+/**
+ * The next (older) and previous (newer) page cursors from a Mastodon-style Link header, taken only from links on
+ * Fedizen itself (max_id for rel="next", min_id for rel="prev"), and only when they look like cursors.
+ */
+export function pageCursors(link: string | null): { next?: string; prev?: string } {
+  const out: { next?: string; prev?: string } = {};
+  if (!link || link.length > 8192) return out;
+  for (const part of link.split(',')) {
+    const m = part.match(/<([^>]+)>\s*;\s*rel="?(next|prev)"?/);
+    if (!m) continue;
+    let u: URL;
+    try { u = new URL(m[1]); } catch { continue; }
+    if (u.origin !== FEDIZEN) continue;
+    const v = u.searchParams.get(m[2] === 'next' ? 'max_id' : 'min_id');
+    if (v && PAGE_CURSOR.test(encodeURIComponent(v))) out[m[2] as 'next' | 'prev'] = v;
+  }
+  return out;
+}
+
+export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[]; next?: string; prev?: string }> {
   const read = READS.find(r => r.match.test(path));
   if (!read) throw new Error('Unsupported Fedizen read path.');
 
@@ -408,7 +459,7 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
   }
   const parsed = read.schema.safeParse(payload);
   if (!parsed.success) return { status: 502, data: [] };
-  return { status: 200, data: read.single ? [parsed.data] : parsed.data as unknown[] };
+  return { status: 200, data: read.single ? [parsed.data] : parsed.data as unknown[], ...pageCursors(response.headers.get('link')) };
 }
 
 /**
@@ -420,12 +471,19 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
  * no redirects, no caching, bounded reply, nothing logged.
  */
 const title = z.object({ title: z.string().trim().min(1).max(100) }).strict();
-/** A reply, and nothing else: Atlas only posts in answer to a post, in that post's audience or a narrower one. */
+/**
+ * A post: a reply (in the post's audience or a narrower one) or a new post, with its text, an optional content
+ * warning, and up to 4 uploaded media ids marked sensitive or not. Text may be empty only when there is media.
+ */
 const reply = z.object({
-  status: z.string().trim().min(1).max(5000),
-  in_reply_to_id: z.string().regex(new RegExp(`^${ID}$`)),
+  status: z.string().trim().max(5000),
+  in_reply_to_id: z.string().regex(new RegExp(`^${ID}$`)).optional(),
   visibility: z.enum(['public', 'unlisted', 'private', 'direct']),
-}).strict();
+  /** A content warning (Mastodon: spoiler_text; Bonfire stores it as the post's summary). */
+  spoiler_text: z.string().trim().min(1).max(500).optional(),
+  media_ids: z.array(z.string().regex(new RegExp(`^${ID}$`))).min(1).max(4).optional(),
+  sensitive: z.boolean().optional(),
+}).strict().refine(p => p.status.length > 0 || !!p.media_ids?.length, 'empty post').refine(p => p.sensitive === undefined || !!p.media_ids?.length, 'sensitive without media');
 const members = z.object({ account_ids: z.array(z.string().regex(new RegExp(`^${ID}$`))).min(1).max(20) }).strict();
 const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTypeAny }[] = [
   { method: 'POST', match: new RegExp(`^/api/v1-bonfire/groups/${ID}/(join|leave)$`) },
@@ -486,5 +544,49 @@ export async function fedizenSend(token: string, method: 'POST' | 'PUT' | 'DELET
   } catch {
     // A 2xx with an empty or unreadable body (DELETE answers {}): the write happened, so report success without state.
     return { status: response.status, data: null };
+  }
+}
+
+
+const uploadedSchema = z.object({
+  id: z.string().regex(new RegExp(`^${ID}$`)),
+  type: z.string().max(20).nullish(),
+  preview_url: z.string().max(2048).nullish(),
+});
+export const MEDIA_UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/webm'];
+
+/**
+ * Uploads one file to Fedizen (POST /api/v2/media, multipart, as Mastodon's API takes it), with its alt text. Only the
+ * types Fedizen stores as images or video, at most `maxBytes`. Answers the media id to attach to a post.
+ */
+export async function fedizenUpload(token: string, file: Blob, name: string, description: string, maxBytes: number): Promise<{ status: number; id?: string; preview?: string }> {
+  if (!MEDIA_UPLOAD_TYPES.includes(file.type)) throw new Error('Unsupported Fedizen upload type.');
+  if (file.size <= 0 || file.size > maxBytes) throw new Error('Unsupported Fedizen upload size.');
+  if (description.length > 1500) throw new Error('Unsupported Fedizen upload description.');
+  const form = new FormData();
+  form.set('file', file, name.replace(/[^\w.-]+/g, '_').slice(0, 100) || 'upload');
+  if (description.trim()) form.set('description', description.trim());
+  let response: Response;
+  try {
+    response = await fetch(`${FEDIZEN}/api/v2/media`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      body: form,
+      // Bonfire stores and resizes (or transcodes) the file before it answers.
+      signal: AbortSignal.timeout(file.type.startsWith('video/') ? 120_000 : 45_000),
+      redirect: 'error',
+      cache: 'no-store',
+    });
+  } catch {
+    return { status: 503 };
+  }
+  if (!response.ok) { await response.body?.cancel().catch(() => {}); return { status: response.status }; }
+  try {
+    const m = uploadedSchema.safeParse(await readBoundedFedizenJson(response, 65536));
+    if (!m.success) return { status: 502 };
+    const preview = m.data.preview_url && /^https:\/\//.test(m.data.preview_url) ? m.data.preview_url : undefined;
+    return { status: response.status, id: m.data.id, ...(preview ? { preview } : {}) };
+  } catch {
+    return { status: 502 };
   }
 }

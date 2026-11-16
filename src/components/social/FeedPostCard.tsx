@@ -1,18 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Bookmark, Globe2, Heart, Lock, MessageCircle, Repeat2, Share, Tag, AtSign } from 'lucide-react';
+import { Globe2, Lock, Repeat2, Tag, AtSign } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { shortAgo, type ForYouReason } from '@/lib/feed-types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MentionField } from './MentionField';
+import { PostActionBar } from './PostActionBar';
 import { linkifyHashtagsWith } from '@/lib/hashtags';
 import { useTagLine } from './useFeeds';
 import { CollectionLinks } from './CollectionsDesktop';
 import { PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
 import { useSaveToggle } from './useFedizenLibrary';
-import { AUDIENCE_LABEL, compactCount, replyMention, replyVisibility, sharePost, useReactions, useReply } from './usePostActions';
+import { FilterGate } from './FilterGate';
+import { PostMoreMenu } from './FilterLikeThis';
+import { AUDIENCE_LABEL, replyMention, replyVisibility, useReactions, useReply } from './usePostActions';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
+import { AuthorWarning } from '@/components/social/ContentWarning';
 
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
   const [broken, setBroken] = useState(false);
@@ -60,30 +65,18 @@ function Avatar({ post: p }: { post: FedizenPost }) {
     : <span aria-hidden="true" className="atlas-avatar flex size-10 shrink-0 items-center justify-center bg-muted font-serif text-base">{p.author.charAt(0)}</span>;
 }
 
-const actionClass = 'inline-flex min-h-9 min-w-9 items-center gap-1.5 rounded-full px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 aria-pressed:text-accent';
-
-/** Desktop: Reply, Boost, Like, Save and Share. A post Fedizen's API can't address offers Share only. */
+/** Desktop: Reply, Boost, Like, Save and More (with Share), as on the phone (PostActionBar). */
 function Actions({ post: p, actions }: { post: FedizenPost; actions: FeedActions }) {
-  const { save, reactions, onReply } = actions;
-  const acts = !!p.statusId && reactions.canAct;
-  const like = reactions.state(p, 'like'), boost = reactions.state(p, 'boost'), saved = save.isSaved(p);
-  const boostable = p.visibility !== 'private' && p.visibility !== 'direct';
-  const [copied, setCopied] = useState(false);
-  return <div className="mt-3 flex items-center gap-1" role="group" aria-label="Post actions">
-    {acts && <>
-      <button type="button" className={actionClass} onClick={() => onReply(p)} aria-label="Reply"><MessageCircle className="size-4" />{compactCount(p.counts?.replies ?? 0)}</button>
-      <button type="button" className={actionClass} disabled={boost.pending || !boostable} aria-pressed={boost.on} onClick={() => void reactions.toggle(p, 'boost')} aria-label={boost.on ? 'Undo boost' : 'Boost'} title={boostable ? undefined : 'Only public posts can be boosted'}><Repeat2 className="size-4" />{compactCount(boost.count)}</button>
-      <button type="button" className={actionClass} disabled={like.pending} aria-pressed={like.on} onClick={() => void reactions.toggle(p, 'like')} aria-label={like.on ? 'Unlike' : 'Like'}><Heart className={`size-4${like.on ? ' fill-current' : ''}`} />{compactCount(like.count)}</button>
-      {save.canSave && <button type="button" className={actionClass} disabled={save.isPending(p)} aria-pressed={saved} onClick={() => void save.toggle(p)} aria-label={saved ? 'Remove from saved' : 'Save'}><Bookmark className={`size-4${saved ? ' fill-current' : ''}`} /></button>}
-    </>}
-    <button type="button" className={`${actionClass} ml-auto`} aria-label="Share" onClick={async () => { if ((await sharePost(p)) === 'copied') { setCopied(true); setTimeout(() => setCopied(false), 1500); } }}>
-      <Share className="size-4" />{copied && 'Link copied'}
-    </button>
-  </div>;
+  return <PostActionBar post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply} more={<PostMoreMenu post={p} />} />;
 }
 
 /** Desktop: one post in a feed — author, text, media or link preview — with the standard post actions. */
-export function FeedPostCard({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {
+/** Desktop: one post, unless the person's keyword filters hide it (or show it behind a notice, or blur its media). */
+export function FeedPostCard(props: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {
+  return <FilterGate post={props.post}><FeedPostCardBody {...props} /></FilterGate>;
+}
+
+function FeedPostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {
   const ago = shortAgo(p.date);
   const tagLine = useTagLine(p, reasons).filter(t => t !== inTag);
   const navigate = useNavigate();
@@ -96,13 +89,18 @@ export function FeedPostCard({ post: p, actions, reasons, inTag }: { post: Fediz
       <p className="min-w-0 flex-1 text-sm leading-tight"><span className="block truncate font-semibold">{p.author}</span><span className="block truncate text-xs text-muted-foreground">{p.handle}</span></p>
       {ago && <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline" title={p.date ? new Date(p.date).toLocaleString() : undefined}>{ago}</a>}
     </div>
+    <AuthorWarning cw={p.cw}>
     <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{linkifyHashtagsWith(t, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
-    {p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
+    <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl bg-muted object-cover" {...reserve(p.imageSize)} />}</SensitiveMedia>
     <CollectionLinks links={p.collections} />
     <PostArticleCard article={p.article} />
+    </AuthorWarning>
     <Actions post={p} actions={actions} />
   </article>;
 }
+
+/** Width, height and aspect ratio for an image whose size is known, so the card keeps its height while it loads. */
+const reserve = (size?: { w: number; h: number }) => (size ? { width: size.w, height: size.h, style: { aspectRatio: `${size.w} / ${size.h}` } } : {});
 
 const AUDIENCE_ICON = { public: Globe2, unlisted: Globe2, private: Lock, direct: AtSign } as const;
 
@@ -111,17 +109,21 @@ function ReplyDialog({ post, onClose }: { post: FedizenPost | null; onClose: () 
   const r = useReply();
   const [text, setText] = useState('');
   const [confirmed, setConfirmed] = useState<string[]>([]);
-  useEffect(() => { if (post) { const m = replyMention(post.handle); setText(m); setConfirmed(m ? [m.trim()] : []); r.clearError(); } }, [post]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [cw, setCw] = useState('');
+  useEffect(() => { if (post) { const m = replyMention(post.handle); setText(m); setConfirmed(m ? [m.trim()] : []); setCw(post.cw ?? ''); r.clearError(); } }, [post]); // eslint-disable-line react-hooks/exhaustive-deps
   const audience = post ? replyVisibility(post) : 'public';
   const Aud = AUDIENCE_ICON[audience];
-  const send = async () => { if (post && (await r.reply(post, text))) onClose(); };
+  const send = async () => { if (post && (await r.reply(post, text, cw))) onClose(); };
   return <Dialog open={!!post} onOpenChange={o => { if (!o) onClose(); }}>
     <DialogContent className="sm:max-w-lg">
       {post && <>
         <DialogHeader>
           <DialogTitle>Reply to {post.author}</DialogTitle>
-          <DialogDescription className="line-clamp-2">{post.paragraphs.join(' ')}</DialogDescription>
+          <DialogDescription className="line-clamp-2">{post.cw ? `Content warning: ${post.cw}` : post.paragraphs.join(' ')}</DialogDescription>
         </DialogHeader>
+        {post.cw && <label className="block text-xs font-medium text-muted-foreground">Content warning
+          <input value={cw} onChange={e => setCw(e.target.value)} maxLength={500} className="mt-1 block w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+        </label>}
         <MentionField value={text} onChange={setText} confirmed={confirmed} onConfirm={t => setConfirmed(c => [...c, t])} autoFocus
           people={[{ handle: post.handle, name: post.author, avatar: post.avatar }]} placeholder="Write your reply" label="Your reply" onSubmit={() => void send()} />
         <p className="flex items-center gap-1 text-xs text-muted-foreground"><Aud className="size-3.5" />{AUDIENCE_LABEL[audience]}, like the post</p>
