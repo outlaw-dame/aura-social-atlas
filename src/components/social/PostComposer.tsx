@@ -19,7 +19,7 @@ const AUDIENCE_ICON: Record<Audience, typeof Globe2> = { public: Globe2, unliste
  * video, each with alt text, and whether the media is sensitive (on, and fixed, while there's a content warning, as
  * Mastodon does). See usePublish.
  */
-export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnType<typeof usePublish>; onPosted: (url?: string) => void; inputRef?: React.RefObject<HTMLTextAreaElement | null> }) {
+export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnType<typeof usePublish>; onPosted: (posted: { url?: string; id?: string }) => void; inputRef?: React.RefObject<HTMLTextAreaElement | null> }) {
   const p = publish;
   const pick = useRef<HTMLInputElement>(null);
   const over = p.length > p.limits.maxChars;
@@ -28,7 +28,7 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
   const [gifOpen, setGifOpen] = useState(false);
   const gifFull = p.media.some(m => m.kind === 'video') || p.media.length >= 4;
   const altFields = useRef(new Map<string, HTMLInputElement>());
-  const post = async () => { const r = await p.send(); if (r) onPosted(r.url); };
+  const post = async () => { const r = await p.send(); if (r) onPosted(r); };
   // Alt text reminder (Settings → Posting): ask before media goes out undescribed.
   const send = async () => { if (!p.ready || over) return; if (missingAlt(prefs, p.media).length) setAsking(true); else await post(); };
   const lacking = missingAlt(prefs, p.media);

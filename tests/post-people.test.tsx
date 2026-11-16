@@ -58,3 +58,12 @@ describe('links in a post', () => {
   });
   test('only http and https', () => strictEqual(html('javascript:alert(1) ftp://x.org', []).includes('<a '), false));
 });
+
+describe('hashtags in a run keep their #', () => {
+  test('a run of tags shows each #; a tag alone in a sentence hides it', () => {
+    const out = html('Data: FediDB #fediverse #FediStats', []);
+    strictEqual((out.match(/<span>#<\/span>/g) ?? []).length, 2);
+    const alone = html('I love #coffee in the morning', []);
+    strictEqual(alone.includes('<span class="atlas-hashtag-mark">#</span>coffee'), true);
+  });
+});

@@ -798,6 +798,10 @@ span.atlas-rich-face { display: inline-flex; align-items: center; justify-conten
 .atlas-mention:hover { text-decoration: underline; }
 .atlas-post-link { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
 .atlas-post-link:hover { text-decoration: underline; }
+/* "View" after posting: the new post, marked briefly where it is in the feed. */
+.atlas-post-flash { animation: atlas-post-flash 2.4s ease-out; border-radius: 12px; outline: none; }
+@keyframes atlas-post-flash { 0%, 40% { background: color-mix(in oklab, var(--accent) 12%, transparent); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .atlas-post-flash { animation: none; background: color-mix(in oklab, var(--accent) 10%, transparent); } }
 .atlas-post-text .atlas-post-link { color: var(--f7-theme-color, var(--accent)); }
 .atlas-boost-icon { width: 12px; height: 12px; flex: none; }
 .atlas-boost-who { display: inline-flex; align-items: center; gap: 5px; min-width: 0; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; width: auto; }

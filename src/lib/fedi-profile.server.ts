@@ -77,6 +77,13 @@ async function build(target: FediProfileTarget, remaining: () => number, f: Fetc
       const c = await getJson(u, AP, f, l);
       if (isObj(c) && typeof c.totalItems === 'number' && c.totalItems >= 0) profile[k] = Math.floor(c.totalItems);
     }),
+    // Bonfire's actor carries no `image` (its banner isn't federated), but its Mastodon API has it as `header`.
+    // Asked only of the actor's own server, and kept only if that account is this actor.
+    (async () => {
+      if (profile.header) return;
+      const header = await bannerFromMastodonApi(actor, id, f, l);
+      if (header) profile.header = header;
+    })(),
     (async () => {
       const u = link('outbox'); if (!u) { profile.postsHidden = true; return; }
       const box = await getJson(u, AP, f, l);
@@ -98,6 +105,20 @@ async function build(target: FediProfileTarget, remaining: () => number, f: Fetc
   remember(id, done);
   if (id !== actorId) remember(actorId, done);
   return done;
+}
+
+/** An actor's banner from its own server's Mastodon API (`/api/v1/accounts/lookup`), when its actor lacks one. The
+ *  account must be this actor: its id is the actor id's last segment (Bonfire) or its url/uri is the actor id. */
+export async function bannerFromMastodonApi(actor: Record<string, unknown>, id: string, f: FetchLike, l: Lookup): Promise<string | undefined> {
+  const user = typeof actor.preferredUsername === 'string' ? actor.preferredUsername.replace(/^@/, '') : '';
+  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(user)) return undefined;
+  const host = new URL(id).host;
+  const a = await getJson(`https://${host}/api/v1/accounts/lookup?acct=${encodeURIComponent(user)}`, 'application/json', f, l);
+  if (!isObj(a)) return undefined;
+  const last = new URL(id).pathname.split('/').filter(Boolean).pop();
+  const same = (typeof a.id === 'string' && a.id === last) || a.uri === id || a.url === id;
+  const header = typeof a.header === 'string' ? a.header : undefined;
+  return same && header && isPublicHttpsUrl(header) && header.length <= 2048 && !/\/missing\.png$/.test(header) ? header : undefined;
 }
 
 async function withReferencedObjects(page: Record<string, unknown>, actorId: string, f: FetchLike, l: Lookup): Promise<Record<string, unknown>> {

@@ -128,7 +128,7 @@ export function usePublish() {
 
   const reset = () => { media.forEach(m => { if (m.file) URL.revokeObjectURL(m.url); }); setText(''); setCw(''); setCwOn(false); setSensitive(false); setMedia([]); setNotice(null); setAudienceRaw('public'); setQuoteRaw(null); };
 
-  const send = async (): Promise<{ url?: string } | null> => {
+  const send = async (): Promise<{ url?: string; id?: string } | null> => {
     if (!user || !ready) return null;
     setSending(true); setNotice(null);
     try {
@@ -164,7 +164,7 @@ export function usePublish() {
       if (!r.ok) { setNotice(LIBRARY_PROBLEM[r.error]); return null; }
       reset();
       void qc.invalidateQueries({ queryKey: ['fedizen-home', user.id] });
-      return { url: r.url };
+      return { url: r.url, ...('id' in r && r.id ? { id: r.id } : {}) };
     } finally { setSending(false); }
   };
 
