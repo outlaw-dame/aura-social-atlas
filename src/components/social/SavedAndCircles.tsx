@@ -33,7 +33,7 @@ function PostRow({ p, save }: { p: FedizenPost; save: ReturnType<typeof useSaveT
   return <article className="border-b border-border pb-5">
     <BoostedBy post={p} className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground" />
     <p className="flex items-center gap-2 text-xs">{canOpen(p)
-      ? <button type="button" className="atlas-author-button flex-none gap-2" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}>{who}</button>
+      ? <button type="button" className="atlas-author-button gap-2" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}>{who}</button>
       : who}<span className="text-muted-foreground">{p.handle} · {when(p.date)}</span></p>
     <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{linkifyPost(t, p.mentions, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
     {p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}

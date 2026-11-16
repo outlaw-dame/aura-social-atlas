@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 import type { FediMention, FediPerson, FedizenPost } from '@/lib/fedizen-feed';
 import { openFediProfile } from '@/lib/fedi-profile';
@@ -29,12 +29,14 @@ export function linkifyPost(text: string, mentions: FediMention[] | undefined, o
     const hit = mentionFor(written, mentions);
     if (!hit) continue;
     const start = m.index! + m[1].length;
-    if (start > at) out.push(...linkifyHashtagsWith(text.slice(at, start), onTag));
+    // Each stretch of text in its own keyed fragment: linkifyHashtagsWith keys its tags by index, so two stretches'
+    // tags would otherwise share keys.
+    if (start > at) out.push(<Fragment key={`t${at}`}>{linkifyHashtagsWith(text.slice(at, start), onTag)}</Fragment>);
     out.push(<button key={`m${start}`} type="button" className="atlas-mention" aria-label={`Open the profile of ${hit.acct}`}
       onClick={e => { e.stopPropagation(); openFediProfile({ acct: hit.acct }); }}>@{written}</button>);
     at = start + 1 + written.length;
   }
-  if (at < text.length) out.push(...linkifyHashtagsWith(text.slice(at), onTag));
+  if (at < text.length) out.push(<Fragment key={`t${at}`}>{linkifyHashtagsWith(text.slice(at), onTag)}</Fragment>);
   return out;
 }
 

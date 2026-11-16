@@ -91,7 +91,7 @@ function FeedPostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenP
     <BoostedBy post={p} className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground" />
     <div className="flex items-center gap-3">
       {canOpen(p)
-        ? <button type="button" className="atlas-author-button gap-3" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}><Who post={p} /></button>
+        ? <button type="button" className="atlas-author-button atlas-author-fill gap-3" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}><Who post={p} /></button>
         : <Who post={p} />}
       {ago && <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline" title={p.date ? new Date(p.date).toLocaleString() : undefined}>{ago}</a>}
     </div>

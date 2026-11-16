@@ -30,3 +30,12 @@ describe('mentions in a post', () => {
   });
   test('without mentions, text is only hashtag-linked', () => strictEqual(html('@nedley hi', []).includes('<button'), false));
 });
+
+describe('mentions and hashtags together', () => {
+  test('stretches of text never share React keys', () => {
+    const nodes = linkifyPost('#one @nedley #two @meganl #three', mentions, () => {});
+    const keys = nodes.map(n => (n as { key?: string | null }).key);
+    strictEqual(keys.every(k => k != null), true);
+    strictEqual(new Set(keys).size, keys.length);
+  });
+});

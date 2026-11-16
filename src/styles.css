@@ -803,7 +803,8 @@ button.atlas-boost-who { cursor: pointer; }
 button.atlas-boost-who:hover b { text-decoration: underline; }
 .atlas-boost-face { width: 16px; height: 16px; flex: none; object-fit: cover; border-radius: var(--atlas-avatar-radius, 50%) !important; background: var(--muted, rgba(127,127,127,.15)); }
 .atlas-boost-initial { display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; }
-.atlas-author-button { display: flex; align-items: center; gap: inherit; min-width: 0; flex: 1 1 auto; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-align: start; cursor: pointer; width: auto; }
+.atlas-author-button { display: flex; align-items: center; gap: inherit; min-width: 0; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-align: start; cursor: pointer; width: auto; }
+.atlas-author-fill { flex: 1 1 auto; }
 .atlas-author-button:hover b, .atlas-author-button:hover .atlas-author-name { text-decoration: underline; }
 
 /* Phone: the stack of pushed pages (a hashtag's feed) laid over the tabs, under the tab bar (z-index 600). Its root
