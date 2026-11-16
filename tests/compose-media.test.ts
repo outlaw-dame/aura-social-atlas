@@ -35,3 +35,22 @@ describe('posting with media: the rules Atlas keeps (Mastodon)', () => {
     expect(formatBytes(800)).toBe('1 KB');
   });
 });
+
+describe('alt text reminder (as Ivory: Settings → Posting)', () => {
+  test('on by default; lists only the media with no description', async () => {
+    const { DEFAULT_READING, missingAlt, parseReading } = await import('../src/lib/reading-prefs');
+    expect(DEFAULT_READING.altReminder).toBe(true);
+    expect(parseReading(JSON.stringify({ media: 'default' })).altReminder).toBe(true);
+    expect(parseReading(JSON.stringify({ altReminder: false })).altReminder).toBe(false);
+    const media = [{ alt: 'A cat' }, { alt: '  ' }, { alt: '' }];
+    expect(missingAlt(DEFAULT_READING, media)).toEqual([{ alt: '  ' }, { alt: '' }]);
+    expect(missingAlt({ ...DEFAULT_READING, altReminder: false }, media)).toEqual([]);
+  });
+  test('says how many are missing', async () => {
+    const { altReminderText } = await import('../src/lib/compose-media');
+    expect(altReminderText(1, 1).body).toStartWith('This post’s media has no alt text.');
+    expect(altReminderText(3, 3).body).toStartWith('None of the 3 attachments has alt text.');
+    expect(altReminderText(2, 4).body).toStartWith('2 of the 4 attachments have no alt text.');
+    expect(altReminderText(1, 4).body).toStartWith('1 of the 4 attachments has no alt text.');
+  });
+});

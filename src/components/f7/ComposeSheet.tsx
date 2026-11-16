@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Block, Button, Icon, List, ListInput, ListItem, Popup, Page, Navbar, NavLeft, NavRight, Link, Toggle, f7 } from 'framework7-react';
-import { MAX_ALT, MAX_CW, PICKER_ACCEPT } from '@/lib/compose-media';
+import { MAX_ALT, MAX_CW, PICKER_ACCEPT, altReminderText } from '@/lib/compose-media';
+import { missingAlt, useReading } from '@/lib/reading-prefs';
 import { AUDIENCES, usePublish, type Audience } from '@/components/social/usePublish';
 
 const AUDIENCE_ICON: Record<Audience, { ios: string; md: string }> = {
@@ -18,9 +19,24 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
   const pick = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState('');
   const over = p.length > p.limits.maxChars;
-  const send = async () => {
+  const prefs = useReading();
+  const altFields = useRef(new Map<string, HTMLInputElement>());
+  const post = async () => {
     const r = await p.send();
     if (r) { f7.toast.create({ text: 'Posted', closeTimeout: 1500 }).open(); onClose(); }
+  };
+  // Alt text reminder (Settings → Posting), as Ivory asks: Add alt text goes back to the first undescribed one.
+  const send = async () => {
+    const lacking = missingAlt(prefs, p.media);
+    if (!lacking.length) return post();
+    const w = altReminderText(lacking.length, p.media.length);
+    f7.dialog.create({
+      title: w.title, text: w.body, verticalButtons: false,
+      buttons: [
+        { text: w.add, strong: true, onClick: () => { const el = altFields.current.get(lacking[0].key); el?.scrollIntoView({ block: 'center' }); el?.focus(); } },
+        { text: w.post, onClick: () => void post() },
+      ],
+    }).open();
   };
   return <Popup opened={opened} onPopupClosed={onClose} swipeToClose="to-bottom" className="atlas-compose" push>
     <Page>
@@ -49,7 +65,7 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
             </div>
             {m.state === 'failed' ? <figcaption role="alert" className="atlas-compose-error">{m.error}</figcaption>
               : <figcaption>
-                <input aria-label={`Alt text for this ${m.kind}`} value={m.alt} maxLength={MAX_ALT} disabled={p.sending} placeholder={m.kind === 'video' ? 'Describe the video' : 'Describe the photo'} onChange={e => p.setAlt(m.key, e.target.value)} />
+                <input ref={el => { if (el) altFields.current.set(m.key, el); else altFields.current.delete(m.key); }} aria-label={`Alt text for this ${m.kind}`} value={m.alt} maxLength={MAX_ALT} disabled={p.sending} placeholder={m.kind === 'video' ? 'Describe the video' : 'Describe the photo'} onChange={e => p.setAlt(m.key, e.target.value)} />
                 {m.error && <span role="alert" className="atlas-compose-error">{m.error}</span>}
               </figcaption>}
           </figure>)}

@@ -16,5 +16,12 @@ export function MobileReadingSettings() {
       {MEDIA_DISPLAY.map(m => <ListItem key={m.id} title={m.name} radio radioIcon="end" name="atlas-media-display" checked={r.media === m.id} onChange={() => setReading({ media: m.id })} />)}
     </List>
     <BlockFooter>{MEDIA_DISPLAY.find(m => m.id === r.media)?.note} Media your keyword filters hide stays hidden either way.</BlockFooter>
+    <BlockTitle>Posting</BlockTitle>
+    <List strong inset dividers>
+      <ListItem title="Alt text reminder">
+        <Toggle slot="after" checked={r.altReminder} onToggleChange={() => setReading({ altReminder: !r.altReminder })} />
+      </ListItem>
+    </List>
+    <BlockFooter>Before posting images or a video without alt text, ask whether to add it. Alt text is what screen readers say in place of the picture.</BlockFooter>
   </>;
 }

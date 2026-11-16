@@ -1,9 +1,11 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { missingAlt, useReading } from '@/lib/reading-prefs';
 import { AtSign, Globe2, ImagePlus, Loader2, Lock, MoonStar, TriangleAlert, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MAX_ALT, MAX_CW, PICKER_ACCEPT } from '@/lib/compose-media';
+import { MAX_ALT, MAX_CW, PICKER_ACCEPT, altReminderText } from '@/lib/compose-media';
 import { AUDIENCES, usePublish, type Audience } from './usePublish';
 
 const AUDIENCE_ICON: Record<Audience, typeof Globe2> = { public: Globe2, unlisted: MoonStar, private: Lock, direct: AtSign };
@@ -17,7 +19,14 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
   const p = publish;
   const pick = useRef<HTMLInputElement>(null);
   const over = p.length > p.limits.maxChars;
-  const send = async () => { const r = await p.send(); if (r) onPosted(r.url); };
+  const prefs = useReading();
+  const [asking, setAsking] = useState(false);
+  const altFields = useRef(new Map<string, HTMLInputElement>());
+  const post = async () => { const r = await p.send(); if (r) onPosted(r.url); };
+  // Alt text reminder (Settings → Posting): ask before media goes out undescribed.
+  const send = async () => { if (!p.ready || over) return; if (missingAlt(prefs, p.media).length) setAsking(true); else await post(); };
+  const lacking = missingAlt(prefs, p.media);
+  const words = altReminderText(lacking.length, p.media.length);
   return <div className="flex max-h-[calc(100dvh-12rem)] flex-col">
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
       {p.cwOn && <label className="block">
@@ -41,7 +50,7 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
           {m.state === 'failed' ? <p role="alert" className="text-xs text-destructive">{m.error}</p>
             : <>
               <label className="block"><span className="sr-only">Alt text for this {m.kind}</span>
-                <input value={m.alt} onChange={e => p.setAlt(m.key, e.target.value)} maxLength={MAX_ALT} disabled={p.sending} placeholder={m.kind === 'video' ? 'Describe the video' : 'Describe the image (alt text)'}
+                <input ref={el => { if (el) altFields.current.set(m.key, el); else altFields.current.delete(m.key); }} value={m.alt} onChange={e => p.setAlt(m.key, e.target.value)} maxLength={MAX_ALT} disabled={p.sending} placeholder={m.kind === 'video' ? 'Describe the video' : 'Describe the image (alt text)'}
                   className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring" />
               </label>
               {m.error && <p role="alert" className="text-xs text-destructive">{m.error}</p>}
@@ -67,5 +76,14 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
       <span className={`ml-auto px-2 text-xs tabular-nums ${over ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite">{p.limits.maxChars - p.length}</span>
       <Button size="sm" disabled={!p.ready || over} onClick={() => void send()}>{p.sending ? <><Loader2 className="animate-spin" />Posting…</> : 'Post'}</Button>
     </div>
+    <AlertDialog open={asking} onOpenChange={setAsking}>
+      <AlertDialogContent>
+        <AlertDialogHeader><AlertDialogTitle>{words.title}</AlertDialogTitle><AlertDialogDescription>{words.body}</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => { const first = lacking[0]; setTimeout(() => first && altFields.current.get(first.key)?.focus(), 0); }}>{words.add}</AlertDialogCancel>
+          <AlertDialogAction onClick={() => void post()}>{words.post}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>;
 }

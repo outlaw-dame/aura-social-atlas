@@ -15,8 +15,12 @@ export const MEDIA_DISPLAY = [
   { id: 'hide_all', name: 'Blur all media', note: 'Every image and video is blurred until you open it.' },
 ] as const;
 export type MediaDisplay = (typeof MEDIA_DISPLAY)[number]['id'];
-export type ReadingPrefs = { expandWarnings: boolean; media: MediaDisplay };
-export const DEFAULT_READING: ReadingPrefs = { expandWarnings: false, media: 'default' };
+/**
+ * `altReminder` (Posting): before a post with media that has no alt text goes out, ask first — on by default, as
+ * Ivory's "Alt Text Reminder" is.
+ */
+export type ReadingPrefs = { expandWarnings: boolean; media: MediaDisplay; altReminder: boolean };
+export const DEFAULT_READING: ReadingPrefs = { expandWarnings: false, media: 'default', altReminder: true };
 const KEY = 'atlas-reading';
 
 export function parseReading(raw: string | null): ReadingPrefs {
@@ -25,6 +29,7 @@ export function parseReading(raw: string | null): ReadingPrefs {
     return {
       expandWarnings: v.expandWarnings === true,
       media: MEDIA_DISPLAY.some(m => m.id === v.media) ? v.media as MediaDisplay : 'default',
+      altReminder: v.altReminder !== false,
     };
   } catch { return DEFAULT_READING; }
 }
@@ -46,6 +51,9 @@ export function useReading(): ReadingPrefs {
     () => DEFAULT_READING,
   );
 }
+
+/** The attachments a post would go out with no alt text, when the reminder is on. */
+export const missingAlt = <T extends { alt: string }>(prefs: ReadingPrefs, media: T[]): T[] => (prefs.altReminder ? media.filter(m => !m.alt.trim()) : []);
 
 /** Why media is veiled, if it is: a filter's reason first, then the author's mark, then the reader's own setting. */
 export function veilReason(prefs: ReadingPrefs, filterReason: string | null, sensitive: boolean | undefined): string | null {

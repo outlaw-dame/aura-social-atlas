@@ -18,5 +18,10 @@ export function ReadingSettings() {
         <span><span className="font-medium">{m.name}</span><span className="block text-xs text-muted-foreground">{m.note}</span></span>
       </label>)}
     </div>
+    <h2 className="mb-1 mt-8 text-base font-semibold">Posting</h2>
+    <label className="flex items-start justify-between gap-4 text-sm">
+      <span><span className="font-medium">Alt text reminder</span><span className="block text-xs text-muted-foreground">Before posting images or a video without alt text, ask whether to add it. Alt text is what screen readers say in place of the picture.</span></span>
+      <Switch checked={r.altReminder} onCheckedChange={v => setReading({ altReminder: v })} />
+    </label>
   </>;
 }

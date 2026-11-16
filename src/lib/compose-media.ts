@@ -48,3 +48,16 @@ export function canAdd(kinds: ('image' | 'video')[], next: 'image' | 'video'): s
 export const effectiveSensitive = (cw: string, hasMedia: boolean, chosen: boolean) => hasMedia && (chosen || cw.trim().length > 0);
 
 export const formatBytes = (n: number) => (n >= 1_000_000 ? `${Math.round(n / 100_000) / 10} MB` : `${Math.max(1, Math.round(n / 1000))} KB`);
+
+/** The alt text reminder's words (Settings → Posting → Alt text reminder). */
+export function altReminderText(missing: number, total: number) {
+  const what = total === 1 ? 'This post’s media has no alt text.'
+    : missing === total ? `None of the ${total} attachments has alt text.`
+    : `${missing} of the ${total} attachments ${missing === 1 ? 'has' : 'have'} no alt text.`;
+  return {
+    title: 'Add alt text?',
+    body: `${what} Alt text describes the picture for people who use screen readers or can’t load images.`,
+    add: 'Add alt text',
+    post: 'Post without it',
+  };
+}
