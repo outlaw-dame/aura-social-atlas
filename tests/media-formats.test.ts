@@ -18,6 +18,9 @@ describe("GIFs Mastodon transcoded to video play like GIFs", () => {
     expect(gif).not.toMatch(/\bcontrols\b|autoPlay|playVideo\(/);
     expect(gif).toContain("prefers-reduced-motion: reduce");
     expect(gif).toContain("IntersectionObserver");
+    // Off-screen pausing stays on under Reduce Motion; only automatic playback is gated.
+    expect(gif).not.toMatch(/if \(!el \|\| reduced\) return/);
+    expect(gif).toContain("if (!e.isIntersecting) el.pause(); else if (!reduced) void el.play()");
   });
 });
 

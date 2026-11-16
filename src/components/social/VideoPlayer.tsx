@@ -32,10 +32,11 @@ function GifVideo({ video, className }: { video: FediVideo; className: string })
     on(); mq.addEventListener('change', on);
     return () => mq.removeEventListener('change', on);
   }, []);
+  // Always pause off screen (including one started by a tap under Reduce Motion); only start on its own without it.
   useEffect(() => {
     const el = ref.current;
-    if (!el || reduced) return;
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) void el.play().catch(() => {}); else el.pause(); }, { threshold: 0.25 });
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => { if (!e.isIntersecting) el.pause(); else if (!reduced) void el.play().catch(() => {}); }, { threshold: 0.25 });
     io.observe(el);
     return () => { io.disconnect(); el.pause(); };
   }, [reduced]);
