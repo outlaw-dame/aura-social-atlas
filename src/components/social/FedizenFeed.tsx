@@ -32,24 +32,10 @@ export function FedizenFeed() {
       : <Button className="mt-4" onClick={() => void f.connect()} disabled={f.actionBusy}><Link2 />{f.actionBusy ? 'Connecting…' : 'Connect Fedizen'}</Button>}
     {f.error && <p role="alert" className="mt-3 text-sm text-destructive">{f.error}</p>}
   </section><PublicFedizenFeed /></>;
-  const { error, accountHandle } = f.data;
+  const { error } = f.data;
   const displayed = selectBonfireHome(f.data, f.native);
   const { posts, notices } = displayed;
-  const linkedAccount = accountHandle ? `@${accountHandle.replace(/^@/, '')}` : null;
   return <section className="mb-12">{head}
-    <p className="mb-4 text-xs text-muted-foreground">
-      {linkedAccount ? <>Connected to Fedizen as <strong className="font-medium text-foreground">{linkedAccount}</strong>.</>
-        : 'Fedizen connected. Account identity is not available for this older connection.'}
-      {' '}Only the linked account's authorized content is shown here.
-    </p>
-    {displayed.source === 'native'
-      ? <p className="mb-4 text-xs text-muted-foreground">Bonfire-native Home and activity · read-only · authorized account</p>
-      : f.native && !['disabled', 'disconnected'].includes(f.native.status) && f.native.status !== 'available'
-        ? <p role="status" className="mb-4 text-xs text-muted-foreground">
-            Native Bonfire data is not available ({f.native.status}). Showing the existing Fedizen read-only timeline.
-          </p>
-        : null}
-    {f.nativeQueryError && <p role="status" className="mb-4 text-xs text-muted-foreground">Native Bonfire request failed. Showing the existing Fedizen timeline.</p>}
     {f.error && <p role="alert" className="mb-4 text-sm text-destructive">{f.error}</p>}
     {actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}
     {error && displayed.source !== 'native' && <p className="mb-4 text-sm text-muted-foreground">Fedizen couldn’t send your timeline right now. <Button variant="link" size="sm" className="px-1" onClick={f.retry}>Try again</Button></p>}
