@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Bookmark, CalendarDays, Check, CircleDashed, CircleUserRound, Image, PenLine, Star, Users, X } from 'lucide-react';
+import { Bookmark, CalendarDays, Heart, Check, CircleDashed, CircleUserRound, Image, PenLine, Star, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAtlasAuth } from './AuthState';
 import { useSocial } from './SocialState';
@@ -9,7 +9,7 @@ import { creators, fullHandle, posts, type Creator } from '@/lib/social-catalogu
 import { extractHashtags, hashtagLabel, hashtagUrl, linkifyHashtags, TagText } from '@/lib/hashtags';
 import { CreatorTag } from './CreatorTag';
 import { DesktopCollections } from './CollectionsDesktop';
-import { DesktopCircles, DesktopSaved } from './SavedAndCircles';
+import { DesktopCircles, DesktopLiked, DesktopSaved } from './SavedAndCircles';
 import type { Collection } from '@/lib/collections';
 import { activityLabel, DEFAULT_ACTIVITY_FILTER, profileSections, type ActivityFilter, type ProfileSection } from './profile-sections';
 
@@ -22,6 +22,7 @@ const empty: Record<ProfileSection, { icon: typeof PenLine; title: string; detai
   Media: { icon: Image, title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
   Collections: { icon: Image, title: 'No collections yet', detail: '' },
   Saved: { icon: Bookmark, title: 'Nothing saved yet', detail: 'Posts you save on Fedizen. Each keeps the audience its author chose.' },
+  Liked: { icon: Heart, title: 'No likes yet', detail: 'Posts you like will be here.' },
   Circles: { icon: CircleDashed, title: 'No circles yet', detail: 'Circles group the people you know, like colleagues, friends or locals, so you choose who sees and replies to each post. Circles you make on Fedizen will appear here.' },
 };
 
@@ -123,6 +124,7 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
       </div> : <Empty icon={e.icon} title={e.title} detail={e.detail} />)}
       {section === 'Collections' && <DesktopCollections onOpen={onOpenCollection} />}
       {section === 'Circles' && <DesktopCircles />}
+      {section === 'Liked' && <DesktopLiked />}
       {section === 'Saved' && <DesktopSaved stories={savedPosts.length ? <div className="grid gap-x-6 gap-y-9 border-t border-border pt-8 sm:grid-cols-2"><h3 className="text-[10px] font-semibold uppercase text-muted-foreground sm:col-span-2">Stories saved in Atlas</h3>{savedPosts.map(p => {
         const c = creators.find(x => x.id === p.creatorId);
         return <article key={p.id}>
@@ -133,7 +135,7 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
           <Button variant="ghost" size="sm" className="mt-2 px-0 text-muted-foreground" onClick={() => toggleSave(p.id)}><Bookmark className="fill-accent text-accent" />Remove from saved</Button>
         </article>;
       })}</div> : undefined} />}
-      {!['Featured', 'Collections', 'Saved', 'Circles'].includes(section) && <Empty icon={e.icon} title={e.title} detail={e.detail} />}
+      {!['Featured', 'Collections', 'Saved', 'Liked', 'Circles'].includes(section) && <Empty icon={e.icon} title={e.title} detail={e.detail} />}
     </section>
     <footer className="mt-10 border-t border-border pt-5"><Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { void signOut(); }}>Sign out</Button></footer>
 

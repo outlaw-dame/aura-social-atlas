@@ -1,9 +1,9 @@
 /**
  * Profile tabs, after Mastodon's 2026 profile redesign and Bluesky: Activity (one tab for posts, quote posts,
  * replies and boosts, filtered like Mastodon's Activity dropdown), Featured (Mastodon 4.4: featured hashtags and
- * featured profiles), Media, Collections (Mastodon 4.6), Saved (your Fedizen bookmarks), then Circles (Bonfire's circles of people). No Lists tab: on Fedizen, lists are circles.
+ * featured profiles), Media, Collections (Mastodon 4.6), Saved (your Fedizen bookmarks), Liked (posts you liked; only you see it, as on Mastodon and Bluesky), then Circles (Bonfire's circles of people). No Lists tab: on Fedizen, lists are circles.
  */
-export const profileSections = ['Activity', 'Featured', 'Media', 'Collections', 'Saved', 'Circles'] as const;
+export const profileSections = ['Activity', 'Featured', 'Media', 'Collections', 'Saved', 'Liked', 'Circles'] as const;
 export type ProfileSection = (typeof profileSections)[number];
 
 /** Old tab names still open the right tab (?tab=posts, ?tab=replies, ?tab=feeds, ?tab=lists). */

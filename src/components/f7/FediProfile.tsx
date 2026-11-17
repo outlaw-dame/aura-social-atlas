@@ -1,6 +1,6 @@
 import { openTag } from '@/lib/hashtags';
 import { linkifyPost } from '@/components/social/PostPeople';
-import { Block, BlockTitle, Button, Icon, Link, List, ListItem, Navbar, NavRight, Page, Popup } from 'framework7-react';
+import { Block, BlockTitle, Button, Icon, Link, List, ListItem, Navbar, NavRight, Page, Popup, f7 } from 'framework7-react';
 import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
 import { followLabels } from '@/lib/follow-labels';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
@@ -9,6 +9,8 @@ import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { MobileFilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
+import { useAtlasAuth } from '@/components/social/AuthState';
+import { useModerationActions } from './useModerationActions';
 
 /**
  * Phone: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -33,12 +35,21 @@ function Follow({ p }: { p: FediProfile }) {
   </>;
 }
 
+/** Phone: More (…) in a profile's navbar: Mute / Unmute and Report, for a confirmed handle that isn't yours. */
+function ProfileMore({ p }: { p: FediProfile }) {
+  const { user } = useAtlasAuth();
+  const me = useIsMe(p.acct);
+  const mod = useModerationActions({ name: p.name, acct: p.acct }, !!user && !me && p.acctVerified && p.kind !== 'group');
+  if (!mod.buttons.length) return null;
+  return <Link iconOnly aria-label="More" onClick={() => f7.actions.create({ buttons: [mod.buttons, [{ text: 'Cancel', strong: true }]] }).open()}><Icon ios="f7:ellipsis_circle" md="material:more_vert" /></Link>;
+}
+
 export function FediProfilePopup({ target, onClose }: { target: FediProfileTarget | null; onClose: () => void }) {
   const q = useFediProfile(target);
   const p = q.data?.profile;
   return <Popup opened={!!target} onPopupClosed={onClose} swipeToClose className="atlas-fedi-popup">
     <Page>
-      <Navbar title={p?.name ?? target?.name ?? 'Profile'}><NavRight><Link iconOnly popupClose aria-label="Close profile"><Icon ios="f7:xmark" md="material:close" /></Link></NavRight></Navbar>
+      <Navbar title={p?.name ?? target?.name ?? 'Profile'}><NavRight>{p && <ProfileMore p={p} />}<Link iconOnly popupClose aria-label="Close profile"><Icon ios="f7:xmark" md="material:close" /></Link></NavRight></Navbar>
       {!p ? <Block>{q.isLoading ? 'Loading their profile from their server…' : 'This profile couldn’t be loaded. Their server may be down or not share it publicly.'}</Block> : <>
         <div className="atlas-fedi-header" style={p.header ? { backgroundImage: `url("${p.header.replace(/"/g, '%22')}")` } : undefined} aria-hidden="true" />
         <header className="atlas-fedi-head">

@@ -10,7 +10,9 @@ import { PostActionBar } from '@/components/social/PostActionBar';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useFilterLikeThis } from '@/components/social/useFilterLikeThis';
 import { useIsMe } from '@/components/social/useFediProfile';
-import { useDeletePost, useEditPost } from '@/components/social/useOwnPosts';
+import { useDeletePost, useEditPost, useWhoReacted } from '@/components/social/useOwnPosts';
+import { useModerationActions } from './useModerationActions';
+import { openFediProfile } from '@/lib/fedi-profile';
 import { MAX_CW, MAX_TEXT } from '@/lib/compose-media';
 
 type Save = ReturnType<typeof useSaveToggle>;
@@ -46,15 +48,22 @@ export function MobilePostActions({ post: p, save, reactions, onReply }: { post:
     const ok = await del.remove(p.statusId!);
     f7.toast.create({ text: ok ? 'Post deleted' : del.error ?? 'Couldn’t delete it. Try again.', closeTimeout: 1800 }).open();
   });
+  // Someone else's post: who reacted, mute its author, report it.
+  const [reactors, setReactors] = useState<'like' | 'boost' | null>(null);
+  const other = !!user && !!p.statusId && !mine && !!(p.authorId || p.acct);
+  const mod = useModerationActions({ name: p.author, acct: p.acct, accountId: p.authorId, statusId: p.statusId }, other);
   const more = () => f7.actions.create({ buttons: [[
     { text: typeof navigator !== 'undefined' && 'share' in navigator ? 'Share' : 'Copy link', onClick: async () => { if ((await sharePost(p)) === 'copied') f7.toast.create({ text: 'Link copied', closeTimeout: 1500 }).open(); } },
+    ...(user && p.statusId && p.counts?.likes ? [{ text: 'Liked by…', onClick: () => setReactors('like') }] : []),
+    ...(user && p.statusId && p.counts?.boosts ? [{ text: 'Boosted by…', onClick: () => setReactors('boost') }] : []),
     ...(user && !mine ? [{ text: 'Filter posts like this', onClick: () => void filterLikeThis() }] : []),
     ...(mine ? [{ text: 'Edit', onClick: () => setEditing(true) }, { text: 'Delete', color: 'red', onClick: confirmDelete }] : []),
-  ], [{ text: 'Cancel', strong: true }]] }).open();
+  ], ...(mod.buttons.length ? [mod.buttons] : []), [{ text: 'Cancel', strong: true }]] }).open();
   return <>
     <PostActionBar post={p} save={save} reactions={reactions} onReply={onReply}
       more={<button type="button" className="atlas-act-more" aria-label="More" onClick={more}><Ellipsis aria-hidden="true" /></button>} />
     {editing && <EditSheet statusId={p.statusId!} onClose={() => setEditing(false)} />}
+    {reactors && <ReactorsSheet statusId={p.statusId!} kind={reactors} onClose={() => setReactors(null)} />}
   </>;
 }
 
@@ -112,5 +121,22 @@ function EditSheet({ statusId, onClose }: { statusId: string; onClose: () => voi
       <Button tonal style={{ flex: 1 }} onClick={onClose}>Cancel</Button>
       <Button fill style={{ flex: 1 }} disabled={e.loading || !!e.loadError || (!text.trim() && !cw.trim()) || e.saving} onClick={() => void save()}>{e.saving ? 'Saving…' : 'Save'}</Button>
     </Block>
+  </Sheet>;
+}
+
+/** Phone: who liked or boosted a post; tapping someone opens their profile in Atlas. */
+function ReactorsSheet({ statusId, kind, onClose }: { statusId: string; kind: 'like' | 'boost'; onClose: () => void }) {
+  const w = useWhoReacted(statusId, kind);
+  return <Sheet opened onSheetClosed={onClose} swipeToClose backdrop style={{ height: 'auto', maxHeight: '75vh' }} className="atlas-reply-sheet">
+    <Block><div style={{ fontWeight: 600, fontSize: 17 }}>{kind === 'like' ? 'Liked by' : 'Boosted by'}</div></Block>
+    {w.loading ? <Block>Loading…</Block>
+      : w.error ? <Block><p role="alert" style={{ margin: 0 }}>{w.error}</p></Block>
+      : !w.people.length ? <Block>{kind === 'like' ? 'No likes Fedizen knows of yet.' : 'No boosts Fedizen knows of yet.'}</Block>
+      : <ul className="atlas-reactors">{w.people.map(x => <li key={x.id}>
+          <button type="button" onClick={() => { onClose(); openFediProfile({ actor: x.actor, acct: x.acct, name: x.name }); }}>
+            {x.avatar ? <img src={x.avatar} alt="" width={40} height={40} referrerPolicy="no-referrer" className="atlas-reactor-face" /> : <span aria-hidden="true" className="atlas-reactor-face atlas-boost-initial">{x.name.charAt(0)}</span>}
+            <span><b>{x.name}</b><small>{x.handle}</small></span>
+          </button>
+        </li>)}</ul>}
   </Sheet>;
 }

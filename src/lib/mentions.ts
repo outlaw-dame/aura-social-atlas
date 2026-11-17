@@ -50,3 +50,17 @@ export function mergeSuggestions<P extends { handle: string }>(query: string, lo
   const seen = new Set<string>();
   return [...local.filter(matches), ...found].filter(p => { const k = p.handle.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, max);
 }
+
+/** What's being typed after "#" at the caret (at least one letter), like Mastodon's composer. Null otherwise — and
+ *  inside a URL fragment ("page#top") or a word, a "#" isn't a hashtag. */
+export function hashtagQueryAt(text: string, caret: number): { start: number; query: string } | null {
+  const m = /(^|[^\p{L}\p{N}_&#/])#([\p{L}\p{N}_]{1,100})$/u.exec(text.slice(0, caret));
+  return m ? { start: caret - m[2].length - 1, query: m[2] } : null;
+}
+
+/** Replaces the "#query" at `start..caret` with "#tag " (the rest of a half-typed word goes too). */
+export function insertHashtag(text: string, start: number, caret: number, tag: string): { text: string; caret: number } {
+  const token = `#${tag.replace(/^#/, '')} `;
+  const after = text.slice(caret).replace(/^[\p{L}\p{N}_]*/u, '').replace(/^ /, '');
+  return { text: text.slice(0, start) + token + after, caret: start + token.length };
+}

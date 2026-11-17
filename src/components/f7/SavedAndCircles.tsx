@@ -7,6 +7,7 @@ import { openTag } from '@/lib/hashtags';
 import { BoostedBy, canOpen, linkifyPost, openAuthor } from '@/components/social/PostPeople';
 import { ArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
+import { useLikedPosts } from '@/components/social/useOwnPosts';
 import { LIBRARY_PROBLEM, useCircleActions, useCircleMembers, useFedizenCircles, useFedizenSaved, useSaveToggle } from '@/components/social/useFedizenLibrary';
 
 /**
@@ -52,6 +53,32 @@ export function MobileSaved({ stories }: { stories?: React.ReactNode }) {
       <p>Save posts from your Fedizen feed, and they’ll be here.</p>
     </div>}
     {stories}
+  </div>;
+}
+
+/** Profile → Liked on the phone: posts you liked on Fedizen. Only you see this tab. */
+export function MobileLiked() {
+  const q = useLikedPosts();
+  const save = useSaveToggle();
+  return <div className="atlas-library">
+    <p className="atlas-library-note">Only you can see what you’ve liked.</p>
+    {q.loading && <p className="atlas-library-note">Loading posts you liked…</p>}
+    {q.error && <p role="alert" className="atlas-library-note">{q.error}</p>}
+    {q.posts.map(p => <article key={p.id} className="atlas-saved-post">
+      <BoostedBy post={p} className="atlas-saved-boost" />
+      <div className="atlas-saved-head">{canOpen(p)
+        ? <button type="button" className="atlas-author-button" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} />}<span><b>{p.author}</b> <span>{p.handle} · {when(p.date)}</span></span></button>
+        : <>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} />}<span><b>{p.author}</b> <span>{p.handle} · {when(p.date)}</span></span></>}</div>
+      {p.paragraphs.map((t, i) => <p key={i}>{linkifyPost(t, p.mentions, openTag)}</p>)}
+      {p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-saved-image" src={p.image} alt="" loading="lazy" />}
+      <ArticleCard article={p.article} />
+      <div className="atlas-saved-actions"><SaveLink post={p} save={save} /><Link external target="_blank" href={p.url}>Open</Link></div>
+    </article>)}
+    {!q.loading && !q.error && !q.posts.length && <div className="atlas-profile-empty">
+      <div className="atlas-profile-empty-icon"><Icon ios="f7:heart" md="material:favorite_border" /></div>
+      <h2>No likes yet</h2>
+      <p>Posts you like will be here.</p>
+    </div>}
   </div>;
 }
 

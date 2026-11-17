@@ -11,6 +11,7 @@ export function PostSearchResults({ q }: { q: string }) {
   if (!s.available || q.trim().length < 2) return null;
   return <section aria-label={`Posts on Fedizen for ${q}`} className="mb-10">
     <h2 className="mb-4 font-serif text-2xl italic">Posts on Fedizen</h2>
+    {s.related.length > 0 && <p className="-mt-2 mb-4 text-xs text-muted-foreground">Also searched, as suggested by your AI model: {s.related.map(t => `“${t}”`).join(', ')}</p>}
     {s.loading && !s.posts.length && <p className="text-sm text-muted-foreground">Searching posts…</p>}
     {s.error && <p role="alert" className="text-sm text-muted-foreground">{s.error}</p>}
     {!s.loading && !s.error && !s.posts.length && <p className="text-sm text-muted-foreground">No posts on Fedizen match “{q}”.</p>}

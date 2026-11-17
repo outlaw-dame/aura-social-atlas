@@ -12,6 +12,7 @@ export function MobilePostSearch({ q }: { q: string }) {
   if (!s.available || term.length < 2) return null;
   return <>
     <BlockTitle>Posts on Fedizen</BlockTitle>
+    {s.related.length > 0 && <Block style={{ marginTop: 0, fontSize: 13, opacity: 0.7 }}>Also searched, as suggested by your AI model: {s.related.map(t => `“${t}”`).join(', ')}</Block>}
     {s.loading && !s.posts.length && <Block>Searching posts…</Block>}
     {s.error && <Block><p role="alert" style={{ margin: 0 }}>{s.error}</p></Block>}
     {!s.loading && !s.error && !s.posts.length && <Block>No posts on Fedizen match “{term}”.</Block>}

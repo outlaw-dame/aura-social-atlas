@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Bookmark, CircleDashed, Minus, Pin, PinOff, Plus, UsersRound } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Bookmark, CircleDashed, Heart, Minus, Pin, PinOff, Plus, UsersRound } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { BoostedBy, canOpen, linkifyPost, openAuthor } from './PostPeople';
 import { ProfileHoverCard } from './ProfileHoverCard';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
+import { useLikedPosts } from './useOwnPosts';
 import { LIBRARY_PROBLEM, useCircleActions, useCircleMembers, useFedizenCircles, useFedizenSaved, useSaveToggle } from './useFedizenLibrary';
 
 /**
@@ -64,6 +65,23 @@ export function DesktopSaved({ stories }: { stories?: React.ReactNode }) {
       <p className="mx-auto mt-3 max-w-sm text-sm text-muted-foreground">Save posts from your Fedizen feed, and they’ll be here.</p>
     </div>}
     {stories}
+  </div>;
+}
+
+/** Profile → Liked: posts you liked on Fedizen, newest like first. Only you see this tab. */
+export function DesktopLiked() {
+  const q = useLikedPosts();
+  const save = useSaveToggle();
+  return <div className="space-y-6">
+    <p className="text-xs text-muted-foreground">Only you can see what you’ve liked.</p>
+    {q.loading && <p className="text-sm text-muted-foreground">Loading posts you liked…</p>}
+    {q.error && <p role="alert" className="text-sm text-muted-foreground">{q.error}</p>}
+    {q.posts.map(p => <PostRow key={p.id} p={p} save={save} />)}
+    {!q.loading && !q.error && !q.posts.length && <div className="py-12 text-center">
+      <Heart className="mx-auto mb-4 size-8 text-muted-foreground" strokeWidth={1.5} />
+      <h3 className="font-serif text-2xl">No likes yet</h3>
+      <p className="mx-auto mt-3 max-w-sm text-sm text-muted-foreground">Posts you like will be here.</p>
+    </div>}
   </div>;
 }
 
