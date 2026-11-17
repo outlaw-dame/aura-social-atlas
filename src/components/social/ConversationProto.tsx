@@ -6,6 +6,7 @@ import type { FedizenPost } from '@/lib/fedizen-feed';
 import { fullAcct } from '@/lib/fedizen-feed';
 import { shortAgo } from '@/lib/feed-types';
 import { buildThread, type Thread } from '@/lib/thread';
+import type { FoldStyle } from '@/lib/folding';
 import { allPosts, branchesOf, chatItems, latestTime, participantsOf, readMarks, rootOf, subjectOf, unreadIn, writeMark, type ProtoStyle, type ReplyMode } from '@/lib/conversation';
 import { getFedizenStatus, getFedizenThread } from '@/lib/fedizen.functions';
 import { useSaveToggle } from './useFedizenLibrary';
@@ -33,6 +34,7 @@ function useStored<T extends string>(k: string, ok: readonly T[], fallback: T): 
 }
 export const useProtoStyle = () => useStored<ProtoStyle>('atlas.proto.style', ['a', 'b'], 'a');
 export const useReplyMode = () => useStored<ReplyMode>('atlas.proto.replyMode', ['nested', 'flat'], 'nested');
+export const useFoldStyle = () => useStored<FoldStyle>('atlas.proto.folding', ['phanpy', 'bonfire'], 'phanpy');
 
 const STYLES: { id: ProtoStyle; label: string; note: string }[] = [
   { id: 'a', label: 'A · Bonfire + Phanpy', note: 'A thread: the post in the middle, replies nested or flat, as Bonfire and Phanpy read one.' },
@@ -53,6 +55,13 @@ export function ProtoSwitch({ style, setStyle }: { style: ProtoStyle; setStyle: 
 export function ReplyModeSwitch({ mode, setMode }: { mode: ReplyMode; setMode: (m: ReplyMode) => void }) {
   return <div role="radiogroup" aria-label="Show replies" className="atlas-proto-switch atlas-proto-small">
     {(['nested', 'flat'] as const).map(m => <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setMode(m)} className={mode === m ? 'is-on' : undefined}>{m === 'nested' ? 'Nested' : 'Flat'}</button>)}
+  </div>;
+}
+
+/** A, nested: whose way of hiding replies to use (folding.ts). */
+export function FoldSwitch({ style, setStyle }: { style: FoldStyle; setStyle: (s: FoldStyle) => void }) {
+  return <div role="radiogroup" aria-label="Hide replies the way" className="atlas-proto-switch atlas-proto-small">
+    {(['phanpy', 'bonfire'] as const).map(f => <button key={f} type="button" role="radio" aria-checked={style === f} onClick={() => setStyle(f)} className={style === f ? 'is-on' : undefined}>{f === 'phanpy' ? 'Phanpy folds' : 'Bonfire folds'}</button>)}
   </div>;
 }
 

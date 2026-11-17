@@ -1208,7 +1208,7 @@ ruby rt { font-size: .6em; }
 .atlas-ph-link { color: inherit; text-decoration: underline; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; width: auto; }
 .atlas-ph-link svg { width: 12px; height: 12px; }
 .atlas-ph-more, .atlas-ph-continue { display: inline-flex; align-items: center; gap: 4px; margin: 10px 0; padding: 7px 14px; border-radius: 999px; border: 1px solid color-mix(in oklab, currentColor 16%, transparent); background: none; color: inherit; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; width: auto; }
-.atlas-ph-continue { margin: 2px 0 8px calc(var(--av) + var(--av-gap)); color: var(--branch, inherit); border-color: color-mix(in oklab, var(--branch, currentColor) 45%, transparent); }
+.atlas-ph-continue { margin: 2px 0 8px calc(var(--av) / 2 + var(--step) + 14px); color: var(--branch, inherit); border-color: color-mix(in oklab, var(--branch, currentColor) 45%, transparent); }
 .atlas-ph-continue svg, .atlas-ph-more svg { width: 15px; height: 15px; }
 /* Replies: each level indented one step, its line in the branch colour, and an elbow curving into each avatar. */
 .atlas-ph-replies > .atlas-ph-li.is-reply > .atlas-ph-row, .atlas-ph-flat > .atlas-ph-li > .atlas-ph-row { padding-inline-start: calc(8px + var(--step)); }
@@ -1216,10 +1216,10 @@ ruby rt { font-size: .6em; }
 .atlas-ph-nested { margin-inline-start: calc(var(--av) / 2 + var(--step) - 1px); padding-inline-start: 0; border-inline-start: var(--atlas-line-width) solid color-mix(in oklab, var(--branch, var(--line)) 70%, transparent); }
 .atlas-ph-nested .atlas-ph-li.is-reply::after { inset-inline-start: calc(-1 * var(--atlas-line-width)); }
 /* A top-level reply with replies under it: its own line runs from its avatar down to them. */
-.atlas-ph-replies > .atlas-ph-li.is-reply:has(> .atlas-ph-nested, > .atlas-ph-fold)::before { content: ''; position: absolute; inset-inline-start: calc(var(--step) + var(--av) / 2 + 8px - 1px - var(--atlas-line-width) / 2); top: calc(14px + var(--av)); height: 18px; width: var(--atlas-line-width); background: color-mix(in oklab, var(--branch, var(--line)) 70%, transparent); }
+.atlas-ph-replies > .atlas-ph-li.is-reply:has(> .atlas-ph-nested, > .atlas-ph-fold, > .atlas-bf-summary, > .atlas-ph-continue)::before { content: ''; position: absolute; inset-inline-start: calc(var(--step) + var(--av) / 2 + 8px - 1px - var(--atlas-line-width) / 2); top: calc(14px + var(--av)); height: 18px; width: var(--atlas-line-width); background: color-mix(in oklab, var(--branch, var(--line)) 70%, transparent); }
 /* Folded replies: Phanpy's pill — faces (tilted when open), the count, a chevron. */
 .atlas-ph-fold { margin-inline-start: calc(var(--av) / 2 + var(--step) - 1px); padding-inline-start: calc(var(--step) - 4px); border-inline-start: var(--atlas-line-width) dashed color-mix(in oklab, var(--branch, var(--line)) 60%, transparent); }
-.atlas-ph-fold > summary { display: inline-flex; align-items: center; gap: 8px; margin: 2px 0 8px; padding: 7px 10px; border-radius: 8px; list-style: none; cursor: pointer; user-select: none; font-size: 12px; text-transform: uppercase; letter-spacing: .02em; background: color-mix(in oklab, var(--branch, currentColor) 12%, transparent); }
+.atlas-ph-fold > summary { position: relative; margin-inline-end: 52px; display: inline-flex; align-items: center; gap: 8px; margin: 2px 0 8px; padding: 7px 10px; border-radius: 8px; list-style: none; cursor: pointer; user-select: none; font-size: 12px; text-transform: uppercase; letter-spacing: .02em; background: color-mix(in oklab, var(--branch, currentColor) 12%, transparent); }
 .atlas-ph-fold > summary::-webkit-details-marker { display: none; }
 .atlas-ph-fold > summary b { font-weight: 650; }
 .atlas-ph-fold > summary:focus-visible { outline: 2px solid var(--branch, var(--accent)); outline-offset: 2px; }
@@ -1234,6 +1234,33 @@ ruby rt { font-size: .6em; }
 .atlas-ph-chevron { width: 14px; height: 14px; transition: transform .3s ease; }
 .atlas-ph-fold[open] .atlas-ph-chevron { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) { .atlas-ph-faces > *, .atlas-ph-chevron, .atlas-ph-row { transition: none; } }
+/* Phanpy: "»" opens the post above a closed set as its own conversation, a tab on the pill's end. */
+.atlas-ph-parent { position: absolute; inset-inline-end: 0; top: 0; bottom: 0; transform: translateX(100%); display: flex; align-items: center; padding: 0 14px; border: 0; border-radius: 8px; font: inherit; font-size: 16px; font-weight: 700; color: var(--accent, var(--f7-theme-color)); background: color-mix(in oklab, var(--accent, var(--f7-theme-color)) 12%, transparent); cursor: pointer; width: auto; }
+.atlas-ph-parent:dir(rtl) { transform: translateX(-100%); }
+.atlas-ph-parent:focus-visible { outline: 2px solid var(--accent, var(--f7-theme-color)); outline-offset: 2px; }
+/* Phanpy: a reply whose replies aren't loaded here shows how many it has. */
+.atlas-ph-unloaded { display: flex; align-items: center; gap: 4px; margin: -2px 0 8px calc(var(--step) + var(--av) + var(--av-gap)); font-size: 12px; opacity: .6; }
+.atlas-ph-unloaded svg { width: 14px; height: 14px; }
+/* Phanpy: no depth limit; replies under a 4th-level post scroll sideways, fading at the start once they nest further. */
+.atlas-ph-nested[data-scrolls] { overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
+.atlas-ph-nested[data-scrolls]:has(.atlas-ph-nested) { mask-image: linear-gradient(to left, transparent, black 32px); }
+.atlas-ph-nested[data-scrolls]:dir(rtl):has(.atlas-ph-nested) { mask-image: linear-gradient(to right, transparent, black 32px); }
+.atlas-ph-nested[data-scrolls] .atlas-ph-nested .atlas-ph-row { min-width: min(20em, 80vw); }
+/* Bonfire: indentation stops at the 3rd level; deeper replies line up under it. */
+.atlas-ph-nested.is-capped { margin-inline-start: 0; border-inline-start: 0; }
+.atlas-ph-nested.is-capped > .atlas-ph-li.is-reply::after { display: none; }
+/* Bonfire: − / + where a reply's line meets its replies, to fold them by hand. */
+.atlas-bf-toggle { position: absolute; z-index: 3; inset-inline-start: calc(var(--step) + var(--av) / 2); top: calc(14px + var(--av) + 6px); transform: translateX(-50%); display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid color-mix(in oklab, var(--branch, currentColor) 45%, transparent); background: var(--background, var(--f7-page-bg-color, #fff)); color: var(--branch, inherit); font: inherit; font-size: 13px; font-weight: 700; line-height: 1; cursor: pointer; }
+.atlas-bf-toggle::before { content: ''; position: absolute; inset: -6px; }
+.atlas-bf-toggle:hover { border-color: var(--branch, currentColor); }
+.atlas-bf-toggle:focus-visible { outline: 2px solid var(--branch, var(--accent)); outline-offset: 2px; }
+.atlas-ph-li:has(> .atlas-bf-toggle) > .atlas-ph-row { padding-bottom: 24px; }
+/* Bonfire: the summary row of a reply it folded, a rounded pill of faces, the count and a chevron (no capitals). */
+.atlas-bf-summary { margin: 0 0 8px calc(var(--av) / 2 + var(--step) + 14px); }
+.atlas-bf-summary > button { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 6px; border: 0; border-radius: 999px; background: color-mix(in oklab, var(--branch, currentColor) 10%, transparent); color: inherit; font: inherit; font-size: 13px; cursor: pointer; width: auto; }
+.atlas-bf-summary > button:hover { background: color-mix(in oklab, var(--branch, currentColor) 18%, transparent); }
+.atlas-bf-summary > button > span:nth-child(2) { opacity: .75; }
+.atlas-bf-summary > button:focus-visible { outline: 2px solid var(--branch, var(--accent)); outline-offset: 2px; }
 /* Phone: a little tighter. */
 .atlas-thread-page .atlas-ph { --av: 36px; --av-gap: 10px; --step: 14px; }
 /* B picks up the branch colours: a stripe beside each message, and its "Replying to" chip. */

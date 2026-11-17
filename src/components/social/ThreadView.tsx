@@ -1,7 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
-import { MAX_DEPTH } from '@/lib/thread';
 import { rememberSeed } from '@/lib/open-post';
 import { Button } from '@/components/ui/button';
 import { PostContent, useFeedPostActions } from './FeedPostCard';
@@ -40,7 +39,7 @@ export function ThreadView({ statusId, seed }: { statusId: string; seed?: Fedize
           ? <ChatConversation thread={t.thread} actions={actions} loaded={!t.loading} Gate={FilterGate} Content={PostContent} onOpenInbox={() => void navigate({ to: '/conversations' })}
               onOpenPost={open} />
           : <ThreadA thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} sort={t.sort} setSort={t.setSort}
-              replyMode={replyMode} setReplyMode={setReplyMode} maxDepth={MAX_DEPTH.desktop} Gate={FilterGate} Content={PostContent} onOpenPost={open} />}
+              replyMode={replyMode} setReplyMode={setReplyMode} Gate={FilterGate} Content={PostContent} onOpenPost={open} />}
       </FilterPlaceProvider>}
     {actions.dialog}
   </main>;

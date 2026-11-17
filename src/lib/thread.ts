@@ -10,7 +10,7 @@ import type { FedizenPost } from './fedizen-feed';
  *  - Phanpy and Bluesky: the author's self-thread continues straight after the post, unindented, before others' replies;
  *    when the ancestors are all the author's own, they read as one thread.
  *  - Bluesky: replies sorted by Top, Oldest or Newest; the author's and the reader's own replies first.
- *  - Bonfire: nesting stops at a set depth (thread_default_max_depth, 3) and deeper replies open as their own thread.
+ *  - How replies are folded and how deep they nest follow Phanpy or Bonfire, the reader's choice (folding.ts).
  */
 
 export type ReplySort = 'oldest' | 'newest' | 'top';
@@ -118,25 +118,5 @@ function sortRoots(nodes: ThreadNode[], sort: ReplySort, focus: FedizenPost, isM
     || (sort === 'newest' ? time(b.post) - time(a.post) : time(a.post) - time(b.post)));
 }
 
-/** Sub-threads start folded once a conversation is this large (Phanpy opens everything under 10). */
-export const FOLD_ABOVE = 10;
 /** Replies shown before "Show more replies" (Phanpy's page of 40). */
 export const PAGE = 40;
-/** Levels drawn nested before "Continue this thread" opens the rest (Bonfire's default is 3). */
-export const MAX_DEPTH = { phone: 3, desktop: 5 } as const;
-
-/** The people in a folded sub-thread, for its summary: the first few distinct faces. */
-export function facesIn(n: ThreadNode, max = 3): FedizenPost[] {
-  const out: FedizenPost[] = [];
-  const seen = new Set<string>();
-  const walk = (x: ThreadNode) => {
-    for (const r of x.replies) {
-      if (out.length >= max) return;
-      const h = r.post.handle.toLowerCase();
-      if (!seen.has(h)) { seen.add(h); out.push(r.post); }
-      walk(r);
-    }
-  };
-  walk(n);
-  return out;
-}
