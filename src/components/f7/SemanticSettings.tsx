@@ -4,7 +4,7 @@ import { localSupported, removeLocalModel } from '@/lib/semantic/local-embedder'
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useAiRunner } from '@/components/social/useIntelligence';
 import { setEngine, useEngine, useLocalModel } from '@/components/social/useSemanticIndex';
-import { SEMANTIC_COPY, localStatusText, useIndexCount } from '@/components/social/SemanticSettings';
+import { SEMANTIC_COPY, localStatusText, useIndexCount, useStartLocalHere } from '@/components/social/SemanticSettings';
 
 /** Phone: Settings → Intelligence → Search by meaning (the desktop SemanticSettings, as a list). */
 export function MobileSemanticSettings() {
@@ -13,6 +13,7 @@ export function MobileSemanticSettings() {
   const local = useLocalModel();
   const runner = useAiRunner();
   const [count, recount] = useIndexCount();
+  useStartLocalHere(engine);
   if (!user) return null;
   const provider = runner.embeddingProvider ? PROVIDERS[runner.embeddingProvider] : null;
   const status = engine === 'device' ? localStatusText(local) : null;

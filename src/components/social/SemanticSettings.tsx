@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PROVIDERS } from '@/lib/intelligence/providers';
-import { localSupported, removeLocalModel } from '@/lib/semantic/local-embedder';
+import { localSupported, removeLocalModel, startLocal } from '@/lib/semantic/local-embedder';
 import { useAtlasAuth } from './AuthState';
 import { setEngine, useEngine, useLocalModel, useSemantic, type Engine } from './useSemanticIndex';
 import { useAiRunner } from './useIntelligence';
@@ -38,6 +38,11 @@ export function useIndexCount(): [number | null, () => void] {
   return [n, () => setTick(t => t + 1)];
 }
 
+/** Settings may be open where no SemanticIndexer is mounted: choosing the device model starts (downloads) it here too. */
+export function useStartLocalHere(engine: Engine | null) {
+  useEffect(() => { if (engine === 'device' && localSupported()) startLocal(); }, [engine]);
+}
+
 /** Desktop: Settings → Intelligence → Search by meaning. */
 export function SemanticSettings() {
   const { user } = useAtlasAuth();
@@ -45,6 +50,7 @@ export function SemanticSettings() {
   const local = useLocalModel();
   const runner = useAiRunner();
   const [count, recount] = useIndexCount();
+  useStartLocalHere(engine);
   if (!user) return null;
   const provider = runner.embeddingProvider ? PROVIDERS[runner.embeddingProvider] : null;
   const pick = (e: Engine | null) => setEngine(user.id, e);
