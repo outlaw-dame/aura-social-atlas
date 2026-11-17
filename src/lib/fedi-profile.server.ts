@@ -1,6 +1,7 @@
 import { actorFromWebfinger, isPublicHttpsUrl, normalizeHost, parseHandle } from './article-author';
 import { PODCAST_ACCEPT, dohLookup, fetchActor, safeFetch, type Lookup } from './article-author.server';
-import { claimedAcct, podcastDetails, postsFromOutbox, profileFromActor, type FediProfile, type FediProfileTarget } from './fedi-profile';
+import { claimedAcct, cleanText, podcastDetails, postsFromOutbox, profileFromActor, type FediProfile, type FediProfileTarget } from './fedi-profile';
+import { htmlToParagraphs } from './spotlight';
 
 /**
  * Reads a fediverse account for Atlas's own profile view: the actor from its server (never a copy someone else
@@ -59,7 +60,14 @@ async function build(target: FediProfileTarget, remaining: () => number, f: Fetc
     remember(id, null);
   }
   const base = actor && profileFromActor(actor);
-  if (!actor || !actorId || !base) { if (actorId) remember(actorId, null); return null; }
+  if (!actor || !actorId || !base) {
+    // Many Mastodon servers answer actor documents only to signed requests ("authorized fetch"), which Atlas doesn't
+    // make. Their public Mastodon API still answers, from the same origin server: read the profile there.
+    const viaApi = await profileFromMastodonApi(target, f, l).catch(() => null);
+    if (viaApi) { remember(viaApi.actor, viaApi); if (target.actor && target.actor !== viaApi.actor) remember(target.actor, viaApi); return viaApi; }
+    if (actorId) remember(actorId, null);
+    return null;
+  }
   const id = base.actor;
   const link = (k: string) => { const v = actor[k]; const u = typeof v === 'string' ? v : isObj(v) ? String(v.id ?? '') : ''; return isPublicHttpsUrl(u) && sameHost(u, id) ? u : undefined; };
 
@@ -119,6 +127,79 @@ export async function bannerFromMastodonApi(actor: Record<string, unknown>, id: 
   const same = (typeof a.id === 'string' && a.id === last) || a.uri === id || a.url === id;
   const header = typeof a.header === 'string' ? a.header : undefined;
   return same && header && isPublicHttpsUrl(header) && header.length <= 2048 && !/\/missing\.png$/.test(header) ? header : undefined;
+}
+
+type MastoAccount = {
+  id?: unknown; username?: unknown; acct?: unknown; display_name?: unknown; url?: unknown; uri?: unknown; avatar?: unknown; header?: unknown;
+  note?: unknown; fields?: unknown; created_at?: unknown; followers_count?: unknown; following_count?: unknown; statuses_count?: unknown;
+  bot?: unknown; group?: unknown; locked?: unknown;
+};
+type MastoStatus = {
+  id?: unknown; url?: unknown; uri?: unknown; created_at?: unknown; content?: unknown; spoiler_text?: unknown; sensitive?: unknown;
+  visibility?: unknown; reblog?: unknown; media_attachments?: { type?: unknown; preview_url?: unknown }[];
+};
+const s = (v: unknown) => (typeof v === 'string' ? v : undefined);
+const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : undefined);
+const picture = (v: unknown) => { const u = s(v); return u && isPublicHttpsUrl(u) && u.length <= 2048 && !/\/missing\.png$/.test(u) ? u : undefined; };
+
+/**
+ * A profile from its own server's public Mastodon API (`/api/v1/accounts/lookup`, then its public posts), for servers
+ * that won't hand an unsigned request the actor document. Only the server the handle (or actor) names is asked, and
+ * an account it returns must be the one asked for: its uri/url is the actor we were given, or its handle is the one
+ * we asked about. The handle counts as verified only if WebFinger agrees, as for any profile.
+ */
+export async function profileFromMastodonApi(target: FediProfileTarget, f: FetchLike, l: Lookup): Promise<FediProfile | null> {
+  const handle = parseHandle(target.acct);
+  let host = handle?.split('@')[1], user = handle?.split('@')[0];
+  if (!host && isPublicHttpsUrl(target.actor)) {
+    const u = new URL(target.actor);
+    const m = /^\/(?:users|@)\/?([A-Za-z0-9_.-]{1,64})\/?$/.exec(u.pathname);
+    if (m) { host = u.host; user = m[1]; }
+  }
+  if (!host || !user) return null;
+  const tryHosts = [host];
+  // A handle's domain may delegate to another server (example.com → social.example.com): ask the actor's host too.
+  if (isPublicHttpsUrl(target.actor) && new URL(target.actor).host !== host) tryHosts.push(new URL(target.actor).host);
+  for (const h of tryHosts) {
+    const a = await getJson(`https://${h}/api/v1/accounts/lookup?acct=${encodeURIComponent(user)}`, 'application/json', f, l) as MastoAccount | null;
+    if (!isObj(a) || !s(a.id)) continue;
+    const actor = s(a.uri) && isPublicHttpsUrl(s(a.uri)) ? s(a.uri)! : s(a.url) && isPublicHttpsUrl(s(a.url)) ? s(a.url)! : undefined;
+    if (!actor || new URL(actor).host !== h) continue;
+    const sameActor = !target.actor || target.actor === actor || target.actor === s(a.url);
+    const sameUser = (s(a.username) ?? '').toLowerCase() === user.toLowerCase();
+    if (!sameActor || !sameUser) continue;
+    const acct = handle ?? `${user}@${h}`;
+    const name = cleanText(s(a.display_name) ?? '', 80) || cleanText(s(a.username) ?? '', 64);
+    const created = s(a.created_at);
+    const fields = (Array.isArray(a.fields) ? a.fields : []).filter(isObj)
+      .map(x => ({ name: cleanText(s(x.name) ?? '', 60), value: cleanText(htmlToParagraphs(s(x.value) ?? '').join(' '), 200) }))
+      .filter(x => x.name && x.value).slice(0, 8);
+    const [verified, statuses] = await Promise.all([
+      webfingerActor(acct, f, l).then(id => id === actor).catch(() => false),
+      getJson(`https://${h}/api/v1/accounts/${encodeURIComponent(s(a.id)!)}/statuses?limit=10&exclude_reblogs=true`, 'application/json', f, l).catch(() => null),
+    ]);
+    const posts = (Array.isArray(statuses) ? statuses as MastoStatus[] : []).filter(isObj)
+      .filter(p => !p.reblog && (p.visibility === 'public' || p.visibility === 'unlisted'))
+      .flatMap(p => {
+        const url = s(p.url) ?? s(p.uri);
+        if (!s(p.id) || !url || !isPublicHttpsUrl(url)) return [];
+        const paragraphs = htmlToParagraphs(s(p.content) ?? '').map(t => cleanText(t, 1200)).filter(Boolean);
+        const image = ((Array.isArray(p.media_attachments) ? p.media_attachments : []) as { type?: unknown; preview_url?: unknown }[]).filter(m => m.type === 'image').map(m => picture(m.preview_url)).find(Boolean);
+        const cw = cleanText(s(p.spoiler_text) ?? '', 300);
+        if (!paragraphs.length && !image) return [];
+        return [{ id: s(p.id)!, url, ...(s(p.created_at) ? { date: s(p.created_at) } : {}), paragraphs, ...(cw ? { cw } : {}), ...(image ? { image } : {}), ...(p.sensitive === true && image ? { sensitive: true } : {}) }];
+      }).slice(0, 10);
+    return {
+      actor, acct: `@${acct}`, acctVerified: verified, url: s(a.url) && isPublicHttpsUrl(s(a.url)) ? s(a.url)! : actor, host: normalizeHost(h), name: name || user,
+      ...(picture(a.avatar) ? { avatar: picture(a.avatar) } : {}), ...(picture(a.header) ? { header: picture(a.header) } : {}),
+      bio: htmlToParagraphs(s(a.note) ?? '').map(t => cleanText(t, 600)).filter(Boolean).slice(0, 8),
+      fields, ...(created && !Number.isNaN(Date.parse(created)) ? { joined: created } : {}),
+      followers: n(a.followers_count), following: n(a.following_count), postCount: n(a.statuses_count),
+      kind: a.group === true ? 'group' : a.bot === true ? 'bot' : 'person', locked: a.locked === true,
+      posts, ...(Array.isArray(statuses) ? {} : { postsHidden: true }),
+    };
+  }
+  return null;
 }
 
 async function withReferencedObjects(page: Record<string, unknown>, actorId: string, f: FetchLike, l: Lookup): Promise<Record<string, unknown>> {

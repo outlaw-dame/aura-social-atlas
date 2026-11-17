@@ -178,3 +178,31 @@ describe("Banners Bonfire doesn't federate", () => {
     expect(await bannerFromMastodonApi({ preferredUsername: "damon" }, ID, missing.fetchImpl, dns)).toBeUndefined();
   });
 });
+
+describe("Servers that answer actors only to signed requests", () => {
+  // Mastodon with AUTHORIZED_FETCH: the actor document is 401 without a signature; its public API still answers.
+  const ACTOR = "https://m.ai6yr.org/users/ai6yr";
+  const routes = (account: Record<string, unknown>) => net({
+    [ACTOR]: { status: 401, body: "unauthorized" },
+    "https://m.ai6yr.org/.well-known/webfinger?resource=acct%3Aai6yr%40m.ai6yr.org": { type: "application/jrd+json", body: { links: [{ rel: "self", type: "application/activity+json", href: ACTOR }] } },
+    "https://m.ai6yr.org/api/v1/accounts/lookup?acct=ai6yr": { type: "application/json", body: account },
+    "https://m.ai6yr.org/api/v1/accounts/109/statuses?limit=10&exclude_reblogs=true": { type: "application/json", body: [
+      { id: "1", url: "https://m.ai6yr.org/@ai6yr/1", visibility: "public", content: "<p>Hello <b>there</b></p>", created_at: "2026-11-16T00:00:00Z" },
+      { id: "2", url: "https://m.ai6yr.org/@ai6yr/2", visibility: "private", content: "<p>secret</p>" },
+    ] },
+  });
+  const account = { id: "109", username: "ai6yr", acct: "ai6yr", display_name: "AI6YR Ben", uri: ACTOR, url: "https://m.ai6yr.org/@ai6yr",
+    avatar: "https://m.ai6yr.org/a.png", header: "https://m.ai6yr.org/headers/original/missing.png", note: "<p>Ham radio</p>",
+    fields: [{ name: "Site", value: '<a href="https://ai6yr.org">ai6yr.org</a>' }], followers_count: 1200, following_count: 300, statuses_count: 9000, locked: false, bot: false };
+  test("reads the profile from the origin's public API", async () => {
+    const { fetchImpl } = routes(account);
+    const p = await loadFediProfile({ actor: ACTOR, acct: "ai6yr@m.ai6yr.org" }, 4000, fetchImpl, dns);
+    expect(p).toMatchObject({ actor: ACTOR, acct: "@ai6yr@m.ai6yr.org", acctVerified: true, name: "AI6YR Ben", avatar: "https://m.ai6yr.org/a.png", bio: ["Ham radio"], fields: [{ name: "Site", value: "ai6yr.org" }], followers: 1200 });
+    expect(p?.header).toBeUndefined();
+    expect(p?.posts.map(x => x.paragraphs)).toEqual([["Hello there"]]);
+  });
+  test("refuses an account that isn't the one asked for", async () => {
+    const { fetchImpl } = routes({ ...account, uri: "https://m.ai6yr.org/users/someoneelse", username: "someoneelse" });
+    expect(await loadFediProfile({ actor: ACTOR, acct: "ai6yr@m.ai6yr.org" }, 4000, fetchImpl, dns)).toBeNull();
+  });
+});
