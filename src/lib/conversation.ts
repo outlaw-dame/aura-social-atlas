@@ -50,6 +50,7 @@ export function subjectOf(root: FedizenPost, max = 80): string {
 export function participantsOf(posts: FedizenPost[]): { post: FedizenPost; count: number }[] {
   const by = new Map<string, { post: FedizenPost; count: number }>();
   for (const p of posts) {
+    if (p.tombstone) continue;
     const h = p.handle.toLowerCase();
     const e = by.get(h);
     if (e) e.count++; else by.set(h, { post: p, count: 1 });

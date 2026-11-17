@@ -28,6 +28,9 @@ const deleted = (() => {
     add: (id: string) => { ids = new Set(ids).add(id); listeners.forEach(l => l()); },
   };
 })();
+/** The posts deleted in this session, as a store (useSyncExternalStore): open conversations show placeholders. */
+export const deletedPosts = { subscribe: deleted.subscribe, snapshot: deleted.snapshot };
+
 /** Marks a post deleted everywhere in this session (its author deleted it: from live updates). */
 export const markDeleted = (statusId: string) => deleted.add(statusId);
 

@@ -9,7 +9,7 @@ import { isPostClick } from '@/lib/open-post';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { shortAgo } from '@/lib/feed-types';
 import { PostActionBar } from './PostActionBar';
-import { Face, FoldSwitch, ParticipantsStrip, ReplyModeSwitch, useFoldStyle, useIsMePost, useMyAcct } from './ConversationProto';
+import { Face, FoldSwitch, NewArrivals, ParticipantsStrip, ReplyModeSwitch, justArrived, useFoldStyle, useIsMePost, useMyAcct } from './ConversationProto';
 import { useFilterGate } from './FilterGate';
 import { useFollowedAmong } from './useIntelligence';
 import type { useSaveToggle } from './useFedizenLibrary';
@@ -40,6 +40,8 @@ export type ThreadAProps = {
   onOpenPost: (p: FedizenPost) => void;
   /** Where the reader left off before this visit (useConversationVisit), for Atlas folds' "new". */
   lastVisit: number | undefined;
+  /** Replies that arrived while open and aren't shown yet, showing them, and those added, with when (useThread). */
+  pending: number; onShowPending: () => void; arrived: ReadonlyMap<string, number>;
   Gate: ComponentType<{ post: FedizenPost; children: ReactNode }>; Content: ComponentType<{ post: FedizenPost }>;
 };
 
@@ -59,13 +61,31 @@ export function ThreadA(props: ThreadAProps) {
   const folds = useMemo(() => phanpyFolds(t), [t]);
   useEffect(() => () => remembered.clear(), []);
   const atlas = useAtlasFolding(t, props.lastVisit, replyMode === 'nested' && folding === 'atlas');
+  // After "N new replies", bring the first of them into view — or, when it sits in a folded set, that set's summary.
+  const top = useRef<HTMLDivElement>(null);
+  const [revealed, setRevealed] = useState(0);
+  const showNew = () => { setRevealed(Date.now()); props.onShowPending(); };
+  useEffect(() => {
+    if (!revealed) return;
+    const keys = [...props.arrived].filter(([, at]) => at >= revealed).map(([k]) => k);
+    if (!keys.length) return;
+    setRevealed(0);
+    requestAnimationFrame(() => {
+      const rows = [...(top.current?.querySelectorAll<HTMLElement>('article[data-status-id]') ?? [])].filter(r => keys.includes(r.dataset.statusId!));
+      const first = rows[0];
+      if (!first) return;
+      const hidden = first.closest<HTMLElement>('[hidden], details:not([open])');
+      const target = hidden ? (hidden.parentElement?.querySelector<HTMLElement>(':scope > .atlas-at-summary, :scope > summary') ?? hidden.parentElement ?? first) : first;
+      target.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    });
+  }, [props.arrived, revealed]);
   const count = replyMode === 'flat' ? flat.length : t.replies.length;
   const host = hostOf(t.focus.url);
   const row = (p: FedizenPost, kind: RowKind, extra: Partial<RowProps> = {}) =>
     <Row post={p} kind={kind} number={numbers.get(keyOf(p))} {...props} {...extra} />;
   const ctx: BranchCtx = { t, props, numbers, folds, lazy: t.total > PHANPY.lazyAbove, atlas };
 
-  return <div className="atlas-ph" ref={atlas.measureRef}>
+  return <div className="atlas-ph" ref={el => { top.current = el; atlas.measureRef(el); }}>
     <ol className="atlas-ph-context">
       {t.missingParent && <li className="atlas-ph-gap">{t.ancestors.length ? 'Earlier posts in this conversation aren’t available.' : 'The post this replies to isn’t available.'}</li>}
       {t.ancestors.map(p => <li key={keyOf(p)} className="atlas-ph-li is-ancestor">{row(p, 'ancestor')}</li>)}
@@ -86,6 +106,7 @@ export function ThreadA(props: ThreadAProps) {
       <button type="button" onClick={() => atlas.setAll(false)}>Expand all</button>
       {atlas.chose && <span className="atlas-at-note">Your folds are kept on this device only.</span>}
     </div>}
+    <NewArrivals count={props.pending} onShow={showNew} one="1 new reply" many="new replies" place="top" />
     {loading && <p className="atlas-ph-note" aria-live="polite">Loading replies…</p>}
     {partial && <p className="atlas-ph-note">Couldn’t load the rest of this conversation. <button type="button" className="atlas-ph-link" onClick={retry}>Try again</button></p>}
     {replyMode === 'flat'
@@ -229,6 +250,7 @@ function useAtlasFolding(t: Thread, lastRead: number | undefined, active: boolea
   }, []);
   const phone = box.w < 560;
   const wants = (p: FedizenPost): AtlasReason | undefined => {
+    if (p.tombstone) return undefined;
     if (isMe(p)) return 'mine';
     if (p.handle && p.handle.toLowerCase() === t.focus.handle.toLowerCase()) return 'author';
     if (me && p.mentions?.some(m => fullAcct(m.acct)?.toLowerCase() === me)) return 'mentions';
@@ -240,10 +262,12 @@ function useAtlasFolding(t: Thread, lastRead: number | undefined, active: boolea
   // once per conversation and width, before paint (fonts, the reader's text size, wrapping the estimate can't know).
   const [scale, setScale] = useState(1);
   const calibrated = useRef('');
+  const ready = useRef(false);
   useLayoutEffect(() => {
     const el = host.current;
     const at = `${rootKey}:${t.total}:${box.w}`;
-    if (!active || !el || calibrated.current === at) return;
+    if (!active || !el) return;
+    if (calibrated.current === at) { ready.current = true; return; }
     calibrated.current = at;
     const depth = new Map<string, ThreadNode>();
     const walk = (ns: ThreadNode[]) => ns.forEach(x => { depth.set(keyOf(x.post), x); walk(x.replies); });
@@ -254,14 +278,23 @@ function useAtlasFolding(t: Thread, lastRead: number | undefined, active: boolea
       if (n && row.offsetHeight > 0) pairs.push([row.offsetHeight, postHeight(n.post, box.w - 78, n.depth)]);
     });
     const next = calibration(pairs);
-    if (Math.abs(next - scale) / scale > 0.1) setScale(next);
+    ready.current = Math.abs(next - scale) / scale <= 0.1;
+    if (!ready.current) setScale(next);
   });
   const rules = useMemo(() => atlasFolds(t, { viewportH: box.h, width: box.w - 78, wants, scale }), [t, box, followed, me, lastRead, scale]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Each set's fold is decided once per visit, after calibrating: replies that arrive later, or a new measurement,
+  // never open or close a set under the reader. Sets that didn't exist yet are decided when they appear.
+  const decided = useRef({ root: rootKey, m: new Map<string, boolean>() });
+  if (decided.current.root !== rootKey) decided.current = { root: rootKey, m: new Map() };
+  useEffect(() => {
+    if (!active || !ready.current) return;
+    for (const [k, f] of rules) if (!decided.current.m.has(k)) decided.current.m.set(k, !f.open);
+  });
   const [chosen, setChosen] = useState<Record<string, boolean>>(() => readFolds()[rootKey]?.s ?? {});
   const keys = [...rules.keys()];
   const save = (next: Record<string, boolean>) => { setChosen(next); writeFolds(rootKey, next); };
   return {
-    folded: k => chosen[k] ?? !(rules.get(k)?.open ?? true),
+    folded: k => chosen[k] ?? decided.current.m.get(k) ?? !(rules.get(k)?.open ?? true),
     set: (k, f) => save({ ...chosen, [k]: f }),
     setAll: f => save(Object.fromEntries(keys.map(k => [k, f]))),
     fold: k => rules.get(k),
@@ -356,13 +389,18 @@ function Preview({ post: p }: { post: FedizenPost }) {
 type RowKind = 'ancestor' | 'hero' | 'thread' | 'reply';
 type RowProps = ThreadAProps & { post: FedizenPost; kind: RowKind; number?: { index: number; total: number }; replyingTo?: FedizenPost };
 
-function Row({ post: p, kind, number, replyingTo, actions, onOpenPost, Gate, Content }: RowProps) {
+function Row({ post: p, kind, number, replyingTo, actions, onOpenPost, arrived, Gate, Content }: RowProps) {
   const [active, setActive] = useState(false);
   const hero = kind === 'hero';
+  // Deleted while open, or gone from the conversation: its place, so replies to it still read as replies to something.
+  if (p.tombstone) return <article className={`atlas-ph-row is-${kind} is-tombstone`} data-status-id={p.statusId}>
+    <div className="atlas-ph-av"><span className="atlas-ph-ghost" aria-hidden="true" /></div>
+    <div className="atlas-ph-main"><p className="atlas-ph-gone">This post was deleted or is no longer available.</p></div>
+  </article>;
   const ago = shortAgo(p.date);
   const profile = p.actor || p.acct ? () => openFediProfile({ actor: p.actor, acct: p.acct, name: p.author }) : undefined;
   return <Gate post={p}>
-    <article className={['atlas-ph-row', `is-${kind}`, p.boostedBy && 'is-boost', active && 'is-active'].filter(Boolean).join(' ')} data-status-id={p.statusId}
+    <article className={['atlas-ph-row', `is-${kind}`, p.boostedBy && 'is-boost', active && 'is-active', justArrived(arrived, keyOf(p)) && 'is-arrived'].filter(Boolean).join(' ')} data-status-id={p.statusId}
       onClick={e => {
         if (!isPostClick(e)) return;
         if (hero) return;

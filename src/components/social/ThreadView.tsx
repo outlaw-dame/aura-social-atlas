@@ -37,10 +37,10 @@ export function ThreadView({ statusId, seed }: { statusId: string; seed?: Fedize
       : <FilterPlaceProvider place="public">
         <ProtoSwitch style={style} setStyle={setStyle} />
         {style === 'b'
-          ? <ChatConversation thread={t.thread} actions={actions} lastVisit={lastVisit} Gate={FilterGate} Content={PostContent} onOpenInbox={() => void navigate({ to: '/conversations' })}
+          ? <ChatConversation thread={t.thread} actions={actions} lastVisit={lastVisit} pending={t.pending.length} onShowPending={t.showPending} arrived={t.arrived} Gate={FilterGate} Content={PostContent} onOpenInbox={() => void navigate({ to: '/conversations' })}
               onOpenPost={open} />
           : <ThreadA thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} sort={t.sort} setSort={t.setSort}
-              replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} Gate={FilterGate} Content={PostContent} onOpenPost={open} />}
+              replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} pending={t.pending.length} onShowPending={t.showPending} arrived={t.arrived} Gate={FilterGate} Content={PostContent} onOpenPost={open} />}
       </FilterPlaceProvider>}
     {actions.dialog}
   </main>;

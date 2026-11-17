@@ -113,6 +113,7 @@ export function replyFaces(n: ThreadNode, max = 3): FedizenPost[] {
   const out: FedizenPost[] = [];
   const seen = new Set<string>();
   for (const r of n.replies) {
+    if (r.post.tombstone) continue;
     const h = r.post.handle.toLowerCase();
     if (seen.has(h)) continue;
     seen.add(h); out.push(r.post);
