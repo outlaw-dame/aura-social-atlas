@@ -3,6 +3,7 @@ import { FediProfileDialog } from './FediProfileDialog';
 import { MiniPlayer } from './MiniPlayer';
 import { VideoDock } from './VideoDock';
 import { useFediProfileOpener } from './useFediProfile';
+import { LiveUpdates } from './LiveUpdates';
 import { SemanticIndexer } from './useSemanticIndex';
 
 type CollectionOpener = ReturnType<typeof useCollectionOpener>;
@@ -22,6 +23,7 @@ export function DesktopHosts({ collections }: { collections: CollectionOpener })
     <MiniPlayer />
     <VideoDock />
     <SemanticIndexer />
+    <LiveUpdates />
   </>;
 }
 

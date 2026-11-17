@@ -532,6 +532,12 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: new RegExp(`^/api/v1/accounts/${ID}/statuses\\?limit=40&exclude_reblogs=true$`), schema: homeSchema },
 ];
 
+/** A status from Fedizen's live stream, checked like any timeline read (live.server.ts); null when it doesn't fit. */
+export function liveStatus(raw: unknown): unknown | null {
+  const r = timelineStatus.safeParse(raw);
+  return r.success ? r.data : null;
+}
+
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;
 
 /** A page cursor from a Link header (Bonfire's are opaque Paginator cursors, "g3…"; Mastodon's are ids). */
