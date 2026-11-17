@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react';
 import { ArrowUpRight, ChevronDown, CornerDownRight, MessageCircle, Repeat2 } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { PAGE, REPLY_SORTS, type ReplySort, type Thread, type ThreadNode } from '@/lib/thread';
-import { branchesOf, flatReplies, threadNumbers, type ReplyMode } from '@/lib/conversation';
-import { BONFIRE, PHANPY, bonfireFolds, bonfireMoreLabel, phanpyFolds, replyFaces, type FoldStyle, type PhanpyFold } from '@/lib/folding';
+import { allPosts, branchesOf, flatReplies, latestTime, readMarks, rootOf, subjectOf, threadNumbers, writeMark, type ReplyMode } from '@/lib/conversation';
+import { ATLAS, BONFIRE, PHANPY, atlasFolds, bonfireFolds, bonfireMoreLabel, phanpyFolds, reasonWords, replyFaces, type AtlasFold, type AtlasReason, type PhanpyFold } from '@/lib/folding';
+import { fullAcct } from '@/lib/fedizen-feed';
 import { isPostClick } from '@/lib/open-post';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { shortAgo } from '@/lib/feed-types';
 import { PostActionBar } from './PostActionBar';
-import { Face, FoldSwitch, ParticipantsStrip, ReplyModeSwitch, useFoldStyle } from './ConversationProto';
+import { Face, FoldSwitch, ParticipantsStrip, ReplyModeSwitch, useFoldStyle, useIsMePost, useMyAcct } from './ConversationProto';
+import { useFilterGate } from './FilterGate';
+import { useFollowedAmong } from './useIntelligence';
 import type { useSaveToggle } from './useFedizenLibrary';
 import type { useReactions } from './usePostActions';
 
@@ -20,9 +23,11 @@ import type { useReactions } from './usePostActions';
  *    with its full date and counts and its actions always shown;
  *  - the author's self-thread marked "Thread 2/3" (Phanpy's orange Thread badge);
  *  - replies curving off the line into each avatar, indented a step per level;
- *  - replies hidden either as Phanpy hides them (by weight, no depth limit, sideways scroll from level 4) or as
- *    Bonfire does (by sub-thread size, − / + by hand, 3 levels at a time, indented 3 levels) — folding.ts has both
- *    rules and their sources;
+ *  - replies hidden as Atlas does (by the screen they'd take, never hiding what the reader wants, − / + and the
+ *    line by hand, collapse or expand all, find-in-page reaches folded text, remembered per conversation on this
+ *    device, indentation capped with "Replying to"), or as Phanpy does (by weight, no depth limit, sideways scroll
+ *    from level 4), or as Bonfire does (by sub-thread size, − / + by hand, 3 levels at a time, indented 3 levels) —
+ *    folding.ts has the rules and their sources;
  *  - Bonfire's parts: Nested or Flat (thread_mode), sorting, participants;
  *  - Phanpy's colours for kinds of post: orange for replying-to and Thread, purple for boosts. Atlas adds one colour
  *    per branch (conversation.ts, branchesOf) to the lines, so a sub-conversation is easy to follow down the page.
@@ -51,13 +56,14 @@ export function ThreadA(props: ThreadAProps) {
   const flat = useMemo(() => flatReplies(t), [t]);
   const folds = useMemo(() => phanpyFolds(t), [t]);
   useEffect(() => () => remembered.clear(), []);
+  const atlas = useAtlasFolding(t, loading);
   const count = replyMode === 'flat' ? flat.length : t.replies.length;
   const host = hostOf(t.focus.url);
   const row = (p: FedizenPost, kind: RowKind, extra: Partial<RowProps> = {}) =>
     <Row post={p} kind={kind} number={numbers.get(keyOf(p))} {...props} {...extra} />;
-  const ctx: BranchCtx = { t, props, numbers, folds, lazy: t.total > PHANPY.lazyAbove };
+  const ctx: BranchCtx = { t, props, numbers, folds, lazy: t.total > PHANPY.lazyAbove, atlas };
 
-  return <div className="atlas-ph">
+  return <div className="atlas-ph" ref={atlas.measureRef}>
     <ol className="atlas-ph-context">
       {t.missingParent && <li className="atlas-ph-gap">{t.ancestors.length ? 'Earlier posts in this conversation aren’t available.' : 'The post this replies to isn’t available.'}</li>}
       {t.ancestors.map(p => <li key={keyOf(p)} className="atlas-ph-li is-ancestor">{row(p, 'ancestor')}</li>)}
@@ -73,6 +79,10 @@ export function ThreadA(props: ThreadAProps) {
       </div>}
       {replyMode === 'nested' && t.replies.some(n => n.replies.length) && <FoldSwitch style={folding} setStyle={setFolding} />}
     </div>
+    {replyMode === 'nested' && folding === 'atlas' && atlas.keys.length > 0 && <div className="atlas-at-all">
+      <button type="button" onClick={() => atlas.setAll(true)}>Collapse replies</button>
+      <button type="button" onClick={() => atlas.setAll(false)}>Expand all</button>
+    </div>}
     {loading && <p className="atlas-ph-note" aria-live="polite">Loading replies…</p>}
     {partial && <p className="atlas-ph-note">Couldn’t load the rest of this conversation. <button type="button" className="atlas-ph-link" onClick={retry}>Try again</button></p>}
     {replyMode === 'flat'
@@ -80,7 +90,9 @@ export function ThreadA(props: ThreadAProps) {
       ? <ol className="atlas-ph-replies atlas-ph-flat">{flat.slice(0, shown).map(r => <li key={keyOf(r.post)} className="atlas-ph-li" style={branchStyle(branches.get(keyOf(r.post)))}>
           {row(r.post, 'reply', { replyingTo: r.parent })}
         </li>)}</ol>
-      : <ol className={`atlas-ph-replies is-${folding}`}>{t.replies.slice(0, shown).map(n => folding === 'phanpy'
+      : <ol className={`atlas-ph-replies is-${folding}`}>{t.replies.slice(0, shown).map(n => folding === 'atlas'
+          ? <AtlasBranch key={keyOf(n.post)} node={n} branch={branches.get(keyOf(n.post))} ctx={ctx} />
+          : folding === 'phanpy'
           ? <PhanpyBranch key={keyOf(n.post)} node={n} branch={branches.get(keyOf(n.post))} ctx={ctx} />
           : <BonfireBranch key={keyOf(n.post)} node={n} branch={branches.get(keyOf(n.post))} ctx={ctx} loadedTo={BONFIRE.loadLevels} />)}</ol>}
     {count > shown && <button type="button" className="atlas-ph-more" onClick={() => setShown(s => s + PAGE)}>Show more replies ({count - shown})</button>}
@@ -92,13 +104,13 @@ export function ThreadA(props: ThreadAProps) {
 
 const branchStyle = (b: number | undefined): CSSProperties | undefined => (b === undefined ? undefined : { '--branch': `var(--atlas-branch-${b})` } as CSSProperties);
 
-type BranchCtx = { t: Thread; props: ThreadAProps; numbers: Map<string, { index: number; total: number }>; folds: Map<string, PhanpyFold>; lazy: boolean };
+type BranchCtx = { t: Thread; props: ThreadAProps; numbers: Map<string, { index: number; total: number }>; folds: Map<string, PhanpyFold>; lazy: boolean; atlas: AtlasFolding };
 
 /** The start of a reply: which part of the author's thread it answers, and the post. */
-function Head({ node: n, ctx }: { node: ThreadNode; ctx: BranchCtx }) {
+function Head({ node: n, ctx, replyingTo }: { node: ThreadNode; ctx: BranchCtx; replyingTo?: FedizenPost }) {
   return <>
     {n.part && <p className="atlas-ph-part"><CornerDownRight aria-hidden="true" />On {ctx.t.focus.author}’s post {n.part}</p>}
-    <Row post={n.post} kind="reply" number={ctx.numbers.get(keyOf(n.post))} {...ctx.props} />
+    <Row post={n.post} kind="reply" number={ctx.numbers.get(keyOf(n.post))} {...ctx.props} replyingTo={replyingTo} />
   </>;
 }
 
@@ -160,6 +172,158 @@ function BonfireBranch({ node: n, branch, ctx, loadedTo }: { node: ThreadNode; b
       {n.replies.map(r => <BonfireBranch key={keyOf(r.post)} node={r} branch={branch} ctx={ctx} loadedTo={under} />)}
     </ol>}
   </li>;
+}
+
+/* ── Atlas: sized to the screen, never hiding what the reader wants, every fold in the reader's hands ──── */
+
+type AtlasFolding = {
+  /** Whether a set (keyed by the post it answers) is folded: the reader's choice if they made one, else the rule. */
+  folded: (k: string) => boolean;
+  set: (k: string, folded: boolean) => void;
+  setAll: (folded: boolean) => void;
+  fold: (k: string) => AtlasFold | undefined;
+  keys: string[];
+  cap: number;
+  measureRef: (el: HTMLDivElement | null) => void;
+};
+
+const FOLDS_KEY = 'atlas.proto.folds';
+const FOLDS_MAX = 100;
+type FoldStore = Record<string, { at: number; s: Record<string, boolean> }>;
+function readFolds(): FoldStore {
+  try { const v = JSON.parse(localStorage.getItem(FOLDS_KEY) ?? '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v as FoldStore : {}; } catch { return {}; }
+}
+function writeFolds(root: string, s: Record<string, boolean>) {
+  try {
+    const all = readFolds();
+    all[root] = { at: Date.now(), s };
+    const kept = Object.fromEntries(Object.entries(all).sort(([, a], [, b]) => b.at - a.at).slice(0, FOLDS_MAX));
+    localStorage.setItem(FOLDS_KEY, JSON.stringify(kept));
+  } catch { /* full or blocked: per-device convenience only */ }
+}
+
+function useAtlasFolding(t: Thread, loading: boolean): AtlasFolding {
+  const root = rootOf(t);
+  const rootKey = keyOf(root);
+  const me = useMyAcct();
+  const isMe = useIsMePost();
+  // Where the reader left off last time, read once: this visit is recorded as soon as the replies load.
+  const [lastRead] = useState(() => readMarks()[rootKey]?.lastRead);
+  useEffect(() => {
+    if (loading) return;
+    const posts = allPosts(t);
+    writeMark(rootKey, { lastRead: Math.max(latestTime(posts), lastRead ?? 0), seenAt: Date.now(), opened: keyOf(t.focus), subject: subjectOf(root) });
+  }, [loading, rootKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const authorIds = useMemo(() => [...new Set(allPosts(t).map(p => p.authorId).filter((x): x is string => !!x))], [t]);
+  const followed = useFollowedAmong(authorIds);
+  // The space replies get on this screen, followed as the window changes.
+  const [box, setBox] = useState({ w: 600, h: 800 });
+  const observer = useRef<ResizeObserver | null>(null);
+  const measureRef = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    observer.current = new ResizeObserver(() => setBox(b => {
+      const w = Math.round(el.clientWidth), h = window.innerHeight;
+      return Math.abs(b.w - w) < 8 && Math.abs(b.h - h) < 8 ? b : { w, h };
+    }));
+    observer.current.observe(el);
+  }, []);
+  const phone = box.w < 560;
+  const wants = (p: FedizenPost): AtlasReason | undefined => {
+    if (isMe(p)) return 'mine';
+    if (p.handle && p.handle.toLowerCase() === t.focus.handle.toLowerCase()) return 'author';
+    if (me && p.mentions?.some(m => fullAcct(m.acct)?.toLowerCase() === me)) return 'mentions';
+    if (lastRead !== undefined && p.date && Date.parse(p.date) > lastRead) return 'new';
+    if (p.authorId && followed.has(p.authorId)) return 'following';
+    return undefined;
+  };
+  const rules = useMemo(() => atlasFolds(t, { viewportH: box.h, width: box.w - 78, wants }), [t, box, followed, me, lastRead]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [chosen, setChosen] = useState<Record<string, boolean>>(() => readFolds()[rootKey]?.s ?? {});
+  const keys = [...rules.keys()];
+  const save = (next: Record<string, boolean>) => { setChosen(next); writeFolds(rootKey, next); };
+  return {
+    folded: k => chosen[k] ?? !(rules.get(k)?.open ?? true),
+    set: (k, f) => save({ ...chosen, [k]: f }),
+    setAll: f => save(Object.fromEntries(keys.map(k => [k, f]))),
+    fold: k => rules.get(k),
+    keys,
+    cap: phone ? ATLAS.indent.phone : ATLAS.indent.desktop,
+    measureRef,
+  };
+}
+
+function AtlasBranch({ node: n, branch, ctx, parent }: { node: ThreadNode; branch?: number; ctx: BranchCtx; parent?: FedizenPost }) {
+  const a = ctx.atlas;
+  const k = keyOf(n.post);
+  const has = n.replies.length > 0;
+  const folded = has && a.folded(k);
+  const unloaded = !has && (n.post.counts?.replies ?? 0) > 0 ? n.post.counts!.replies : 0;
+  const host = unloaded ? hostOf(n.post.url) : null;
+  // Past the cap the replies line up under it, each saying whom it answers.
+  const flat = n.depth >= a.cap;
+  return <li className="atlas-ph-li is-reply" style={{ ...branchStyle(branch), '--level': n.depth } as CSSProperties}>
+    <Head node={n} ctx={ctx} replyingTo={n.depth > a.cap ? parent : undefined} />
+    {unloaded > 0 && <p className="atlas-ph-unloaded">
+      <MessageCircle aria-hidden="true" />{unloaded} {unloaded === 1 ? 'reply' : 'replies'} not on Fedizen yet
+      {host && host !== 'fedizen.net' && <> · <a href={n.post.url} target="_blank" rel="noopener noreferrer" className="atlas-ph-link">See on {host}<ArrowUpRight aria-hidden="true" /></a></>}
+    </p>}
+    {has && <button type="button" className="atlas-bf-toggle" aria-expanded={!folded} aria-label={folded ? `Show replies to ${n.post.author}` : `Hide replies to ${n.post.author}`} onClick={() => a.set(k, !folded)}>{folded ? '+' : '−'}</button>}
+    {has && !folded && <button type="button" className="atlas-at-line" tabIndex={-1} aria-hidden="true" onClick={() => a.set(k, true)} />}
+    {folded && <AtlasSummary node={n} fold={a.fold(k)} ctx={ctx} onOpen={() => a.set(k, false)} />}
+    {has && <Foldable folded={folded} onFound={() => a.set(k, false)}>
+      <ol className={flat ? 'atlas-ph-replies atlas-ph-nested is-capped' : 'atlas-ph-replies atlas-ph-nested'}>
+        {n.replies.map(r => <AtlasBranch key={keyOf(r.post)} node={r} branch={branch} ctx={ctx} parent={n.post} />)}
+      </ol>
+    </Foldable>}
+  </li>;
+}
+
+/** Folded replies stay in the page, hidden until found, so the browser's find opens them (hidden="until-found";
+ *  where it isn't supported it is plain hidden). */
+function Foldable({ folded, onFound, children }: { folded: boolean; onFound: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const found = useRef(onFound);
+  found.current = onFound;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (folded) el.setAttribute('hidden', 'until-found'); else el.removeAttribute('hidden');
+  }, [folded]);
+  useEffect(() => {
+    const el = ref.current;
+    const on = () => found.current();
+    el?.addEventListener('beforematch', on);
+    return () => el?.removeEventListener('beforematch', on);
+  }, []);
+  return <div ref={ref} className="atlas-at-fold">{children}</div>;
+}
+
+function AtlasSummary({ node: n, fold, ctx, onOpen }: { node: ThreadNode; fold?: AtlasFold; ctx: BranchCtx; onOpen: () => void }) {
+  const total = fold?.total ?? n.size;
+  const reasons = reasonWords(fold?.reasons ?? {});
+  const latest = fold?.latest ? shortAgo(new Date(fold.latest).toISOString()) : '';
+  return <div className="atlas-at-summary">
+    <button type="button" className="atlas-at-open" aria-expanded="false" onClick={onOpen}>
+      <span className="atlas-at-line1">
+        <span className="atlas-ph-faces" aria-hidden="true">{replyFaces(n).map(p => <Face key={p.handle} post={p} size={20} />)}</span>
+        <span><b className="nw">{n.replies.length} {n.replies.length === 1 ? 'reply' : 'replies'}</b>{total !== n.replies.length && <> · <span className="nw">{total} in total</span></>}{latest && <> · <span className="nw">latest {latest}</span></>}</span>
+        <ChevronDown aria-hidden="true" className="atlas-ph-chevron" />
+      </span>
+      {reasons.length > 0 && <span className="atlas-at-reasons">{reasons.join(' · ')}</span>}
+      <Preview post={n.replies[0].post} />
+    </button>
+    <button type="button" className="atlas-ph-parent atlas-at-parent" title="View post with its replies" aria-label={`Open ${n.post.author}’s post with its replies`} onClick={() => ctx.props.onOpenPost(n.post)}>»</button>
+  </div>;
+}
+
+/** The first reply's opening words, under the reader's filters and its content warning. */
+function Preview({ post: p }: { post: FedizenPost }) {
+  const g = useFilterGate(p);
+  if (g.kind === 'none') return null;
+  if (g.kind === 'notice') return <span className="atlas-at-preview">{p.author}: hidden by your filters</span>;
+  const text = p.cw?.trim() ? `Content warning: ${p.cw.trim()}` : (p.paragraphs.find(x => x.trim()) ?? (p.image || p.video ? 'Media' : '')).trim();
+  if (!text) return null;
+  return <span className="atlas-at-preview"><b>{p.author}</b> {text.length > 110 ? `${text.slice(0, 108).replace(/\s+\S*$/, '')}…` : text}</span>;
 }
 
 type RowKind = 'ancestor' | 'hero' | 'thread' | 'reply';

@@ -34,7 +34,7 @@ function useStored<T extends string>(k: string, ok: readonly T[], fallback: T): 
 }
 export const useProtoStyle = () => useStored<ProtoStyle>('atlas.proto.style', ['a', 'b'], 'a');
 export const useReplyMode = () => useStored<ReplyMode>('atlas.proto.replyMode', ['nested', 'flat'], 'nested');
-export const useFoldStyle = () => useStored<FoldStyle>('atlas.proto.folding', ['phanpy', 'bonfire'], 'phanpy');
+export const useFoldStyle = () => useStored<FoldStyle>('atlas.proto.folding', ['atlas', 'phanpy', 'bonfire'], 'atlas');
 
 const STYLES: { id: ProtoStyle; label: string; note: string }[] = [
   { id: 'a', label: 'A · Bonfire + Phanpy', note: 'A thread: the post in the middle, replies nested or flat, as Bonfire and Phanpy read one.' },
@@ -58,10 +58,12 @@ export function ReplyModeSwitch({ mode, setMode }: { mode: ReplyMode; setMode: (
   </div>;
 }
 
+const FOLDS: { id: FoldStyle; label: string }[] = [{ id: 'atlas', label: 'Atlas folds' }, { id: 'phanpy', label: 'Phanpy folds' }, { id: 'bonfire', label: 'Bonfire folds' }];
+
 /** A, nested: whose way of hiding replies to use (folding.ts). */
 export function FoldSwitch({ style, setStyle }: { style: FoldStyle; setStyle: (s: FoldStyle) => void }) {
   return <div role="radiogroup" aria-label="Hide replies the way" className="atlas-proto-switch atlas-proto-small">
-    {(['phanpy', 'bonfire'] as const).map(f => <button key={f} type="button" role="radio" aria-checked={style === f} onClick={() => setStyle(f)} className={style === f ? 'is-on' : undefined}>{f === 'phanpy' ? 'Phanpy folds' : 'Bonfire folds'}</button>)}
+    {FOLDS.map(f => <button key={f.id} type="button" role="radio" aria-checked={style === f.id} onClick={() => setStyle(f.id)} className={style === f.id ? 'is-on' : undefined}>{f.label}</button>)}
   </div>;
 }
 
@@ -86,11 +88,16 @@ export function ParticipantsStrip({ thread }: { thread: Thread }) {
 }
 
 /** The reader's own handle, to tell their messages apart. */
-export function useIsMePost() {
+/** The reader's full Fedizen handle, lower case, once known. */
+export function useMyAcct(): string | undefined {
   const { user } = useAtlasAuth();
   const statusFn = useServerFn(getFedizenStatus);
   const status = useQuery({ queryKey: ['fedizen-status', user?.id], queryFn: () => statusFn(), enabled: !!user, staleTime: 60_000 });
-  const me = fullAcct(status.data?.handle)?.toLowerCase();
+  return fullAcct(status.data?.handle)?.toLowerCase();
+}
+
+export function useIsMePost() {
+  const me = useMyAcct();
   return (p: FedizenPost) => !!me && fullAcct(p.acct ?? p.handle)?.toLowerCase() === me;
 }
 
