@@ -57,3 +57,6 @@ export function showTab(id: string) {
 export const tagPageUrl = (tag: string) => `/tag/${encodeURIComponent(tag.toLowerCase())}/`;
 
 export const postPageUrl = (id: string) => `/post/${encodeURIComponent(id)}/`;
+
+/** Prototype B's list of conversations (f7/Conversations.tsx). */
+export const CONVERSATIONS_URL = '/conversations/';

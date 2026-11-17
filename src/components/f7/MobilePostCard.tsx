@@ -67,6 +67,27 @@ export function useMobilePostActions() {
 }
 export type MobileActions = ReturnType<typeof useMobilePostActions>;
 
+
+/**
+ * Phone: what a post says and carries, behind its content warning: text, media (behind the sensitive veil and the
+ * reader's blur setting), poll, collections and link preview. Shared by feed cards and the conversation prototypes,
+ * so a layout never drops content or skips a warning.
+ */
+export function MobilePostContent({ post: p }: { post: FedizenPost }) {
+  const mine = useIsMine(p);
+  return <>
+      <AuthorWarning cw={p.cw} phone>
+    <PostBody post={p} onTag={openTag} pClassName="atlas-post-text" />
+    <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" {...(p.imageSize ? { width: p.imageSize.w, height: p.imageSize.h, style: { aspectRatio: `${p.imageSize.w} / ${p.imageSize.h}` } } : {})} />}</SensitiveMedia>
+    {p.pollState && <PollView poll={p.pollState} mine={mine} phone />}
+    {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
+      <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />
+    </button>)}
+    <ArticleCard article={p.article} />
+    </AuthorWarning>
+  </>;
+}
+
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ');
 
 /** The opened post's full date and time, and its counts, under the post (Mastodon, Bluesky). */
@@ -117,15 +138,7 @@ function MobilePostCardBody({ post: p, actions, reasons, inTag, mode = 'feed' }:
           ? <button type="button" className="atlas-post-time" onClick={() => openPost(p)} aria-label={`Open the conversation, posted ${p.date ? new Date(p.date).toLocaleString() : ago}${p.editedAt ? ', edited' : ''}`}>{ago}{p.editedAt && <span className="atlas-post-edited"> · Edited</span>}</button>
           : <Link external target="_blank" href={p.url} className="atlas-post-time" aria-label={`Open the post on Fedizen, posted ${p.date ? new Date(p.date).toLocaleString() : ''}${p.editedAt ? ', edited' : ''}`}>{ago}{p.editedAt && <span className="atlas-post-edited"> · Edited</span>}</Link>)}
       </div>
-      <AuthorWarning cw={p.cw} phone>
-      <PostBody post={p} onTag={openTag} pClassName="atlas-post-text" />
-      <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" {...(p.imageSize ? { width: p.imageSize.w, height: p.imageSize.h, style: { aspectRatio: `${p.imageSize.w} / ${p.imageSize.h}` } } : {})} />}</SensitiveMedia>
-      {p.pollState && <PollView poll={p.pollState} mine={mine} phone />}
-      {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
-        <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />
-      </button>)}
-      <ArticleCard article={p.article} />
-      </AuthorWarning>
+      <MobilePostContent post={p} />
       {mode === 'focus' && <MobileFocusDetails post={p} />}
     </CardContent>
     <CardFooter className="atlas-post-footer"><MobilePostActions post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply} /></CardFooter>

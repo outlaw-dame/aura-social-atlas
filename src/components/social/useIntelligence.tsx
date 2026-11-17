@@ -370,6 +370,16 @@ export function useNotFollowed(post: { authorId?: string; handle?: string }, act
   return env.following.get(id) !== true;
 }
 
+/** Which of these Fedizen account ids the person follows, as answers arrive (asked through the same batched
+ *  relationship lookup as useNotFollowed). Empty outside a ContentFilterProvider. */
+export function useFollowedAmong(ids: readonly string[]): ReadonlySet<string> {
+  const env = useContext(EngineContext);
+  const revision = useSyncExternalStore(env?.engine.subscribe ?? noop, env?.engine.getRevision ?? zero, zero);
+  const list = ids.join(',');
+  useEffect(() => { if (env) for (const id of ids) env.following.request(id); }, [env, list]); // eslint-disable-line react-hooks/exhaustive-deps
+  return useMemo(() => new Set(env ? ids.filter(id => env.following.get(id) === true) : []), [env, list, revision]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 /**
  * How many of these posts the person would actually see in Home under their filters (hidden ones and ones still
  * being checked by the AI model don't count). Starts the checks too, so new posts are judged before they're shown.

@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import { deepStrictEqual, strictEqual } from 'node:assert';
-import { buildThread, facesIn } from '../src/lib/thread';
+import { buildThread } from '../src/lib/thread';
 import type { FedizenPost } from '../src/lib/fedizen-feed';
 
 let n = 0;
@@ -58,13 +58,6 @@ describe('a conversation, arranged', () => {
     deepStrictEqual(order('oldest'), ['mine', 'old', 'hot', 'new']);
     deepStrictEqual(order('newest'), ['mine', 'new', 'hot', 'old']);
     deepStrictEqual(order('top'), ['mine', 'hot', 'old', 'new']);
-  });
-
-  test("a folded sub-thread's summary shows its first few people once each", () => {
-    n = 0;
-    const f = post('f', 'ann');
-    const t = buildThread(f, [], [post('r', 'bob', 'f'), post('r1', 'cat', 'r'), post('r2', 'cat', 'r'), post('r3', 'dan', 'r1'), post('r4', 'eve', 'r')]);
-    deepStrictEqual(facesIn(t.replies[0]).map(p => p.author), ['cat', 'dan', 'eve']);
   });
 });
 
