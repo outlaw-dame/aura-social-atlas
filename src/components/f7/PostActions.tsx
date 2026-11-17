@@ -16,6 +16,10 @@ import { openFediProfile } from '@/lib/fedi-profile';
 import { MAX_CW, MAX_TEXT } from '@/lib/compose-media';
 
 type Save = ReturnType<typeof useSaveToggle>;
+
+function hostOf(url: string): string | null {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
+}
 type Reactions = ReturnType<typeof useReactions>;
 
 /**
@@ -54,6 +58,8 @@ export function MobilePostActions({ post: p, save, reactions, onReply }: { post:
   const mod = useModerationActions({ name: p.author, acct: p.acct, accountId: p.authorId, statusId: p.statusId }, other);
   const more = () => f7.actions.create({ buttons: [[
     { text: typeof navigator !== 'undefined' && 'share' in navigator ? 'Share' : 'Copy link', onClick: async () => { if ((await sharePost(p)) === 'copied') f7.toast.create({ text: 'Link copied', closeTimeout: 1500 }).open(); } },
+    // The post's own page, now that tapping it (or its time) opens the conversation in Atlas.
+    ...(hostOf(p.url) ? [{ text: `Open on ${hostOf(p.url)}`, onClick: () => { window.open(p.url, '_blank', 'noopener,noreferrer'); } }] : []),
     ...(user && p.statusId && p.counts?.likes ? [{ text: 'Liked by…', onClick: () => setReactors('like') }] : []),
     ...(user && p.statusId && p.counts?.boosts ? [{ text: 'Boosted by…', onClick: () => setReactors('boost') }] : []),
     ...(user && !mine ? [{ text: 'Filter posts like this', onClick: () => void filterLikeThis() }] : []),

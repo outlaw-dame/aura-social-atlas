@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from 'react';
 import { useServerFn } from '@tanstack/react-start';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAtlasAuth } from './AuthState';
 import { LIBRARY_PROBLEM } from './useFedizenLibrary';
 import { replyOnFedizen, setFedizenReaction } from '@/lib/fedizen.functions';
@@ -68,6 +69,7 @@ export function useReactions() {
 export function useReply() {
   const { user } = useAtlasAuth();
   const send = useServerFn(replyOnFedizen);
+  const qc = useQueryClient();
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const reply = async (p: Pick<FedizenPost, 'statusId' | 'visibility' | 'id'>, text: string, cw?: string): Promise<{ url?: string } | null> => {
@@ -76,6 +78,8 @@ export function useReply() {
     try {
       const r = await send({ data: { expectedAtlasUserId: user.id, statusId: p.statusId, text: text.trim().slice(0, 5000), visibility: replyVisibility(p), ...(cw?.trim() ? { cw: cw.trim().slice(0, 500) } : {}) } });
       if (!r.ok) { setError(LIBRARY_PROBLEM[r.error]); return null; }
+      // An open conversation shows the new reply.
+      void qc.invalidateQueries({ queryKey: ['fedizen-thread'] });
       return { url: r.url };
     } catch { setError(LIBRARY_PROBLEM.unavailable); return null; } finally { setSending(false); }
   };

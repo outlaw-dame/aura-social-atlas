@@ -847,6 +847,33 @@ export const getFedizenPoll = createServerFn({ method: 'GET' }).middleware([requ
     return { poll: r?.status === 200 ? pollOf(r.data[0] as never) : null };
   });
 
+/**
+ * A post and its conversation, as the reader may see it on Fedizen: the post itself, the posts above it and every
+ * reply under it (Mastodon /statuses/:id and /statuses/:id/context; Bonfire reads its own reply tree, so replies it
+ * hasn't fetched from other servers aren't there yet). Arranged in the browser (thread.ts).
+ */
+export const getFedizenThread = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ statusId }).parse(d))
+  .handler(async ({ data, context }): Promise<{ post: FedizenPost | null; ancestors: FedizenPost[]; descendants: FedizenPost[]; error?: Problem | 'not-found' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const empty = { post: null, ancestors: [], descendants: [] };
+    const c = await connection(context.userId);
+    if ('error' in c) return { ...empty, error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const [one, ctx] = await Promise.all([
+      fedizenGet(c.token, `/api/v1/statuses/${data.statusId}`).catch(() => null),
+      fedizenGet(c.token, `/api/v1/statuses/${data.statusId}/context`).catch(() => null),
+    ]);
+    if (!one || one.status !== 200) return { ...empty, error: !one ? 'unavailable' : one.status === 404 ? 'not-found' : problem(one.status) };
+    const [post] = fromStatuses(one.data as never);
+    if (!post) return { ...empty, error: 'not-found' };
+    // The post alone still opens when its conversation can't be read.
+    const raw = ctx?.status === 200 ? ctx.data[0] as { ancestors: never[]; descendants: never[] } : { ancestors: [], descendants: [] };
+    const all = await withArticleAuthorsAndFaces([post, ...fromStatuses(raw.ancestors), ...fromStatuses(raw.descendants)], 1500);
+    const n = raw.ancestors.length;
+    return { post: all[0], ancestors: all.slice(1, 1 + n), descendants: all.slice(1 + n), ...(ctx?.status === 200 ? {} : { error: 'unavailable' as const }) };
+  });
+
 /** People asking to follow you: a locked account approves each one (Mastodon /follow_requests). */
 export const getFollowRequests = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.parse(d))

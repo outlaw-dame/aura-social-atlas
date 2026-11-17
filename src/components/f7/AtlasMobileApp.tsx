@@ -37,7 +37,7 @@ import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileActivity, MessagesPopup } from './FedizenMobile';
 import { MobileFeeds } from './MobileFeeds';
 import { FollowedTagsPage, TagFeedPage } from './TagFeed';
-import { bindStack, popToRoot, pushPage, showTab, tagPageUrl } from './navigation';
+import { bindStack, popToRoot, postPageUrl, pushPage, showTab, tagPageUrl } from './navigation';
 import { ModerationPopup } from './Moderation';
 import { IntelligencePage, KeywordFiltersPage } from './Intelligence';
 import { intelligenceReady, useIntelligence } from '@/components/social/useIntelligence';
@@ -51,6 +51,8 @@ import { VideoDock } from '@/components/social/VideoDock';
 import { registerAppServiceWorker } from '@/lib/register-sw';
 import { MobileReadingSettings } from './ReadingSettings';
 import { useComposeIntent } from '@/lib/compose-intent';
+import { ThreadPage } from './Thread';
+import { OPEN_POST_EVENT, type OpenPostDetail } from '@/lib/open-post';
 
 Framework7.use(Framework7React);
 
@@ -152,6 +154,12 @@ export default function AtlasMobileApp() {
     const on = (e: Event) => { const t = (e as CustomEvent<{ tag?: string }>).detail?.tag; if (t) pushPage(tagPageUrl(t)); };
     window.addEventListener(OPEN_TAG_EVENT, on);
     return () => window.removeEventListener(OPEN_TAG_EVENT, on);
+  }, []);
+  // A tapped post pushes its conversation onto the main view, as a hashtag's feed is.
+  useEffect(() => {
+    const on = (e: Event) => { const d = (e as CustomEvent<OpenPostDetail>).detail; if (d?.statusId) pushPage(postPageUrl(d.statusId), { seed: d.seed }); };
+    window.addEventListener(OPEN_POST_EVENT, on);
+    return () => window.removeEventListener(OPEN_POST_EVENT, on);
   }, []);
   // A "Popular in" chip in For You opens its group here.
   useEffect(() => {
@@ -496,6 +504,7 @@ function StackRoot() {
 const STACK_ROUTES = [
   { path: '/', component: StackRoot },
   { path: '/tag/:tag/', component: TagFeedPage },
+  { path: '/post/:id/', component: ThreadPage },
   { path: '/followed-tags/', component: FollowedTagsPage },
   { path: '/intelligence/', component: IntelligencePage },
   { path: '/notifications-settings/', component: NotificationSettingsPage },

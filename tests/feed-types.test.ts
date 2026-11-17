@@ -63,7 +63,8 @@ describe("Feed reads are allowlisted", () => {
     const one = await fedizenGet("t", "/api/v1/statuses/01P");
     expect(one.status).toBe(200);
     expect(one.data[0]).toMatchObject({ id: "01P", favourited: true, favourites_count: 3 });
-    await expect(fedizenGet("t", "/api/v1/statuses/01P/context")).rejects.toThrow("Unsupported Fedizen read path.");
+    // A post's conversation is allowlisted (tests/fedizen-private-transport.test.ts); its edit history is not.
+    await expect(fedizenGet("t", "/api/v1/statuses/01P/history")).rejects.toThrow("Unsupported Fedizen read path.");
     await expect(fedizenGet("t", "/api/v1/timelines/tag/a/b?limit=10")).rejects.toThrow("Unsupported Fedizen read path.");
     await expect(fedizenGet("t", "/api/v1/timelines/list/x?limit=40")).rejects.toThrow("Unsupported Fedizen read path.");
     await expect(fedizenGet("t", "/api/v1/timelines/public?limit=20")).rejects.toThrow("Unsupported Fedizen read path.");

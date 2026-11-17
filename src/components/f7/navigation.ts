@@ -55,3 +55,5 @@ export function showTab(id: string) {
 }
 
 export const tagPageUrl = (tag: string) => `/tag/${encodeURIComponent(tag.toLowerCase())}/`;
+
+export const postPageUrl = (id: string) => `/post/${encodeURIComponent(id)}/`;

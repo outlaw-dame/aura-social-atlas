@@ -23,6 +23,8 @@ import { PostMoreMenu } from './FilterLikeThis';
 import { AUDIENCE_LABEL, replyMention, replyVisibility, useReactions, useReply } from './usePostActions';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
+import { cn } from '@/lib/utils';
+import { isPostClick, isStatusId, rememberSeed } from '@/lib/open-post';
 import { PostBody } from './PostBody';
 
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
@@ -83,38 +85,62 @@ function Actions({ post: p, actions }: { post: FedizenPost; actions: FeedActions
 
 /** Desktop: one post in a feed — author, text, media or link preview — with the standard post actions. */
 /** Desktop: one post, unless the person's keyword filters hide it (or show it behind a notice, or blur its media). */
-export function FeedPostCard(props: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {
+/** Where a card is: a feed; a post in an open conversation (no parent above it, the conversation shows it); or the
+ *  conversation's own post, drawn larger with its full date and counts. */
+export type CardMode = 'feed' | 'thread' | 'focus';
+
+export function FeedPostCard(props: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string; mode?: CardMode }) {
   const deleted = useIsDeleted(props.post.statusId);
   useEffect(() => { if (!deleted) queueForIndex(props.post); }, [deleted, props.post]);
   if (deleted) return null;
   return <FilterGate post={props.post}><FeedPostCardBody {...props} /></FilterGate>;
 }
 
-function FeedPostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {
+function FeedPostCardBody({ post: p, actions, reasons, inTag, mode = 'feed' }: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string; mode?: CardMode }) {
   const ago = shortAgo(p.date);
   const tagLine = useTagLine(p, reasons).filter(t => t !== inTag);
   const navigate = useNavigate();
   const mine = useIsMine(p);
-  return <article className="border-b border-border pb-4" data-status-id={p.statusId}>
-    <FollowedTagLine tags={tagLine} />
-    <ReasonChips reasons={reasons} />
+  // Clicking the post (not a link or control in it) opens its conversation, as Mastodon, Bluesky and Phanpy do.
+  const opens = mode !== 'focus' && isStatusId(p.statusId);
+  const open = () => { rememberSeed(p); void navigate({ to: '/post/$id', params: { id: p.statusId! } }); };
+  return <article className={cn('border-b border-border pb-4', opens && 'atlas-post-opens', mode === 'focus' && 'atlas-thread-focus')} data-status-id={p.statusId}
+    onClick={opens ? e => { if (isPostClick(e)) open(); } : undefined}>
+    {mode === 'feed' && <FollowedTagLine tags={tagLine} />}
+    {mode === 'feed' && <ReasonChips reasons={reasons} />}
     <BoostedBy post={p} className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground" />
-    {p.replyTo?.post && <ReplyParent post={p.replyTo.post} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} Gate={FilterGate} />}
+    {mode === 'feed' && p.replyTo?.post && <ReplyParent post={p.replyTo.post} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} Gate={FilterGate} />}
     <div className="flex items-center gap-3">
       {canOpen(p)
         ? <ProfileHoverCard target={{ actor: p.actor, acct: p.acct, name: p.author }}><button type="button" className="atlas-author-button atlas-author-fill gap-3" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}><Who post={p} /></button></ProfileHoverCard>
         : <Who post={p} />}
-      {ago && <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline" title={p.date ? new Date(p.date).toLocaleString() : undefined}>{ago}{p.editedAt && <span className="atlas-post-edited" title={`Edited ${new Date(p.editedAt).toLocaleString()}`}> · Edited</span>}</a>}
+      {ago && mode !== 'focus' && (opens
+        // The time opens the conversation in Atlas (a real link: it opens in a new tab too); More has the original.
+        ? <Link to="/post/$id" params={{ id: p.statusId! }} onClick={() => rememberSeed(p)} className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline" title={p.date ? new Date(p.date).toLocaleString() : undefined}
+            aria-label={`Open the conversation, posted ${p.date ? new Date(p.date).toLocaleString() : ago}${p.editedAt ? ', edited' : ''}`}>{ago}{p.editedAt && <span className="atlas-post-edited"> · Edited</span>}</Link>
+        : <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline" title={p.date ? new Date(p.date).toLocaleString() : undefined}>{ago}{p.editedAt && <span className="atlas-post-edited" title={`Edited ${new Date(p.editedAt).toLocaleString()}`}> · Edited</span>}</a>)}
     </div>
     <AuthorWarning cw={p.cw}>
-    <div className="mt-3 space-y-2 text-sm leading-relaxed"><PostBody post={p} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} /></div>
+    <div className={cn('mt-3 space-y-2 leading-relaxed', mode === 'focus' ? 'text-base' : 'text-sm')}><PostBody post={p} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} /></div>
     <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl bg-muted object-cover" {...reserve(p.imageSize)} />}</SensitiveMedia>
     {p.pollState && <PollView poll={p.pollState} mine={mine} />}
     <CollectionLinks links={p.collections} />
     <PostArticleCard article={p.article} />
     </AuthorWarning>
+    {mode === 'focus' && <FocusDetails post={p} />}
     <Actions post={p} actions={actions} />
   </article>;
+}
+
+/** The opened post's full date and time, and its counts, as Mastodon and Bluesky show them under the post. */
+function FocusDetails({ post: p }: { post: FedizenPost }) {
+  const c = p.counts;
+  const n = (v: number, one: string, many: string) => `${v.toLocaleString()} ${v === 1 ? one : many}`;
+  return <div className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
+    {p.date && <p><time dateTime={p.date}>{new Date(p.date).toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' })}</time>
+      {p.editedAt && <> · Edited <time dateTime={p.editedAt}>{new Date(p.editedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time></>}</p>}
+    {c && (c.replies || c.boosts || c.likes) ? <p className="mt-1">{[n(c.replies, 'reply', 'replies'), n(c.boosts, 'boost', 'boosts'), n(c.likes, 'like', 'likes')].join(' · ')}</p> : null}
+  </div>;
 }
 
 /** Width, height and aspect ratio for an image whose size is known, so the card keeps its height while it loads. */

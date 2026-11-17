@@ -448,6 +448,8 @@ const notice = z.object({
   status: timelineStatus.nullish(),
 });
 const homeSchema = z.array(timelineStatus).max(20);
+/** Statuses where any one that doesn't fit is dropped, for long lists from many servers (a conversation). */
+const tolerantStatuses = z.array(z.unknown()).max(4096).transform(list => list.flatMap(x => { const r = timelineStatus.safeParse(x); return r.success ? [r.data] : []; }));
 const notificationsSchema = z.array(notice).max(20);
 /** Mastodon 4.3 grouped notifications (Bonfire: SocialMastoAdapter.grouped_notifications, groups within a page). */
 const groupedSchema = z.object({
@@ -528,6 +530,10 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v2\/instance$/, schema: instanceSchema, single: true },
   // One post, as the person sees it (their like, boost and bookmark, its counts): for group posts read publicly.
   { match: new RegExp(`^/api/v1/statuses/${ID}$`), schema: timelineStatus, single: true },
+  // A post's conversation: the posts above it and every reply under it, as the reader may see them (Mastodon
+  // StatusContext; Bonfire: SocialMastoAdapter.status_context over its reply tree). One odd post is left out rather
+  // than failing the whole conversation.
+  { match: new RegExp(`^/api/v1/statuses/${ID}/context$`), schema: z.object({ ancestors: tolerantStatuses, descendants: tolerantStatuses }), single: true },
   // People asking to follow you (a locked account approves each): Bonfire MastoAccountController.follow_requests.
   { match: /^\/api\/v1\/follow_requests\?limit=40$/, schema: accountsSchema },
   // A post's own text and content warning, to edit it (Mastodon: StatusSourcesController; Bonfire: status_source).
