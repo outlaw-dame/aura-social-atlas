@@ -1,6 +1,8 @@
 import { MobilePostSearch } from './MobilePostSearch';
+import { NotificationSettingsPage } from './NotificationSettings';
+import { useOpenActivityFromPush } from '@/components/social/usePush';
 import { SemanticIndexer } from '@/components/social/useSemanticIndex';
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Framework7 from 'framework7/lite-bundle';
 import Framework7React, {
   App, View, Page, Navbar, Link, Toolbar, Tabs, Tab, PageContent,
@@ -123,6 +125,8 @@ export default function AtlasMobileApp() {
   const panelHeldAtStart = useMemo(() => profile.nav === 'rail' || profile.nav === 'sidebar', []); // eslint-disable-line react-hooks/exhaustive-deps
   useAdaptiveLayout(profile);
   useEffect(registerAppServiceWorker, []);
+  // A tapped notification opens Activity (public/sw.js posts this to the open app).
+  useOpenActivityFromPush(useCallback(() => { try { showTab('tab-activity'); } catch { /* not ready */ } }, []));
   const { followed, saved, canSave, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled: assistantWanted } = useSocial();
   // The assistant answers with the person's own key: only there once Intelligence is on with a key.
   const intelligence = useIntelligence();
@@ -424,6 +428,11 @@ export default function AtlasMobileApp() {
                   <Icon slot="media" ios="f7:shield_lefthalf_fill" md="material:shield" />
                 </ListItem>
               </List>
+              <List strong inset dividers>
+                <ListItem link="#" title="Notifications" footer="Mentions, replies and new followers on this device." onClick={() => pushPage('/notifications-settings/')}>
+                  <Icon slot="media" ios="f7:bell" md="material:notifications_none" />
+                </ListItem>
+              </List>
               <BlockTitle>Intelligence</BlockTitle>
               <List strong inset dividers>
                 <ListItem link="#" title="Intelligence" footer="Off by default. AI with your own key: smarter keyword filters and the assistant." onClick={() => pushPage('/intelligence/')}>
@@ -487,6 +496,7 @@ const STACK_ROUTES = [
   { path: '/tag/:tag/', component: TagFeedPage },
   { path: '/followed-tags/', component: FollowedTagsPage },
   { path: '/intelligence/', component: IntelligencePage },
+  { path: '/notifications-settings/', component: NotificationSettingsPage },
   { path: '/keyword-filters/', component: KeywordFiltersPage },
   { path: '/creator-tag/:creator/:tag/', component: SampleTagPage },
 ];

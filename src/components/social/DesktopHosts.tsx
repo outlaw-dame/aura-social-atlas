@@ -3,6 +3,9 @@ import { FediProfileDialog } from './FediProfileDialog';
 import { MiniPlayer } from './MiniPlayer';
 import { VideoDock } from './VideoDock';
 import { useFediProfileOpener } from './useFediProfile';
+import { useCallback } from 'react';
+import { useNavigate } from '@tanstack/react-router';
+import { useOpenActivityFromPush } from './usePush';
 import { SemanticIndexer } from './useSemanticIndex';
 
 type CollectionOpener = ReturnType<typeof useCollectionOpener>;
@@ -16,6 +19,9 @@ type CollectionOpener = ReturnType<typeof useCollectionOpener>;
  */
 export function DesktopHosts({ collections }: { collections: CollectionOpener }) {
   const profile = useFediProfileOpener();
+  const navigate = useNavigate();
+  // A tapped notification opens Activity (public/sw.js posts this to the focused Atlas page).
+  useOpenActivityFromPush(useCallback(() => void navigate({ to: '/activity' }), [navigate]));
   return <>
     <FediProfileDialog target={profile.target} onClose={profile.close} />
     <CollectionDialog target={collections.target} onClose={collections.close} />

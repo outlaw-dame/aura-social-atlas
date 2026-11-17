@@ -262,3 +262,24 @@ describe('Your recent posts, for the hashtags you used: allowlisted', () => {
     await expect(fedizenGet('t', '/api/v1/accounts/01ABC/statuses?limit=80&exclude_reblogs=true')).rejects.toThrow('Unsupported Fedizen read path.');
   });
 });
+
+describe('Push subscription writes: only to an Atlas relay', () => {
+  const keys = { p256dh: 'B'.padEnd(87, 'A'), auth: 'A'.repeat(22) };
+  const data = { alerts: { mention: true, status: false, reblog: true, follow: true, follow_request: true, favourite: true, poll: true, update: false, quote: true }, policy: 'all' };
+  test('subscribes, updates and unsubscribes with exactly these bodies', async () => {
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: string, init?: RequestInit) => { seen.push(`${init?.method} ${String(url).replace('https://fedizen.net', '')}`); return new Response(JSON.stringify({ id: '1', server_key: 'B'.padEnd(87, 'x') })); }) as unknown as typeof fetch;
+    const r = await fedizenSend('t', 'POST', '/api/v1/push/subscription', { subscription: { endpoint: 'https://atlas-social.space/api/push/relay/' + 'a'.repeat(32), keys }, data });
+    expect(r.data?.server_key).toBe('B'.padEnd(87, 'x'));
+    await fedizenSend('t', 'PUT', '/api/v1/push/subscription', { data: { ...data, policy: 'followed' } });
+    await fedizenSend('t', 'DELETE', '/api/v1/push/subscription');
+    expect(seen).toEqual(['POST /api/v1/push/subscription', 'PUT /api/v1/push/subscription', 'DELETE /api/v1/push/subscription']);
+  });
+  test('never to anywhere but a relay, and no extra alerts or fields', async () => {
+    globalThis.fetch = (async () => new Response('{}')) as unknown as typeof fetch;
+    await expect(fedizenSend('t', 'POST', '/api/v1/push/subscription', { subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys }, data })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/push/subscription', { subscription: { endpoint: 'http://atlas-social.space/api/push/relay/' + 'a'.repeat(32), keys }, data })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'PUT', '/api/v1/push/subscription', { data: { ...data, alerts: { ...data.alerts, admin_sign_up: true } } })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'PUT', '/api/v1/push/subscription', { data: { ...data, policy: 'everyone' } })).rejects.toThrow('Unsupported Fedizen write body.');
+  });
+});

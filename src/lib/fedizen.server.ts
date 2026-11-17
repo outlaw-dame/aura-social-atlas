@@ -631,7 +631,26 @@ const reply = z.object({
   poll: pollIn.optional(),
 }).strict().refine(p => p.status.length > 0 || !!p.media_ids?.length || !!p.poll, 'empty post').refine(p => !(p.poll && p.media_ids?.length), 'a poll has no media').refine(p => p.sensitive === undefined || !!p.media_ids?.length, 'sensitive without media');
 const members = z.object({ account_ids: z.array(z.string().regex(new RegExp(`^${ID}$`))).min(1).max(20) }).strict();
+/** Mastodon push alerts Atlas offers (Mastodon WebPushSubscription), and who may trigger them. */
+const pushData = z.object({
+  alerts: z.object({ mention: z.boolean(), status: z.boolean(), reblog: z.boolean(), follow: z.boolean(), follow_request: z.boolean(), favourite: z.boolean(), poll: z.boolean(), update: z.boolean(), quote: z.boolean() }).strict(),
+  policy: z.enum(['all', 'followed', 'follower', 'none']),
+}).strict();
+const B64U = /^[A-Za-z0-9_-]+={0,2}$/;
+/** A push subscription pointing at Atlas's relay, never anywhere else (live.server's sibling, push/relay.server.ts). */
+const pushSubscribe = z.object({
+  subscription: z.object({
+    endpoint: z.string().url().max(512).refine(u => /^https:\/\/[^/]+\/api\/push\/relay\/[A-Za-z0-9_-]{22,64}$/.test(u), 'relay'),
+    keys: z.object({ p256dh: z.string().regex(B64U).min(80).max(100), auth: z.string().regex(B64U).min(20).max(30) }).strict(),
+  }).strict(),
+  data: pushData,
+}).strict();
+
 const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTypeAny }[] = [
+  // Push notifications through Atlas's relay (Bonfire: MastoPushController; one subscription per access token).
+  { method: 'POST', match: /^\/api\/v1\/push\/subscription$/, body: pushSubscribe },
+  { method: 'PUT', match: /^\/api\/v1\/push\/subscription$/, body: z.object({ data: pushData }).strict() },
+  { method: 'DELETE', match: /^\/api\/v1\/push\/subscription$/ },
   { method: 'POST', match: new RegExp(`^/api/v1-bonfire/groups/${ID}/(join|leave)$`) },
   { method: 'POST', match: new RegExp(`^/api/v1/accounts/${ID}/(follow|unfollow)$`) },
   // Follow or unfollow a hashtag, as Mastodon does (Bonfire: MastoTagController, bonfire_tag; following creates the tag).
@@ -656,6 +675,8 @@ const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTy
 ];
 const writeReply = z.object({
   id: z.string().max(64).nullish(),
+  // A push subscription's VAPID public key (Mastodon WebPushSubscription.server_key): Atlas's relay checks pushes with it.
+  server_key: z.string().regex(/^[A-Za-z0-9_\-=+/]{40,200}$/).nullish().catch(null),
   title: z.string().max(200).nullish(),
   following: z.boolean().nullish(),
   requested: z.boolean().nullish(),
