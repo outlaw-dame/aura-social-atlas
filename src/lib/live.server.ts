@@ -16,6 +16,9 @@ const STREAM = `${FEDIZEN}/api/v1/streaming`;
 
 type CfSocket = { accept(): void; close(code?: number, reason?: string): void; addEventListener(t: 'message' | 'close' | 'error', l: (e: { data?: unknown }) => void): void };
 
+/** Fedizen access, swappable in tests. */
+export const liveDeps = { server: () => import('./fedizen.server') as Promise<{ tokenFor(uid: string): Promise<{ access_token: string } | null>; liveStatus(raw: unknown): unknown | null }> };
+
 export function liveStream(userId: string, signal: AbortSignal): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
   let ctl!: ReadableStreamDefaultController<Uint8Array>;
@@ -44,7 +47,7 @@ export function liveStream(userId: string, signal: AbortSignal): ReadableStream<
   };
 
   const start = async () => {
-    const { tokenFor, liveStatus } = await import('./fedizen.server');
+    const { tokenFor, liveStatus } = await liveDeps.server();
     check = liveStatus;
     const t = await tokenFor(userId);
     if (!t) { write(toSse({ type: 'off', reason: 'not-connected' })); finish(); return; }

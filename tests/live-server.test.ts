@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
-mock.module('../src/lib/fedizen.server', () => ({
-  tokenFor: async (uid: string) => (uid === 'u1' ? { access_token: 'secret-token', scope: 'read write follow' } : null),
+const { liveStream, liveDeps } = await import('../src/lib/live.server');
+// No module mocks (they'd leak into other test files): the stream's own seam.
+liveDeps.server = async () => ({
+  tokenFor: async (uid: string) => (uid === 'u1' ? { access_token: 'secret-token' } : null),
   liveStatus: (s: unknown) => (s && typeof s === 'object' && 'id' in s ? s : null),
-}));
-const { liveStream } = await import('../src/lib/live.server');
+});
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
