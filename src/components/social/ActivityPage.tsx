@@ -6,6 +6,8 @@ import { ArrowUpRight, AtSign, Bell, BarChart3, Heart, Layers3, Link2, PenLine, 
 import { Button } from '@/components/ui/button';
 import { useFedizen } from './useFedizen';
 import { useFollowRequests } from './useOwnPosts';
+import { useNotificationGroups } from './useNotificationGroups';
+import { groupSentence, type FedizenNoticeGroup } from '@/lib/fedizen-feed';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 const kinds: Record<string, { icon: typeof Bell; color: string }> = {
@@ -34,9 +36,57 @@ export function ActivityPage() {
       : <Button className="mt-4" onClick={f.connect}><Link2 />Connect Fedizen</Button>}
     {f.error && <p role="alert" className="mt-3 text-destructive">{f.error}</p>}
   </>);
-  const list = f.data.notices;
-  if (!list.length) return <><FollowRequests />{note('No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.')}</>;
-  return <><FollowRequests /><ul className="divide-y divide-border">{list.map(n => {
+  return <><FollowRequests /><GroupedActivity fallback={<SingleActivity notices={f.data.notices} note={note} />} /></>;
+}
+
+/**
+ * Activity grouped as Mastodon 4.3 and Bluesky show it: likes, boosts and follows on the same post in one row
+ * ("Ann, Ben and 3 others liked your post") with their faces, and All / Mentions. Falls back to single notifications
+ * when Fedizen can't group.
+ */
+function GroupedActivity({ fallback }: { fallback: React.ReactNode }) {
+  const [mentions, setMentions] = useState(false);
+  const g = useNotificationGroups(mentions);
+  if (g.unsupported && !mentions) return <>{fallback}</>;
+  return <section>
+    <div role="tablist" aria-label="Show" className="mb-4 inline-flex rounded-full bg-muted p-1 text-sm">
+      {([['All', false], ['Mentions', true]] as const).map(([label, on]) => <button key={label} type="button" role="tab" aria-selected={mentions === on}
+        className={`rounded-full px-4 py-1.5 ${mentions === on ? 'bg-background font-semibold shadow-sm' : 'text-muted-foreground'}`} onClick={() => setMentions(on)}>{label}</button>)}
+    </div>
+    {g.loading ? <p className="text-sm text-muted-foreground">Loading your activity…</p>
+      : g.error ? <p role="alert" className="text-sm text-muted-foreground">{g.error} <Button variant="link" size="sm" className="px-1" onClick={g.refresh}>Try again</Button></p>
+      : !g.groups.length ? <p className="rounded-2xl border border-border p-6 text-sm text-muted-foreground">{mentions ? 'No mentions yet.' : 'No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.'}</p>
+      : <ul className="divide-y divide-border">{g.groups.map(x => <GroupRow key={x.key} g={x} />)}</ul>}
+    {g.more && <Button variant="outline" className="mt-4 w-full rounded-full" disabled={g.loadingMore} onClick={g.more}>{g.loadingMore ? 'Loading…' : 'Show older'}</Button>}
+  </section>;
+}
+
+function GroupRow({ g }: { g: FedizenNoticeGroup }) {
+  const k = kinds[g.type] ?? { icon: Bell, color: 'var(--accent)' };
+  const s = groupSentence(g);
+  const first = g.people[0];
+  const open = (p: FedizenNoticeGroup['people'][number]) => (p.acct || p.actor ? () => openFediProfile({ actor: p.actor, acct: p.acct, name: p.name }) : undefined);
+  return <li className="flex gap-4 py-4">
+    <span className="grid size-10 shrink-0 place-items-center rounded-full text-white" style={{ background: k.color }}><k.icon className="size-5" aria-hidden="true" /></span>
+    <div className="min-w-0 flex-1">
+      {g.people.length > 0 && <div className="mb-1.5 flex -space-x-2">{g.people.slice(0, 6).map((p, i) => {
+        const face = <span className="block atlas-avatar ring-2 ring-background"><Face avatar={p.avatar} name={p.name} small /></span>;
+        const go = open(p);
+        return go ? <ProfileHoverCard key={i} target={{ actor: p.actor, acct: p.acct, name: p.name }}><button type="button" onClick={go} aria-label={`${p.name}. Open their profile`}>{face}</button></ProfileHoverCard> : <span key={i}>{face}</span>;
+      })}</div>}
+      <p className="flex items-baseline justify-between gap-3 text-sm">
+        <span>{first && open(first) && g.people.length === 1 ? <button type="button" className="font-semibold hover:underline" onClick={open(first)}>{s.names}</button> : <span className="font-semibold">{s.names}</span>} <span className="text-muted-foreground">{s.rest}</span></span>
+        <span className="shrink-0 text-xs text-muted-foreground">{when(g.date)}</span>
+      </p>
+      {g.post?.text && <p className="mt-1 line-clamp-3 text-sm text-muted-foreground [overflow-wrap:anywhere]">{g.post.text}</p>}
+    </div>
+  </li>;
+}
+
+/** Single notifications, for a Fedizen that can't group them. */
+function SingleActivity({ notices: list, note }: { notices: { id: string; type: string; author: string; avatar?: string; date?: string; text: string; acct?: string; actor?: string }[]; note: (c: React.ReactNode) => React.ReactNode }) {
+  if (!list.length) return <>{note('No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.')}</>;
+  return <><ul className="divide-y divide-border">{list.map(n => {
     const k = kinds[n.type ?? ''] ?? { icon: Bell, color: 'var(--accent)' };
     const who = n.acct || n.actor ? { actor: n.actor, acct: n.acct, name: n.author } : null;
     const face = <span className="relative size-10 shrink-0">
@@ -77,9 +127,10 @@ function FollowRequests() {
 }
 
 /** An avatar, or the initial when there's none or it won't load. */
-function Face({ avatar, name }: { avatar?: string; name: string }) {
+function Face({ avatar, name, small }: { avatar?: string; name: string; small?: boolean }) {
   const [broken, setBroken] = useState(false);
+  const size = small ? 'size-8' : 'size-10';
   return avatar && !broken
-    ? <img src={avatar} alt="" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="size-10 atlas-avatar object-cover" />
-    : <span className="social-avatar size-10 font-serif text-lg" aria-hidden="true">{name.charAt(0)}</span>;
+    ? <img src={avatar} alt="" referrerPolicy="no-referrer" onError={() => setBroken(true)} className={`${size} atlas-avatar object-cover`} />
+    : <span className={`social-avatar ${size} font-serif ${small ? 'text-sm' : 'text-lg'}`} aria-hidden="true">{name.charAt(0)}</span>;
 }

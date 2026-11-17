@@ -13,6 +13,7 @@ import { PROVIDERS, type Credential, type ProviderId } from '@/lib/intelligence/
 import type { DeviceKey, DevicePrefs } from '@/lib/intelligence/device-keys';
 import type { ImageInput } from '@/lib/intelligence/llm';
 import { useAtlasAuth } from './AuthState';
+import { makeSimilar, useSemantic } from './useSemanticIndex';
 
 export const AI_PROBLEM: Record<AiProblem, string> = {
   'not-configured': 'Intelligence isn’t set up on this Atlas server yet.',
@@ -324,12 +325,14 @@ export function ContentFilterProvider({ children }: { children: ReactNode }) {
   const ai = useIntelligence().data;
   const runner = useAiRunner();
   const following = useFollowLookup(engine);
+  const semantic = useSemantic();
+  const similar = useMemo(() => (user ? makeSimilar(user.id, semantic) : undefined), [user, semantic]);
   const statusFn = useServerFn(getFedizenStatus);
   const fedizen = useQuery({ queryKey: ['fedizen-status', user?.id], queryFn: () => statusFn(), enabled: !!user, staleTime: 60_000 });
   const list = useMemo(() => (user && filters.data && 'filters' in filters.data ? filters.data.filters : []), [user, filters.data]);
   useEffect(() => {
-    engine.configure({ filters: list, ai: runner.ready, deep: !!ai?.deepMatching, scope: `${user?.id}:${runner.where}`, judge: runner.judge(list), following });
-  }, [engine, list, runner, ai?.deepMatching, user?.id, following]);
+    engine.configure({ filters: list, ai: runner.ready, deep: !!ai?.deepMatching, scope: `${user?.id}:${runner.where}:${semantic.model ?? ''}`, judge: runner.judge(list), similar, following });
+  }, [engine, list, runner, ai?.deepMatching, user?.id, following, similar, semantic.model]);
   const env = useMemo(() => ({ engine, me: fedizen.data?.handle ?? null, product: ai?.active ? PROVIDERS[ai.active.provider].product : null, following }), [engine, fedizen.data?.handle, ai?.active, following]);
   return <EngineContext.Provider value={env}>{children}</EngineContext.Provider>;
 }

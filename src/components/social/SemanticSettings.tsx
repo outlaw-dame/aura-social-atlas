@@ -9,7 +9,7 @@ import { useAiRunner } from './useIntelligence';
 /** What each engine choice says, shared by desktop and phone Settings. */
 export const SEMANTIC_COPY = {
   title: 'Search by meaning',
-  detail: 'Finds posts you’ve been shown that mean the same as a search, even with none of its words. Atlas keeps an index of those posts on this device.',
+  detail: 'Finds posts you’ve been shown that mean the same as a search, even with none of its words, and lets keyword filters checked in context catch posts on their topic. Atlas keeps an index of those posts on this device.',
   device: { label: 'On this device', note: 'Google’s EmbeddingGemma model runs in this browser: nothing you read or search leaves the device. It downloads once (about 200 MB) and works offline after that.' },
   provider: (name: string) => ({ label: `With your ${name} key`, note: `Posts are sent to ${name} as they’re added to the index, like checking every post against topic filters. Direct messages never are.` }),
   noProvider: 'Your provider has no embedding model (Anthropic and Kimi don’t). Use the model on this device, or add an OpenAI, Gemini, Mistral or Cloudflare key.',

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import type { ForYouPost } from './feed-types';
 import { DEFAULT_LIMITS, MAX_ALT, MAX_CW, MAX_TEXT, UPLOAD_CEILING, type ComposeLimits } from './compose-media';
-import { allowedCallback, assertFedizenSessionIntent, creditsBesidesAuthor, pollOf, type FediPoll, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
+import { allowedCallback, assertFedizenSessionIntent, creditsBesidesAuthor, pollOf, type FediPoll, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromGroupedNotifications, type FedizenNoticeGroup, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
 
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const { tokenFor } = await import('./fedizen.server');
@@ -113,6 +113,29 @@ export const getFedizenHome = createServerFn({ method: 'GET' }).middleware([requ
     error,
   };
 });
+
+/**
+ * Activity, grouped as Mastodon 4.3 does (likes, boosts and follows on the same post as one row), newest first: all
+ * notifications or mentions only, and older pages by the cursor Fedizen's Link header gave. Groups Bonfire made per
+ * page are joined across pages in the browser (mergeNoticeGroups).
+ */
+export const getGroupedNotifications = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: z.string().uuid(), mentions: z.boolean().default(false), max: z.string().min(1).max(512).optional() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ groups: FedizenNoticeGroup[]; next?: string; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor, fedizenGet, PAGE_CURSOR } = await import('./fedizen.server');
+    const cursor = data.max ? encodeURIComponent(data.max) : null;
+    if (cursor && !PAGE_CURSOR.test(cursor)) return { groups: [], error: 'unavailable' };
+    const t = await tokenFor(context.userId);
+    if (!t) return { groups: [], error: 'not-connected' };
+    const r = await fedizenGet(t.access_token, `/api/v2/notifications?limit=40${data.mentions ? '&types%5B%5D=mention' : ''}${cursor ? `&max_id=${cursor}` : ''}`).catch(() => null);
+    if (!r || r.status !== 200) return { groups: [], error: r ? problem(r.status) : 'unavailable' };
+    const groups = fromGroupedNotifications(r.data[0] as never);
+    // Fedizen's placeholder pictures: read each person's own from their actor, as for single notifications.
+    const faces = await actorAvatars(groups.flatMap(g => g.people.flatMap(p => (!p.avatar && p.actor ? [p.actor] : []))), 1000);
+    const withFaces = faces.size ? groups.map(g => ({ ...g, people: g.people.map(p => (!p.avatar && p.actor && faces.get(p.actor) ? { ...p, avatar: faces.get(p.actor) } : p)) })) : groups;
+    return { groups: withFaces, ...(r.next ? { next: r.next } : {}) };
+  });
 
 /** An older page of Home (max_id cursor from the previous page's Link header), loaded before the reader reaches it. */
 export const getFedizenHomePage = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
