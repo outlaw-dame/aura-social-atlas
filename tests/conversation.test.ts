@@ -60,3 +60,19 @@ describe('read positions and mutes on this device', () => {
     deepStrictEqual(readMarks(null), {});
   });
 });
+
+describe('branch colours and thread numbers', () => {
+  const { branchesOf, threadNumbers } = require('../src/lib/conversation') as typeof import('../src/lib/conversation');
+  test('each top-level reply and everything under it share one colour; the post and follow-ups have none', () => {
+    const f = post('f', 'ann', 0);
+    const t = buildThread(f, [], [post('c1', 'ann', 1, 'f'), post('a', 'bob', 2, 'f'), post('a1', 'cat', 3, 'a'), post('b', 'dan', 4, 'f')]);
+    const b = branchesOf(t);
+    deepStrictEqual([b.get('a'), b.get('a1'), b.get('b'), b.get('f'), b.get('c1')], [0, 0, 1, undefined, undefined]);
+  });
+  test("an author's self-thread is numbered from the first post above", () => {
+    const r = post('r', 'ann', 0), f = post('f', 'ann', 1, 'r');
+    const t = buildThread(f, [r], [post('c1', 'ann', 2, 'f')]);
+    deepStrictEqual([...threadNumbers(t).entries()], [['r', { index: 1, total: 3 }], ['f', { index: 2, total: 3 }], ['c1', { index: 3, total: 3 }]]);
+    strictEqual(threadNumbers(buildThread(post('x', 'bob', 0), [], [])).size, 0);
+  });
+});

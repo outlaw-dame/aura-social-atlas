@@ -150,3 +150,35 @@ export function unreadIn(posts: FedizenPost[], lastRead: number | undefined, isM
 }
 
 export const latestTime = (posts: FedizenPost[]) => posts.reduce((m, p) => Math.max(m, time(p)), 0);
+
+/* ── Branch colours (both prototypes) ───────────────────────────────────────────────────────────────── */
+
+/** How many branch colours there are (styles.css --atlas-branch-0…5). */
+export const BRANCHES = 6;
+
+/**
+ * Each reply's branch: which top-level reply it descends from, numbered in the order shown, so a sub-conversation
+ * keeps one colour wherever it appears — the line beside it in A, the stripe and "Replying to" chip in B. Phanpy's
+ * own thread lines are one grey (--comment-line-color); colour there means kind (orange reply-to and Thread
+ * badges, purple boosts). Colouring branches is Atlas's addition, after Reddit clients' coloured comment lines.
+ * The posts above, the post and its author's follow-ups have no branch.
+ */
+export function branchesOf(t: Thread): Map<string, number> {
+  const out = new Map<string, number>();
+  t.replies.forEach((n, i) => {
+    const walk = (x: Thread['replies'][number]) => { out.set(key(x.post), i % BRANCHES); x.replies.forEach(walk); };
+    walk(n);
+  });
+  return out;
+}
+
+/** "Thread 2/3", as Phanpy numbers an author's self-thread: the post above that are the author's, the post, then
+ *  their follow-ups. Undefined for a post that isn't part of one. */
+export function threadNumbers(t: Thread): Map<string, { index: number; total: number }> {
+  const own = t.selfThread ? t.ancestors : [];
+  const chain = [...own, t.focus, ...t.continuation];
+  const out = new Map<string, { index: number; total: number }>();
+  if (chain.length < 2) return out;
+  chain.forEach((p, i) => out.set(key(p), { index: i + 1, total: chain.length }));
+  return out;
+}

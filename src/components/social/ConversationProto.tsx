@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { BellOff, Bell, CornerDownRight, MessageSquareReply } from 'lucide-react';
@@ -6,7 +6,7 @@ import type { FedizenPost } from '@/lib/fedizen-feed';
 import { fullAcct } from '@/lib/fedizen-feed';
 import { shortAgo } from '@/lib/feed-types';
 import { buildThread, type Thread } from '@/lib/thread';
-import { allPosts, chatItems, latestTime, participantsOf, readMarks, rootOf, subjectOf, unreadIn, writeMark, type ProtoStyle, type ReplyMode } from '@/lib/conversation';
+import { allPosts, branchesOf, chatItems, latestTime, participantsOf, readMarks, rootOf, subjectOf, unreadIn, writeMark, type ProtoStyle, type ReplyMode } from '@/lib/conversation';
 import { getFedizenStatus, getFedizenThread } from '@/lib/fedizen.functions';
 import { useSaveToggle } from './useFedizenLibrary';
 import { useReactions } from './usePostActions';
@@ -104,6 +104,8 @@ export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, 
 }) {
   const isMe = useIsMePost();
   const posts = useMemo(() => allPosts(t), [t]);
+  // The same colour per branch as prototype A, so a sub-conversation can be followed as it interleaves.
+  const branches = useMemo(() => branchesOf(t), [t]);
   const root = rootOf(t);
   const rootKey = root.statusId ?? root.id;
   const subject = subjectOf(root);
@@ -142,7 +144,7 @@ export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, 
         ? <li key={it.key} className="atlas-conv-day" role="separator"><span>{it.label}</span></li>
         : it.t === 'new'
         ? <li key={it.key} id="atlas-conv-new" className="atlas-conv-new" role="separator"><span>New</span></li>
-        : <li key={it.key} className="atlas-conv-item"><Gate post={it.post}><Message item={it} actions={actions} mine={isMe(it.post)} active={active === it.key} onActivate={() => setActive(a => (a === it.key ? null : it.key))} onOpenPost={onOpenPost} Content={Content} /></Gate></li>)}
+        : <li key={it.key} className="atlas-conv-item" style={branches.has(it.key) ? { '--branch': `var(--atlas-branch-${branches.get(it.key)})` } as CSSProperties : undefined}><Gate post={it.post}><Message item={it} actions={actions} mine={isMe(it.post)} active={active === it.key} onActivate={() => setActive(a => (a === it.key ? null : it.key))} onOpenPost={onOpenPost} Content={Content} /></Gate></li>)}
     </ol>
     <div className="atlas-conv-dock">
       <button type="button" className="atlas-conv-reply" onClick={() => actions.onReply(t.focus)} disabled={!actions.reactions.canAct}>
