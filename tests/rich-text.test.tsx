@@ -154,3 +154,13 @@ describe('drawing', () => {
     strictEqual(hasFormatting([{ t: 'quote', c: [] }]), true);
   });
 });
+
+describe("Fedizen's statuses keep their custom emoji", () => {
+  test('emojis pass the status schema and reach the post', async () => {
+    const { liveStatus } = await import('../src/lib/fedizen.server');
+    const { fromStatuses } = await import('../src/lib/fedizen-feed');
+    const raw = liveStatus({ id: '1', content: '<p>hi :blob:</p>', emojis: [{ shortcode: 'blob', url: 'https://x.example.org/b.png', static_url: 'https://x.example.org/b.png' }] });
+    ok(raw);
+    deepStrictEqual(fromStatuses([raw as never])[0].emojis, { blob: { url: 'https://x.example.org/b.png' } });
+  });
+});
