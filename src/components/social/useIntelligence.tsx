@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import {
   addContentFilters, deleteContentFilter, describePostForFilter, expandContentFilter, followingAmong, getIntelligence, judgeFilteredPosts,
-  listContentFilters, removeAiKey, saveAiKey, suggestContentFilters, altTextForImage, updateContentFilter, updateIntelligence,
+  listContentFilters, removeAiKey, saveAiKey, suggestContentFilters, altTextForImage, searchWordingsFor, updateContentFilter, updateIntelligence,
   type AiProblem, type IntelligenceStatus,
 } from '@/lib/intelligence.functions';
 import { getFedizenStatus } from '@/lib/fedizen.functions';
@@ -127,7 +127,7 @@ export function useAiRunner() {
   const ai = useIntelligence().data;
   const judgeServer = useServerFn(judgeFilteredPosts), expandServer = useServerFn(expandContentFilter);
   const suggestServer = useServerFn(suggestContentFilters), describeServer = useServerFn(describePostForFilter);
-  const altServer = useServerFn(altTextForImage);
+  const altServer = useServerFn(altTextForImage), wordingsServer = useServerFn(searchWordingsFor);
   const id = user?.id ?? '';
   const active = ai?.active ?? null, ready = intelligenceReady(ai), deep = !!ai?.deepMatching;
   const local = useCallback(async (): Promise<{ c: Credential; model: string } | AiProblem> => {
@@ -176,7 +176,18 @@ export function useAiRunner() {
       }
       return altServer({ data: { expectedAtlasUserId: id, image, text } }).catch(() => ({ error: 'unavailable' as const }));
     },
-  }), [ready, active, deep, local, judgeServer, expandServer, suggestServer, describeServer, altServer, id]);
+    /** Other searches meaning the same as `q` (post search): with the key on this device, or on Atlas's server. */
+    searchWordings: async (q: string): Promise<string[]> => {
+      if (active?.where === 'device') {
+        const k = await local(); if (typeof k === 'string') return [];
+        try { return await (await tasks()).searchWordings(k.c, k.model, q); } catch { return []; }
+      }
+      const r = await wordingsServer({ data: { expectedAtlasUserId: id, q } }).catch(() => null);
+      return r && 'terms' in r ? r.terms : [];
+    },
+    /** Which model answers, so answers cached for one model aren't reused for another. */
+    model: active ? `${active.where}:${active.provider}:${active.model}` : null,
+  }), [ready, active, deep, local, judgeServer, expandServer, suggestServer, describeServer, altServer, wordingsServer, id]);
 }
 
 /* ── Keyword filters ─────────────────────────────────────────────────────────────────────────── */

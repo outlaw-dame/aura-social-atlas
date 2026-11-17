@@ -4,6 +4,7 @@ import { useServerFn } from '@tanstack/react-start';
 import { useAtlasAuth } from './AuthState';
 import { LIBRARY_PROBLEM } from './useFedizenLibrary';
 import { useIsMe } from './useFediProfile';
+import { useAiRunner } from './useIntelligence';
 import {
   answerFollowRequest, deleteFedizenPost, editFedizenPost, getFedizenPostSource, getFollowRequests, getLikedPosts, getMutedAccounts, getWhoReacted,
   muteFedizenAccount, reportOnFedizen, searchFedizenPosts, suggestHashtags, voteOnFedizenPoll,
@@ -134,17 +135,39 @@ export function useFollowRequests() {
   };
 }
 
-/** Posts on Fedizen matching a search, once it's two characters or more. */
+/**
+ * Posts on Fedizen matching a search, once it's two characters or more. The plain search shows at once; with
+ * Intelligence on, the person's own model (wherever their key is kept) suggests other wordings, and the search runs
+ * again with them, replacing the plain results when it answers. Wordings are cached per model, and only while
+ * Intelligence is ready, so turning it off stops them at once.
+ */
 export function useSearchPosts(q: string) {
   const { user } = useAtlasAuth();
   const search = useServerFn(searchFedizenPosts);
+  const runner = useAiRunner();
   const term = q.trim();
-  const r = useQuery({
-    queryKey: ['fedizen-search-posts', user?.id, term],
+  const on = !!user && term.length >= 2;
+  const plain = useQuery({
+    queryKey: ['fedizen-search-posts', user?.id, term, []],
     queryFn: () => search({ data: { expectedAtlasUserId: user!.id, q: term } }),
-    enabled: !!user && term.length >= 2, staleTime: 60_000,
+    enabled: on, staleTime: 60_000,
   });
-  return { posts: r.data?.posts ?? [], related: r.data?.related ?? [], loading: r.isFetching, error: r.data?.error && r.data.error !== 'not-connected' ? problem(r.data.error) : r.isError ? problem('unavailable') : null, available: !!user };
+  const wordings = useQuery({
+    queryKey: ['search-wordings', user?.id, runner.model, term.toLowerCase()],
+    queryFn: () => Promise.race([runner.searchWordings(term), new Promise<string[]>(r => setTimeout(() => r([]), 6000))]),
+    enabled: on && runner.ready && !!runner.model, staleTime: 3_600_000, retry: false,
+  });
+  const related = runner.ready ? wordings.data ?? [] : [];
+  const expanded = useQuery({
+    queryKey: ['fedizen-search-posts', user?.id, term, related],
+    queryFn: () => search({ data: { expectedAtlasUserId: user!.id, q: term, related } }),
+    enabled: on && related.length > 0, staleTime: 60_000,
+  });
+  const r = related.length && expanded.data && !expanded.data.error ? expanded : plain;
+  return {
+    posts: r.data?.posts ?? [], related: r === expanded ? r.data?.related ?? [] : [], loading: plain.isFetching || (related.length > 0 && expanded.isFetching),
+    error: r.data?.error && r.data.error !== 'not-connected' ? problem(r.data.error) : r.isError ? problem('unavailable') : null, available: !!user,
+  };
 }
 
 /** One handle written two ways: "@ann" and "ann@fedizen.net" are the same Fedizen person. */

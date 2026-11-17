@@ -10,6 +10,9 @@ import { Input } from '@/components/ui/input';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
+import { FilterGate } from './FilterGate';
+import { SensitiveMedia } from './SensitiveMedia';
+import { AuthorWarning } from './ContentWarning';
 import { useLikedPosts } from './useOwnPosts';
 import { LIBRARY_PROBLEM, useCircleActions, useCircleMembers, useFedizenCircles, useFedizenSaved, useSaveToggle } from './useFedizenLibrary';
 
@@ -32,19 +35,20 @@ export function SaveButton({ post, save }: { post: Pick<FedizenPost, 'statusId' 
 function PostRow({ p, save }: { p: FedizenPost; save: ReturnType<typeof useSaveToggle> }) {
   const navigate = useNavigate();
   const who = <>{p.avatar && <img src={p.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-8 atlas-avatar object-cover" />}<span className="atlas-author-name font-semibold">{p.author}</span></>;
-  return <article className="border-b border-border pb-5">
+  // Keyword filters, content warnings and sensitive media apply here as in the feeds.
+  return <FilterGate post={p}><article className="border-b border-border pb-5">
     <BoostedBy post={p} className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground" />
     <p className="flex items-center gap-2 text-xs">{canOpen(p)
       ? <ProfileHoverCard target={{ actor: p.actor, acct: p.acct, name: p.author }}><button type="button" className="atlas-author-button gap-2" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}>{who}</button></ProfileHoverCard>
       : who}<span className="text-muted-foreground">{p.handle} · {when(p.date)}</span></p>
-    <div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{linkifyPost(t, p.mentions, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
-    {p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}
-    <PostArticleCard article={p.article} />
+    <AuthorWarning cw={p.cw}><div className="mt-3 space-y-2 text-sm leading-relaxed">{p.paragraphs.map((t, i) => <p key={i}>{linkifyPost(t, p.mentions, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
+    <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}</SensitiveMedia>
+    <PostArticleCard article={p.article} /></AuthorWarning>
     <div className="mt-2 flex items-center gap-2">
       <SaveButton post={p} save={save} />
       <a href={p.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Open on Fedizen<ArrowUpRight className="size-3" /></a>
     </div>
-  </article>;
+  </article></FilterGate>;
 }
 
 /** Profile → Saved: your Fedizen bookmarks. `stories` are discovery stories saved this session, shown after. */

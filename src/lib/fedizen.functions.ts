@@ -857,18 +857,18 @@ export const answerFollowRequest = createServerFn({ method: 'POST' }).middleware
 
 /**
  * Posts Fedizen knows about that match a search (Mastodon v2 search, statuses), as the reader may see them. With
- * Intelligence on, the search is semantic: the person's own AI model suggests up to four other searches that posts
- * meaning the same would match (other wordings, hashtags, the term in another language), and every search runs at
- * once. Posts that match the search itself come first, then those matching more of the other searches, newest first.
+ * Intelligence on, the search is semantic: `related` carries up to four other searches from the person's own AI model
+ * (useSearchPosts asks it, on their device or Atlas's server, wherever their key is), and every search runs at once. Posts that match the search itself come first, then those matching more of the other searches, newest first.
  */
 export const searchFedizenPosts = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => me.extend({ q: z.string().trim().min(2).max(200) }).parse(d))
+  .inputValidator(d => me.extend({ q: z.string().trim().min(2).max(200), related: z.array(z.string().trim().min(2).max(40)).max(4).default([]) }).parse(d))
   .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; error?: Problem; related?: string[] }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId);
     if ('error' in c) return { posts: [], error: c.error };
     const { fedizenGet } = await import('./fedizen.server');
-    const related = await relatedSearches(context.userId, data.q);
+    const seen = new Set([data.q.toLowerCase()]);
+    const related = data.related.filter(t => { const k = t.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
     const runs = await Promise.all([data.q, ...related].map(q => fedizenGet(c.token, `/api/v2/search?q=${encodeURIComponent(q)}&type=statuses&limit=20`).catch(() => null)));
     const first = runs[0];
     if (!first || first.status !== 200) {
@@ -886,28 +886,6 @@ export const searchFedizenPosts = createServerFn({ method: 'GET' }).middleware([
     const ranked = [...score.values()].sort((a, b) => Number(b.exact) - Number(a.exact) || b.hits - a.hits || b.at - a.at).slice(0, 30).map(x => x.status);
     return { posts: await withArticleAuthors(fromStatuses(ranked as never), 1500, c.token), ...(related.length ? { related } : {}) };
   });
-
-/** Other searches meaning the same as `q`, from the person's own AI model; none when Intelligence is off or fails. */
-const relatedCache = new Map<string, { at: number; terms: string[] }>();
-async function relatedSearches(userId: string, q: string): Promise<string[]> {
-  const key = `${userId}:${q.toLowerCase()}`;
-  const hit = relatedCache.get(key);
-  if (hit && Date.now() - hit.at < 3_600_000) return hit.terms;
-  try {
-    const { activeModel } = await import('./intelligence/store.server');
-    const ai = await activeModel(userId);
-    if ('problem' in ai) return [];
-    const { searchWordings } = await import('./intelligence/tasks');
-    // A slow model doesn't hold the search up; its answer isn't cached then, so the next search can use it.
-    const found = await Promise.race([searchWordings(ai.credential, ai.model, q), new Promise<null>(r => setTimeout(() => r(null), 4000))]);
-    if (!found) return [];
-    const seen = new Set([q.toLowerCase()]);
-    const terms = found.filter(t => { const k = t.toLowerCase(); if (seen.has(k) || t.length < 2) return false; seen.add(k); return true; });
-    if (relatedCache.size >= 500) relatedCache.delete(relatedCache.keys().next().value as string);
-    relatedCache.set(key, { at: Date.now(), terms });
-    return terms;
-  } catch { return []; }
-}
 
 /* ── Mute, report, who reacted, liked posts, hashtag suggestions ──────────────────────────────────── */
 
