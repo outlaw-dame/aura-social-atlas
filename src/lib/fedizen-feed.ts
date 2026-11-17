@@ -1,4 +1,5 @@
 /** Browser-safe Fedizen (Mastodon-compatible) feed types, normalizers and redirect allowlist. */
+import { emojiMap, htmlToRich, type EmojiMap, type RichBlock } from './rich-text';
 import { htmlToParagraphs } from './spotlight';
 import { collectionLinksIn, mastodonCollectionApi } from './collections';
 import { isPublicHttpsUrl, parseHandle, type FediAuthor } from './article-author';
@@ -25,7 +26,7 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
   return have.has(needed) || (needed.includes(':') && have.has(needed.split(':')[0]));
 }
 
-export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; url: string; date?: string; image?: string; /** The image's width and height (from Fedizen's media meta), to reserve its space before it loads. */ imageSize?: { w: number; h: number }; /** The author marked its media sensitive. */ sensitive?: boolean; boostedBy?: string;
+export type FedizenPost = { id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; /** Its formatting (rich-text.ts), when it has any: bold, code, quotes, Misskey's MFM… */ rich?: RichBlock[]; /** Its custom emoji, by shortcode. */ emojis?: EmojiMap; url: string; date?: string; image?: string; /** The image's width and height (from Fedizen's media meta), to reserve its space before it loads. */ imageSize?: { w: number; h: number }; /** The author marked its media sensitive. */ sensitive?: boolean; boostedBy?: string;
   /** The author's actor and full handle, to open their profile in Atlas. */ actor?: string; acct?: string;
   /** Who boosted it (boostedBy is their name), to show their avatar and open their profile. */ booster?: FediPerson;
   /** The people the post mentions, as Fedizen resolved them: "@name" in the text opens theirs. */ mentions?: FediMention[];
@@ -54,7 +55,7 @@ export type FedizenNotice = { id: string; type: string; author: string; avatar?:
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string; url?: string | null; uri?: string | null };
-type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; sensitive?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
+type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; emojis?: unknown; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; sensitive?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
   replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null;
   in_reply_to_id?: string | null; spoiler_text?: string | null; tags?: { name?: string }[] | null; mentions?: { acct?: string | null; username?: string | null }[] | null; poll?: { id?: string; expires_at?: string | null; expired?: boolean | null; multiple?: boolean | null; votes_count?: number | null; voters_count?: number | null; voted?: boolean | null; own_votes?: number[] | null; options?: { title?: string; votes_count?: number | null }[] } | null; edited_at?: string | null;
   quote?: { quoted_status?: { content?: string | null; spoiler_text?: string | null; media_attachments?: { description?: string | null }[] | null } | null } | null };
@@ -124,6 +125,8 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
     return {
       id: s.id, statusId: o.id, bookmarked: o.bookmarked === true || s.bookmarked === true, author: name(o.account), handle: `@${o.account?.acct ?? ''}`, avatar: avatarOf(o.account),
       paragraphs: htmlToParagraphs(o.content ?? ''), url: http(o.url) ?? http(o.uri) ?? FEDIZEN, date: o.created_at,
+      ...(() => { const r = htmlToRich(o.content); return r ? { rich: r } : {}; })(),
+      ...(() => { const e = emojiMap(o.emojis); return e ? { emojis: e } : {}; })(),
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
       ...(() => { const size = imageSizeOf(o.media_attachments?.find(m => m.type === 'image')?.meta); return size ? { imageSize: size } : {}; })(),
       boostedBy: s.reblog ? name(s.account) : undefined,

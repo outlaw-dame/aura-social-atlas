@@ -1,4 +1,5 @@
 import { htmlToParagraphs } from './spotlight';
+import { emojiMap, htmlToRich, type EmojiMap, type RichBlock } from './rich-text';
 import { isPublicHttpsUrl, normalizeHost, parseHandle, type FediAuthor } from './article-author';
 import { videoFromObject, type FediVideo } from './fedi-video';
 
@@ -14,6 +15,10 @@ export type FediProfilePost = {
   /** Articles have a title; notes don't. */
   title?: string;
   paragraphs: string[];
+  /** Its formatting (rich-text.ts), when it has any; for Misskey-family posts read from their MFM source. */
+  rich?: RichBlock[];
+  /** Its custom emoji, by shortcode (ActivityPub `Emoji` tags). */
+  emojis?: EmojiMap;
   /** The author's content warning; the post body stays folded behind it. */
   cw?: string;
   image?: string;
@@ -125,7 +130,9 @@ const isPublic = (o: Json) => [...list(o.to), ...list(o.cc)].some(a => typeof a 
 const POST_TYPES = new Set(['Note', 'Article', 'Page', 'Question', 'Video', 'Audio', 'Event']);
 
 /** An outbox page → the author's own public posts (boosts and non-public items are left out). */
-export function postsFromOutbox(page: unknown, actorId: string, max = 10): FediProfilePost[] {
+export function postsFromOutbox(page: unknown, actorId: string, max = 10,
+  /** Formatting from a source the server reads (Misskey's MFM: mfm.ts, kept out of the browser bundle). */
+  sourceRich?: (o: Record<string, unknown>) => RichBlock[] | undefined): FediProfilePost[] {
   if (!isObj(page)) return [];
   const actorHost = normalizeHost(new URL(actorId).hostname);
   const out: FediProfilePost[] = [];
@@ -153,6 +160,12 @@ export function postsFromOutbox(page: unknown, actorId: string, max = 10): FediP
       id, url: href(o.url) ?? id, date: published && !Number.isNaN(Date.parse(published)) ? published : undefined,
       title, paragraphs, cw, image: img ? href(img.url) : undefined,
       ...(o.sensitive === true ? { sensitive: true } : {}),
+      ...(() => {
+        if (isArticle && summary) return {};
+        const r = sourceRich?.(o) ?? htmlToRich(str(o.content));
+        return r ? { rich: r.slice(0, 12) } : {};
+      })(),
+      ...(() => { const e = emojiMap(list(o.tag)); return e ? { emojis: e } : {}; })(),
       ...(() => { const v = list(o.type).includes('Video') ? videoFromObject(o) : null; return v ? { video: v } : {}; })(),
     });
   }
