@@ -83,9 +83,16 @@ export function usePostTranslation(post: FedizenPost): PostTranslation {
   const lang = source ?? found ?? null;
   const offered = offer(post, lang, prefs);
   const cacheKey = `${id}|${post.editedAt ?? ''}|${target}|${lang ?? ''}`;
-  const [done, setDone] = useState<Done | null>(() => made.get(cacheKey) ?? null);
+  // A translation belongs to one version of the post, one target and one source: when any changes (an edit arrives,
+  // the target is changed), it's no longer shown, and an answer still on its way for the old one is ignored.
+  const [made1, setDone] = useState<(Done & { key: string }) | null>(null);
+  const done = made1?.key === cacheKey ? made1 : made.get(cacheKey) ?? null;
+  const latest = useRef(cacheKey);
+  latest.current = cacheKey;
   const [original, setOriginal] = useState(false);
-  const [state, setState] = useState<{ busy?: boolean; problem?: string; download?: boolean }>({});
+  /** `waiting`: automatic translation needs a language download, which only a tap may start. */
+  const [state, setState] = useState<{ busy?: boolean; problem?: string; download?: boolean; waiting?: boolean }>({});
+  useEffect(() => { setState(x => (x.busy ? x : {})); setOriginal(false); }, [cacheKey]);
   const device = canTranslateOnDevice();
 
   // A pair whose language pack isn't on this device yet: the button says the tap will download it.
@@ -102,7 +109,7 @@ export function usePostTranslation(post: FedizenPost): PostTranslation {
     if (!list.length) { if (manual) setState({ problem: device || prefs.cloud !== 'none' ? 'unavailable' : 'setup' }); return; }
     const key = `${id}|${post.editedAt ?? ''}|${target}|${from}`;
     const cached = made.get(key);
-    if (cached) { setDone(cached); setOriginal(false); return; }
+    if (cached) { setDone({ ...cached, key }); setOriginal(false); return; }
     setState({ busy: true });
     let last = 'unavailable';
     for (const e of list) {
@@ -121,20 +128,23 @@ export function usePostTranslation(post: FedizenPost): PostTranslation {
       if ('texts' in r) {
         const d: Done = { texts: r.texts, mode, engine: e, ...(r.detected ? { detected: r.detected } : {}) };
         made.set(key, d);
-        setDone(d); setOriginal(false); setState({});
+        // The post was edited or the target changed meanwhile: keep the answer for later, show nothing stale.
+        if (latest.current !== key && from === lang) return;
+        setDone({ ...d, key }); setOriginal(false); setState({});
         return;
       }
       last = r.error;
-      if (r.error === 'needs-download' && !manual) { setState({ download: true }); return; }
+      if (r.error === 'needs-download' && !manual) { setState({ download: true, waiting: true }); return; }
     }
+    if (latest.current !== key && from === lang) return;
     setState({ problem: last });
   }, [lang, post, prefs, device, cloudReady, id, target, source, deeplFn, user, runner]);
 
   // Automatically, once it's on screen.
   useEffect(() => {
-    if (!prefs.auto || !offered || !visible || done || state.busy || state.problem) return;
+    if (!prefs.auto || !offered || !visible || done || state.busy || state.problem || state.waiting) return;
     void run(false);
-  }, [prefs.auto, offered, visible, done, state.busy, state.problem, run]);
+  }, [prefs.auto, offered, visible, done, state.busy, state.problem, state.waiting, run]);
 
   const shown = useMemo(() => {
     if (!done || original) return post;
@@ -143,7 +153,7 @@ export function usePostTranslation(post: FedizenPost): PostTranslation {
 
   const sourceName = lang ? languageName(done?.detected && !source && !post.language ? done.detected : lang) : '';
   let line: TranslationLine | null = null;
-  if (done) line = { kind: 'done', source: sourceName, via: via(done.engine), original, toggle: () => setOriginal(o => !o), retranslate: l => { setSource(l); setDone(null); void run(true, l); } };
+  if (done) line = { kind: 'done', source: sourceName, via: via(done.engine), original, toggle: () => setOriginal(o => !o), retranslate: l => { setSource(l); void run(true, l); } };
   else if (!offered) line = null;
   else if (state.busy) line = { kind: 'busy', source: sourceName };
   else if (state.problem) line = { kind: 'problem', source: sourceName, message: state.problem === 'setup' ? 'This browser can’t translate on the device. Choose a translation service in Settings → Intelligence.' : PROBLEM[state.problem] ?? PROBLEM.unavailable, settings: state.problem === 'setup' || state.problem === 'no-key', run: () => void run(true) };
