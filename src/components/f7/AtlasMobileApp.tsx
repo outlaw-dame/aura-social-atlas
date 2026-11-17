@@ -52,6 +52,7 @@ import { registerAppServiceWorker } from '@/lib/register-sw';
 import { MobileReadingSettings } from './ReadingSettings';
 import { useComposeIntent } from '@/lib/compose-intent';
 import { ThreadPage } from './Thread';
+import { ConversationsPage } from './Conversations';
 import { OPEN_POST_EVENT, type OpenPostDetail } from '@/lib/open-post';
 
 Framework7.use(Framework7React);
@@ -505,6 +506,7 @@ const STACK_ROUTES = [
   { path: '/', component: StackRoot },
   { path: '/tag/:tag/', component: TagFeedPage },
   { path: '/post/:id/', component: ThreadPage },
+  { path: '/conversations/', component: ConversationsPage },
   { path: '/followed-tags/', component: FollowedTagsPage },
   { path: '/intelligence/', component: IntelligencePage },
   { path: '/notifications-settings/', component: NotificationSettingsPage },

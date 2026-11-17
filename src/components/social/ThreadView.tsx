@@ -9,6 +9,8 @@ import { FeedPostCard, useFeedPostActions, type FeedActions } from './FeedPostCa
 import { FEED_PROBLEM } from './useFeeds';
 import { useThread } from './useThread';
 import { FilterPlaceProvider } from './useIntelligence';
+import { ChatConversation, ParticipantsStrip, ProtoSwitch, ReplyModeSwitch, useProtoStyle, useReplyMode } from './ConversationProto';
+import { flatReplies, type ReplyMode } from '@/lib/conversation';
 
 /**
  * Desktop: a post's conversation (/post/$id). The posts it answers above, joined by a line; the post itself, larger,
@@ -19,6 +21,8 @@ export function ThreadView({ statusId, seed }: { statusId: string; seed?: Fedize
   const t = useThread(statusId, seed);
   const actions = useFeedPostActions();
   const navigate = useNavigate();
+  const [style, setStyle] = useProtoStyle();
+  const [replyMode, setReplyMode] = useReplyMode();
   const back = () => { if (window.history.length > 1) window.history.back(); else void navigate({ to: '/' }); };
   return <main className="mx-auto w-full max-w-2xl px-4 pb-24 pt-6">
     <div className="mb-4 flex items-center gap-2">
@@ -30,7 +34,13 @@ export function ThreadView({ statusId, seed }: { statusId: string; seed?: Fedize
     {!t.signedIn ? <p className="text-sm text-muted-foreground">Sign in to Atlas and connect Fedizen to open conversations.</p>
       : !t.thread && t.loading ? <p className="text-sm text-muted-foreground" aria-live="polite">Loading the conversation…</p>
       : !t.thread ? <Problem error={t.error} retry={t.refetch} />
-      : <FilterPlaceProvider place="public"><Conversation thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} sort={t.sort} setSort={t.setSort} retry={t.refetch} /></FilterPlaceProvider>}
+      : <FilterPlaceProvider place="public">
+        <ProtoSwitch style={style} setStyle={setStyle} />
+        {style === 'b'
+          ? <ChatConversation thread={t.thread} actions={actions} loaded={!t.loading} onOpenInbox={() => void navigate({ to: '/conversations' })}
+              onOpenPost={p => { rememberSeed(p); void navigate({ to: '/post/$id', params: { id: p.statusId! } }); }} />
+          : <Conversation thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} sort={t.sort} setSort={t.setSort} retry={t.refetch} replyMode={replyMode} setReplyMode={setReplyMode} />}
+      </FilterPlaceProvider>}
     {actions.dialog}
   </main>;
 }
@@ -41,7 +51,7 @@ function Problem({ error, retry }: { error?: string; retry: () => void }) {
   return <p className="text-sm text-muted-foreground">{known} <button type="button" className="underline" onClick={retry}>Try again</button></p>;
 }
 
-function Conversation({ thread: t, actions, loading, partial, sort, setSort, retry }: { thread: Thread; actions: FeedActions; loading: boolean; partial: boolean; sort: string; setSort: (s: 'oldest' | 'newest' | 'top') => void; retry: () => void }) {
+function Conversation({ thread: t, actions, loading, partial, sort, setSort, retry, replyMode, setReplyMode }: { thread: Thread; actions: FeedActions; loading: boolean; partial: boolean; sort: string; setSort: (s: 'oldest' | 'newest' | 'top') => void; retry: () => void; replyMode: ReplyMode; setReplyMode: (m: ReplyMode) => void }) {
   const [shown, setShown] = useState(PAGE);
   const fold = t.total > FOLD_ABOVE;
   const host = hostOf(t.focus.url);
@@ -52,23 +62,31 @@ function Conversation({ thread: t, actions, loading, partial, sort, setSort, ret
     </ol>}
     {!t.ancestors.length && t.missingParent && <p className="atlas-thread-gap">The post this replies to isn’t available.</p>}
     <FeedPostCard post={t.focus} actions={actions} mode="focus" />
+    <ParticipantsStrip thread={t} />
     {t.continuation.length > 0 && <ol className="atlas-thread-continue" aria-label={`${t.focus.author} continues`}>
       {t.continuation.map(p => <li key={p.statusId ?? p.id}><FeedPostCard post={p} actions={actions} mode="thread" /></li>)}
     </ol>}
     <section aria-labelledby="atlas-replies-h" className="mt-6">
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <h2 id="atlas-replies-h" className="flex-1 text-sm font-semibold">{loading ? 'Replies' : t.replies.length ? `Replies` : 'No replies yet'}</h2>
-        {t.replies.length > 1 && <div role="radiogroup" aria-label="Sort replies" className="inline-flex rounded-full bg-muted p-0.5 text-xs">
+        {t.replies.length > 0 && <ReplyModeSwitch mode={replyMode} setMode={setReplyMode} />}
+        {replyMode === 'nested' && t.replies.length > 1 && <div role="radiogroup" aria-label="Sort replies" className="inline-flex rounded-full bg-muted p-0.5 text-xs">
           {REPLY_SORTS.map(s => <button key={s.id} type="button" role="radio" aria-checked={sort === s.id} onClick={() => setSort(s.id)}
             className={sort === s.id ? 'rounded-full bg-background px-3 py-1 font-medium shadow-sm' : 'rounded-full px-3 py-1 text-muted-foreground hover:text-foreground'}>{s.label}</button>)}
         </div>}
       </div>
       {loading && <p className="text-sm text-muted-foreground" aria-live="polite">Loading replies…</p>}
       {partial && <p className="mb-3 text-sm text-muted-foreground">Couldn’t load the rest of this conversation. <button type="button" className="underline" onClick={retry}>Try again</button></p>}
-      <ol className="atlas-thread-replies">
+      {replyMode === 'flat'
+        // Bonfire's flat mode: every reply oldest first, each naming the post it answers when that isn't this one.
+        ? <ol className="atlas-thread-replies">{flatReplies(t).slice(0, shown).map(r => <li key={r.post.statusId ?? r.post.id}>
+            {r.parent && <p className="atlas-thread-part">Replying to {r.parent.author}: “{(r.parent.paragraphs[0] ?? '').slice(0, 60)}”</p>}
+            <FeedPostCard post={r.post} actions={actions} mode="thread" />
+          </li>)}</ol>
+        : <ol className="atlas-thread-replies">
         {t.replies.slice(0, shown).map(n => <Reply key={n.post.statusId ?? n.post.id} node={n} actions={actions} fold={fold} author={t.focus.author} />)}
-      </ol>
-      {t.replies.length > shown && <Button variant="outline" className="mt-3 w-full" onClick={() => setShown(s => s + PAGE)}>Show more replies ({t.replies.length - shown})</Button>}
+      </ol>}
+      {(() => { const n = replyMode === 'flat' ? flatReplies(t).length : t.replies.length; return n > shown && <Button variant="outline" className="mt-3 w-full" onClick={() => setShown(s => s + PAGE)}>Show more replies ({n - shown})</Button>; })()}
       {/* Fedizen shows the replies it has; one from a server it hasn't heard from yet appears once it has. */}
       {!loading && host && host !== 'fedizen.net' && <p className="mt-4 text-xs text-muted-foreground">
         Replies come from Fedizen, which may not have every reply from other servers yet. <a href={t.focus.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 underline">See it on {host}<ArrowUpRight className="size-3" aria-hidden="true" /></a>

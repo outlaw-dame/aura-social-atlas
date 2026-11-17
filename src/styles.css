@@ -1093,3 +1093,82 @@ ruby rt { font-size: .6em; }
 @keyframes atlas-mfm-hue { from { color: hsl(0 85% 55%); } 17% { color: hsl(60 85% 50%); } 33% { color: hsl(120 70% 42%); } 50% { color: hsl(180 80% 42%); } 67% { color: hsl(240 80% 62%); } 83% { color: hsl(300 75% 55%); } to { color: hsl(360 85% 55%); } }
 @keyframes atlas-mfm-sparkle { 0%, 100% { text-shadow: 0 0 0 transparent; } 50% { text-shadow: 0 0 .35em color-mix(in oklab, gold 80%, transparent), 0 0 .1em #fff; } }
 @keyframes atlas-mfm-fade { from { opacity: 1; } to { opacity: 0; } }
+
+/* Conversation prototypes (ConversationProto.tsx; model in src/lib/conversation.ts). A: Bonfire + Phanpy.
+   B: + Wavelength — subject, messages in order, day separators, a New line, mute, and the Conversations list. */
+.atlas-proto { margin: 0 0 16px; }
+.atlas-proto-wrap { padding-inline: var(--f7-card-margin-horizontal, 16px); }
+.atlas-proto-switch { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: 999px; background: color-mix(in oklab, currentColor 8%, transparent); }
+.atlas-proto-switch > button { border: 0; background: none; color: inherit; font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; opacity: .7; cursor: pointer; width: auto; }
+.atlas-proto-switch > button.is-on { opacity: 1; font-weight: 600; background: var(--background, var(--f7-page-bg-color, #fff)); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+.atlas-proto-switch > button:focus-visible { outline: 2px solid var(--f7-theme-color, var(--accent)); outline-offset: 1px; }
+.atlas-proto-small > button { font-size: 12px; padding: 4px 10px; }
+.atlas-proto-note { margin: 6px 2px 0; font-size: 12px; opacity: .65; }
+.atlas-thread-head-sub { padding-top: 0; }
+.atlas-thread-head-sub:empty { display: none; }
+.atlas-conv-face { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; background: color-mix(in oklab, currentColor 12%, transparent); }
+.atlas-conv-faces { display: inline-flex; }
+.atlas-conv-faces > * { margin-inline-start: -6px; box-shadow: 0 0 0 2px var(--background, var(--f7-page-bg-color, #fff)); }
+.atlas-conv-faces > :first-child { margin-inline-start: 0; }
+.atlas-conv-people { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 13px; opacity: .8; }
+/* B: the conversation */
+.atlas-conv { position: relative; }
+.atlas-conv-head { position: sticky; top: 0; z-index: 2; padding: 10px 0 12px; background: var(--background, var(--f7-page-bg-color, #fff)); border-bottom: 1px solid color-mix(in oklab, currentColor 12%, transparent); }
+.atlas-thread-page .atlas-conv-head { top: var(--f7-navbar-height, 44px); padding-inline: var(--f7-card-margin-horizontal, 16px); }
+.atlas-conv-subject { margin: 0; font-size: 19px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.atlas-conv-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; opacity: .75; }
+.atlas-conv-tools { display: flex; gap: 8px; margin-top: 10px; }
+.atlas-conv-tools > button, .atlas-conv-jump { display: inline-flex; align-items: center; gap: 6px; border: 1px solid color-mix(in oklab, currentColor 18%, transparent); background: none; color: inherit; font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px; cursor: pointer; width: auto; }
+.atlas-conv-tools svg { width: 15px; height: 15px; }
+.atlas-conv-tools > button[aria-pressed="true"] { background: color-mix(in oklab, currentColor 8%, transparent); }
+.atlas-conv-jump { margin-top: 10px; border-color: transparent; background: var(--f7-theme-color, var(--accent)); color: #fff; font-weight: 600; }
+.atlas-conv-list { list-style: none; margin: 0; padding: 8px 0 96px; }
+.atlas-thread-page .atlas-conv-list { padding-inline: var(--f7-card-margin-horizontal, 16px); }
+.atlas-conv-day, .atlas-conv-new { display: flex; align-items: center; gap: 10px; margin: 16px 0 8px; font-size: 12px; font-weight: 600; opacity: .6; }
+.atlas-conv-day::before, .atlas-conv-day::after, .atlas-conv-new::before, .atlas-conv-new::after { content: ''; flex: 1; height: 1px; background: currentColor; opacity: .25; }
+.atlas-conv-new { opacity: 1; color: var(--f7-theme-color, var(--accent)); scroll-margin-top: 160px; }
+.atlas-conv-new::before, .atlas-conv-new::after { opacity: .6; }
+.atlas-conv-msg { display: flex; gap: 10px; padding: 2px 0; }
+.atlas-conv-msg.is-first { margin-top: 10px; }
+.atlas-conv-gutter { width: 32px; flex-shrink: 0; }
+.atlas-conv-main { min-width: 0; flex: 1; border-radius: 10px; padding: 2px 6px; margin: -2px -6px; }
+.atlas-conv-msg.is-focus .atlas-conv-main { background: color-mix(in oklab, var(--f7-theme-color, var(--accent)) 8%, transparent); }
+.atlas-conv-who { margin: 0 0 2px; font-size: 14px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.atlas-conv-who > span, .atlas-conv-who > time { font-size: 12px; opacity: .6; }
+.atlas-conv-who > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14em; }
+.atlas-conv-body { font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.atlas-conv-body p { margin: 0 0 4px; }
+.atlas-conv-body details > summary { cursor: pointer; font-weight: 500; }
+.atlas-conv-image { display: block; margin-top: 6px; max-height: 280px; max-width: 100%; border-radius: 12px; object-fit: cover; }
+.atlas-conv-parent { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin: 2px 0 4px; padding: 2px 8px; border: 0; border-inline-start: 2px solid color-mix(in oklab, currentColor 25%, transparent); background: none; color: inherit; font: inherit; font-size: 12px; opacity: .7; text-align: start; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; width: auto; }
+.atlas-conv-parent svg { width: 13px; height: 13px; flex-shrink: 0; }
+.atlas-conv-parent > span { overflow: hidden; text-overflow: ellipsis; }
+.atlas-conv-msg.is-mine .atlas-conv-who > b { color: var(--f7-theme-color, var(--accent)); }
+/* Actions appear on hover or keyboard focus (desktop), or after a tap on the message (phone). */
+.atlas-conv-actions { display: none; margin-top: 2px; }
+.atlas-conv-msg.is-active .atlas-conv-actions, .atlas-conv-main:focus-within .atlas-conv-actions { display: block; }
+@media (hover: hover) { .atlas-conv-main:hover .atlas-conv-actions { display: block; } .atlas-conv-main:hover { background: color-mix(in oklab, currentColor 4%, transparent); } }
+.atlas-conv-open { border: 0; background: none; color: inherit; font: inherit; font-size: 13px; opacity: .7; cursor: pointer; padding: 6px 8px; width: auto; }
+.atlas-conv-dock { position: sticky; bottom: 0; padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--background, var(--f7-page-bg-color, #fff)) 70%, transparent); }
+/* On the phone the stack page already ends above the tab bar and mini player. */
+.atlas-thread-page .atlas-conv-dock { padding-inline: var(--f7-card-margin-horizontal, 16px); padding-bottom: 10px; }
+.atlas-conv-reply { display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 16px; border-radius: 999px; border: 1px solid color-mix(in oklab, currentColor 18%, transparent); background: var(--background, var(--f7-page-bg-color, #fff)); color: inherit; font: inherit; font-size: 15px; opacity: .85; cursor: pointer; text-align: start; }
+.atlas-conv-reply svg { width: 18px; height: 18px; }
+.atlas-conv-reply:disabled { opacity: .5; cursor: default; }
+.atlas-conv-empty { font-size: 14px; opacity: .7; padding: 12px 2px; }
+/* B: the Conversations list */
+.atlas-inbox { list-style: none; margin: 0; padding: 0; }
+.atlas-inbox-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 12px 6px 12px 2px; border: 0; border-bottom: 1px solid color-mix(in oklab, currentColor 10%, transparent); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.atlas-inbox-row:hover { background: color-mix(in oklab, currentColor 4%, transparent); }
+.atlas-inbox-row:focus-visible { outline: 2px solid var(--f7-theme-color, var(--accent)); outline-offset: -2px; border-radius: 8px; }
+.atlas-inbox-dot { width: 9px; height: 9px; margin-top: 15px; border-radius: 50%; flex-shrink: 0; }
+.atlas-inbox-row.is-unread .atlas-inbox-dot { background: var(--f7-theme-color, var(--accent)); }
+.atlas-inbox-row.is-muted { opacity: .55; }
+.atlas-inbox-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.atlas-inbox-top { display: flex; gap: 8px; align-items: baseline; }
+.atlas-inbox-subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 500; }
+.atlas-inbox-row.is-unread .atlas-inbox-subject { font-weight: 700; }
+.atlas-inbox-top time, .atlas-inbox-by, .atlas-inbox-counts { font-size: 12px; opacity: .65; }
+.atlas-inbox-muted { display: inline; width: 12px; height: 12px; vertical-align: -2px; margin-inline-end: 2px; }
+.atlas-inbox-preview { font-size: 14px; opacity: .85; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.atlas-inbox-counts strong { color: var(--f7-theme-color, var(--accent)); font-weight: 600; opacity: 1; }
