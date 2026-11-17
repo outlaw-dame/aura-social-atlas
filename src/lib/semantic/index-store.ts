@@ -51,6 +51,13 @@ export async function indexed(uid: string, model: string, ids: string[]): Promis
   return have;
 }
 
+/** The stored vectors of these posts, by post id (those not in the index are missing). */
+export async function vectorsOf(uid: string, model: string, ids: string[]): Promise<Map<string, Float32Array>> {
+  const out = new Map<string, Float32Array>();
+  await run('readonly', s => { for (const id of ids) { const r = s.get(keyOf(uid, model, id)); r.onsuccess = () => { const v = r.result as IndexedPost<unknown> | undefined; if (v) out.set(id, v.vec); }; } });
+  return out;
+}
+
 /** Adds posts with their vectors, then trims the oldest past the cap. */
 export async function addToIndex<P>(uid: string, model: string, items: { id: string; vec: Float32Array; post: P }[]) {
   if (!items.length) return;

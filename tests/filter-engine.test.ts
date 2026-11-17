@@ -104,3 +104,41 @@ describe('filter engine: places, own posts, people you follow, reasons', () => {
     expect(e2.evaluate(post('2', 'spoilers!'))).toMatchObject({ state: 'filtered', action: 'warn', reason: { by: 'words', term: 'spoilers' } });
   });
 });
+
+describe('filter engine with the semantic index', () => {
+  const similar: import('../src/lib/filter-engine').Similar = async posts => posts.map(p => ({
+    n: p.n, matches: /keto/.test(p.text) ? [{ id: 't', strong: true }] : /lbs/.test(p.text) ? [{ id: 't', strong: false }] : [],
+  }));
+  test('without an AI model, only a close match is filtered, by meaning, and the rest stay', async () => {
+    const e = new FilterEngine();
+    e.configure({ filters: [f('t', 'diet culture')], ai: false, deep: false, similar });
+    const close = post('1', 'Day 3 of keto!'), near = post('2', 'Down 4 lbs'), other = post('3', 'Sunrise'), dm = post('4', 'keto chat', { visibility: 'direct' });
+    [close, near, other, dm].forEach(p => { expect(e.evaluate(p).state).toBe('clear'); e.request(p); });
+    await settle();
+    expect(e.evaluate(close)).toMatchObject({ state: 'filtered', reason: { by: 'meaning' } });
+    expect(e.evaluate(near).state).toBe('clear');
+    expect(e.evaluate(other).state).toBe('clear');
+    expect(e.evaluate(dm).state).toBe('clear'); // direct messages never go to the index
+  });
+  test('with an AI model, posts close in meaning go to it to confirm, visible meanwhile', async () => {
+    const sent: string[] = [];
+    const judge: Judge = async posts => { posts.forEach(p => sent.push(p.text)); return posts.map(p => ({ n: p.n, matches: /keto/.test(p.text) ? ['t'] : [] })); };
+    const e = new FilterEngine();
+    e.configure({ filters: [f('t', 'diet culture')], ai: true, deep: false, judge, similar });
+    const close = post('1', 'Day 3 of keto!'), near = post('2', 'Down 4 lbs'), other = post('3', 'Sunrise');
+    [close, near, other].forEach(p => { expect(e.evaluate(p).state).toBe('clear'); e.request(p); });
+    await settle(); await settle();
+    expect(sent.sort()).toEqual(['Day 3 of keto!', 'Down 4 lbs']);
+    expect(e.evaluate(close)).toMatchObject({ state: 'filtered', reason: { by: 'ai' } });
+    expect(e.evaluate(near).state).toBe('clear');
+    expect(e.evaluate(other).state).toBe('clear');
+  });
+  test('keyword-only filters never use the index', async () => {
+    let asked = 0;
+    const e = new FilterEngine();
+    e.configure({ filters: [f('k', 'spoilers', { semantic: false })], ai: false, deep: false, similar: async p => { asked++; return similar(p, []); } });
+    e.request(post('1', 'keto'));
+    await settle();
+    expect(asked).toBe(0);
+  });
+});
