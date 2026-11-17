@@ -18,6 +18,14 @@ function q(table: string) {
       if (i >= 0) tables[table][i] = { ...tables[table][i], ...row }; else tables[table].push({ id: crypto.randomUUID(), ...row });
       return { error: null };
     },
+    insert: async (row: Record<string, unknown>) => {
+      // Simulate Postgres's UNIQUE(endpoint) race protection, not owner-clobbering upsert.
+      if (table === 'atlas_push_devices' && tables[table].some(r => r.endpoint === row.endpoint)) {
+        return { error: { code: '23505' } };
+      }
+      tables[table].push({ id: crypto.randomUUID(), ...row });
+      return { error: null };
+    },
     delete: () => { op = 'delete'; return api; },
     update: (p: Record<string, unknown>) => { op = 'update'; patch = p; return api; },
     then: (resolve: (v: unknown) => void) => {
@@ -58,6 +66,28 @@ describe('Push relay', () => {
     expect(endpoint).toMatch(/^https:\/\/atlas\.example\/api\/push\/relay\/[A-Za-z0-9_-]{32}$/);
     expect(tables.atlas_push_relays[0].server_key).toBe(fedizenServerKey);
     expect(JSON.stringify(tables.atlas_push_relays[0])).not.toContain(b64u(atlas.d)); // the relay's private key is sealed
+  });
+
+  test('rejects reuse of another user’s endpoint without changing device ownership or contacting Fedizen', async () => {
+    const sameEndpoint = 'https://fcm.googleapis.com/fcm/send/abc';
+    const owner = tables.atlas_push_devices.find(r => r.endpoint === sameEndpoint);
+    expect(owner?.user_id).toBe('u1');
+    const before = sends.length;
+    const response = await relayMod.addDevice('u2', 'different-token', 'https://atlas.example',
+      { endpoint: sameEndpoint, p256dh: b64u(browser.keys!.pub), auth: b64u(browser.auth) });
+    expect(response).toEqual({ ok: false, error: 'bad-subscription' });
+    expect(sends).toHaveLength(before);
+    expect(tables.atlas_push_devices.find(r => r.endpoint === sameEndpoint)?.user_id).toBe('u1');
+  });
+
+  test('refreshes a device for its existing owner without reassigning the unique endpoint', async () => {
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/abc';
+    const originalId = tables.atlas_push_devices.find(r => r.endpoint === endpoint)?.id;
+    const result = await relayMod.addDevice('u1', 'tok', 'https://atlas.example',
+      { endpoint, p256dh: b64u(browser.keys!.pub), auth: b64u(browser.auth) });
+    expect(result).toEqual({ ok: true });
+    expect(tables.atlas_push_devices.filter(r => r.endpoint === endpoint)).toHaveLength(1);
+    expect(tables.atlas_push_devices.find(r => r.endpoint === endpoint)).toMatchObject({ id: originalId, user_id: 'u1' });
   });
 
   test("Fedizen's push is checked, decrypted, stripped of its token and passed to the browser", async () => {
