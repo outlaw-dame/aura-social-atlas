@@ -2,6 +2,7 @@ import { actorFromWebfinger, isPublicHttpsUrl, normalizeHost, parseHandle } from
 import { PODCAST_ACCEPT, dohLookup, fetchActor, safeFetch, type Lookup } from './article-author.server';
 import { claimedAcct, cleanText, podcastDetails, postsFromOutbox, profileFromActor, type FediProfile, type FediProfileTarget } from './fedi-profile';
 import { htmlToParagraphs } from './spotlight';
+import { mfmSourceOf, mfmToRich } from './mfm';
 
 /**
  * Reads a fediverse account for Atlas's own profile view: the actor from its server (never a copy someone else
@@ -102,7 +103,7 @@ async function build(target: FediProfileTarget, remaining: () => number, f: Fetc
       // PeerTube's outbox refers to its videos by URL (a Create of its own, an Announce of a channel's), so fetch the
       // newest few from this same server and read them as if they were embedded.
       if (isObj(page)) page = await withReferencedObjects(page, id, f, l);
-      profile.posts = postsFromOutbox(page, id);
+      profile.posts = postsFromOutbox(page, id, 10, o => { const src = mfmSourceOf(o); return src ? mfmToRich(src) : undefined; });
       if (!profile.posts.length && !isObj(page)) profile.postsHidden = true;
     })(),
   ].map(p => p.catch(() => undefined)));

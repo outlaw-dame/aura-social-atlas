@@ -1,5 +1,4 @@
 import { openTag } from '@/lib/hashtags';
-import { linkifyPost } from '@/components/social/PostPeople';
 import { Block, BlockFooter, BlockTitle, Button, Card, CardContent, CardFooter, Icon, Link, List, ListInput, ListItem, Navbar, NavLeft, NavRight, Page, Popup, Segmented, f7 } from 'framework7-react';
 import { useState } from 'react';
 import { useGroup, useGroupMembership, useGroupsDirectory, useLatestInGroups } from '@/components/social/useGroups';
@@ -7,6 +6,7 @@ import { groupAccessLabel, groupHandle, groupMembersLine, matchesGroup, membersh
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { MobileFilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
+import { PostBody } from '@/components/social/PostBody';
 
 const when = (d?: string) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 const meta = (g: Group) => [groupMembersLine(g), groupAccessLabel(g)].filter(Boolean).join(' · ');
@@ -38,7 +38,7 @@ function PostCardBody({ p, showGroup }: { p: GroupPost; showGroup?: boolean }) {
         {p.avatar ? <img src={p.avatar} alt="" width={32} height={32} referrerPolicy="no-referrer" /> : <span className="atlas-activity-initial" aria-hidden="true">{p.author.charAt(0)}</span>}
         <span><b>{p.author}</b>{showGroup && p.group && <> <span className="atlas-group-in">in {p.group}</span></>}<small>{p.handle}{p.date ? ` · ${when(p.date)}` : ''}</small></span>
       </div>
-      {p.paragraphs.slice(0, 4).map((t, i) => <p key={i}>{linkifyPost(t, undefined, openTag)}</p>)}
+      <PostBody post={{ ...p, mentions: undefined }} onTag={openTag} limit={4} />
       <SensitiveMedia cta="Tap to view">{p.image && <img className="atlas-group-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia>
     </CardContent>
     <CardFooter><span /><Link external target="_blank" href={p.url}>Open on Fedizen</Link></CardFooter>

@@ -1,4 +1,5 @@
 /** Browser-safe Spotlight types and normalizers (Mastodon trending links + Bonfire articles). */
+import { htmlToRich, type RichBlock } from './rich-text';
 import type { FediAuthor } from './article-author';
 
 export type SpotlightItem = {
@@ -142,10 +143,12 @@ export function fromBonfirePosts(nodes: BonfireActivityNode[]) {
     const pc = n.objectPostContent;
     const paragraphs = [pc?.name?.trim(), ...htmlToParagraphs(pc?.htmlBody ?? '')].filter((t): t is string => !!t);
     if (!paragraphs.length) return [];
+    const body = htmlToRich(pc?.htmlBody);
+    const rich: RichBlock[] | undefined = body && (pc?.name?.trim() ? [{ t: 'p', c: [{ t: 'b', c: [{ t: 'text', v: pc.name.trim() }] }] }, ...body] : body);
     const user = n.subject?.character?.username?.replace(/^@/, '');
     const avatar = n.subject?.profile?.icon;
     return [{
-      id: n.id, paragraphs, date: n.date,
+      id: n.id, paragraphs, ...(rich ? { rich } : {}), date: n.date,
       url: isHttp(n.canonicalUri) ? n.canonicalUri! : `https://fedizen.net/post/${encodeURIComponent(n.id)}`,
       author: n.subject?.profile?.name || user || 'Fedizen member',
       handle: user ? `@${user.includes('@') ? user : `${user}@fedizen.net`}` : '',
