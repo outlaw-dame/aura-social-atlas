@@ -6,7 +6,7 @@ import { shortAgo, type ForYouReason } from '@/lib/feed-types';
 import { openCollection } from '@/lib/collections';
 import { openGroup } from '@/lib/groups';
 import { openTag } from '@/lib/hashtags';
-import { BoostedBy, canOpen, linkifyPost, openAuthor } from '@/components/social/PostPeople';
+import { BoostedBy, canOpen, openAuthor } from '@/components/social/PostPeople';
 import { ReplyParent } from '@/components/social/ReplyParent';
 import { PollView } from '@/components/social/PollView';
 import { useIsDeleted, useIsMine } from '@/components/social/useOwnPosts';
@@ -22,6 +22,7 @@ import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
 import type { CardMode } from '@/components/social/FeedPostCard';
 import { isPostClick, isStatusId, openPost } from '@/lib/open-post';
+import { PostBody } from '@/components/social/PostBody';
 
 /** A group's avatar in a reason chip: its picture, else its initial, as a rounded square (groups are squares). */
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
@@ -117,7 +118,7 @@ function MobilePostCardBody({ post: p, actions, reasons, inTag, mode = 'feed' }:
           : <Link external target="_blank" href={p.url} className="atlas-post-time" aria-label={`Open the post on Fedizen, posted ${p.date ? new Date(p.date).toLocaleString() : ''}${p.editedAt ? ', edited' : ''}`}>{ago}{p.editedAt && <span className="atlas-post-edited"> · Edited</span>}</Link>)}
       </div>
       <AuthorWarning cw={p.cw} phone>
-      {p.paragraphs.map((t, i) => <p key={i} className="atlas-post-text">{linkifyPost(t, p.mentions, openTag)}</p>)}
+      <PostBody post={p} onTag={openTag} pClassName="atlas-post-text" />
       <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" {...(p.imageSize ? { width: p.imageSize.w, height: p.imageSize.h, style: { aspectRatio: `${p.imageSize.w} / ${p.imageSize.h}` } } : {})} />}</SensitiveMedia>
       {p.pollState && <PollView poll={p.pollState} mine={mine} phone />}
       {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>

@@ -425,6 +425,8 @@ const status = z.object({
   mentions: z.array(z.object({ acct: z.string().max(320).nullish(), username: z.string().max(320).nullish() })).max(50).nullish().catch(null),
   // Mastodon Poll (Bonfire: bonfire_poll's Mappers.Poll): its options and counts, and whether the reader voted.
   poll: pollSchema.nullish().catch(null),
+  // Its custom emoji (Mastodon CustomEmoji), drawn in its text by shortcode; https images only, checked again when read.
+  emojis: z.array(z.object({ shortcode: z.string().max(64), url: z.string().max(2048), static_url: z.string().max(2048).nullish().catch(null) })).max(100).nullish().catch(null),
   /** When the author last edited it (Mastodon), for the "Edited" mark. */
   edited_at: z.string().max(40).nullish().catch(null),
   // Mastodon 4.5 quotes: { state, quoted_status }. Only the quoted post's own words, never deeper.

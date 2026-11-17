@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { shortAgo } from '@/lib/feed-types';
-import { canOpen, linkifyPost, openAuthor } from './PostPeople';
+import { canOpen, openAuthor } from './PostPeople';
 import { ProfileHoverCard } from './ProfileHoverCard';
+import { PostBody } from './PostBody';
 
 /**
  * The post a reply answers, above the reply in a feed, joined to it by a thread line (as Ivory and Phanpy show a
@@ -25,7 +26,7 @@ export function ReplyParent({ post: p, onTag, Gate }: { post: FedizenPost; onTag
     </div>
     <div className="atlas-reply-parent-body">
       {p.cw ? <p className="atlas-reply-parent-cw">Content warning: {p.cw}</p>
-        : p.paragraphs.slice(0, 4).map((t, i) => <p key={i}>{linkifyPost(t, p.mentions, onTag)}</p>)}
+        : <PostBody post={p} onTag={onTag} limit={4} />}
       {!p.cw && !p.sensitive && p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="atlas-reply-parent-image" />}
     </div>
   </section></Gate>;

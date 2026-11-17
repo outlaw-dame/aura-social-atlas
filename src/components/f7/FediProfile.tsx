@@ -11,6 +11,7 @@ import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useModerationActions } from './useModerationActions';
+import { PostBody } from '@/components/social/PostBody';
 
 /**
  * Phone: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -73,7 +74,7 @@ export function FediProfilePopup({ target, onClose }: { target: FediProfileTarge
         <BlockTitle>{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</BlockTitle>
         <FilterPlaceProvider place="account">{p.posts.map(post => <MobileFilterGate key={post.id} post={post}><Block strong inset className="atlas-fedi-post">
           {post.title && <h2>{post.title}</h2>}
-          <AuthorWarning cw={post.cw} phone>{post.paragraphs.map((t, i) => <p key={i}>{linkifyPost(t, undefined, tag => { onClose(); openTag(tag); })}</p>)}
+          <AuthorWarning cw={post.cw} phone><PostBody post={post} onTag={tag => { onClose(); openTag(tag); }} />
           <SensitiveMedia sensitive={post.sensitive} cta="Tap to view">{post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia></AuthorWarning>
           <p className="atlas-fedi-note">{day(post.date)} · <Link external target="_blank" href={post.url}>Original</Link></p>
         </Block></MobileFilterGate>)}</FilterPlaceProvider>

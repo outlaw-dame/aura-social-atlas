@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MentionField } from './MentionField';
 import { PostActionBar } from './PostActionBar';
-import { BoostedBy, canOpen, linkifyPost, openAuthor } from './PostPeople';
+import { BoostedBy, canOpen, openAuthor } from './PostPeople';
 import { ProfileHoverCard } from './ProfileHoverCard';
 import { ReplyParent } from './ReplyParent';
 import { PollView } from './PollView';
@@ -25,6 +25,7 @@ import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
 import { cn } from '@/lib/utils';
 import { isPostClick, isStatusId, rememberSeed } from '@/lib/open-post';
+import { PostBody } from './PostBody';
 
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
   const [broken, setBroken] = useState(false);
@@ -120,7 +121,7 @@ function FeedPostCardBody({ post: p, actions, reasons, inTag, mode = 'feed' }: {
         : <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline" title={p.date ? new Date(p.date).toLocaleString() : undefined}>{ago}{p.editedAt && <span className="atlas-post-edited" title={`Edited ${new Date(p.editedAt).toLocaleString()}`}> · Edited</span>}</a>)}
     </div>
     <AuthorWarning cw={p.cw}>
-    <div className={cn('mt-3 space-y-2 leading-relaxed', mode === 'focus' ? 'text-base' : 'text-sm')}>{p.paragraphs.map((t, i) => <p key={i}>{linkifyPost(t, p.mentions, tag => void navigate({ to: '/tags/$tag', params: { tag } }))}</p>)}</div>
+    <div className={cn('mt-3 space-y-2 leading-relaxed', mode === 'focus' ? 'text-base' : 'text-sm')}><PostBody post={p} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} /></div>
     <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl bg-muted object-cover" {...reserve(p.imageSize)} />}</SensitiveMedia>
     {p.pollState && <PollView poll={p.pollState} mine={mine} />}
     <CollectionLinks links={p.collections} />
