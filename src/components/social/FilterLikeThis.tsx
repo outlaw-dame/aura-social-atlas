@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Ellipsis, EyeOff, Link2, Pencil, Share, Trash2 } from 'lucide-react';
+import { Ellipsis, EyeOff, Flag, Heart, Link2, Pencil, RefreshCw, Share, Trash2, VolumeX } from 'lucide-react';
 import { sharePost } from './usePostActions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,15 +12,24 @@ import { useAtlasAuth } from './AuthState';
 import { useIsMe } from './useFediProfile';
 import { DeletePostDialog, EditPostDialog } from './OwnPostControls';
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { ReactorsDialog, ReportDialog, type ReportTarget } from './ModerationDialogs';
+import { useMutes } from './useOwnPosts';
 
 /** Desktop: the post's More menu — Share (or Copy link), and "Filter posts like this" when signed in (filters are kept
  *  per account). */
-export function PostMoreMenu({ post }: { post: FilterablePost & { url?: string; author?: string; statusId?: string; acct?: string } }) {
+export function PostMoreMenu({ post }: { post: FilterablePost & { url?: string; author?: string; statusId?: string; acct?: string; counts?: { likes: number; boosts: number } } }) {
   const { user } = useAtlasAuth();
   const [open, setOpen] = useState(false);
   // Your own posts: Edit and Delete, as Mastodon offers them in a post's menu.
   const mine = useIsMe(post.acct) && !!post.statusId;
   const [editing, setEditing] = useState<string | null>(null), [deleting, setDeleting] = useState<string | null>(null);
+  // Someone else's post: who reacted, mute them, report it.
+  const [reactors, setReactors] = useState<'like' | 'boost' | null>(null);
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
+  const mutes = useMutes(!!user && !!post.statusId && !mine);
+  const muted = mutes.isMuted({ accountId: post.authorId, acct: post.acct });
+  const canAct = !!user && !!post.statusId;
+  const name = post.author ?? 'this account';
   const [copied, setCopied] = useState(false);
   const canShare = typeof navigator !== 'undefined' && !!navigator.share;
   if (!post.url && !user) return null;
@@ -30,6 +39,13 @@ export function PostMoreMenu({ post }: { post: FilterablePost & { url?: string; 
       <DropdownMenuContent align="end">
         {post.url && <DropdownMenuItem onSelect={async () => { if ((await sharePost({ url: post.url!, author: post.author ?? '' })) === 'copied') { setCopied(true); setTimeout(() => setCopied(false), 1500); } }}>{canShare ? <><Share />Share</> : <><Link2 />Copy link</>}</DropdownMenuItem>}
         {user && !mine && <DropdownMenuItem onSelect={() => setOpen(true)}><EyeOff />Filter posts like this</DropdownMenuItem>}
+        {canAct && !!post.counts?.likes && <DropdownMenuItem onSelect={() => setReactors('like')}><Heart />Liked by…</DropdownMenuItem>}
+        {canAct && !!post.counts?.boosts && <DropdownMenuItem onSelect={() => setReactors('boost')}><RefreshCw />Boosted by…</DropdownMenuItem>}
+        {canAct && !mine && (post.authorId || post.acct) && <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={mutes.busy} onSelect={() => void mutes.mute({ accountId: post.authorId, acct: post.acct, on: !muted })}><VolumeX />{muted ? `Unmute ${name}` : `Mute ${name}`}</DropdownMenuItem>
+          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setReporting({ name, acct: post.acct, accountId: post.authorId, statusId: post.statusId })}><Flag />Report…</DropdownMenuItem>
+        </>}
         {mine && <>
           <DropdownMenuItem onSelect={() => setEditing(post.statusId!)}><Pencil />Edit</DropdownMenuItem>
           <DropdownMenuSeparator />
@@ -40,6 +56,9 @@ export function PostMoreMenu({ post }: { post: FilterablePost & { url?: string; 
     {open && <FilterLikeThisDialog post={post} onClose={() => setOpen(false)} />}
     {editing && <EditPostDialog statusId={editing} onClose={() => setEditing(null)} />}
     {deleting && <DeletePostDialog statusId={deleting} onClose={() => setDeleting(null)} />}
+    {reactors && <ReactorsDialog statusId={post.statusId ?? null} kind={reactors} onClose={() => setReactors(null)} />}
+    {reporting && <ReportDialog target={reporting} onClose={() => setReporting(null)} />}
+    {mutes.error && <span role="alert" className="text-xs text-destructive">{mutes.error}</span>}
   </>;
 }
 

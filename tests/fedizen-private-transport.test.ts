@@ -223,3 +223,33 @@ describe('Own posts, polls, follow requests and search: allowlisted', () => {
     expect(((await fedizenGet('t', `/api/v2/search?q=${encodeURIComponent('atlas app')}&type=statuses&limit=20`)).data[0] as { statuses: unknown[] }).statuses).toHaveLength(1);
   });
 });
+
+describe('Mute, report, who reacted, liked posts and hashtag search: allowlisted', () => {
+  test('mute and report take only their paths and bodies', async () => {
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: string, init?: RequestInit) => { seen.push(`${init?.method} ${String(url).replace('https://fedizen.net', '')}`); return new Response('{}'); }) as unknown as typeof fetch;
+    await fedizenSend('t', 'POST', '/api/v1/accounts/01ABC/mute');
+    await fedizenSend('t', 'POST', '/api/v1/accounts/01ABC/unmute');
+    await fedizenSend('t', 'POST', '/api/v1/reports', { account_id: '01ABC', status_ids: ['01S'], comment: '', category: 'spam', forward: false });
+    expect(seen).toEqual(['POST /api/v1/accounts/01ABC/mute', 'POST /api/v1/accounts/01ABC/unmute', 'POST /api/v1/reports']);
+    await expect(fedizenSend('t', 'POST', '/api/v1/reports', { account_id: '01ABC', comment: '', category: 'nonsense', forward: false })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/reports', { account_id: '01ABC', comment: '', category: 'spam', forward: false, rule_ids: ['1'] })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/reports', { account_id: '01ABC', comment: 'x'.repeat(1001), category: 'other', forward: false })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/accounts/01ABC/mute', { duration: 60 })).rejects.toThrow('Unsupported Fedizen write body.');
+  });
+  test('reads mutes, liked posts, who liked or boosted, and hashtag search', async () => {
+    globalThis.fetch = (async (url: string) => {
+      const u = String(url);
+      if (u.includes('/mutes') || u.includes('favourited_by') || u.includes('reblogged_by')) return new Response(JSON.stringify([{ id: '01P', acct: 'ana@lemmy.ca', display_name: 'Ana', url: 'https://lemmy.ca/u/ana' }]));
+      if (u.includes('/favourites')) return new Response(JSON.stringify([{ id: '01T', content: '<p>liked</p>' }]));
+      return new Response(JSON.stringify({ accounts: [], statuses: [], hashtags: [{ name: 'atlas', url: 'https://fedizen.net/tags/atlas' }] }));
+    }) as unknown as typeof fetch;
+    expect((await fedizenGet('t', '/api/v1/mutes?limit=80')).data).toHaveLength(1);
+    expect((await fedizenGet('t', '/api/v1/favourites?limit=40')).data).toHaveLength(1);
+    expect((await fedizenGet('t', '/api/v1/statuses/01T/favourited_by?limit=40')).data).toHaveLength(1);
+    expect((await fedizenGet('t', '/api/v1/statuses/01T/reblogged_by?limit=40')).data).toHaveLength(1);
+    expect(((await fedizenGet('t', '/api/v2/search?q=atl&type=hashtags&limit=8')).data[0] as { hashtags: { name: string }[] }).hashtags[0].name).toBe('atlas');
+    await expect(fedizenGet('t', '/api/v1/statuses/01T/favourited_by?limit=500')).rejects.toThrow('Unsupported Fedizen read path.');
+    await expect(fedizenGet('t', '/api/v2/search?q=atl&type=hashtags&limit=8&resolve=true')).rejects.toThrow('Unsupported Fedizen read path.');
+  });
+});

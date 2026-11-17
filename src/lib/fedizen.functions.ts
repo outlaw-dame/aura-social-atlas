@@ -855,16 +855,143 @@ export const answerFollowRequest = createServerFn({ method: 'POST' }).middleware
     return r.status >= 200 && r.status < 300 ? { ok: true } : { ok: false, error: problem(r.status) };
   });
 
-/** Posts Fedizen knows about that match a search (Mastodon v2 search, statuses), as the reader may see them. */
+/**
+ * Posts Fedizen knows about that match a search (Mastodon v2 search, statuses), as the reader may see them. With
+ * Intelligence on, the search is semantic: `related` carries up to four other searches from the person's own AI model
+ * (useSearchPosts asks it, on their device or Atlas's server, wherever their key is), and every search runs at once. Posts that match the search itself come first, then those matching more of the other searches, newest first.
+ */
 export const searchFedizenPosts = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => me.extend({ q: z.string().trim().min(2).max(200) }).parse(d))
+  .inputValidator(d => me.extend({ q: z.string().trim().min(2).max(200), related: z.array(z.string().trim().min(2).max(40)).max(4).default([]) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; error?: Problem; related?: string[] }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { posts: [], error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const seen = new Set([data.q.toLowerCase()]);
+    const related = data.related.filter(t => { const k = t.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+    const runs = await Promise.all([data.q, ...related].map(q => fedizenGet(c.token, `/api/v2/search?q=${encodeURIComponent(q)}&type=statuses&limit=20`).catch(() => null)));
+    const first = runs[0];
+    if (!first || first.status !== 200) {
+      if (!runs.some(r => r?.status === 200)) return { posts: [], error: first ? problem(first.status) : 'unavailable' };
+    }
+    const score = new Map<string, { status: unknown; exact: boolean; hits: number; at: number }>();
+    runs.forEach((r, i) => {
+      if (r?.status !== 200) return;
+      for (const st of ((r.data[0] as { statuses?: { id: string; created_at?: string }[] } | undefined)?.statuses ?? [])) {
+        const cur = score.get(st.id) ?? { status: st, exact: false, hits: 0, at: Date.parse(st.created_at ?? '') || 0 };
+        cur.hits += 1; if (i === 0) cur.exact = true;
+        score.set(st.id, cur);
+      }
+    });
+    const ranked = [...score.values()].sort((a, b) => Number(b.exact) - Number(a.exact) || b.hits - a.hits || b.at - a.at).slice(0, 30).map(x => x.status);
+    return { posts: await withArticleAuthors(fromStatuses(ranked as never), 1500, c.token), ...(related.length ? { related } : {}) };
+  });
+
+/* ── Mute, report, who reacted, liked posts, hashtag suggestions ──────────────────────────────────── */
+
+/** The Fedizen account id for a handle, or the id given. */
+async function accountIdFor(token: string, v: { accountId?: string; acct?: string }): Promise<string | { error: Problem | 'not-found' }> {
+  if (v.accountId) return v.accountId;
+  const acct = v.acct ? lookupAcct(v.acct) : null;
+  if (!acct) return { error: 'not-found' };
+  const { fedizenGet } = await import('./fedizen.server');
+  const found = await fedizenGet(token, `/api/v1/accounts/lookup?acct=${encodeURIComponent(acct)}`).catch(() => null);
+  if (!found) return { error: 'unavailable' };
+  if (found.status === 404 || (found.status === 200 && !found.data.length)) return { error: 'not-found' };
+  if (found.status !== 200) return { error: problem(found.status) };
+  return fromAccounts(found.data as never)[0]?.id ?? { error: 'not-found' };
+}
+const who = z.object({ accountId: statusId.optional(), acct: z.string().max(320).optional() }).refine(v => !!v.accountId || !!v.acct, 'who');
+
+/** Mutes or unmutes someone: their posts leave your feeds, and you can still see them on their profile. */
+export const muteFedizenAccount = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.and(who).and(z.object({ on: z.boolean() })).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true } | { ok: false; error: Problem | 'not-found' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const id = await accountIdFor(c.token, data);
+    if (typeof id !== 'string') return { ok: false, error: id.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const r = await fedizenSend(c.token, 'POST', `/api/v1/accounts/${id}/${data.on ? 'mute' : 'unmute'}`);
+    return r.status >= 200 && r.status < 300 ? { ok: true } : { ok: false, error: problem(r.status) };
+  });
+
+/** People you mute. */
+export const getMutedAccounts = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ people: FedizenPerson[]; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { people: [], error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const r = await fedizenGet(c.token, '/api/v1/mutes?limit=80').catch(() => null);
+    return r?.status === 200 ? { people: fromAccounts(r.data as never) } : { people: [], error: r ? problem(r.status) : 'unavailable' };
+  });
+
+/** Reports an account, and optionally some of its posts, to Fedizen's moderators (Mastodon's report categories). */
+export const reportOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.and(who).and(z.object({
+    statusIds: z.array(statusId).max(20).default([]),
+    comment: z.string().trim().max(1000).default(''),
+    category: z.enum(['spam', 'legal', 'violation', 'other']),
+    forward: z.boolean().default(false),
+  })).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true } | { ok: false; error: Problem | 'not-found' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const id = await accountIdFor(c.token, data);
+    if (typeof id !== 'string') return { ok: false, error: id.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const r = await fedizenSend(c.token, 'POST', '/api/v1/reports', {
+      account_id: id, ...(data.statusIds.length ? { status_ids: data.statusIds } : {}), comment: data.comment, category: data.category, forward: data.forward,
+    });
+    return r.status >= 200 && r.status < 300 ? { ok: true } : { ok: false, error: problem(r.status) };
+  });
+
+/** Who liked or boosted a post (Mastodon favourited_by / reblogged_by). */
+export const getWhoReacted = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ statusId, kind: z.enum(['like', 'boost']) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ people: (FedizenPerson & { acct?: string; actor?: string })[]; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { people: [], error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const { fullAcct } = await import('./fedizen-feed');
+    const { isPublicHttpsUrl } = await import('./article-author');
+    const r = await fedizenGet(c.token, `/api/v1/statuses/${data.statusId}/${data.kind === 'like' ? 'favourited_by' : 'reblogged_by'}?limit=40`).catch(() => null);
+    if (!r || r.status !== 200) return { people: [], error: r ? problem(r.status) : 'unavailable' };
+    const raw = r.data as { acct?: string; url?: string | null; uri?: string | null }[];
+    return { people: fromAccounts(r.data as never).map((p, i) => {
+      const acct = fullAcct(raw[i]?.acct), actor = [raw[i]?.uri, raw[i]?.url].find(u => isPublicHttpsUrl(u ?? undefined)) ?? undefined;
+      return { ...p, ...(acct ? { acct } : {}), ...(actor ? { actor } : {}) };
+    }) };
+  });
+
+/** Posts you liked, newest first (Mastodon /favourites). */
+export const getLikedPosts = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
   .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; error?: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId);
     if ('error' in c) return { posts: [], error: c.error };
     const { fedizenGet } = await import('./fedizen.server');
-    const r = await fedizenGet(c.token, `/api/v2/search?q=${encodeURIComponent(data.q)}&type=statuses&limit=20`).catch(() => null);
-    if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
-    const found = (r.data[0] as { statuses?: unknown[] } | undefined)?.statuses ?? [];
-    return { posts: await withArticleAuthors(fromStatuses(found as never), 1500, c.token) };
+    const r = await fedizenGet(c.token, '/api/v1/favourites?limit=40').catch(() => null);
+    return r?.status === 200 ? { posts: await withArticleAuthors(fromStatuses(r.data as never).map(p => ({ ...p, liked: true })), 2000, c.token) } : { posts: [], error: r ? problem(r.status) : 'unavailable' };
+  });
+
+/** Hashtags starting with what's typed after "#" (Mastodon v2 search, hashtags), for the composer. */
+export const suggestHashtags = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ q: z.string().regex(/^[\p{L}\p{N}_]{1,100}$/u) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ tags: string[] }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { tags: [] };
+    const { fedizenGet } = await import('./fedizen.server');
+    const r = await fedizenGet(c.token, `/api/v2/search?q=${encodeURIComponent(data.q)}&type=hashtags&limit=8`).catch(() => null);
+    const tags = r?.status === 200 ? ((r.data[0] as { hashtags?: { name: string }[] } | undefined)?.hashtags ?? []).map(h => h.name) : [];
+    // Those starting with what's typed first, as Mastodon's composer orders them.
+    const q = data.q.toLowerCase();
+    return { tags: [...new Set(tags)].sort((a, b) => Number(b.toLowerCase().startsWith(q)) - Number(a.toLowerCase().startsWith(q))).slice(0, 8) };
   });

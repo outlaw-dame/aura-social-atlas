@@ -8,14 +8,14 @@ import { CreatorTag } from '@/components/social/CreatorTag';
 import { linkifyHashtags, extractHashtags, hashtagLabel, hashtagUrl, TagText } from '@/lib/hashtags';
 import type { Collection } from '@/lib/collections';
 import { MyCollections } from './Collections';
-import { MobileCircles, MobileSaved } from './SavedAndCircles';
+import { MobileCircles, MobileLiked, MobileSaved } from './SavedAndCircles';
 import { activityLabel, DEFAULT_ACTIVITY_FILTER, type ActivityFilter } from '@/components/social/profile-sections';
 
 /* Profile tabs after Mastodon's 2026 redesign: Activity (posts, quote posts, replies and boosts, filtered like
    Mastodon's Activity menu), Featured (Mastodon 4.4: featured hashtags and profiles), Media, Collections (Mastodon
-   4.6), Saved (your Fedizen bookmarks), then Circles (Bonfire's circles of people); no Lists tab, since on Fedizen lists are circles. Follows are not a tab:
+   4.6), Saved (your Fedizen bookmarks), Liked (only you see it), then Circles (Bonfire's circles of people); no Lists tab, since on Fedizen lists are circles. Follows are not a tab:
    they open from the Following count. */
-const sections = ['Activity', 'Featured', 'Media', 'Collections', 'Saved', 'Circles'] as const;
+const sections = ['Activity', 'Featured', 'Media', 'Collections', 'Saved', 'Liked', 'Circles'] as const;
 type Section = (typeof sections)[number];
 const emptySections: Record<Section, { ios: string; md: string; title: string; detail: string }> = {
   Activity: { ios: 'f7:square_pencil', md: 'material:edit_note', title: 'No activity yet', detail: 'Your public posts, quote posts, replies and boosts on Fedizen will appear here.' },
@@ -23,6 +23,7 @@ const emptySections: Record<Section, { ios: string; md: string; title: string; d
   Media: { ios: 'f7:photo_on_rectangle', md: 'material:photo_library', title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
   Collections: { ios: 'f7:square_stack_3d_up', md: 'material:collections_bookmark', title: 'No collections yet', detail: '' },
   Saved: { ios: 'f7:bookmark', md: 'material:bookmark_border', title: 'Nothing saved yet', detail: 'Posts you save on Fedizen. Each keeps the audience its author chose.' },
+  Liked: { ios: 'f7:heart', md: 'material:favorite_border', title: 'No likes yet', detail: 'Posts you like will be here.' },
   Circles: { ios: 'f7:circle_grid_hex', md: 'material:bubble_chart', title: 'No circles yet', detail: 'Circles group the people you know, like colleagues, friends or locals, so you choose who sees and replies to each post. Circles you make on Fedizen will appear here.' },
 };
 
@@ -143,7 +144,8 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
           <p>People you feature from their profiles on Fedizen will appear here.</p>
         </div>}
         {section === 'Circles' && <MobileCircles />}
-        {!hasContent && !['Collections', 'Saved', 'Circles'].includes(section) && <div className="atlas-profile-empty">
+        {section === 'Liked' && <MobileLiked />}
+        {!hasContent && !['Collections', 'Saved', 'Liked', 'Circles'].includes(section) && <div className="atlas-profile-empty">
           <div className="atlas-profile-empty-icon"><Icon ios={empty.ios} md={empty.md} /></div>
           <h2>{empty.title}</h2>
           <p>{empty.detail}</p>

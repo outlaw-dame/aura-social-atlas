@@ -12,6 +12,8 @@ import { FilterPlaceProvider } from './useIntelligence';
 import { FilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
+import { ProfileMoreMenu } from './ModerationDialogs';
+import { useAtlasAuth } from './AuthState';
 
 /**
  * Desktop: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -42,6 +44,12 @@ export function Follow({ p }: { p: FediProfile }) {
   </div>;
 }
 
+function MoreFor({ p }: { p: FediProfile }) {
+  const { user } = useAtlasAuth();
+  const me = useIsMe(p.acct);
+  return <ProfileMoreMenu name={p.name} acct={p.acct} enabled={!!user && !me && p.acctVerified && p.kind !== 'group'} />;
+}
+
 export function FediProfileDialog({ target, onClose }: { target: FediProfileTarget | null; onClose: () => void }) {
   const q = useFediProfile(target);
   const navigate = useNavigate();
@@ -56,7 +64,7 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
       : <>
         <div className="h-28 w-full bg-muted bg-cover bg-center" style={p.header ? { backgroundImage: `url("${p.header.replace(/"/g, '%22')}")` } : undefined} aria-hidden="true" />
         <div className="px-6 pb-6">
-          <div className="-mt-10 flex items-end justify-between gap-3"><Avatar p={p} /><Follow p={p} /></div>
+          <div className="-mt-10 flex items-end justify-between gap-3"><Avatar p={p} /><div className="flex items-start gap-2"><Follow p={p} /><MoreFor p={p} /></div></div>
           <DialogHeader className="mt-3 text-left">
             <DialogTitle className="flex flex-wrap items-center gap-2 font-serif text-3xl font-normal [overflow-wrap:anywhere]">
               {p.name}

@@ -245,6 +245,21 @@ export const describePostForFilter = createServerFn({ method: 'POST' }).middlewa
     }
   });
 
+/** Other searches meaning the same as `q`, from the person's server-kept model (post search with Intelligence on). */
+export const searchWordingsFor = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, q: z.string().trim().min(2).max(200) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ terms: string[] } | { error: AiProblem }> => {
+    sameSession(data.expectedAtlasUserId, context.userId);
+    try {
+      const ai = await (await store()).activeModel(context.userId);
+      if ('problem' in ai) return { error: ai.problem };
+      const { searchWordings } = await import('./intelligence/tasks');
+      return { terms: await searchWordings(ai.credential, ai.model, data.q) };
+    } catch (e) {
+      return { error: (await store()).problem(e) };
+    }
+  });
+
 /**
  * Which of these accounts the person follows on Fedizen, for filters that skip people they follow. Reads
  * /api/v1/accounts/relationships (40 ids at most, already on the READS allowlist). Unknown when not connected.

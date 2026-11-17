@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { HashtagSuggestions } from './HashtagSuggestions';
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { searchFedizenPeople } from '@/lib/fedizen.functions';
@@ -46,6 +47,7 @@ export function MentionField({ value, onChange, confirmed, onConfirm, people = [
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const mirror = useRef<HTMLDivElement>(null);
+  const field = useCallback(() => ref.current, []);
   const [caret, setCaret] = useState(value.length);
   const [dismissed, setDismissed] = useState<number | null>(null);
   const at = mentionQueryAt(value, caret);
@@ -99,5 +101,6 @@ export function MentionField({ value, onChange, confirmed, onConfirm, people = [
       </button>)}
       {!suggestions.length && found.isFetching && <span className="atlas-mention-hint">Looking…</span>}
     </div>}
+    {!open && <HashtagSuggestions value={value} onChange={onChange} input={field} />}
   </div>;
 }

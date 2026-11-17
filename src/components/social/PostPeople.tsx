@@ -73,7 +73,7 @@ function linkifyPeople(text: string, mentions: FediMention[] | undefined, onTag:
     // Each stretch of text in its own keyed fragment: linkifyHashtagsWith keys its tags by index, so two stretches'
     // tags would otherwise share keys.
     if (start > at) out.push(<Fragment key={`t${at}`}>{linkifyHashtagsWith(text.slice(at, start), onTag)}</Fragment>);
-    out.push(<button key={`m${start}`} type="button" className="atlas-mention" aria-label={`Open the profile of ${hit.acct}`}
+    out.push(<button key={`m${start}`} type="button" className="atlas-post-mention" aria-label={`Open the profile of ${hit.acct}`}
       onClick={e => { e.stopPropagation(); openFediProfile({ acct: hit.acct }); }}>@{written}</button>);
     at = start + 1 + written.length;
   }

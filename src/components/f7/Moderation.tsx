@@ -3,6 +3,7 @@ import { Block, BlockFooter, BlockTitle, Button, Icon, Link, List, ListInput, Li
 import { FEDIZEN_BLOCKED_URL } from '@/lib/fedizen-feed';
 import { pushPage } from './navigation';
 import { LIBRARY_PROBLEM, useBlockActions, useFedizenBlocks } from '@/components/social/useFedizenLibrary';
+import { useMutes } from '@/components/social/useOwnPosts';
 import { useAtlasAuth } from '@/components/social/AuthState';
 
 /**
@@ -50,6 +51,8 @@ export function ModerationPopup({ opened, onClose }: { opened: boolean; onClose:
       </> : <BlockFooter>{LIBRARY_PROBLEM['needs-permission']}</BlockFooter>)}
       {note && <BlockFooter><span role="alert">{note}</span></BlockFooter>}
 
+      <MutedPeople opened={opened} />
+
       <BlockTitle>Blocked instances</BlockTitle>
       <List strong inset dividers>
         <ListItem link={FEDIZEN_BLOCKED_URL} external target="_blank" title="Manage on Fedizen" footer="Block a whole server: nothing from its people reaches you.">
@@ -59,4 +62,30 @@ export function ModerationPopup({ opened, onClose }: { opened: boolean; onClose:
       <BlockFooter>Fedizen keeps blocked instances; Atlas can’t show or change them yet.</BlockFooter>
     </Page>
   </Popup>;
+}
+
+/** Phone: muted people, with Unmute and mute-by-handle (desktop's MutedPeople). */
+function MutedPeople({ opened }: { opened: boolean }) {
+  const m = useMutes(opened);
+  const [handle, setHandle] = useState('');
+  const mute = async () => { const h = handle.trim().replace(/^@/, ''); if (h && await m.mute({ acct: h, on: true })) setHandle(''); };
+  if (!m.signedIn) return null;
+  return <>
+    <BlockTitle>Muted people</BlockTitle>
+    {m.loading && <Block>Loading…</Block>}
+    {m.readError && <Block>{m.readError}</Block>}
+    <List strong inset dividers mediaList>
+      {m.people.map(p => <ListItem key={p.id} title={p.name} subtitle={p.handle}>
+        {p.avatar ? <img slot="media" src={p.avatar} alt="" width={40} height={40} className="atlas-avatar" style={{ objectFit: 'cover' }} referrerPolicy="no-referrer" />
+          : <span slot="media" className="atlas-activity-initial" aria-hidden="true">{p.name.charAt(0)}</span>}
+        <Link slot="after" onClick={() => void m.mute({ accountId: p.id, on: false })}>Unmute</Link>
+      </ListItem>)}
+      {!m.loading && !m.readError && !m.people.length && <ListItem title="You haven’t muted anyone." />}
+    </List>
+    {!m.loading && !m.readError && <>
+      <List strong inset><ListInput label="Mute someone" type="text" placeholder="@name@server.social" value={handle} onInput={e => setHandle((e.target as HTMLInputElement).value)} clearButton /></List>
+      <Block><Button tonal round onClick={() => void mute()} disabled={!handle.trim() || m.busy}>Mute</Button></Block>
+    </>}
+    <BlockFooter>{m.error ? <span role="alert">{m.error}</span> : 'Their posts leave your feeds. Unlike blocking, they can still follow you and won’t know you muted them.'}</BlockFooter>
+  </>;
 }

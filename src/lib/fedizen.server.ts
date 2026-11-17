@@ -520,6 +520,14 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   // Posts matching a search (Mastodon v2 search, statuses only; Bonfire: MastoSearchController). The query arrives
   // percent-encoded.
   { match: /^\/api\/v2\/search\?q=[A-Za-z0-9_.~%*'()!-]{1,2400}&type=statuses&limit=20$/, schema: z.object({ statuses: z.array(timelineStatus).max(40) }), single: true },
+  // Hashtags starting with what's typed after "#" in the composer (Mastodon v2 search, hashtags).
+  { match: /^\/api\/v2\/search\?q=[A-Za-z0-9_%]{1,1200}&type=hashtags&limit=8$/, schema: z.object({ hashtags: z.array(z.object({ name: z.string().min(1).max(100) })).max(40) }), single: true },
+  // People you mute (Bonfire: MastoAccountController.mutes).
+  { match: /^\/api\/v1\/mutes\?limit=80$/, schema: accountsSchema },
+  // Posts you liked, newest first (Bonfire: MastoTimelineController.favourites).
+  { match: /^\/api\/v1\/favourites\?limit=40$/, schema: bookmarksSchema },
+  // Who liked or boosted a post.
+  { match: new RegExp(`^/api/v1/statuses/${ID}/(favourited_by|reblogged_by)\\?limit=40$`), schema: accountsSchema },
 ];
 
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;
@@ -602,6 +610,13 @@ const pollIn = z.object({
   multiple: z.boolean(),
 }).strict();
 const edit = z.object({ status: z.string().trim().max(5000), spoiler_text: z.string().trim().max(500) }).strict().refine(p => p.status.length > 0 || p.spoiler_text.length > 0, 'empty post');
+const report = z.object({
+  account_id: z.string().regex(new RegExp(`^${ID}$`)),
+  status_ids: z.array(z.string().regex(new RegExp(`^${ID}$`))).max(20).optional(),
+  comment: z.string().trim().max(1000),
+  category: z.enum(['spam', 'legal', 'violation', 'other']),
+  forward: z.boolean(),
+}).strict();
 const votes = z.object({ choices: z.array(z.number().int().min(0).max(99)).min(1).max(100) }).strict();
 const reply = z.object({
   status: z.string().trim().max(5000),
@@ -621,7 +636,9 @@ const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTy
   { method: 'POST', match: new RegExp(`^/api/v1/tags/${TAG}/(follow|unfollow)$`) },
   { method: 'POST', match: new RegExp(`^/api/v1/statuses/${ID}/(bookmark|unbookmark|favourite|unfavourite|reblog|unreblog)$`) },
   { method: 'POST', match: /^\/api\/v1\/statuses$/, body: reply },
-  { method: 'POST', match: new RegExp(`^/api/v1/accounts/${ID}/(block|unblock)$`) },
+  { method: 'POST', match: new RegExp(`^/api/v1/accounts/${ID}/(block|unblock|mute|unmute)$`) },
+  // Report an account or its posts to Fedizen's moderators (Mastodon POST /reports; Bonfire: flag).
+  { method: 'POST', match: /^\/api\/v1\/reports$/, body: report },
   { method: 'POST', match: /^\/api\/v1\/lists$/, body: title },
   { method: 'PUT', match: new RegExp(`^/api/v1/lists/${ID}$`), body: title },
   { method: 'DELETE', match: new RegExp(`^/api/v1/lists/${ID}$`) },

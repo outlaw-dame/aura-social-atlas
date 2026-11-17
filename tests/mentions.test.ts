@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { insertMention, mentionQueryAt, mentionSegments, mentionToken, mergeSuggestions } from "../src/lib/mentions";
+import { hashtagQueryAt, insertHashtag, insertMention, mentionQueryAt, mentionSegments, mentionToken, mergeSuggestions } from "../src/lib/mentions";
 
 describe("Mentions, as iMessage does them", () => {
   test("finds the @word at the caret, and nothing inside an email or a finished word", () => {
@@ -26,5 +26,21 @@ describe("Mentions, as iMessage does them", () => {
     const found = [{ handle: "@daniella", name: "Daniella" }, { handle: "@dan@x.org", name: "Dan" }, { handle: "@dana", name: "Dana" }, { handle: "@danny", name: "Danny" }];
     expect(mergeSuggestions("dan", local, found).map(p => p.handle)).toEqual(["@daniella", "@dan@x.org", "@dana"]);
     expect(mergeSuggestions("zz", local, []).length).toBe(0);
+  });
+});
+
+describe("Hashtag suggestions while typing", () => {
+  test("finds #word at the caret, not in a URL fragment, an entity or the middle of a word", () => {
+    expect(hashtagQueryAt("love #atl", 9)).toEqual({ start: 5, query: "atl" });
+    expect(hashtagQueryAt("#café", 5)).toEqual({ start: 0, query: "café" });
+    expect(hashtagQueryAt("#", 1)).toBeNull();
+    expect(hashtagQueryAt("see page#top", 12)).toBeNull();
+    expect(hashtagQueryAt("https://x.org/#frag", 19)).toBeNull();
+    expect(hashtagQueryAt("&#39", 4)).toBeNull();
+    expect(hashtagQueryAt("love #atlas now", 15)).toBeNull();
+  });
+  test("picking a tag replaces what was typed and leaves the caret after a space", () => {
+    expect(insertHashtag("love #atl", 5, 9, "atlas")).toEqual({ text: "love #atlas ", caret: 12 });
+    expect(insertHashtag("love #atl there", 5, 8, "atlas")).toEqual({ text: "love #atlas there", caret: 12 });
   });
 });

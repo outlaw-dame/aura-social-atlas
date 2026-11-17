@@ -791,11 +791,12 @@ span.atlas-rich-face { display: inline-flex; align-items: center; justify-conten
 .atlas-post-tagline button { display: inline-flex; align-items: center; gap: 4px; width: auto; min-height: 24px; margin: -3px 0; padding: 0; border: 0; background: none; color: var(--f7-text-color, inherit); opacity: .6; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .atlas-post-tagline .icon { font-size: 14px; }
 .atlas-post-text .atlas-hashtag, .atlas-post-text .atlas-hashtag-btn { color: var(--f7-theme-color, var(--accent)); font-weight: 500; }
-.atlas-post-text .atlas-mention { color: var(--f7-theme-color, var(--accent)); }
+.atlas-post-text .atlas-post-mention { color: var(--f7-theme-color, var(--accent)); }
 
 /* People in a post (PostPeople.tsx): mentions and the "boosted" row open profiles in Atlas. */
-.atlas-mention { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); font-weight: 500; cursor: pointer; width: auto; text-align: start; }
-.atlas-mention:hover { text-decoration: underline; }
+/* A mention in a post's text (PostPeople.tsx); not the reply box's .atlas-mention. Inline, like a link. */
+.atlas-post-mention { display: inline; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: var(--accent); font-weight: 500; cursor: pointer; width: auto; text-align: start; }
+.atlas-post-mention:hover { text-decoration: underline; }
 .atlas-post-link { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
 .atlas-post-link:hover { text-decoration: underline; }
 /* Polls (PollView.tsx): choices, then results as bars, as Mastodon and Ivory draw them. */
@@ -975,3 +976,14 @@ html.atlas-stack-open .view.atlas-stack { pointer-events: auto; }
 .atlas-gifs-note { margin: 16px 4px; font-size: 14px; opacity: .7; text-align: center; }
 .atlas-gifs-note button { width: auto; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 .atlas-gif-sheet { border-radius: 14px 14px 0 0; overflow: hidden; }
+
+/* Phone: who liked or boosted a post. */
+.atlas-reactors { list-style: none; margin: 0; padding: 0 0 calc(12px + env(safe-area-inset-bottom)); overflow-y: auto; max-height: 60vh; }
+.atlas-reactors button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 16px; min-height: 52px; background: none; border: 0; color: inherit; text-align: left; font: inherit; }
+.atlas-reactors button span { min-width: 0; display: flex; flex-direction: column; }
+.atlas-reactors b, .atlas-reactors small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-reactors small { opacity: .65; }
+.atlas-reactor-face { width: 40px; height: 40px; flex: none; object-fit: cover; border-radius: var(--atlas-avatar-radius, 50%); display: inline-flex; align-items: center; justify-content: center; }
+.atlas-mention-bar.atlas-tag-bar button { padding: 0 14px; font-weight: 500; }
+.atlas-compose-tags { margin: -8px calc(16px + env(safe-area-inset-right)) 8px calc(16px + env(safe-area-inset-left)); }
+.atlas-compose-tags:empty { display: none; }
