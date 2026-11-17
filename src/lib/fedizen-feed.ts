@@ -167,6 +167,68 @@ export function fromNotifications(list: Notice[]): FedizenNotice[] {
   }));
 }
 
+/**
+ * A grouped notification (Mastodon 4.3's /api/v2/notifications): "Ann, Ben and 3 others liked your post". Mastodon and
+ * Bonfire group likes, boosts and follows; Bonfire groups within each page it returns, so groups of the same kind on the
+ * same post that land on different pages are merged here (mergeNoticeGroups). `people` are the sample, newest first.
+ */
+export type FedizenNoticeGroup = {
+  key: string; type: string; count: number; date?: string; people: FediPerson[];
+  /** The post it's about (yours for likes and boosts; theirs for mentions and replies), as plain text. */
+  post?: { id: string; text: string; url?: string };
+  /** Mastodon's own wording for one, e.g. "mentioned you". */ verb: string;
+};
+type Grouped = {
+  accounts?: (Acct & { id?: string | null })[] | null;
+  statuses?: Status[] | null;
+  notification_groups?: { group_key: string; notifications_count?: number | null; type?: string | null; latest_page_notification_at?: string | null; sample_account_ids?: string[] | null; status_id?: string | null }[] | null;
+};
+export const GROUPABLE = new Set(['favourite', 'reblog', 'follow']);
+
+export function fromGroupedNotifications(g: Grouped): FedizenNoticeGroup[] {
+  const accounts = new Map((g.accounts ?? []).filter(a => a?.id).map(a => [a.id!, a]));
+  const statuses = new Map((g.statuses ?? []).filter(s => s?.id).map(s => [s.id, s]));
+  return (g.notification_groups ?? []).filter(n => n && typeof n.group_key === 'string').map(n => {
+    const type = n.type ?? 'other';
+    const st = n.status_id ? statuses.get(n.status_id) : undefined;
+    const people = (n.sample_account_ids ?? []).map(id => accounts.get(id)).filter((a): a is Acct => !!a).map(person);
+    const text = st?.content ? htmlToParagraphs(st.content).join(' ').slice(0, 200) : '';
+    return {
+      key: n.group_key, type, count: Math.max(1, n.notifications_count ?? people.length ?? 1), date: n.latest_page_notification_at ?? undefined, people,
+      verb: verbs[type] ?? 'interacted with you',
+      ...(st ? { post: { id: st.id, text, ...(http(st.url) ?? http(st.uri) ? { url: http(st.url) ?? http(st.uri) } : {}) } } : {}),
+    };
+  });
+}
+
+/**
+ * Joins groups of the same kind on the same post (and all follows) across pages, as one: the count adds up and the
+ * people are merged, newest first. Ungroupable kinds (mentions, replies, polls…) stay one per notification.
+ */
+export function mergeNoticeGroups(groups: FedizenNoticeGroup[]): FedizenNoticeGroup[] {
+  const out: FedizenNoticeGroup[] = [];
+  const at = new Map<string, number>();
+  for (const g of groups) {
+    const k = GROUPABLE.has(g.type) ? `${g.type}|${g.post?.id ?? ''}` : null;
+    const i = k ? at.get(k) : undefined;
+    if (i === undefined) { if (k) at.set(k, out.length); out.push(g); continue; }
+    const m = out[i];
+    const seen = new Set(m.people.map(p => p.acct ?? p.actor ?? p.name));
+    out[i] = { ...m, count: m.count + g.count, people: [...m.people, ...g.people.filter(p => !seen.has(p.acct ?? p.actor ?? p.name))] };
+  }
+  return out;
+}
+
+/** "Ann liked your post", "Ann and Ben…", "Ann, Ben and 3 others…", as Mastodon and Bluesky word a group. */
+export function groupSentence(g: Pick<FedizenNoticeGroup, 'people' | 'count' | 'verb'>): { names: string; rest: string } {
+  const names = g.people.slice(0, 2).map(p => p.name);
+  const others = Math.max(0, g.count - names.length);
+  const who = !names.length ? (g.count === 1 ? 'Someone' : `${g.count} people`)
+    : others === 0 ? names.join(' and ')
+    : `${names.join(', ')} and ${others === 1 ? '1 other' : `${others} others`}`;
+  return { names: who, rest: g.verb };
+}
+
 type Conversation = { id: string; unread?: boolean; accounts?: Acct[]; last_status?: Status | null };
 export function fromConversations(list: Conversation[]): FedizenConversation[] {
   return list.filter(c => c && typeof c.id === 'string').map(c => ({

@@ -210,7 +210,7 @@ export function lexicalHits(compiled: Compiled[], p: FilterablePost): LexicalHit
 /* ── What a feed does with a post ────────────────────────────────────────────────────────────── */
 
 /** Why a post was filtered, for the notice: the words that matched, or the AI model's judgment in context. */
-export type FilterReason = { by: 'words'; term: string } | { by: 'ai' };
+export type FilterReason = { by: 'words'; term: string } | { by: 'ai' } | { by: 'meaning' };
 export type Verdict = { state: 'clear' } | { state: 'pending' } | { state: 'filtered'; action: FilterAction; filter: ContentFilter; reason: FilterReason };
 
 const STRENGTH: Record<FilterAction, number> = { hide: 3, warn: 2, blur: 1 };

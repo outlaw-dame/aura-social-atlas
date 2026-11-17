@@ -6,6 +6,7 @@ import { useFediProfileOpener } from './useFediProfile';
 import { useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useOpenActivityFromPush } from './usePush';
+import { LiveUpdates } from './LiveUpdates';
 import { SemanticIndexer } from './useSemanticIndex';
 
 type CollectionOpener = ReturnType<typeof useCollectionOpener>;
@@ -28,6 +29,7 @@ export function DesktopHosts({ collections }: { collections: CollectionOpener })
     <MiniPlayer />
     <VideoDock />
     <SemanticIndexer />
+    <LiveUpdates />
   </>;
 }
 

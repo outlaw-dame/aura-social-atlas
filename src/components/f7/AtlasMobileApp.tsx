@@ -1,6 +1,7 @@
 import { MobilePostSearch } from './MobilePostSearch';
 import { NotificationSettingsPage } from './NotificationSettings';
 import { useOpenActivityFromPush } from '@/components/social/usePush';
+import { LiveUpdates } from '@/components/social/LiveUpdates';
 import { SemanticIndexer } from '@/components/social/useSemanticIndex';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Framework7 from 'framework7/lite-bundle';
@@ -463,6 +464,7 @@ export default function AtlasMobileApp() {
       <MiniPlayer />
       <VideoDock />
       <SemanticIndexer />
+      <LiveUpdates />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
     </SampleCards.Provider>

@@ -8,7 +8,7 @@ import { WarningPanel } from './ContentWarning';
 
 /** Why a post was filtered, in a few words: the words that matched, or the AI model that judged it in context. */
 export function filterReason(v: Extract<Verdict, { state: 'filtered' }>, product: string | null): string {
-  return v.reason.by === 'words' ? `matched “${v.reason.term}”` : `judged by ${product ?? 'your AI model'}`;
+  return v.reason.by === 'words' ? `matched “${v.reason.term}”` : v.reason.by === 'meaning' ? 'close in meaning' : `judged by ${product ?? 'your AI model'}`;
 }
 
 export type GateView = { kind: 'show' } | { kind: 'none' } | { kind: 'notice'; filter: string; why: string; onShow: () => void } | { kind: 'blur'; filter: string; why: string; onShow: () => void };

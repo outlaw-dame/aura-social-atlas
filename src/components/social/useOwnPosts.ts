@@ -28,6 +28,9 @@ const deleted = (() => {
     add: (id: string) => { ids = new Set(ids).add(id); listeners.forEach(l => l()); },
   };
 })();
+/** Marks a post deleted everywhere in this session (its author deleted it: from live updates). */
+export const markDeleted = (statusId: string) => deleted.add(statusId);
+
 /** Whether this post was deleted here (feed cards render nothing for it). */
 export function useIsDeleted(statusId?: string) {
   const ids = useSyncExternalStore(deleted.subscribe, deleted.snapshot, deleted.snapshot);

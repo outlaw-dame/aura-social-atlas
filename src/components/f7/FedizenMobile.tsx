@@ -1,4 +1,7 @@
 import { useFollowRequests } from '@/components/social/useOwnPosts';
+import { useNotificationGroups } from '@/components/social/useNotificationGroups';
+import { groupSentence } from '@/lib/fedizen-feed';
+import { Segmented } from 'framework7-react';
 import { openTag } from '@/lib/hashtags';
 import { linkifyPost } from '@/components/social/PostPeople';
 import { useQuery } from '@tanstack/react-query';
@@ -132,9 +135,46 @@ export function MobileActivity() {
     {f.embedded ? <Button fill round external target="_blank" href={`${window.location.origin}/app`}>Open Atlas in a new tab to connect</Button> : <Button fill round onClick={f.connect}>Connect Fedizen</Button>}
     {f.error && <p role="alert" style={{ color: 'var(--f7-theme-color)' }}>{f.error}</p>}
   </Block>;
-  const n = f.data.notices;
-  if (!n.length) return <><MobileFollowRequests /><Block strong inset>No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.</Block></>;
-  return <><MobileFollowRequests /><List strong inset dividers mediaList className="atlas-activity">
+  return <><MobileFollowRequests /><MobileGroupedActivity notices={f.data.notices} /></>;
+}
+
+/** Phone Activity, grouped (desktop GroupedActivity): All / Mentions, faces of who did it, older pages on request. */
+function MobileGroupedActivity({ notices }: { notices: Parameters<typeof MobileSingleActivity>[0]['n'] }) {
+  const [mentions, setMentions] = useState(false);
+  const g = useNotificationGroups(mentions);
+  if (g.unsupported && !mentions) return <MobileSingleActivity n={notices} />;
+  return <>
+    <Block className="atlas-activity-tabs"><Segmented strong tag="div">
+      <Button active={!mentions} onClick={() => setMentions(false)}>All</Button>
+      <Button active={mentions} onClick={() => setMentions(true)}>Mentions</Button>
+    </Segmented></Block>
+    {g.loading ? <Block strong inset>Loading your activity…</Block>
+      : g.error ? <Block strong inset><p role="alert" style={{ margin: 0 }}>{g.error}</p><Button small onClick={g.refresh}>Try again</Button></Block>
+      : !g.groups.length ? <Block strong inset>{mentions ? 'No mentions yet.' : 'No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.'}</Block>
+      : <List strong inset dividers mediaList className="atlas-activity">
+        {g.groups.map(x => {
+          const i = noticeIcon[x.type] ?? { ios: 'f7:bell_fill', md: 'material:notifications' };
+          const s = groupSentence(x);
+          const one = x.people.length === 1 && (x.people[0].acct || x.people[0].actor) ? x.people[0] : null;
+          return <ListItem key={x.key} title={s.names} text={`${s.rest}${x.post?.text ? ` — ${x.post.text}` : ''}`} after={when(x.date)}
+            {...(one ? { link: '#', onClick: (e: { preventDefault?: () => void }) => { e.preventDefault?.(); openFediProfile({ actor: one.actor, acct: one.acct, name: one.name }); } } : {})}>
+            <span slot="media" className="atlas-activity-media">
+              {x.people.length > 1
+                ? <span className="atlas-activity-stack">{x.people.slice(0, 3).map((p, k) => p.avatar ? <img key={k} src={p.avatar} alt="" width={26} height={26} referrerPolicy="no-referrer" /> : <span key={k} className="atlas-activity-initial" aria-hidden="true">{p.name.charAt(0)}</span>)}</span>
+                : x.people[0]?.avatar ? <img src={x.people[0].avatar} alt="" width={40} height={40} referrerPolicy="no-referrer" /> : <span className="atlas-activity-initial" aria-hidden="true">{(x.people[0]?.name ?? '?').charAt(0)}</span>}
+              <span className={`atlas-activity-kind atlas-activity-${x.type}`}><Icon ios={i.ios} md={i.md} /></span>
+            </span>
+          </ListItem>;
+        })}
+      </List>}
+    {g.more && <Block><Button tonal round disabled={g.loadingMore} onClick={g.more}>{g.loadingMore ? 'Loading…' : 'Show older'}</Button></Block>}
+  </>;
+}
+
+/** Single notifications, for a Fedizen that can't group them. */
+function MobileSingleActivity({ n }: { n: { id: string; type: string; author: string; avatar?: string; date?: string; text: string; acct?: string; actor?: string }[] }) {
+  if (!n.length) return <Block strong inset>No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.</Block>;
+  return <><List strong inset dividers mediaList className="atlas-activity">
     {n.map(x => {
       const i = noticeIcon[x.type] ?? { ios: 'f7:bell_fill', md: 'material:notifications' };
       // Tapping someone in Activity opens their profile in Atlas (phones have no hover card).
