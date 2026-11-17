@@ -31,7 +31,9 @@ import { Route as SettingsAppearanceRouteImport } from './routes/settings.appear
 import { Route as SettingsHashtagsRouteImport } from './routes/settings.hashtags'
 import { Route as SettingsIntelligenceRouteImport } from './routes/settings.intelligence'
 import { Route as SettingsModerationRouteImport } from './routes/settings.moderation'
+import { Route as SettingsNotificationsRouteImport } from './routes/settings.notifications'
 import { Route as TagsTagRouteImport } from './routes/tags.$tag'
+import { Route as ApiPushRelayIdRouteImport } from './routes/api/push/relay.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -143,9 +145,19 @@ const SettingsModerationRoute = SettingsModerationRouteImport.update({
   path: '/moderation',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const TagsTagRoute = TagsTagRouteImport.update({
   id: '/tags/$tag',
   path: '/tags/$tag',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPushRelayIdRoute = ApiPushRelayIdRouteImport.update({
+  id: '/api/push/relay/$id',
+  path: '/api/push/relay/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -171,8 +183,10 @@ export interface FileRoutesByFullPath {
   '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
   '/settings/moderation': typeof SettingsModerationRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/tags/$tag': typeof TagsTagRoute
   '/settings/': typeof SettingsIndexRoute
+  '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -195,8 +209,10 @@ export interface FileRoutesByTo {
   '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
   '/settings/moderation': typeof SettingsModerationRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/tags/$tag': typeof TagsTagRoute
   '/settings': typeof SettingsIndexRoute
+  '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -221,8 +237,10 @@ export interface FileRoutesById {
   '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
   '/settings/moderation': typeof SettingsModerationRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/tags/$tag': typeof TagsTagRoute
   '/settings/': typeof SettingsIndexRoute
+  '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -248,8 +266,10 @@ export interface FileRouteTypes {
     | '/settings/hashtags'
     | '/settings/intelligence'
     | '/settings/moderation'
+    | '/settings/notifications'
     | '/tags/$tag'
     | '/settings/'
+    | '/api/push/relay/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -272,8 +292,10 @@ export interface FileRouteTypes {
     | '/settings/hashtags'
     | '/settings/intelligence'
     | '/settings/moderation'
+    | '/settings/notifications'
     | '/tags/$tag'
     | '/settings'
+    | '/api/push/relay/$id'
   id:
     | '__root__'
     | '/'
@@ -297,8 +319,10 @@ export interface FileRouteTypes {
     | '/settings/hashtags'
     | '/settings/intelligence'
     | '/settings/moderation'
+    | '/settings/notifications'
     | '/tags/$tag'
     | '/settings/'
+    | '/api/push/relay/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -320,6 +344,7 @@ export interface RootRouteChildren {
   ApiLiveRoute: typeof ApiLiveRoute
   FedizenCallbackRoute: typeof FedizenCallbackRoute
   TagsTagRoute: typeof TagsTagRoute
+  ApiPushRelayIdRoute: typeof ApiPushRelayIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -478,11 +503,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsModerationRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/notifications': {
+      id: '/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof SettingsNotificationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/tags/$tag': {
       id: '/tags/$tag'
       path: '/tags/$tag'
       fullPath: '/tags/$tag'
       preLoaderRoute: typeof TagsTagRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/push/relay/$id': {
+      id: '/api/push/relay/$id'
+      path: '/api/push/relay/$id'
+      fullPath: '/api/push/relay/$id'
+      preLoaderRoute: typeof ApiPushRelayIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -493,6 +532,7 @@ interface SettingsRouteChildren {
   SettingsHashtagsRoute: typeof SettingsHashtagsRoute
   SettingsIntelligenceRoute: typeof SettingsIntelligenceRoute
   SettingsModerationRoute: typeof SettingsModerationRoute
+  SettingsNotificationsRoute: typeof SettingsNotificationsRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
@@ -501,6 +541,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsHashtagsRoute: SettingsHashtagsRoute,
   SettingsIntelligenceRoute: SettingsIntelligenceRoute,
   SettingsModerationRoute: SettingsModerationRoute,
+  SettingsNotificationsRoute: SettingsNotificationsRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }
 
@@ -527,6 +568,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLiveRoute: ApiLiveRoute,
   FedizenCallbackRoute: FedizenCallbackRoute,
   TagsTagRoute: TagsTagRoute,
+  ApiPushRelayIdRoute: ApiPushRelayIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

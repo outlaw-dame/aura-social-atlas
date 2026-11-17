@@ -50,6 +50,75 @@ export type Database = {
         }
         Relationships: []
       }
+      atlas_push_devices: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          last_ok_at: string | null
+          p256dh: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          last_ok_at?: string | null
+          p256dh: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          last_ok_at?: string | null
+          p256dh?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      atlas_push_relays: {
+        Row: {
+          alerts: Json
+          auth_secret: string
+          created_at: string
+          iv: string
+          policy: string
+          public_key: string
+          relay_id: string
+          sealed_private: string
+          server_key: string | null
+          user_id: string
+        }
+        Insert: {
+          alerts?: Json
+          auth_secret: string
+          created_at?: string
+          iv: string
+          policy?: string
+          public_key: string
+          relay_id: string
+          sealed_private: string
+          server_key?: string | null
+          user_id: string
+        }
+        Update: {
+          alerts?: Json
+          auth_secret?: string
+          created_at?: string
+          iv?: string
+          policy?: string
+          public_key?: string
+          relay_id?: string
+          sealed_private?: string
+          server_key?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       atlas_ai_settings: {
         Row: {
           deep_matching: boolean

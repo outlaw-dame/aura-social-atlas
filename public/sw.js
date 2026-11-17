@@ -138,3 +138,36 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/assets/')) { event.respondWith(cacheFirst(event)); return; }
   if (PRECACHE.includes(url.pathname)) { event.respondWith(staleWhileRevalidate(event)); }
 });
+
+// Push notifications from Atlas's relay (src/lib/push/relay.server.ts): {title, body, kind}, already stripped of
+// anything Fedizen sent that a notification doesn't need. One notification per kind is replaced rather than stacked
+// (tag), and tapping one opens Activity in Atlas: the phone app when it's open or installed, the site otherwise.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = {}; }
+  const title = typeof data.title === 'string' && data.title ? data.title.slice(0, 120) : 'Atlas';
+  const body = typeof data.body === 'string' ? data.body.slice(0, 240) : '';
+  const kind = typeof data.kind === 'string' ? data.kind.replace(/[^a-z_]/g, '').slice(0, 30) : 'other';
+  event.waitUntil(self.registration.showNotification(title, {
+    body, tag: `atlas-${kind}`, renotify: kind === 'mention', icon: '/icon-192.png', badge: '/icon-192.png', data: { kind },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const app = all.find((c) => new URL(c.url).pathname.startsWith('/app')) || all.find((c) => new URL(c.url).origin === self.location.origin);
+    if (app) {
+      await app.focus();
+      app.postMessage({ type: 'atlas-open-activity' });
+      return;
+    }
+    await self.clients.openWindow('/activity');
+  })());
+});
+
+// The browser replaced this subscription (keys rotated or expired): tell any open Atlas page to register again.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((all) => all.forEach((c) => c.postMessage({ type: 'atlas-push-renew' }))));
+});
