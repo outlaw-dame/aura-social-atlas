@@ -245,6 +245,24 @@ export const describePostForFilter = createServerFn({ method: 'POST' }).middlewa
     }
   });
 
+/** Embeddings for the semantic index with the person's server-kept key (device keys embed from the browser). */
+export const embedTextsFor = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, kind: z.enum(['query', 'document']), texts: z.array(z.string().min(1).max(2000)).min(1).max(32) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ key: string; vectors: number[][] } | { error: AiProblem }> => {
+    sameSession(data.expectedAtlasUserId, context.userId);
+    try {
+      const ai = await (await store()).activeModel(context.userId);
+      if ('problem' in ai) return { error: ai.problem };
+      const { embedWith, EMBEDDING_MODELS } = await import('./intelligence/embeddings');
+      const m = EMBEDDING_MODELS[ai.credential.provider];
+      if (!m) return { error: 'bad-model' };
+      const vectors = await embedWith(ai.credential, data.texts, data.kind);
+      return { key: m.key, vectors: vectors.map(v => Array.from(v)) };
+    } catch (e) {
+      return { error: (await store()).problem(e) };
+    }
+  });
+
 /** Other searches meaning the same as `q`, from the person's server-kept model (post search with Intelligence on). */
 export const searchWordingsFor = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator(d => z.object({ expectedAtlasUserId: Uid, q: z.string().trim().min(2).max(200) }).parse(d))

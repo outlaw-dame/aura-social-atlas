@@ -1,4 +1,5 @@
 import { MobilePostSearch } from './MobilePostSearch';
+import { SemanticIndexer } from '@/components/social/useSemanticIndex';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import Framework7 from 'framework7/lite-bundle';
 import Framework7React, {
@@ -452,6 +453,7 @@ export default function AtlasMobileApp() {
       <FediProfilePopup target={fediProfile.target} onClose={fediProfile.close} />
       <MiniPlayer />
       <VideoDock />
+      <SemanticIndexer />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
     </SampleCards.Provider>

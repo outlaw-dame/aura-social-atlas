@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import {
   addContentFilters, deleteContentFilter, describePostForFilter, expandContentFilter, followingAmong, getIntelligence, judgeFilteredPosts,
-  listContentFilters, removeAiKey, saveAiKey, suggestContentFilters, altTextForImage, searchWordingsFor, updateContentFilter, updateIntelligence,
+  listContentFilters, removeAiKey, saveAiKey, suggestContentFilters, altTextForImage, embedTextsFor, searchWordingsFor, updateContentFilter, updateIntelligence,
   type AiProblem, type IntelligenceStatus,
 } from '@/lib/intelligence.functions';
 import { getFedizenStatus } from '@/lib/fedizen.functions';
@@ -127,7 +127,7 @@ export function useAiRunner() {
   const ai = useIntelligence().data;
   const judgeServer = useServerFn(judgeFilteredPosts), expandServer = useServerFn(expandContentFilter);
   const suggestServer = useServerFn(suggestContentFilters), describeServer = useServerFn(describePostForFilter);
-  const altServer = useServerFn(altTextForImage), wordingsServer = useServerFn(searchWordingsFor);
+  const altServer = useServerFn(altTextForImage), wordingsServer = useServerFn(searchWordingsFor), embedServer = useServerFn(embedTextsFor);
   const id = user?.id ?? '';
   const active = ai?.active ?? null, ready = intelligenceReady(ai), deep = !!ai?.deepMatching;
   const local = useCallback(async (): Promise<{ c: Credential; model: string } | AiProblem> => {
@@ -185,9 +185,24 @@ export function useAiRunner() {
       const r = await wordingsServer({ data: { expectedAtlasUserId: id, q } }).catch(() => null);
       return r && 'terms' in r ? r.terms : [];
     },
+    /** Embeddings with the key in use, for the semantic index; null when it fails or the provider has none. */
+    embed: async (texts: string[], kind: 'query' | 'document'): Promise<{ key: string; vectors: Float32Array[] } | null> => {
+      if (!ready || !active) return null;
+      const { EMBEDDING_MODELS, embedWith } = await import('@/lib/intelligence/embeddings');
+      const m = EMBEDDING_MODELS[active.provider];
+      if (!m) return null;
+      if (active.where === 'device') {
+        const k = await local(); if (typeof k === 'string') return null;
+        try { return { key: m.key, vectors: await embedWith(k.c, texts, kind) }; } catch { return null; }
+      }
+      const r = await embedServer({ data: { expectedAtlasUserId: id, texts, kind } }).catch(() => null);
+      return r && 'vectors' in r ? { key: r.key, vectors: r.vectors.map(v => Float32Array.from(v)) } : null;
+    },
+    /** The provider in use, when it has an embedding model (Anthropic and Kimi don't). */
+    embeddingProvider: ready && active && ['openai', 'google', 'mistral', 'cloudflare'].includes(active.provider) && !(active.where === 'device' && active.provider === 'cloudflare') ? active.provider : null,
     /** Which model answers, so answers cached for one model aren't reused for another. */
     model: active ? `${active.where}:${active.provider}:${active.model}` : null,
-  }), [ready, active, deep, local, judgeServer, expandServer, suggestServer, describeServer, altServer, wordingsServer, id]);
+  }), [ready, active, deep, local, judgeServer, expandServer, suggestServer, describeServer, altServer, wordingsServer, embedServer, id]);
 }
 
 /* ── Keyword filters ─────────────────────────────────────────────────────────────────────────── */

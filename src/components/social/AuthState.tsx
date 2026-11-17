@@ -97,7 +97,12 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const signOut = async () => {
-    if (session?.user.id) { clearHomeCache(session.user.id); forgetAccount(queryClient, session.user.id); }
+    if (session?.user.id) {
+      clearHomeCache(session.user.id); forgetAccount(queryClient, session.user.id);
+      // The semantic index holds posts this account was shown: it goes with the account (the downloaded model stays).
+      const uid = session.user.id;
+      void import('@/lib/semantic/index-store').then(m => m.clearIndex(uid)).catch(() => {});
+    }
     await supabase.auth.signOut();
     setSession(null);
     setProfileRecord(null);

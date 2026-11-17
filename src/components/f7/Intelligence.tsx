@@ -10,6 +10,7 @@ import { DEVICE_KEY_NOTE } from '@/components/social/IntelligenceSettings';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useSocial } from '@/components/social/SocialState';
 import { pushPage } from './navigation';
+import { MobileSemanticSettings } from './SemanticSettings';
 
 /** Phone: Settings → Intelligence, a pushed page (swipe back). */
 export function IntelligencePage() {
@@ -27,7 +28,7 @@ export function IntelligencePage() {
     <Navbar title="Intelligence" backLink backLinkShowText={false} />
     {!user ? <Block strong inset>Sign in to Atlas to use Intelligence.</Block>
       : q.isLoading ? <Block strong inset>Loading…</Block>
-      : !s?.available ? <Block strong inset>Intelligence isn’t set up on this Atlas server yet.</Block>
+      : !s?.available ? <><Block strong inset>Intelligence isn’t set up on this Atlas server yet.</Block><MobileSemanticSettings /></>
       : <>
         <List strong inset dividers>
           <ListItem title="Use AI in Atlas"><Toggle slot="after" checked={s.enabled} disabled={act.busy} onToggleChange={() => void act.update({ enabled: !s.enabled })} /></ListItem>
@@ -70,6 +71,7 @@ export function IntelligencePage() {
           <ListItem title="Check every post against topic filters" footer="Also sends every public post you scroll past to your provider."><Toggle slot="after" checked={s.deepMatching} disabled={!ready || act.busy} onToggleChange={() => void act.update({ deepMatching: !s.deepMatching })} /></ListItem>
           <ListItem link="#" title="Keyword filters" onClick={() => pushPage('/keyword-filters/')} />
         </List>
+        <MobileSemanticSettings />
       </>}
   </Page>;
 }

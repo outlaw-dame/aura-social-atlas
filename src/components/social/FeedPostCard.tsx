@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { queueForIndex } from './useSemanticIndex';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Globe2, Lock, Tag, AtSign } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
@@ -82,7 +83,9 @@ function Actions({ post: p, actions }: { post: FedizenPost; actions: FeedActions
 /** Desktop: one post in a feed — author, text, media or link preview — with the standard post actions. */
 /** Desktop: one post, unless the person's keyword filters hide it (or show it behind a notice, or blur its media). */
 export function FeedPostCard(props: { post: FedizenPost; actions: FeedActions; reasons?: ForYouReason[]; /** The hashtag page this card is on. */ inTag?: string }) {
-  if (useIsDeleted(props.post.statusId)) return null;
+  const deleted = useIsDeleted(props.post.statusId);
+  useEffect(() => { if (!deleted) queueForIndex(props.post); }, [deleted, props.post]);
+  if (deleted) return null;
   return <FilterGate post={props.post}><FeedPostCardBody {...props} /></FilterGate>;
 }
 

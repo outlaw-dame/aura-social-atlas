@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { queueForIndex } from '@/components/social/useSemanticIndex';
 import { Card, CardContent, CardFooter, Link } from 'framework7-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { shortAgo, type ForYouReason } from '@/lib/feed-types';
@@ -73,7 +74,9 @@ function Avatar({ post: p }: { post: FedizenPost }) {
 /** Phone: one post in a feed — author, text, media or link preview — with the standard post actions. */
 /** Phone: one post, unless the person's keyword filters hide it (or show it behind a notice, or blur its media). */
 export function MobilePostCard(props: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string }) {
-  if (useIsDeleted(props.post.statusId)) return null;
+  const deleted = useIsDeleted(props.post.statusId);
+  useEffect(() => { if (!deleted) queueForIndex(props.post); }, [deleted, props.post]);
+  if (deleted) return null;
   return <MobileFilterGate post={props.post}><MobilePostCardBody {...props} /></MobileFilterGate>;
 }
 
