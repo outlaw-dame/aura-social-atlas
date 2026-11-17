@@ -48,7 +48,7 @@ function failure(status: number): ProviderError {
   return new ProviderError('unavailable', status);
 }
 
-async function call(url: string, c: Credential, init: { method?: string; body?: unknown; timeout?: number } = {}): Promise<unknown> {
+export async function call(url: string, c: Credential, init: { method?: string; body?: unknown; timeout?: number } = {}): Promise<unknown> {
   if (inBrowser() && !BROWSER_CAPABLE[c.provider]) throw new ProviderError('browser-blocked');
   let res: Response;
   try {

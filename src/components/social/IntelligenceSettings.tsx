@@ -9,6 +9,7 @@ import { BROWSER_CAPABLE } from '@/lib/intelligence/llm';
 import { intelligenceReady, useIntelligence, useIntelligenceActions } from './useIntelligence';
 import { useAtlasAuth } from './AuthState';
 import { useSocial } from './SocialState';
+import { SemanticSettings } from './SemanticSettings';
 
 export const DEVICE_KEY_NOTE = 'Never sent to Atlas: this browser calls the provider itself. But anything running in Atlas’s page could read it (an injected script or a browser extension), Safari may clear it after 7 days without a visit unless Atlas is on your Home Screen, and you’ll enter it again on each device. The assistant needs a key on Atlas’s server.';
 
@@ -24,7 +25,7 @@ export function IntelligenceSettings() {
 
   if (!user) return <p className="mt-6 text-sm text-muted-foreground">Sign in to Atlas to use Intelligence.</p>;
   if (q.isLoading) return <p className="mt-6 text-sm text-muted-foreground">Loading…</p>;
-  if (!s?.available) return <p className="mt-6 text-sm text-muted-foreground">Intelligence isn’t set up on this Atlas server yet.</p>;
+  if (!s?.available) return <><p className="mt-6 text-sm text-muted-foreground">Intelligence isn’t set up on this Atlas server yet.</p><SemanticSettings /></>;
 
   const active = s.active;
   const activeModels = active ? (active.where === 'device' ? s.deviceKeys : s.keys).find(k => k.provider === active.provider)?.models ?? [] : [];
@@ -77,6 +78,7 @@ export function IntelligenceSettings() {
     <Row title="Check every post against topic filters" detail="Filters normally check only posts whose words match. This also catches posts on a topic that use none of its words, but sends every public post you scroll past to your provider." id="ai-deep">
       <Switch aria-label="Check every post against topic filters" aria-describedby="ai-deep" checked={s.deepMatching} disabled={!ready || act.busy} onCheckedChange={v => void act.update({ deepMatching: v })} />
     </Row>
+    <SemanticSettings />
     <Button asChild variant="ghost" className="h-auto w-full justify-start rounded-none border-b border-border py-5"><Link to="/settings/moderation"><span className="flex-1 text-left">Keyword filters</span><ChevronRight /></Link></Button>
   </div>;
 }
