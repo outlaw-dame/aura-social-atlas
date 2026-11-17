@@ -262,3 +262,14 @@ describe('Your recent posts, for the hashtags you used: allowlisted', () => {
     await expect(fedizenGet('t', '/api/v1/accounts/01ABC/statuses?limit=80&exclude_reblogs=true')).rejects.toThrow('Unsupported Fedizen read path.');
   });
 });
+
+describe('Grouped notifications: allowlisted', () => {
+  test('reads v2 notifications, mentions only, and older pages; nothing else', async () => {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ accounts: [{ id: 'a', acct: 'ann' }], statuses: [], notification_groups: [{ group_key: 'page-1', notifications_count: 2, type: 'favourite', sample_account_ids: ['a'] }] }))) as unknown as typeof fetch;
+    expect(((await fedizenGet('t', '/api/v2/notifications?limit=40')).data[0] as { notification_groups: unknown[] }).notification_groups).toHaveLength(1);
+    await fedizenGet('t', '/api/v2/notifications?limit=40&types%5B%5D=mention');
+    await fedizenGet('t', '/api/v2/notifications?limit=40&types%5B%5D=mention&max_id=g3QAAAAB');
+    await expect(fedizenGet('t', '/api/v2/notifications?limit=80')).rejects.toThrow('Unsupported Fedizen read path.');
+    await expect(fedizenGet('t', '/api/v2/notifications?limit=40&types%5B%5D=favourite')).rejects.toThrow('Unsupported Fedizen read path.');
+  });
+});

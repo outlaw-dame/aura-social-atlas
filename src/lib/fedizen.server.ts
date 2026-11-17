@@ -447,6 +447,19 @@ const notice = z.object({
 });
 const homeSchema = z.array(timelineStatus).max(20);
 const notificationsSchema = z.array(notice).max(20);
+/** Mastodon 4.3 grouped notifications (Bonfire: SocialMastoAdapter.grouped_notifications, groups within a page). */
+const groupedSchema = z.object({
+  accounts: z.array(account.extend({ id: z.string().min(1).max(64) })).max(400).nullish().catch(null),
+  statuses: z.array(timelineStatus).max(80).nullish().catch(null),
+  notification_groups: z.array(z.object({
+    group_key: z.string().min(1).max(200),
+    notifications_count: z.number().int().nonnegative().nullish().catch(null),
+    type: z.string().max(64).nullish(),
+    latest_page_notification_at: z.string().max(64).nullish().catch(null),
+    sample_account_ids: z.array(z.string().max(64)).max(400).nullish().catch(null),
+    status_id: z.string().max(64).nullish().catch(null),
+  })).max(80),
+});
 /** Mastodon Relationship (Bonfire answers it for groups too; members follow their groups). */
 const relationship = z.object({
   id: z.string().min(1).max(64),
@@ -490,6 +503,8 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   // The next (older) page of Home, from the cursor Fedizen's Link header gave (rel="next", max_id).
   { match: /^\/api\/v1\/timelines\/home\?limit=20&max_id=[A-Za-z0-9_\-.~=%]{1,512}$/, schema: homeSchema },
   { match: /^\/api\/v1\/notifications\?limit=20$/, schema: notificationsSchema },
+  // Grouped notifications for Activity: all of them, or mentions only (Bluesky's Mentions tab), then older pages.
+  { match: /^\/api\/v2\/notifications\?limit=40(&types%5B%5D=mention)?(&max_id=[A-Za-z0-9_\-.~=%]{1,512})?$/, schema: groupedSchema, single: true },
   { match: /^\/api\/v1\/conversations\?limit=30$/, schema: conversationsSchema },
   { match: new RegExp(`^/api/v1/accounts/relationships\\?id%5B%5D=${ID}(&id%5B%5D=${ID}){0,39}$`), schema: relationshipsSchema },
   { match: /^\/api\/v1\/bookmarks\?limit=40$/, schema: bookmarksSchema },
