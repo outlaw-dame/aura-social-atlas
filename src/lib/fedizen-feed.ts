@@ -38,6 +38,7 @@ export type FedizenPost = { /** Deleted, or gone from the conversation, while it
   /** Reply, boost and like counts, and whether the person has liked or boosted it (Fedizen statuses only). */
   counts?: { replies: number; boosts: number; likes: number }; liked?: boolean; boosted?: boolean;
   /** Who can see it; a reply keeps to this audience. */ visibility?: 'public' | 'unlisted' | 'private' | 'direct';
+  /** The language its author set (a BCP 47 tag, Mastodon's `language`), for translation (lib/translation). */ language?: string;
   /** What keyword filters read besides the text: content warning, hashtags, image descriptions, link preview, poll
    *  options, the quoted post's words, and the author's account id (for "except people I follow"). */
   cw?: string; tags?: string[]; alt?: string[]; linkTitle?: string; linkDescription?: string; poll?: string[]; quote?: string; authorId?: string;
@@ -56,7 +57,7 @@ export type FedizenConversation = { id: string; unread: boolean; people: { name:
 
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string; url?: string | null; uri?: string | null };
 type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; emojis?: unknown; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; sensitive?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
-  replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null;
+  replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null; language?: string | null;
   in_reply_to_id?: string | null; spoiler_text?: string | null; tags?: { name?: string }[] | null; mentions?: { acct?: string | null; username?: string | null }[] | null; poll?: { id?: string; expires_at?: string | null; expired?: boolean | null; multiple?: boolean | null; votes_count?: number | null; voters_count?: number | null; voted?: boolean | null; own_votes?: number[] | null; options?: { title?: string; votes_count?: number | null }[] } | null; edited_at?: string | null;
   quote?: { quoted_status?: { content?: string | null; spoiler_text?: string | null; media_attachments?: { description?: string | null }[] | null } | null } | null };
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
@@ -119,6 +120,11 @@ export function imageSizeOf(meta: unknown): { w: number; h: number } | undefined
   return undefined;
 }
 
+/** A language tag as a status gives it, when it is one (BCP 47 shape: `ja`, `pt-BR`, `zh-Hant`). */
+export function languageTag(v: unknown): string | undefined {
+  return typeof v === 'string' && /^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$/i.test(v.trim()) ? v.trim() : undefined;
+}
+
 export function fromStatuses(list: Status[]): FedizenPost[] {
   return list.map(s => {
     const o = s.reblog ?? s;
@@ -139,6 +145,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
         ? { counts: { replies: o.replies_count ?? 0, boosts: o.reblogs_count ?? 0, likes: o.favourites_count ?? 0 } } : {}),
       ...(o.favourited === true ? { liked: true } : {}), ...(o.reblogged === true ? { boosted: true } : {}),
       ...(o.visibility ? { visibility: o.visibility } : {}),
+      ...(() => { const l = languageTag(o.language); return l ? { language: l } : {}; })(),
       ...(o.spoiler_text?.trim() ? { cw: o.spoiler_text.trim() } : {}),
       ...(() => { const t = (o.tags ?? []).map(x => x.name).filter((n): n is string => !!n); return t.length ? { tags: t } : {}; })(),
       ...(() => { const a = (o.media_attachments ?? []).map(m => m.description?.trim()).filter((d): d is string => !!d); return a.length ? { alt: a } : {}; })(),

@@ -7,6 +7,7 @@ import {
   type AiProblem, type IntelligenceStatus,
 } from '@/lib/intelligence.functions';
 import { getFedizenStatus } from '@/lib/fedizen.functions';
+import { translateWithAi } from '@/lib/translation.functions';
 import { FilterEngine, type FollowLookup, type Judge } from '@/lib/filter-engine';
 import { FILTER_PLACES, lintFilters, type ContentFilter, type FilterAction, type FilterablePost, type FilterPlace, type Verdict } from '@/lib/content-filter';
 import { PROVIDERS, type Credential, type ProviderId } from '@/lib/intelligence/providers';
@@ -129,6 +130,7 @@ export function useAiRunner() {
   const judgeServer = useServerFn(judgeFilteredPosts), expandServer = useServerFn(expandContentFilter);
   const suggestServer = useServerFn(suggestContentFilters), describeServer = useServerFn(describePostForFilter);
   const altServer = useServerFn(altTextForImage), wordingsServer = useServerFn(searchWordingsFor), embedServer = useServerFn(embedTextsFor);
+  const translateServer = useServerFn(translateWithAi);
   const id = user?.id ?? '';
   const active = ai?.active ?? null, ready = intelligenceReady(ai), deep = !!ai?.deepMatching;
   const local = useCallback(async (): Promise<{ c: Credential; model: string } | AiProblem> => {
@@ -203,7 +205,16 @@ export function useAiRunner() {
     embeddingProvider: ready && active && ['openai', 'google', 'mistral', 'cloudflare'].includes(active.provider) && !(active.where === 'device' && active.provider === 'cloudflare') ? active.provider : null,
     /** Which model answers, so answers cached for one model aren't reused for another. */
     model: active ? `${active.where}:${active.provider}:${active.model}` : null,
-  }), [ready, active, deep, local, judgeServer, expandServer, suggestServer, describeServer, altServer, wordingsServer, embedServer, id]);
+    /** Translation (lib/translation) with the key in use: on this device or Atlas's server. */
+    translate: async (req: { texts: string[]; target: string; source?: string }): Promise<{ texts: string[]; detected?: string } | { error: string }> => {
+      if (!ready) return { error: 'no-key' };
+      if (active?.where === 'device') {
+        const k = await local(); if (typeof k === 'string') return { error: k };
+        try { return await (await tasks()).translateTexts(k.c, k.model, req); } catch (e) { return { error: await problemOf(e) }; }
+      }
+      return translateServer({ data: { expectedAtlasUserId: id, ...req } }).catch(() => ({ error: 'unavailable' as const }));
+    },
+  }), [ready, active, deep, local, judgeServer, expandServer, suggestServer, describeServer, altServer, wordingsServer, embedServer, translateServer, id]);
 }
 
 /* ── Keyword filters ─────────────────────────────────────────────────────────────────────────── */

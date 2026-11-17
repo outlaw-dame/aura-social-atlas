@@ -429,6 +429,8 @@ const status = z.object({
   emojis: z.array(z.object({ shortcode: z.string().max(64), url: z.string().max(2048), static_url: z.string().max(2048).nullish().catch(null) })).max(100).nullish().catch(null),
   /** When the author last edited it (Mastodon), for the "Edited" mark. */
   edited_at: z.string().max(40).nullish().catch(null),
+  /** The language its author wrote it in (Mastodon: ISO 639), for translation. */
+  language: z.string().max(35).nullish().catch(null),
   // Mastodon 4.5 quotes: { state, quoted_status }. Only the quoted post's own words, never deeper.
   quote: z.object({
     quoted_status: z.object({
