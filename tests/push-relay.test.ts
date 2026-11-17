@@ -12,10 +12,12 @@ function q(table: string) {
     eq: (k: string, v: unknown) => { filters.push([k, v]); return api; },
     limit: () => api,
     maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
-    upsert: async (row: Record<string, unknown>, o?: { onConflict?: string }) => {
+    upsert: async (row: Record<string, unknown>, o?: { onConflict?: string; ignoreDuplicates?: boolean }) => {
       const key = o?.onConflict ?? 'user_id';
       const i = tables[table].findIndex(r => r[key] === row[key]);
-      if (i >= 0) tables[table][i] = { ...tables[table][i], ...row }; else tables[table].push({ id: crypto.randomUUID(), ...row });
+      if (i >= 0) {
+        if (!o?.ignoreDuplicates) tables[table][i] = { ...tables[table][i], ...row };
+      } else tables[table].push({ id: crypto.randomUUID(), ...row });
       return { error: null };
     },
     insert: async (row: Record<string, unknown>) => {
@@ -124,6 +126,29 @@ describe('Push relay', () => {
     await relayMod.removeDevice('u1', 'tok', null);
     expect(sends.at(-1)).toMatchObject({ method: 'DELETE', path: '/api/v1/push/subscription' });
     expect(tables.atlas_push_relays).toHaveLength(0);
+  });
+
+  test('two simultaneous device enrollments share one canonical relay ID', async () => {
+    const keys = await newKeyPair();
+    const auth = b64u(crypto.getRandomValues(new Uint8Array(16)));
+    const firstEndpoint = 'https://fcm.googleapis.com/fcm/send/parallel-1';
+    const secondEndpoint = 'https://fcm.googleapis.com/fcm/send/parallel-2';
+    const before = sends.length;
+    const [first, second] = await Promise.all([
+      relayMod.addDevice('u3', 'token-u3', 'https://atlas.example',
+        { endpoint: firstEndpoint, p256dh: b64u(keys.pub), auth }),
+      relayMod.addDevice('u3', 'token-u3', 'https://atlas.example',
+        { endpoint: secondEndpoint, p256dh: b64u(keys.pub), auth }),
+    ]);
+    expect(first).toEqual({ ok: true });
+    expect(second).toEqual({ ok: true });
+    expect(tables.atlas_push_relays.filter(row => row.user_id === 'u3')).toHaveLength(1);
+    expect(tables.atlas_push_devices.filter(row => row.user_id === 'u3')).toHaveLength(2);
+    const concurrentSubs = sends.slice(before).filter(send => send.path === '/api/v1/push/subscription');
+    expect(concurrentSubs).toHaveLength(2);
+    const urls = concurrentSubs.map(send => (send.body!.subscription as { endpoint: string }).endpoint);
+    expect(new Set(urls).size).toBe(1);
+    expect(urls[0]).toContain((tables.atlas_push_relays.find(row => row.user_id === 'u3') as { relay_id: string }).relay_id);
   });
 
   test('only title, body and kind reach a browser', () => {
