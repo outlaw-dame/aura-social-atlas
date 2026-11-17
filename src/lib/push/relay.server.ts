@@ -78,6 +78,8 @@ export async function addDevice(userId: string, token: string, origin: string, d
   if (r.status === 401 || r.status === 403) return { ok: false, error: r.status === 403 ? 'needs-permission' : 'not-connected' };
   if (r.status < 200 || r.status >= 300) return { ok: false, error: 'unavailable' };
   const serverKey = typeof r.data?.server_key === 'string' ? r.data.server_key : row.server_key;
+  // Without Fedizen's VAPID key the relay can't tell its pushes from anyone else's, so it wouldn't accept any.
+  if (!serverKey) return { ok: false, error: 'unavailable' };
   row = { ...row, server_key: serverKey, alerts, policy };
   const saved = await db.from('atlas_push_relays').upsert({ ...row, alerts: alerts as unknown as Json });
   if (saved.error) return { ok: false, error: 'unavailable' };
@@ -139,8 +141,8 @@ export async function relay(relayId: string, request: Request): Promise<Response
   const { data } = await db.from('atlas_push_relays').select('*').eq('relay_id', relayId).maybeSingle();
   const row = data as RelayRow | null;
   if (!row) return new Response(null, { status: 404 });
-  // Only Fedizen's signature counts, once its key is known (it comes back when subscribing).
-  if (row.server_key && !(await verifyVapid(request.headers.get('authorization'), request.headers.get('crypto-key'), unb64u(row.server_key), new URL(request.url).origin))) return new Response(null, { status: 401 });
+  // Only Fedizen's signature counts (its key comes back when subscribing); without one, nothing is accepted.
+  if (!row.server_key || !(await verifyVapid(request.headers.get('authorization'), request.headers.get('crypto-key'), unb64u(row.server_key), new URL(request.url).origin))) return new Response(null, { status: 401 });
   const body = new Uint8Array(await request.arrayBuffer());
   if (body.length > 8192) return new Response(null, { status: 413 });
   let notice: ReturnType<typeof safeNotice>;
