@@ -67,7 +67,14 @@ export async function addDevice(userId: string, token: string, origin: string, d
   if (!pushEndpointAllowed(device.endpoint)) return { ok: false, error: 'bad-subscription' };
   try { if (unb64u(device.p256dh).length !== 65 || unb64u(device.auth).length !== 16) return { ok: false, error: 'bad-subscription' }; } catch { return { ok: false, error: 'bad-subscription' }; }
   const db = await admin();
-  const { data: existing } = await db.from('atlas_push_relays').select('*').eq('user_id', userId).maybeSingle();
+  // This service client bypasses RLS. Never permit upsert(onConflict: 'endpoint') to
+  // silently reassign another user's push subscription to this account (IDOR).
+  const { data: existingDevice, error: deviceLookupError } = await db.from('atlas_push_devices')
+    .select('id, user_id').eq('endpoint', device.endpoint).maybeSingle();
+  if (deviceLookupError) return { ok: false, error: 'unavailable' };
+  if (existingDevice && existingDevice.user_id !== userId) return { ok: false, error: 'bad-subscription' };
+  const { data: existing, error: relayLookupError } = await db.from('atlas_push_relays').select('*').eq('user_id', userId).maybeSingle();
+  if (relayLookupError) return { ok: false, error: 'unavailable' };
   let row = (existing as RelayRow | null) ?? await newRelay(userId, v);
   const alerts = choice?.alerts ?? (row.alerts as PushAlerts) ?? DEFAULT_ALERTS, policy = choice?.policy ?? (row.policy as PushPolicy) ?? 'all';
   // (Re)subscribe at Fedizen: Mastodon replaces the token's previous subscription, so this is safe to repeat.
@@ -83,7 +90,13 @@ export async function addDevice(userId: string, token: string, origin: string, d
   row = { ...row, server_key: serverKey, alerts, policy };
   const saved = await db.from('atlas_push_relays').upsert({ ...row, alerts: alerts as unknown as Json });
   if (saved.error) return { ok: false, error: 'unavailable' };
-  const dev = await db.from('atlas_push_devices').upsert({ user_id: userId, endpoint: device.endpoint, p256dh: device.p256dh, auth: device.auth }, { onConflict: 'endpoint' });
+  // The UNIQUE(endpoint) index closes the concurrent-registration race:
+  // an INSERT that loses to a different owner fails, never overwrites user_id.
+  // A same-owner refresh is filtered by both row ID and authenticated owner.
+  const dev = existingDevice
+    ? await db.from('atlas_push_devices').update({ p256dh: device.p256dh, auth: device.auth })
+      .eq('id', existingDevice.id).eq('user_id', userId)
+    : await db.from('atlas_push_devices').insert({ user_id: userId, endpoint: device.endpoint, p256dh: device.p256dh, auth: device.auth });
   return dev.error ? { ok: false, error: 'unavailable' } : { ok: true };
 }
 
