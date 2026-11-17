@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Ellipsis, EyeOff, Flag, Heart, Link2, Pencil, RefreshCw, Share, Trash2, VolumeX } from 'lucide-react';
+import { ArrowUpRight, Ellipsis, EyeOff, Flag, Heart, Link2, Pencil, RefreshCw, Share, Trash2, VolumeX } from 'lucide-react';
 import { sharePost } from './usePostActions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +38,8 @@ export function PostMoreMenu({ post }: { post: FilterablePost & { url?: string; 
       <DropdownMenuTrigger asChild><button type="button" className="atlas-act-more" aria-label={copied ? 'More, link copied' : 'More'}><Ellipsis aria-hidden="true" />{copied && <span className="text-xs">Link copied</span>}</button></DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {post.url && <DropdownMenuItem onSelect={async () => { if ((await sharePost({ url: post.url!, author: post.author ?? '' })) === 'copied') { setCopied(true); setTimeout(() => setCopied(false), 1500); } }}>{canShare ? <><Share />Share</> : <><Link2 />Copy link</>}</DropdownMenuItem>}
+        {/* The post's own page, now that its time opens the conversation in Atlas. */}
+        {post.url && hostOf(post.url) && <DropdownMenuItem asChild><a href={post.url} target="_blank" rel="noopener noreferrer"><ArrowUpRight />Open on {hostOf(post.url)}</a></DropdownMenuItem>}
         {user && !mine && <DropdownMenuItem onSelect={() => setOpen(true)}><EyeOff />Filter posts like this</DropdownMenuItem>}
         {canAct && !!post.counts?.likes && <DropdownMenuItem onSelect={() => setReactors('like')}><Heart />Liked by…</DropdownMenuItem>}
         {canAct && !!post.counts?.boosts && <DropdownMenuItem onSelect={() => setReactors('boost')}><RefreshCw />Boosted by…</DropdownMenuItem>}
@@ -60,6 +62,10 @@ export function PostMoreMenu({ post }: { post: FilterablePost & { url?: string; 
     {reporting && <ReportDialog target={reporting} onClose={() => setReporting(null)} />}
     {mutes.error && <span role="alert" className="text-xs text-destructive">{mutes.error}</span>}
   </>;
+}
+
+function hostOf(url: string): string | null {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
 }
 
 function FilterLikeThisDialog({ post, onClose }: { post: FilterablePost; onClose: () => void }) {

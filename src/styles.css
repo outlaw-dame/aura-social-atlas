@@ -995,3 +995,40 @@ html.atlas-stack-open .view.atlas-stack { pointer-events: auto; }
 .atlas-activity-stack > :nth-child(2) { left: 14px; top: 7px; z-index: 2; }
 .atlas-activity-stack > :nth-child(3) { left: 7px; top: 14px; z-index: 1; }
 .atlas-activity-tabs { margin-bottom: 8px; }
+
+/* Opening a post (open-post.ts) and its conversation (ThreadView.tsx, f7/Thread.tsx; arranged by thread.ts). */
+.atlas-post-hit { display: contents; }
+@media (hover: hover) { .atlas-post-opens { cursor: pointer; } .atlas-post-hit .atlas-post-card { cursor: pointer; } .atlas-post-hit .atlas-thread-focus { cursor: auto; } }
+button.atlas-post-time { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; width: auto; }
+.atlas-thread-up, .atlas-thread-continue, .atlas-thread-replies { list-style: none; margin: 0; padding: 0; }
+/* The posts above, joined by a line through their avatars down to the opened post. */
+.atlas-thread-up > li, .atlas-thread-continue > li { position: relative; }
+.atlas-thread-up > li:not(.atlas-thread-gap)::before { content: ''; position: absolute; z-index: 1; inset-inline-start: 19px; top: 52px; bottom: -14px; width: 2px; border-radius: 1px; background: color-mix(in oklab, currentColor 18%, transparent); pointer-events: none; }
+.atlas-thread-page .atlas-thread-up > li:not(.atlas-thread-gap)::before { inset-inline-start: calc(var(--f7-card-margin-horizontal, 16px) + 35px); top: 62px; }
+.atlas-thread-gap { font-size: 12px; opacity: .7; padding: 8px 2px; }
+.atlas-thread-page .atlas-thread-gap { padding: 8px var(--f7-card-margin-horizontal, 16px); }
+.atlas-thread-focus .atlas-post-text { font-size: 18px; line-height: 1.45; }
+.atlas-thread-details { margin-top: 12px; padding-top: 10px; border-top: 1px solid color-mix(in oklab, currentColor 12%, transparent); font-size: 13px; opacity: .75; }
+.atlas-thread-details p { margin: 2px 0; }
+.atlas-thread-head { display: flex; align-items: center; gap: 12px; padding: 18px var(--f7-card-margin-horizontal, 16px) 6px; }
+.atlas-thread-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
+.atlas-thread-head .segmented { width: auto; }
+.atlas-thread-head .segmented .button { padding: 0 12px; }
+.atlas-thread-head .segmented .button-active { background: var(--f7-segmented-strong-button-active-bg-color, rgba(255,255,255,.9)); font-weight: 600; }
+/* Replies to replies sit indented on a rail, as Phanpy and Bluesky draw them. */
+.atlas-thread-nested { margin-inline-start: 18px; padding-inline-start: 12px; border-inline-start: 2px solid color-mix(in oklab, currentColor 12%, transparent); }
+.atlas-thread-page .atlas-thread-nested { margin-inline-start: calc(var(--f7-card-margin-horizontal, 16px) + 8px); padding-inline-start: 0; }
+.atlas-thread-page .atlas-thread-nested .atlas-post-card { margin-inline-start: 8px; }
+.atlas-thread-part { margin: 6px 0 2px; font-size: 11px; opacity: .65; }
+.atlas-thread-page .atlas-thread-part { padding: 0 var(--f7-card-margin-horizontal, 16px); }
+.atlas-thread-more { display: inline-flex; align-items: center; gap: 4px; margin: 6px 0 10px; font-size: 13px; font-weight: 500; color: var(--f7-theme-color, var(--accent)); background: none; border: 0; padding: 4px 0; cursor: pointer; width: auto; }
+.atlas-thread-page .atlas-thread-more { margin-inline-start: var(--f7-card-margin-horizontal, 16px); }
+.atlas-thread-fold > summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; padding: 6px 2px 10px; font-size: 13px; font-weight: 500; color: var(--f7-theme-color, var(--accent)); }
+.atlas-thread-page .atlas-thread-fold > summary { padding-inline: var(--f7-card-margin-horizontal, 16px); }
+.atlas-thread-fold > summary::-webkit-details-marker { display: none; }
+.atlas-thread-fold > summary:focus-visible { outline: 2px solid var(--f7-theme-color, var(--accent)); outline-offset: 2px; border-radius: 6px; }
+.atlas-thread-fold[open] > summary { display: none; }
+.atlas-thread-faces { display: inline-flex; }
+.atlas-thread-faces > * { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; margin-inline-start: -6px; box-shadow: 0 0 0 2px var(--background, var(--f7-page-bg-color, #fff)); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; background: color-mix(in oklab, currentColor 12%, transparent); }
+.atlas-thread-faces > :first-child { margin-inline-start: 0; }
+.atlas-thread-note { font-size: 13px; opacity: .75; }

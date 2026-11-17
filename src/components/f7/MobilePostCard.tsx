@@ -20,6 +20,8 @@ import { Icon } from './F7Extras';
 import { MobileFilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
+import type { CardMode } from '@/components/social/FeedPostCard';
+import { isPostClick, isStatusId, openPost } from '@/lib/open-post';
 
 /** A group's avatar in a reason chip: its picture, else its initial, as a rounded square (groups are squares). */
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
@@ -64,6 +66,18 @@ export function useMobilePostActions() {
 }
 export type MobileActions = ReturnType<typeof useMobilePostActions>;
 
+const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ');
+
+/** The opened post's full date and time, and its counts, under the post (Mastodon, Bluesky). */
+function MobileFocusDetails({ post: p }: { post: FedizenPost }) {
+  const c = p.counts;
+  const n = (v: number, one: string, many: string) => `${v.toLocaleString()} ${v === 1 ? one : many}`;
+  return <div className="atlas-thread-details">
+    {p.date && <p><time dateTime={p.date}>{new Date(p.date).toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' })}</time>{p.editedAt && ' · Edited'}</p>}
+    {c && (c.replies || c.boosts || c.likes) ? <p>{[n(c.replies, 'reply', 'replies'), n(c.boosts, 'boost', 'boosts'), n(c.likes, 'like', 'likes')].join(' · ')}</p> : null}
+  </div>;
+}
+
 function Avatar({ post: p }: { post: FedizenPost }) {
   const [broken, setBroken] = useState(false);
   return p.avatar && !broken
@@ -73,28 +87,34 @@ function Avatar({ post: p }: { post: FedizenPost }) {
 
 /** Phone: one post in a feed — author, text, media or link preview — with the standard post actions. */
 /** Phone: one post, unless the person's keyword filters hide it (or show it behind a notice, or blur its media). */
-export function MobilePostCard(props: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string }) {
+export function MobilePostCard(props: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string; mode?: CardMode }) {
   const deleted = useIsDeleted(props.post.statusId);
   useEffect(() => { if (!deleted) queueForIndex(props.post); }, [deleted, props.post]);
   if (deleted) return null;
   return <MobileFilterGate post={props.post}><MobilePostCardBody {...props} /></MobileFilterGate>;
 }
 
-function MobilePostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string }) {
+function MobilePostCardBody({ post: p, actions, reasons, inTag, mode = 'feed' }: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string; mode?: CardMode }) {
   const ago = shortAgo(p.date);
   const mine = useIsMine(p);
   const tagLine = useTagLine(p, reasons).filter(t => t !== inTag);
-  return <Card outline className="atlas-post-card">
+  // Tapping the post (not a link or control in it) opens its conversation, as Mastodon, Bluesky and Phanpy do.
+  const opens = mode !== 'focus' && isStatusId(p.statusId);
+  // Framework7's Card doesn't take onClick; a layout-less wrapper catches the tap as it bubbles.
+  return <div className="atlas-post-hit" onClick={opens ? e => { if (isPostClick(e)) openPost(p); } : undefined}>
+  <Card outline className={cx('atlas-post-card', mode === 'focus' && 'atlas-thread-focus')}>
     <CardContent>
-      <FollowedTagLine tags={tagLine} />
-      <MobileReasonChips reasons={reasons} />
+      {mode === 'feed' && <FollowedTagLine tags={tagLine} />}
+      {mode === 'feed' && <MobileReasonChips reasons={reasons} />}
       <BoostedBy post={p} className="atlas-post-boosted" />
-      {p.replyTo?.post && <ReplyParent post={p.replyTo.post} onTag={openTag} Gate={({ post, children }) => <MobileFilterGate post={post} card={false}>{children}</MobileFilterGate>} />}
+      {mode === 'feed' && p.replyTo?.post && <ReplyParent post={p.replyTo.post} onTag={openTag} Gate={({ post, children }) => <MobileFilterGate post={post} card={false}>{children}</MobileFilterGate>} />}
       <div className="atlas-post-head">
         {canOpen(p)
           ? <button type="button" className="atlas-author-button atlas-author-fill" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}><Avatar post={p} /><span className="atlas-post-who"><b>{p.author}</b><small>{p.handle}</small></span></button>
           : <><Avatar post={p} /><span className="atlas-post-who"><b>{p.author}</b><small>{p.handle}</small></span></>}
-        {ago && <Link external target="_blank" href={p.url} className="atlas-post-time" aria-label={`Open the post on Fedizen, posted ${p.date ? new Date(p.date).toLocaleString() : ''}${p.editedAt ? ', edited' : ''}`}>{ago}{p.editedAt && <span className="atlas-post-edited"> · Edited</span>}</Link>}
+        {ago && mode !== 'focus' && (opens
+          ? <button type="button" className="atlas-post-time" onClick={() => openPost(p)} aria-label={`Open the conversation, posted ${p.date ? new Date(p.date).toLocaleString() : ago}${p.editedAt ? ', edited' : ''}`}>{ago}{p.editedAt && <span className="atlas-post-edited"> · Edited</span>}</button>
+          : <Link external target="_blank" href={p.url} className="atlas-post-time" aria-label={`Open the post on Fedizen, posted ${p.date ? new Date(p.date).toLocaleString() : ''}${p.editedAt ? ', edited' : ''}`}>{ago}{p.editedAt && <span className="atlas-post-edited"> · Edited</span>}</Link>)}
       </div>
       <AuthorWarning cw={p.cw} phone>
       {p.paragraphs.map((t, i) => <p key={i} className="atlas-post-text">{linkifyPost(t, p.mentions, openTag)}</p>)}
@@ -105,7 +125,9 @@ function MobilePostCardBody({ post: p, actions, reasons, inTag }: { post: Fedize
       </button>)}
       <ArticleCard article={p.article} />
       </AuthorWarning>
+      {mode === 'focus' && <MobileFocusDetails post={p} />}
     </CardContent>
     <CardFooter className="atlas-post-footer"><MobilePostActions post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply} /></CardFooter>
-  </Card>;
+  </Card>
+  </div>;
 }

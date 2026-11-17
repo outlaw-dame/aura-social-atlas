@@ -224,6 +224,22 @@ describe('Own posts, polls, follow requests and search: allowlisted', () => {
   });
 });
 
+describe('A post’s conversation: allowlisted', () => {
+  test('reads ancestors and descendants, dropping any one post that does not fit', async () => {
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      ancestors: [{ id: '01A', content: '<p>up</p>' }],
+      descendants: [{ id: '01B', content: '<p>reply</p>', in_reply_to_id: '01T' }, { content: 'no id' }, 'junk'],
+    }))) as unknown as typeof fetch;
+    const r = await fedizenGet('t', '/api/v1/statuses/01T/context');
+    expect(r.status).toBe(200);
+    const ctx = r.data[0] as { ancestors: { id: string }[]; descendants: { id: string }[] };
+    expect(ctx.ancestors.map(s => s.id)).toEqual(['01A']);
+    expect(ctx.descendants.map(s => s.id)).toEqual(['01B']);
+    await expect(fedizenGet('t', '/api/v1/statuses/01T/context?limit=5')).rejects.toThrow('Unsupported Fedizen read path.');
+    await expect(fedizenGet('t', '/api/v1/statuses/../context')).rejects.toThrow('Unsupported Fedizen read path.');
+  });
+});
+
 describe('Mute, report, who reacted, liked posts and hashtag search: allowlisted', () => {
   test('mute and report take only their paths and bodies', async () => {
     const seen: string[] = [];
