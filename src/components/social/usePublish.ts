@@ -183,6 +183,7 @@ export function usePublish() {
       if (!r.ok) { setNotice(LIBRARY_PROBLEM[r.error]); return null; }
       reset();
       void qc.invalidateQueries({ queryKey: ['fedizen-home', user.id] });
+      void qc.invalidateQueries({ queryKey: ['fedizen-recent-tags', user.id] });
       return { url: r.url, ...('id' in r && r.id ? { id: r.id } : {}) };
     } finally { setSending(false); }
   };

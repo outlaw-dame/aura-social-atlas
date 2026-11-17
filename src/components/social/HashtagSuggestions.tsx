@@ -23,8 +23,9 @@ export function HashtagSuggestions({ value, onChange, input }: { value: string; 
   const open = !!at && dismissed !== at.start;
   const [q, setQ] = useState<string | null>(null);
   useEffect(() => { const t = setTimeout(() => setQ(open ? at!.query : null), 180); return () => clearTimeout(t); }, [open, at?.query]); // eslint-disable-line react-hooks/exhaustive-deps
-  const tags = useHashtagSuggestions(q);
-  const shown = open && q === at!.query ? tags : [];
+  const tags = useHashtagSuggestions(open && at!.query === '' ? '' : q);
+  // Right after "#", your recent hashtags show at once; once you type, after a short pause.
+  const shown = open && (at!.query === '' || q === at!.query) ? tags : [];
   useEffect(() => setActive(0), [at?.query]);
 
   const pick = (tag: string) => {

@@ -51,11 +51,21 @@ export function mergeSuggestions<P extends { handle: string }>(query: string, lo
   return [...local.filter(matches), ...found].filter(p => { const k = p.handle.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, max);
 }
 
-/** What's being typed after "#" at the caret (at least one letter), like Mastodon's composer. Null otherwise — and
- *  inside a URL fragment ("page#top") or a word, a "#" isn't a hashtag. */
+/** What's being typed after "#" at the caret ("" right after the "#", when your recent hashtags are offered). Null
+ *  otherwise — inside a URL fragment ("page#top"), an entity or a word, a "#" isn't a hashtag. */
 export function hashtagQueryAt(text: string, caret: number): { start: number; query: string } | null {
-  const m = /(^|[^\p{L}\p{N}_&#/])#([\p{L}\p{N}_]{1,100})$/u.exec(text.slice(0, caret));
+  const m = /(^|[^\p{L}\p{N}_&#/])#([\p{L}\p{N}_]{0,100})$/u.exec(text.slice(0, caret));
   return m ? { start: caret - m[2].length - 1, query: m[2] } : null;
+}
+
+/** Your recent hashtags that start with what's typed, then the server's matches; one of each, at most `max`. */
+export function mergeTagSuggestions(query: string, recent: string[], found: string[], max = 8): string[] {
+  const q = query.toLowerCase();
+  const seen = new Set<string>();
+  const starts = (t: string) => t.toLowerCase().startsWith(q);
+  return [...recent.filter(starts), ...found.filter(starts), ...found]
+    .filter(t => { const k = t.toLowerCase(); if (seen.has(k) || k === q) return false; seen.add(k); return true; })
+    .slice(0, max);
 }
 
 /** Replaces the "#query" at `start..caret` with "#tag " (the rest of a half-typed word goes too). */

@@ -5,9 +5,10 @@ import { useAtlasAuth } from './AuthState';
 import { LIBRARY_PROBLEM } from './useFedizenLibrary';
 import { useIsMe } from './useFediProfile';
 import { useAiRunner } from './useIntelligence';
+import { mergeTagSuggestions } from '@/lib/mentions';
 import {
   answerFollowRequest, deleteFedizenPost, editFedizenPost, getFedizenPostSource, getFollowRequests, getLikedPosts, getMutedAccounts, getWhoReacted,
-  muteFedizenAccount, reportOnFedizen, searchFedizenPosts, suggestHashtags, voteOnFedizenPoll,
+  muteFedizenAccount, reportOnFedizen, searchFedizenPosts, suggestHashtags, getRecentHashtags, voteOnFedizenPoll,
 } from '@/lib/fedizen.functions';
 import type { FediPoll, FedizenPost } from '@/lib/fedizen-feed';
 
@@ -236,15 +237,24 @@ export function useLikedPosts(enabled = true) {
   return { posts: q.data?.posts ?? [], loading: q.isLoading, error: q.data?.error ? problem(q.data.error) : q.isError ? problem('unavailable') : null, signedIn: !!user };
 }
 
-/** Hashtags starting with `q` (what's typed after "#"), for the composer. */
+/**
+ * Hashtags for what's typed after "#" (`q`; "" right after the "#"), for the composer: the ones you used in your recent
+ * posts first, then Fedizen's matches. Null when not typing a hashtag.
+ */
 export function useHashtagSuggestions(q: string | null) {
   const { user } = useAtlasAuth();
-  const read = useServerFn(suggestHashtags);
-  const term = q && /^[\p{L}\p{N}_]{1,100}$/u.test(q) ? q : null;
+  const read = useServerFn(suggestHashtags), readRecent = useServerFn(getRecentHashtags);
+  const typing = q !== null && /^[\p{L}\p{N}_]{0,100}$/u.test(q);
+  const term = typing && q ? q : null;
+  const recent = useQuery({
+    queryKey: ['fedizen-recent-tags', user?.id],
+    queryFn: () => readRecent({ data: { expectedAtlasUserId: user!.id } }),
+    enabled: !!user && typing, staleTime: 10 * 60_000,
+  });
   const r = useQuery({
     queryKey: ['fedizen-tag-suggest', user?.id, term?.toLowerCase()],
     queryFn: () => read({ data: { expectedAtlasUserId: user!.id, q: term! } }),
     enabled: !!user && !!term, staleTime: 5 * 60_000,
   });
-  return r.data?.tags ?? [];
+  return typing ? mergeTagSuggestions(q ?? '', recent.data?.tags ?? [], term ? r.data?.tags ?? [] : []) : [];
 }
