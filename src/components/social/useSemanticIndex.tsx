@@ -2,7 +2,9 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { postText } from '@/lib/content-filter';
-import type { EmbedKind } from '@/lib/semantic/vectors';
+import { dot, type EmbedKind } from '@/lib/semantic/vectors';
+import type { ContentFilter } from '@/lib/content-filter';
+import type { Similar } from '@/lib/filter-engine';
 import { localEmbed, localState, localSupported, onLocalState, startLocal, stopLocal, type LocalState } from '@/lib/semantic/local-embedder';
 import { useAtlasAuth } from './AuthState';
 import { useAiRunner } from './useIntelligence';
@@ -131,4 +133,51 @@ export function useSeenPostsLike(q: string) {
     enabled: !!user && s.ready && !!s.model && term.length >= 2, staleTime: 60_000,
   });
   return { posts: r.data ?? [], loading: r.isFetching, on: s.ready };
+}
+
+/* ── Keyword filters by meaning ────────────────────────────────────────────────────────────────── */
+
+/**
+ * Cosine floors for filters. A post at or above NEAR goes to the AI model to confirm (when there is one); at or above
+ * CLOSE it's filtered even without one. Starting values for EmbeddingGemma-style query/document scores, not tuned.
+ */
+export const FILTER_NEAR = 0.4, FILTER_CLOSE = 0.55;
+
+const filterVectors = new Map<string, Float32Array[]>();
+
+/**
+ * The filter engine's `similar` (filter-engine.ts) for the engine in use: each filter checked in context is embedded
+ * once as a search (its words and its wordings); each post uses its vector from the index when it's there, and is
+ * embedded otherwise. Null when the engine isn't ready.
+ */
+export function makeSimilar(uid: string, s: Semantic): Similar | undefined {
+  if (!s.ready || !s.model) return undefined;
+  const model = s.model;
+  return async (posts, filters) => {
+    const wanted = filters.filter(f => f.semantic);
+    if (!wanted.length || !posts.length) return posts.map(p => ({ n: p.n, matches: [] }));
+    const fv = await Promise.all(wanted.map(async (f: ContentFilter) => {
+      const texts = [f.text, ...(f.expansions ?? []).slice(0, 8)].map(t => t.replace(/^#/, '')).filter(Boolean);
+      const key = `${model}|${f.id}|${texts.join('\u0001')}`;
+      let v = filterVectors.get(key);
+      if (!v) { v = (await s.embed(texts, 'query')) ?? undefined; if (v) { if (filterVectors.size > 300) filterVectors.clear(); filterVectors.set(key, v); } }
+      return { id: f.id, v };
+    }));
+    if (fv.some(x => !x.v)) return null;
+    const store = await import('@/lib/semantic/index-store');
+    const known = await store.vectorsOf(uid, model, posts.map(p => p.id)).catch(() => new Map<string, Float32Array>());
+    const missing = posts.filter(p => !known.has(p.id) && p.text.length >= 12);
+    if (missing.length) {
+      const got = await s.embed(missing.map(p => p.text), 'document');
+      if (!got || got.length !== missing.length) return null;
+      missing.forEach((p, i) => known.set(p.id, got[i]));
+    }
+    return posts.map(p => {
+      const pv = known.get(p.id);
+      if (!pv) return { n: p.n, matches: [] };
+      const matches = fv.map(f => ({ id: f.id, score: Math.max(...f.v!.map(v => dot(v, pv))) }))
+        .filter(m => m.score >= FILTER_NEAR).map(m => ({ id: m.id, strong: m.score >= FILTER_CLOSE }));
+      return { n: p.n, matches };
+    });
+  };
 }
