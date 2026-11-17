@@ -26,13 +26,40 @@ export type PushPolicy = 'all' | 'followed' | 'follower' | 'none';
 export const DEFAULT_ALERTS: PushAlerts = { mention: true, status: false, reblog: true, follow: true, follow_request: true, favourite: true, poll: true, update: false, quote: true };
 
 type Vapid = { pub: Uint8Array; d: Uint8Array; subject: string };
+export type VapidProblem = 'missing' | 'bad-subject' | 'bad-public-key' | 'bad-private-key' | 'keys-do-not-match';
+
+/** A secret as pasted: without spaces, quotes or a leading "NAME=", in base64url (standard base64 accepted too). */
+function cleanKey(raw: string, name: string): string {
+  let v = raw.trim().replace(/^["']|["']$/g, '');
+  if (v.startsWith(`${name}=`)) v = v.slice(name.length + 1);
+  return v.replace(/\s+/g, '').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** The VAPID keys from the Worker secrets, or which part is wrong (never the values). */
+export function vapidConfig(): Vapid | { problem: VapidProblem } {
+  const rawPub = process.env['ATLAS_VAPID_PUBLIC_KEY'], rawD = process.env['ATLAS_VAPID_PRIVATE_KEY'], subject = process.env['ATLAS_VAPID_SUBJECT']?.trim();
+  if (!rawPub || !rawD || !subject) return { problem: 'missing' };
+  if (!/^(mailto:\S+@\S+|https:\/\/\S+)$/.test(subject)) return { problem: 'bad-subject' };
+  let pub: Uint8Array, d: Uint8Array;
+  try { pub = unb64u(cleanKey(rawPub, 'ATLAS_VAPID_PUBLIC_KEY')); } catch { return { problem: 'bad-public-key' }; }
+  try { d = unb64u(cleanKey(rawD, 'ATLAS_VAPID_PRIVATE_KEY')); } catch { return { problem: 'bad-private-key' }; }
+  if (pub.length !== 65 || pub[0] !== 4) return { problem: 'bad-public-key' };
+  // Some generators drop a private scalar's leading zero bytes: put them back.
+  if (d.length < 32 && d.length >= 28) d = Uint8Array.from([...new Uint8Array(32 - d.length), ...d]);
+  if (d.length !== 32) return { problem: 'bad-private-key' };
+  return { pub, d, subject };
+}
 export function vapid(): Vapid | null {
-  const pub = process.env['ATLAS_VAPID_PUBLIC_KEY'], d = process.env['ATLAS_VAPID_PRIVATE_KEY'], subject = process.env['ATLAS_VAPID_SUBJECT'];
-  if (!pub || !d || !subject || !/^(mailto:|https:\/\/)/.test(subject)) return null;
+  const v = vapidConfig();
+  return 'problem' in v ? null : v;
+}
+
+/** Whether the private key signs what the public key verifies: a pair from two different runs doesn't. */
+export async function vapidKeysMatch(v: Vapid): Promise<boolean> {
   try {
-    const v = { pub: unb64u(pub), d: unb64u(d), subject };
-    return v.pub.length === 65 && v.d.length === 32 ? v : null;
-  } catch { return null; }
+    const h = await vapidHeader('https://push.example/x', v.subject, v.d, v.pub);
+    return await verifyVapid(h, null, v.pub, 'https://push.example');
+  } catch { return false; }
 }
 
 /** AES-256-GCM key for sealing relay private keys, derived from the VAPID private key (no further secret needed). */

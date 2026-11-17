@@ -30,6 +30,14 @@ export const PUSH_PROBLEM: Record<PushProblem, string> = {
   failed: 'Couldn’t turn notifications on. Try again.',
 };
 
+const SETUP_PROBLEM: Record<string, string> = {
+  missing: 'This Atlas server isn’t set up to send notifications yet.',
+  'bad-subject': 'Notifications aren’t set up: ATLAS_VAPID_SUBJECT must be a mailto: address or an https: link.',
+  'bad-public-key': 'Notifications aren’t set up: ATLAS_VAPID_PUBLIC_KEY isn’t a valid key. Generate a new pair and enter both again.',
+  'bad-private-key': 'Notifications aren’t set up: ATLAS_VAPID_PRIVATE_KEY isn’t a valid key. Generate a new pair and enter both again.',
+  'keys-do-not-match': 'Notifications aren’t set up: the two VAPID keys aren’t a pair (they came from different runs). Generate a new pair and enter both again.',
+};
+
 const supported = () => typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && window.isSecureContext;
 const iosNotInstalled = () => typeof navigator !== 'undefined' && /iP(hone|ad|od)/.test(navigator.userAgent) && !(window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone);
 
@@ -106,6 +114,8 @@ export function usePush() {
 
   return {
     available: supported() && !!config.data?.configured, configured: !!config.data?.configured, supported: supported(),
+    /** Why this server isn't set up for push (for its owner): which secret to fix. */
+    setupProblem: config.data && !config.data.configured ? SETUP_PROBLEM[config.data.problem ?? 'missing'] : null,
     on: !!endpoint && !!state.data?.thisDevice, alerts: state.data?.alerts, policy: state.data?.policy,
     enable, disable, setChoice, busy, problem: problem ? PUSH_PROBLEM[problem] : null,
     note: !supported() && iosNotInstalled() ? PUSH_PROBLEM['ios-home-screen'] : null,
