@@ -30,8 +30,15 @@ export type VapidProblem = 'missing' | 'bad-subject' | 'bad-public-key' | 'bad-p
 
 /** A secret as pasted: without spaces, quotes or a leading "NAME=", in base64url (standard base64 accepted too). */
 function cleanKey(raw: string, name: string): string {
-  let v = raw.trim().replace(/^["']|["']$/g, '');
-  if (v.startsWith(`${name}=`)) v = v.slice(name.length + 1);
+  let v = raw.trim();
+  const unquote = (s: string) =>
+    s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))
+      ? s.slice(1, -1).trim() : s;
+  // Accept both a copied value and a copied NAME="value" shell assignment,
+  // but do not infer keys from PEM/JWK or arbitrary mixed text.
+  v = unquote(v);
+  if (v.startsWith(`${name}=`)) v = v.slice(name.length + 1).trim();
+  v = unquote(v);
   return v.replace(/\s+/g, '').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 

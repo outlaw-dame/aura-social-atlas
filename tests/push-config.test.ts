@@ -13,6 +13,15 @@ describe('VAPID secrets as people paste them', () => {
     expect('problem' in v).toBe(false);
     expect(await vapidKeysMatch(v as never)).toBe(true);
   });
+  test('a quoted value after a copied NAME= prefix is decoded without exposing it', async () => {
+    const pair = await newKeyPair();
+    set(`ATLAS_VAPID_PUBLIC_KEY="${b64u(pair.pub)}"`,
+      `ATLAS_VAPID_PRIVATE_KEY='${b64u(pair.d)}'`);
+    const parsed = vapidConfig();
+    expect('problem' in parsed).toBe(false);
+    expect(await vapidKeysMatch(parsed as never)).toBe(true);
+  });
+
   test('a pasted "NAME=value" line, quotes, spaces and standard base64 still work', async () => {
     const k = await newKeyPair();
     const std = (b: Uint8Array) => btoa(String.fromCharCode(...b));
