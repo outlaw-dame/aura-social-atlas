@@ -8,7 +8,7 @@ import { FilterGate } from './FilterGate';
 import { FEED_PROBLEM } from './useFeeds';
 import { useThread } from './useThread';
 import { FilterPlaceProvider } from './useIntelligence';
-import { ChatConversation, ProtoSwitch, useProtoStyle, useReplyMode } from './ConversationProto';
+import { ChatConversation, ProtoSwitch, useConversationVisit, useProtoStyle, useReplyMode } from './ConversationProto';
 import { ThreadA } from './ThreadA';
 
 /**
@@ -21,6 +21,7 @@ export function ThreadView({ statusId, seed }: { statusId: string; seed?: Fedize
   const navigate = useNavigate();
   const [style, setStyle] = useProtoStyle();
   const [replyMode, setReplyMode] = useReplyMode();
+  const lastVisit = useConversationVisit(t.thread, !t.loading);
   const open = (p: FedizenPost) => { rememberSeed(p); void navigate({ to: '/post/$id', params: { id: p.statusId! } }); };
   const back = () => { if (window.history.length > 1) window.history.back(); else void navigate({ to: '/' }); };
   return <main className="mx-auto w-full max-w-2xl px-4 pb-24 pt-6">
@@ -36,10 +37,10 @@ export function ThreadView({ statusId, seed }: { statusId: string; seed?: Fedize
       : <FilterPlaceProvider place="public">
         <ProtoSwitch style={style} setStyle={setStyle} />
         {style === 'b'
-          ? <ChatConversation thread={t.thread} actions={actions} loaded={!t.loading} Gate={FilterGate} Content={PostContent} onOpenInbox={() => void navigate({ to: '/conversations' })}
+          ? <ChatConversation thread={t.thread} actions={actions} lastVisit={lastVisit} Gate={FilterGate} Content={PostContent} onOpenInbox={() => void navigate({ to: '/conversations' })}
               onOpenPost={open} />
           : <ThreadA thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} sort={t.sort} setSort={t.setSort}
-              replyMode={replyMode} setReplyMode={setReplyMode} Gate={FilterGate} Content={PostContent} onOpenPost={open} />}
+              replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} Gate={FilterGate} Content={PostContent} onOpenPost={open} />}
       </FilterPlaceProvider>}
     {actions.dialog}
   </main>;

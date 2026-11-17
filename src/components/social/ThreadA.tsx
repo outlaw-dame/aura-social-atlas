@@ -2,8 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { ArrowUpRight, ChevronDown, CornerDownRight, MessageCircle, Repeat2 } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { PAGE, REPLY_SORTS, type ReplySort, type Thread, type ThreadNode } from '@/lib/thread';
-import { allPosts, branchesOf, flatReplies, latestTime, readMarks, rootOf, subjectOf, threadNumbers, writeMark, type ReplyMode } from '@/lib/conversation';
-import { ATLAS, BONFIRE, PHANPY, atlasFolds, bonfireFolds, bonfireMoreLabel, phanpyFolds, reasonWords, replyFaces, type AtlasFold, type AtlasReason, type PhanpyFold } from '@/lib/folding';
+import { allPosts, branchesOf, flatReplies, rootOf, threadNumbers, type ReplyMode } from '@/lib/conversation';
+import { ATLAS, BONFIRE, PHANPY, atlasFolds, calibration, postHeight, bonfireFolds, bonfireMoreLabel, phanpyFolds, reasonWords, replyFaces, type AtlasFold, type AtlasReason, type PhanpyFold } from '@/lib/folding';
 import { fullAcct } from '@/lib/fedizen-feed';
 import { isPostClick } from '@/lib/open-post';
 import { openFediProfile } from '@/lib/fedi-profile';
@@ -38,6 +38,8 @@ export type ThreadAProps = {
   thread: Thread; actions: Acts; loading: boolean; partial: boolean; retry: () => void;
   sort: ReplySort; setSort: (s: ReplySort) => void; replyMode: ReplyMode; setReplyMode: (m: ReplyMode) => void;
   onOpenPost: (p: FedizenPost) => void;
+  /** Where the reader left off before this visit (useConversationVisit), for Atlas folds' "new". */
+  lastVisit: number | undefined;
   Gate: ComponentType<{ post: FedizenPost; children: ReactNode }>; Content: ComponentType<{ post: FedizenPost }>;
 };
 
@@ -56,7 +58,7 @@ export function ThreadA(props: ThreadAProps) {
   const flat = useMemo(() => flatReplies(t), [t]);
   const folds = useMemo(() => phanpyFolds(t), [t]);
   useEffect(() => () => remembered.clear(), []);
-  const atlas = useAtlasFolding(t, loading);
+  const atlas = useAtlasFolding(t, props.lastVisit, replyMode === 'nested' && folding === 'atlas');
   const count = replyMode === 'flat' ? flat.length : t.replies.length;
   const host = hostOf(t.focus.url);
   const row = (p: FedizenPost, kind: RowKind, extra: Partial<RowProps> = {}) =>
@@ -82,6 +84,7 @@ export function ThreadA(props: ThreadAProps) {
     {replyMode === 'nested' && folding === 'atlas' && atlas.keys.length > 0 && <div className="atlas-at-all">
       <button type="button" onClick={() => atlas.setAll(true)}>Collapse replies</button>
       <button type="button" onClick={() => atlas.setAll(false)}>Expand all</button>
+      {atlas.chose && <span className="atlas-at-note">Your folds are kept on this device only.</span>}
     </div>}
     {loading && <p className="atlas-ph-note" aria-live="polite">Loading replies…</p>}
     {partial && <p className="atlas-ph-note">Couldn’t load the rest of this conversation. <button type="button" className="atlas-ph-link" onClick={retry}>Try again</button></p>}
@@ -185,6 +188,8 @@ type AtlasFolding = {
   keys: string[];
   cap: number;
   measureRef: (el: HTMLDivElement | null) => void;
+  /** The reader has folded or opened something here themselves. */
+  chose: boolean;
 };
 
 const FOLDS_KEY = 'atlas.proto.folds';
@@ -202,24 +207,18 @@ function writeFolds(root: string, s: Record<string, boolean>) {
   } catch { /* full or blocked: per-device convenience only */ }
 }
 
-function useAtlasFolding(t: Thread, loading: boolean): AtlasFolding {
-  const root = rootOf(t);
-  const rootKey = keyOf(root);
+function useAtlasFolding(t: Thread, lastRead: number | undefined, active: boolean): AtlasFolding {
+  const rootKey = keyOf(rootOf(t));
   const me = useMyAcct();
   const isMe = useIsMePost();
-  // Where the reader left off last time, read once: this visit is recorded as soon as the replies load.
-  const [lastRead] = useState(() => readMarks()[rootKey]?.lastRead);
-  useEffect(() => {
-    if (loading) return;
-    const posts = allPosts(t);
-    writeMark(rootKey, { lastRead: Math.max(latestTime(posts), lastRead ?? 0), seenAt: Date.now(), opened: keyOf(t.focus), subject: subjectOf(root) });
-  }, [loading, rootKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const authorIds = useMemo(() => [...new Set(allPosts(t).map(p => p.authorId).filter((x): x is string => !!x))], [t]);
   const followed = useFollowedAmong(authorIds);
   // The space replies get on this screen, followed as the window changes.
   const [box, setBox] = useState({ w: 600, h: 800 });
   const observer = useRef<ResizeObserver | null>(null);
+  const host = useRef<HTMLDivElement | null>(null);
   const measureRef = useCallback((el: HTMLDivElement | null) => {
+    host.current = el;
     observer.current?.disconnect();
     if (!el || typeof ResizeObserver === 'undefined') return;
     observer.current = new ResizeObserver(() => setBox(b => {
@@ -237,7 +236,27 @@ function useAtlasFolding(t: Thread, loading: boolean): AtlasFolding {
     if (p.authorId && followed.has(p.authorId)) return 'following';
     return undefined;
   };
-  const rules = useMemo(() => atlasFolds(t, { viewportH: box.h, width: box.w - 78, wants }), [t, box, followed, me, lastRead]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The estimate corrected by what's on screen: the drawn height of the replies showing, against their estimates,
+  // once per conversation and width, before paint (fonts, the reader's text size, wrapping the estimate can't know).
+  const [scale, setScale] = useState(1);
+  const calibrated = useRef('');
+  useLayoutEffect(() => {
+    const el = host.current;
+    const at = `${rootKey}:${t.total}:${box.w}`;
+    if (!active || !el || calibrated.current === at) return;
+    calibrated.current = at;
+    const depth = new Map<string, ThreadNode>();
+    const walk = (ns: ThreadNode[]) => ns.forEach(x => { depth.set(keyOf(x.post), x); walk(x.replies); });
+    walk(t.replies);
+    const pairs: [number, number][] = [];
+    el.querySelectorAll<HTMLElement>('.is-atlas article.atlas-ph-row[data-status-id]').forEach(row => {
+      const n = depth.get(row.dataset.statusId!);
+      if (n && row.offsetHeight > 0) pairs.push([row.offsetHeight, postHeight(n.post, box.w - 78, n.depth)]);
+    });
+    const next = calibration(pairs);
+    if (Math.abs(next - scale) / scale > 0.1) setScale(next);
+  });
+  const rules = useMemo(() => atlasFolds(t, { viewportH: box.h, width: box.w - 78, wants, scale }), [t, box, followed, me, lastRead, scale]); // eslint-disable-line react-hooks/exhaustive-deps
   const [chosen, setChosen] = useState<Record<string, boolean>>(() => readFolds()[rootKey]?.s ?? {});
   const keys = [...rules.keys()];
   const save = (next: Record<string, boolean>) => { setChosen(next); writeFolds(rootKey, next); };
@@ -249,6 +268,7 @@ function useAtlasFolding(t: Thread, loading: boolean): AtlasFolding {
     keys,
     cap: phone ? ATLAS.indent.phone : ATLAS.indent.desktop,
     measureRef,
+    chose: Object.keys(chosen).length > 0,
   };
 }
 
@@ -301,7 +321,7 @@ function Foldable({ folded, onFound, children }: { folded: boolean; onFound: () 
 function AtlasSummary({ node: n, fold, ctx, onOpen }: { node: ThreadNode; fold?: AtlasFold; ctx: BranchCtx; onOpen: () => void }) {
   const total = fold?.total ?? n.size;
   const reasons = reasonWords(fold?.reasons ?? {});
-  const latest = fold?.latest ? shortAgo(new Date(fold.latest).toISOString()) : '';
+  const latest = fold?.latest ? latestLabel(fold.latest) : '';
   return <div className="atlas-at-summary">
     <button type="button" className="atlas-at-open" aria-expanded="false" onClick={onOpen}>
       <span className="atlas-at-line1">
@@ -314,6 +334,13 @@ function AtlasSummary({ node: n, fold, ctx, onOpen }: { node: ThreadNode; fold?:
     </button>
     <button type="button" className="atlas-ph-parent atlas-at-parent" title="View post with its replies" aria-label={`Open ${n.post.author}’s post with its replies`} onClick={() => ctx.props.onOpenPost(n.post)}>»</button>
   </div>;
+}
+
+/** "2h" within a week, then the date: "Nov 16", with the year when it isn't this one. */
+function latestLabel(at: number, now = Date.now()): string {
+  if (now - at < 7 * 86_400_000) return shortAgo(new Date(at).toISOString());
+  const d = new Date(at);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(d.getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}) });
 }
 
 /** The first reply's opening words, under the reader's filters and its content warning. */

@@ -133,3 +133,11 @@ describe('Atlas folding', () => {
     ok(postHeight(tall, 500) <= 44 + 22 + 320 + 12 + 96);
   });
 });
+
+test('calibration: the median of drawn over estimated, held between 0.6 and 2, 1 with too little to go on', () => {
+  const { calibration } = require('../src/lib/folding') as typeof import('../src/lib/folding');
+  strictEqual(calibration([[120, 100], [130, 100], [500, 100]]), 1.3);
+  strictEqual(calibration([[100, 100], [140, 100]]), 1);
+  strictEqual(calibration([[10, 100], [10, 100], [10, 100]]), 0.6);
+  strictEqual(calibration([[900, 100], [900, 100], [900, 100], [900, 100]]), 2);
+});

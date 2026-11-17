@@ -106,17 +106,35 @@ type Acts = { save: ReturnType<typeof useSaveToggle>; reactions: ReturnType<type
 /* ── B: the conversation ────────────────────────────────────────────────────────────────────────────── */
 
 /**
+ * One visit to a conversation, shared by both prototypes: where the reader left off before it (read once, when the
+ * conversation is first known on this page, so switching between A and B mid-visit shows the same posts as new) and,
+ * once Fedizen has answered, this visit recorded as read. Kept on this device (conversation.ts, readMarks).
+ */
+export function useConversationVisit(t: Thread | null, loaded: boolean): number | undefined {
+  const root = t ? rootOf(t) : null;
+  const rootKey = root ? root.statusId ?? root.id : null;
+  const before = useRef<{ root: string; at?: number } | null>(null);
+  if (rootKey && before.current?.root !== rootKey) before.current = { root: rootKey, at: readMarks()[rootKey]?.lastRead };
+  useEffect(() => {
+    if (!t || !root || !rootKey || !loaded) return;
+    const at = before.current?.at;
+    writeMark(rootKey, { lastRead: Math.max(latestTime(allPosts(t)), at ?? 0), seenAt: Date.now(), opened: t.focus.statusId ?? t.focus.id, subject: subjectOf(root) });
+  }, [loaded, rootKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  return before.current?.at;
+}
+
+/**
  * B: Wavelength's conversation over Bonfire's thread. A subject and the people in it; messages oldest first with
  * day separators; a "New" line where you left off last time (and a button to jump there); a mute that quiets the
  * conversation in the Conversations list; replies that don't answer the message above say which one they answer.
  * Each message keeps Atlas's actions (shown on hover or tap); "Reply" at the bottom answers the opened post.
  */
-export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, loaded, Gate, Content }: {
+export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, lastVisit, Gate, Content }: {
   thread: Thread; actions: Acts; onOpenInbox: () => void; onOpenPost: (p: FedizenPost) => void;
   /** The platform's keyword-filter gate (FilterGate, MobileFilterGate) and post content (PostContent,
    *  MobilePostContent: warnings, sensitive media, video, polls, previews), so B shows exactly what a card would. */
   Gate: ComponentType<{ post: FedizenPost; children: ReactNode }>; Content: ComponentType<{ post: FedizenPost }>;
-  /** Fedizen has answered: only then is the conversation marked read. */ loaded: boolean;
+  /** Where the reader left off before this visit (useConversationVisit), for the "New" line. */ lastVisit: number | undefined;
 }) {
   const isMe = useIsMePost();
   const posts = useMemo(() => allPosts(t), [t]);
@@ -125,18 +143,11 @@ export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, 
   const root = rootOf(t);
   const rootKey = root.statusId ?? root.id;
   const subject = subjectOf(root);
-  // Where you left off before this visit: kept for the "New" line while you read.
-  const before = useRef<number | undefined>(undefined);
+  // Mutes only: the visit itself is recorded once per page by useConversationVisit, for A and B alike.
   const [mark, setMark] = useState(() => readMarks()[rootKey]);
-  if (before.current === undefined && mark?.lastRead !== undefined) before.current = mark.lastRead;
-  useEffect(() => {
-    if (!loaded) return;
-    const latest = latestTime(posts);
-    setMark(writeMark(rootKey, { lastRead: Math.max(latest, mark?.lastRead ?? 0), seenAt: Date.now(), opened: t.focus.statusId ?? t.focus.id, subject })[rootKey]);
-  }, [loaded, rootKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const items = useMemo(() => chatItems(posts, t.focus.statusId ?? t.focus.id, before.current), [posts, t.focus]);
+  const items = useMemo(() => chatItems(posts, t.focus.statusId ?? t.focus.id, lastVisit), [posts, t.focus, lastVisit]);
   const people = participantsOf(posts);
-  const fresh = before.current === undefined ? 0 : unreadIn(posts, before.current, isMe);
+  const fresh = lastVisit === undefined ? 0 : unreadIn(posts, lastVisit, isMe);
   const muted = !!mark?.muted;
   const toggleMute = () => setMark(writeMark(rootKey, { muted: !muted })[rootKey]);
   const [active, setActive] = useState<string | null>(null);

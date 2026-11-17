@@ -7,7 +7,7 @@ import { FEED_PROBLEM } from '@/components/social/useFeeds';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { MobilePostContent, useMobilePostActions } from './MobilePostCard';
 import { MobileFilterGate } from './FilterGate';
-import { ChatConversation, ProtoSwitch, useProtoStyle, useReplyMode } from '@/components/social/ConversationProto';
+import { ChatConversation, ProtoSwitch, useConversationVisit, useProtoStyle, useReplyMode } from '@/components/social/ConversationProto';
 import { ThreadA } from '@/components/social/ThreadA';
 import { CONVERSATIONS_URL, pushPage } from './navigation';
 
@@ -22,6 +22,7 @@ export function ThreadPage({ f7route, seed }: { f7route?: { params: { id?: strin
   const actions = useMobilePostActions();
   const [style, setStyle] = useProtoStyle();
   const [replyMode, setReplyMode] = useReplyMode();
+  const lastVisit = useConversationVisit(t.thread, !t.loading);
   return <Page className="atlas-thread-page" ptr onPtrRefresh={(done: () => void) => { t.refetch(); setTimeout(done, 600); }}>
     <Navbar title="Conversation" backLink backLinkShowText={false} />
     {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
@@ -33,9 +34,9 @@ export function ThreadPage({ f7route, seed }: { f7route?: { params: { id?: strin
       : <FilterPlaceProvider place="public">
         <div className="atlas-proto-wrap"><ProtoSwitch style={style} setStyle={setStyle} /></div>
         {style === 'b'
-          ? <ChatConversation thread={t.thread} actions={actions} loaded={!t.loading} Gate={MessageGate} Content={MobilePostContent} onOpenInbox={() => pushPage(CONVERSATIONS_URL)} onOpenPost={p => openPost(p)} />
+          ? <ChatConversation thread={t.thread} actions={actions} lastVisit={lastVisit} Gate={MessageGate} Content={MobilePostContent} onOpenInbox={() => pushPage(CONVERSATIONS_URL)} onOpenPost={p => openPost(p)} />
           : <div className="atlas-proto-wrap"><ThreadA thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} sort={t.sort} setSort={t.setSort}
-              replyMode={replyMode} setReplyMode={setReplyMode} Gate={MessageGate} Content={MobilePostContent} onOpenPost={p => openPost(p)} /></div>}
+              replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} Gate={MessageGate} Content={MobilePostContent} onOpenPost={p => openPost(p)} /></div>}
       </FilterPlaceProvider>}
     {actions.sheet}
   </Page>;

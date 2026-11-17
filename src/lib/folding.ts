@@ -125,9 +125,10 @@ export function replyFaces(n: ThreadNode, max = 3): FedizenPost[] {
 
 /**
  * Atlas's own rule, from the comparison of the two above:
- *  - Fold by how much screen a set of replies would take, as Phanpy folds by reading cost, but measured in estimated
- *    pixels on this screen (text lines at this width, media at its own size up to the 320px Atlas draws it, polls,
- *    link cards), so a phone folds sooner than a desktop and an image weighs what it occupies.
+ *  - Fold by how much screen a set of replies would take, as Phanpy folds by reading cost, but measured in pixels
+ *    on this screen: estimated (text lines at this width, media at its own size up to the 320px Atlas draws it,
+ *    polls, link cards), then corrected by the drawn height of the replies showing (calibration), so a phone folds
+ *    sooner than a desktop, an image weighs what it occupies, and fonts and text size count.
  *  - A set stays open while everything under it fits in three quarters of the window. A conversation that fits in
  *    one and a half windows is all open.
  *  - A set is never folded when it holds something the reader would want to see: the opened post's author, the
@@ -149,6 +150,8 @@ export type AtlasEnv = {
   viewportH: number; width: number;
   /** Why the reader would want this post, if they would. */
   wants: (p: FedizenPost) => AtlasReason | undefined;
+  /** Drawn height over estimated height, from the replies on screen (calibration); 1 until measured. */
+  scale?: number;
 };
 
 export const ATLAS = { setShare: 0.75, allOpenShare: 1.5, indent: { phone: 3, desktop: 5 } } as const;
@@ -169,16 +172,27 @@ export function postHeight(p: FedizenPost, width: number, depth = 1): number {
   return 44 + lines * 22 + media + poll + card;
 }
 
+/** How far the estimate is off on this screen: the median of drawn ÷ estimated heights of the replies showing,
+ *  kept between 0.6 and 2 so one odd post can't swing every fold. 1 with fewer than 3 to go on. */
+export function calibration(pairs: readonly [drawn: number, estimated: number][]): number {
+  const r = pairs.filter(([d, e]) => d > 0 && e > 0).map(([d, e]) => d / e).sort((a, b) => a - b);
+  if (r.length < 3) return 1;
+  const mid = r.length >> 1;
+  const m = r.length % 2 ? r[mid] : (r[mid - 1] + r[mid]) / 2;
+  return Math.min(2, Math.max(0.6, m));
+}
+
 /** Atlas's decision for every post that has replies, keyed by that post. */
 export function atlasFolds(t: Thread, env: AtlasEnv): Map<string, AtlasFold> {
   const out = new Map<string, AtlasFold>();
+  const k = env.scale ?? 1;
   const height = new Map<string, number>(); // the whole subtree under a post, not counting it
   const measure = (n: ThreadNode): number => {
-    const h = n.replies.reduce((s, r) => s + postHeight(r.post, env.width, r.depth) + measure(r), 0);
+    const h = n.replies.reduce((s, r) => s + k * postHeight(r.post, env.width, r.depth) + measure(r), 0);
     height.set(key(n.post), h);
     return h;
   };
-  const all = t.replies.reduce((s, n) => s + postHeight(n.post, env.width, n.depth) + measure(n), 0);
+  const all = t.replies.reduce((s, n) => s + k * postHeight(n.post, env.width, n.depth) + measure(n), 0);
   const allOpen = all <= env.viewportH * ATLAS.allOpenShare;
   const visit = (n: ThreadNode): { latest: number; reasons: Partial<Record<AtlasReason, number>> } => {
     let latest = 0;
