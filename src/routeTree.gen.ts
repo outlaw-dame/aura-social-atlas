@@ -24,6 +24,7 @@ import { Route as SavedRouteImport } from './routes/saved'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiLiveRouteImport } from './routes/api/live'
 import { Route as FedizenCallbackRouteImport } from './routes/fedizen.callback'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
@@ -107,6 +108,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiLiveRoute = ApiLiveRouteImport.update({
+  id: '/api/live',
+  path: '/api/live',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FedizenCallbackRoute = FedizenCallbackRouteImport.update({
   id: '/fedizen/callback',
   path: '/fedizen/callback',
@@ -159,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
@@ -182,6 +189,7 @@ export interface FileRoutesByTo {
   '/saved': typeof SavedRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
@@ -207,6 +215,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
@@ -233,6 +242,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/live'
     | '/fedizen/callback'
     | '/settings/appearance'
     | '/settings/hashtags'
@@ -256,6 +266,7 @@ export interface FileRouteTypes {
     | '/saved'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/live'
     | '/fedizen/callback'
     | '/settings/appearance'
     | '/settings/hashtags'
@@ -280,6 +291,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/live'
     | '/fedizen/callback'
     | '/settings/appearance'
     | '/settings/hashtags'
@@ -305,6 +317,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiLiveRoute: typeof ApiLiveRoute
   FedizenCallbackRoute: typeof FedizenCallbackRoute
   TagsTagRoute: typeof TagsTagRoute
 }
@@ -416,6 +429,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/live': {
+      id: '/api/live'
+      path: '/api/live'
+      fullPath: '/api/live'
+      preLoaderRoute: typeof ApiLiveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/fedizen/callback': {
       id: '/fedizen/callback'
       path: '/fedizen/callback'
@@ -504,6 +524,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiLiveRoute: ApiLiveRoute,
   FedizenCallbackRoute: FedizenCallbackRoute,
   TagsTagRoute: TagsTagRoute,
 }

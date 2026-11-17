@@ -3,10 +3,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { getFedizenHomeLatest, getFedizenHomePage, type FedizenHome } from '@/lib/fedizen.functions';
 import type { FedizenPost } from '@/lib/fedizen-feed';
-import { appendOlder, CHECK_MIN, newerThan, nextCheckDelay } from '@/lib/home-timeline';
+import { appendOlder, CHECK_MAX, CHECK_MIN, newerThan, nextCheckDelay } from '@/lib/home-timeline';
 import { useReading } from '@/lib/reading-prefs';
 import { useAtlasAuth } from './AuthState';
 import { useShownCount } from './useIntelligence';
+import { LIVE_NOTICE_EVENT, LIVE_POST_EVENT, livePosts } from './LiveUpdates';
 
 /** The element that scrolls the feed: Framework7's page content on the phone, the window on desktop. */
 const scroller = (el: Element | null): HTMLElement | null => (el?.closest('.page-content') as HTMLElement | null) ?? null;
@@ -106,7 +107,8 @@ export function useHomeTimeline(data: FedizenHome | undefined, enabled: boolean,
     const schedule = () => { clearTimeout(timer); if (alive && !document.hidden) timer = setTimeout(tick, delay.current); };
     const tick = async () => {
       const found = await check();
-      delay.current = nextCheckDelay(delay.current, found, Date.now() - lastActive.current < 60_000);
+      // With posts arriving live, the check is only a safety net.
+      delay.current = livePosts() ? CHECK_MAX : nextCheckDelay(delay.current, found, Date.now() - lastActive.current < 60_000);
       schedule();
     };
     const active = () => { lastActive.current = Date.now(); };
@@ -131,6 +133,25 @@ export function useHomeTimeline(data: FedizenHome | undefined, enabled: boolean,
       window.removeEventListener('online', online);
     };
   }, [enabled, id, check, dataUpdatedAt]);
+
+  // Live updates (LiveUpdates): a new post goes where a check's would — in at the top, or behind "N new posts"; an
+  // edited one replaces itself; a notification refreshes Activity's list on Home.
+  useEffect(() => {
+    if (!enabled || !id) return;
+    const onPost = (e: Event) => {
+      const { post, edited } = (e as CustomEvent<{ post: FedizenPost; edited: boolean }>).detail;
+      if (edited) { qc.setQueryData<FedizenHome>(key, d => (d ? { ...d, posts: d.posts.map(p => (p.id === post.id ? { ...p, ...post } : p)) } : d)); return; }
+      const { posts: current, pending: waiting, slowMode: slow } = state.current;
+      if ([...waiting.posts, ...current].some(p => p.id === post.id)) return;
+      preload([post]);
+      if (!slow && !waiting.posts.length && atTop()) put([post], false);
+      else setPending(w => ({ ...w, posts: [post, ...w.posts] }));
+    };
+    const onNotice = () => { if (Date.now() - lastCheck.current > 5_000) void check(); };
+    window.addEventListener(LIVE_POST_EVENT, onPost);
+    window.addEventListener(LIVE_NOTICE_EVENT, onNotice);
+    return () => { window.removeEventListener(LIVE_POST_EVENT, onPost); window.removeEventListener(LIVE_NOTICE_EVENT, onNotice); };
+  }, [enabled, id, qc, key, put, atTop, check]);
 
   // Fetch the next older page a couple of screens before the reader gets there.
   const sentinel = useRef<HTMLDivElement | null>(null);
