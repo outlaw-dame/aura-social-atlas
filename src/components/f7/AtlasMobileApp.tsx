@@ -3,15 +3,13 @@ import { NotificationSettingsPage } from './NotificationSettings';
 import { useOpenActivityFromPush } from '@/components/social/usePush';
 import { LiveUpdates } from '@/components/social/LiveUpdates';
 import { SemanticIndexer } from '@/components/social/useSemanticIndex';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import Framework7 from 'framework7/lite-bundle';
 import Framework7React, {
   App, View, Page, Navbar, Link, Toolbar, Tabs, Tab, PageContent,
   Searchbar, List, ListItem, Block, BlockTitle, Card, CardContent, CardFooter, Button, Chip, Toggle, Segmented,
 } from 'framework7-react';
-import 'framework7/css/bundle';
-import 'framework7-icons/css/framework7-icons.css';
-import 'material-icons/iconfont/material-icons.css';
+import { holdF7Styles } from './f7-styles';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
 import { promptSignInToSave } from './save-prompt';
 import { Fab, NavRight, NavLeft, Panel, Popup, f7, f7ready } from 'framework7-react';
@@ -123,6 +121,8 @@ function useAdaptiveLayout(profile: DeviceProfile) {
 }
 
 export default function AtlasMobileApp() {
+  // Framework7's styles only while the phone app is on screen (f7-styles.ts).
+  useLayoutEffect(() => holdF7Styles(), []);
   const profile = useDeviceProfile();
   const theme = useMemo(() => pickTheme(profile), []); // eslint-disable-line react-hooks/exhaustive-deps
   // Hold the panel open from the first frame only when the first layout wants a rail or sidebar.
