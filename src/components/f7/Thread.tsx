@@ -34,9 +34,9 @@ export function ThreadPage({ f7route, seed }: { f7route?: { params: { id?: strin
       : <FilterPlaceProvider place="public">
         <div className="atlas-proto-wrap"><ProtoSwitch style={style} setStyle={setStyle} /></div>
         {style === 'b'
-          ? <ChatConversation thread={t.thread} actions={actions} lastVisit={lastVisit} pending={t.pending.length} onShowPending={t.showPending} arrived={t.arrived} Gate={MessageGate} Content={MobilePostContent} onOpenInbox={() => pushPage(CONVERSATIONS_URL)} onOpenPost={p => openPost(p)} />
+          ? <ChatConversation thread={t.thread} actions={actions} lastVisit={lastVisit} arrived={t.arrived} Gate={MessageGate} Content={MobilePostContent} onOpenInbox={() => pushPage(CONVERSATIONS_URL)} onOpenPost={p => openPost(p)} />
           : <div className="atlas-proto-wrap"><ThreadA thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} sort={t.sort} setSort={t.setSort}
-              replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} pending={t.pending.length} onShowPending={t.showPending} arrived={t.arrived} Gate={MessageGate} Content={MobilePostContent} onOpenPost={p => openPost(p)} /></div>}
+              replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} arrived={t.arrived} Gate={MessageGate} Content={MobilePostContent} onOpenPost={p => openPost(p)} /></div>}
       </FilterPlaceProvider>}
     {actions.sheet}
   </Page>;

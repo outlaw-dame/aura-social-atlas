@@ -9,7 +9,7 @@ import { isPostClick } from '@/lib/open-post';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { shortAgo } from '@/lib/feed-types';
 import { PostActionBar } from './PostActionBar';
-import { Face, FoldSwitch, NewArrivals, ParticipantsStrip, ReplyModeSwitch, justArrived, useFoldStyle, useIsMePost, useMyAcct } from './ConversationProto';
+import { ArrivalNote, Face, FoldSwitch, ParticipantsStrip, ReplyModeSwitch, justArrived, useFoldStyle, useIsMePost, useMyAcct, useScrollAnchor } from './ConversationProto';
 import { useFilterGate } from './FilterGate';
 import { useFollowedAmong } from './useIntelligence';
 import type { useSaveToggle } from './useFedizenLibrary';
@@ -40,8 +40,8 @@ export type ThreadAProps = {
   onOpenPost: (p: FedizenPost) => void;
   /** Where the reader left off before this visit (useConversationVisit), for Atlas folds' "new". */
   lastVisit: number | undefined;
-  /** Replies that arrived while open and aren't shown yet, showing them, and those added, with when (useThread). */
-  pending: number; onShowPending: () => void; arrived: ReadonlyMap<string, number>;
+  /** Posts added while open, and when (useThread): shown at once, in place, marked New. */
+  arrived: ReadonlyMap<string, number>;
   Gate: ComponentType<{ post: FedizenPost; children: ReactNode }>; Content: ComponentType<{ post: FedizenPost }>;
 };
 
@@ -60,30 +60,19 @@ export function ThreadA(props: ThreadAProps) {
   const flat = useMemo(() => flatReplies(t), [t]);
   const folds = useMemo(() => phanpyFolds(t), [t]);
   useEffect(() => () => remembered.clear(), []);
-  const atlas = useAtlasFolding(t, props.lastVisit, replyMode === 'nested' && folding === 'atlas');
-  // After "N new replies", bring the first of them into view — or, when it sits in a folded set, that set's summary.
+  const atlas = useAtlasFolding(t, props.lastVisit, props.arrived, replyMode === 'nested' && folding === 'atlas');
+  // Replies arriving, edits and placeholders show at once; the reader's place is kept, and what's new is marked.
   const top = useRef<HTMLDivElement>(null);
-  const [revealed, setRevealed] = useState(0);
-  const showNew = () => { setRevealed(Date.now()); props.onShowPending(); };
-  useEffect(() => {
-    if (!revealed) return;
-    const keys = [...props.arrived].filter(([, at]) => at >= revealed).map(([k]) => k);
-    if (!keys.length) return;
-    setRevealed(0);
-    requestAnimationFrame(() => {
-      const rows = [...(top.current?.querySelectorAll<HTMLElement>('article[data-status-id]') ?? [])].filter(r => keys.includes(r.dataset.statusId!));
-      const first = rows[0];
-      if (!first) return;
-      const hidden = first.closest<HTMLElement>('[hidden], details:not([open])');
-      const target = hidden ? (hidden.parentElement?.querySelector<HTMLElement>(':scope > .atlas-at-summary, :scope > summary') ?? hidden.parentElement ?? first) : first;
-      target.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-    });
-  }, [props.arrived, revealed]);
+  useScrollAnchor(top, t);
+  const isMePost = useIsMePost();
+  const newCheck = (p: FedizenPost) => !p.tombstone && !isMePost(p)
+    && (props.arrived.has(keyOf(p)) || (props.lastVisit !== undefined && !!p.date && Date.parse(p.date) > props.lastVisit));
+  const rowProps: RowBase = { ...props, newCheck };
   const count = replyMode === 'flat' ? flat.length : t.replies.length;
   const host = hostOf(t.focus.url);
   const row = (p: FedizenPost, kind: RowKind, extra: Partial<RowProps> = {}) =>
-    <Row post={p} kind={kind} number={numbers.get(keyOf(p))} {...props} {...extra} />;
-  const ctx: BranchCtx = { t, props, numbers, folds, lazy: t.total > PHANPY.lazyAbove, atlas };
+    <Row post={p} kind={kind} number={numbers.get(keyOf(p))} {...rowProps} {...extra} />;
+  const ctx: BranchCtx = { t, props: rowProps, numbers, folds, lazy: t.total > PHANPY.lazyAbove, atlas };
 
   return <div className="atlas-ph" ref={el => { top.current = el; atlas.measureRef(el); }}>
     <ol className="atlas-ph-context">
@@ -106,7 +95,7 @@ export function ThreadA(props: ThreadAProps) {
       <button type="button" onClick={() => atlas.setAll(false)}>Expand all</button>
       {atlas.chose && <span className="atlas-at-note">Your folds are kept on this device only.</span>}
     </div>}
-    <NewArrivals count={props.pending} onShow={showNew} one="1 new reply" many="new replies" place="top" />
+    <ArrivalNote arrived={props.arrived} one="1 new reply" many="new replies" />
     {loading && <p className="atlas-ph-note" aria-live="polite">Loading replies…</p>}
     {partial && <p className="atlas-ph-note">Couldn’t load the rest of this conversation. <button type="button" className="atlas-ph-link" onClick={retry}>Try again</button></p>}
     {replyMode === 'flat'
@@ -128,7 +117,9 @@ export function ThreadA(props: ThreadAProps) {
 
 const branchStyle = (b: number | undefined): CSSProperties | undefined => (b === undefined ? undefined : { '--branch': `var(--atlas-branch-${b})` } as CSSProperties);
 
-type BranchCtx = { t: Thread; props: ThreadAProps; numbers: Map<string, { index: number; total: number }>; folds: Map<string, PhanpyFold>; lazy: boolean; atlas: AtlasFolding };
+/** What every row gets: the conversation's props, and whether a post is new to the reader. */
+type RowBase = ThreadAProps & { newCheck?: (p: FedizenPost) => boolean };
+type BranchCtx = { t: Thread; props: RowBase; numbers: Map<string, { index: number; total: number }>; folds: Map<string, PhanpyFold>; lazy: boolean; atlas: AtlasFolding };
 
 /** The start of a reply: which part of the author's thread it answers, and the post. */
 function Head({ node: n, ctx, replyingTo }: { node: ThreadNode; ctx: BranchCtx; replyingTo?: FedizenPost }) {
@@ -228,7 +219,7 @@ function writeFolds(root: string, s: Record<string, boolean>) {
   } catch { /* full or blocked: per-device convenience only */ }
 }
 
-function useAtlasFolding(t: Thread, lastRead: number | undefined, active: boolean): AtlasFolding {
+function useAtlasFolding(t: Thread, lastRead: number | undefined, arrived: ReadonlyMap<string, number>, active: boolean): AtlasFolding {
   const rootKey = keyOf(rootOf(t));
   const me = useMyAcct();
   const isMe = useIsMePost();
@@ -254,7 +245,7 @@ function useAtlasFolding(t: Thread, lastRead: number | undefined, active: boolea
     if (isMe(p)) return 'mine';
     if (p.handle && p.handle.toLowerCase() === t.focus.handle.toLowerCase()) return 'author';
     if (me && p.mentions?.some(m => fullAcct(m.acct)?.toLowerCase() === me)) return 'mentions';
-    if (lastRead !== undefined && p.date && Date.parse(p.date) > lastRead) return 'new';
+    if (arrived.has(keyOf(p)) || (lastRead !== undefined && p.date && Date.parse(p.date) > lastRead)) return 'new';
     if (p.authorId && followed.has(p.authorId)) return 'following';
     return undefined;
   };
@@ -281,7 +272,7 @@ function useAtlasFolding(t: Thread, lastRead: number | undefined, active: boolea
     ready.current = Math.abs(next - scale) / scale <= 0.1;
     if (!ready.current) setScale(next);
   });
-  const rules = useMemo(() => atlasFolds(t, { viewportH: box.h, width: box.w - 78, wants, scale }), [t, box, followed, me, lastRead, scale]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rules = useMemo(() => atlasFolds(t, { viewportH: box.h, width: box.w - 78, wants, scale }), [t, box, followed, me, lastRead, arrived, scale]); // eslint-disable-line react-hooks/exhaustive-deps
   // Each set's fold is decided once per visit, after calibrating: replies that arrive later, or a new measurement,
   // never open or close a set under the reader. Sets that didn't exist yet are decided when they appear.
   const decided = useRef({ root: rootKey, m: new Map<string, boolean>() });
@@ -387,9 +378,9 @@ function Preview({ post: p }: { post: FedizenPost }) {
 }
 
 type RowKind = 'ancestor' | 'hero' | 'thread' | 'reply';
-type RowProps = ThreadAProps & { post: FedizenPost; kind: RowKind; number?: { index: number; total: number }; replyingTo?: FedizenPost };
+type RowProps = RowBase & { post: FedizenPost; kind: RowKind; number?: { index: number; total: number }; replyingTo?: FedizenPost };
 
-function Row({ post: p, kind, number, replyingTo, actions, onOpenPost, arrived, Gate, Content }: RowProps) {
+function Row({ post: p, kind, number, replyingTo, actions, onOpenPost, arrived, newCheck, Gate, Content }: RowProps) {
   const [active, setActive] = useState(false);
   const hero = kind === 'hero';
   // Deleted while open, or gone from the conversation: its place, so replies to it still read as replies to something.
@@ -416,6 +407,7 @@ function Row({ post: p, kind, number, replyingTo, actions, onOpenPost, arrived, 
           {profile ? <button type="button" className="atlas-ph-name" onClick={profile}>{p.author}</button> : <b className="atlas-ph-name">{p.author}</b>}
           <span className="atlas-ph-handle">{p.handle}</span>
           {number && <span className="atlas-ph-badge is-thread">Thread {number.index}/{number.total}</span>}
+          {!hero && newCheck?.(p) && <span className="atlas-new-badge">New</span>}
           {!hero && ago && <button type="button" className="atlas-ph-time" onClick={() => onOpenPost(p)} title={p.date ? new Date(p.date).toLocaleString() : undefined} aria-label={`Open the conversation, posted ${p.date ? new Date(p.date).toLocaleString() : ago}`}>{ago}</button>}
         </header>
         {p.boostedBy && <p className="atlas-ph-boost"><Repeat2 aria-hidden="true" />{p.boostedBy} boosted</p>}

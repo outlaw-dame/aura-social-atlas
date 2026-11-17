@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { ArrowDown, ArrowUp, BellOff, Bell, CornerDownRight, MessageSquareReply } from 'lucide-react';
@@ -105,12 +105,44 @@ type Acts = { save: ReturnType<typeof useSaveToggle>; reactions: ReturnType<type
 
 /* ── B: the conversation ────────────────────────────────────────────────────────────────────────────── */
 
-/** Posts that arrived while the conversation was open: a button that shows them, held at the top (A) or bottom (B)
- *  of the screen, and announced to screen readers. Nothing is added under the reader until they ask. */
-export function NewArrivals({ count, onShow, one, many, place }: { count: number; onShow: () => void; one: string; many: string; place: 'top' | 'bottom' }) {
-  return <div className={`atlas-live is-${place}`} role="status" aria-live="polite">
-    {count > 0 && <button type="button" onClick={onShow}>{place === 'top' ? <ArrowUp aria-hidden="true" /> : <ArrowDown aria-hidden="true" />}{count === 1 ? one : `${count} ${many}`}</button>}
-  </div>;
+/**
+ * Keeps the reader's place while a conversation changes under them (replies arriving, edits, placeholders): before
+ * the change shows, which post is being read and where; once it shows, scroll by however far that post moved. Done here rather than left to the browser's scroll anchoring, which not every browser has.
+ */
+export function useScrollAnchor(root: { current: HTMLElement | null }, version: unknown, selector = '[data-status-id]') {
+  const snap = useRef<{ k: string; top: number } | null>(null);
+  const seen = useRef(version);
+  // Read while rendering the new version, before React changes the page.
+  if (seen.current !== version) {
+    seen.current = version;
+    snap.current = null;
+    // The post being read: the one across the line 40% down the screen (or the first below it). Changes above it are
+    // made up for; changes below it don't move it anyway.
+    const line = (typeof window === 'undefined' ? 0 : window.innerHeight) * 0.4;
+    for (const el of root.current?.querySelectorAll<HTMLElement>(selector) ?? []) {
+      const r = el.getBoundingClientRect();
+      if (r.height > 0 && r.bottom > line) { snap.current = { k: el.getAttribute(selector.slice(1, -1)) ?? '', top: r.top }; break; }
+    }
+  }
+  useLayoutEffect(() => {
+    const s = snap.current;
+    snap.current = null;
+    if (!s?.k || !root.current) return;
+    const attr = selector.slice(1, -1);
+    const el = [...root.current.querySelectorAll<HTMLElement>(selector)].find(x => x.getAttribute(attr) === s.k);
+    if (!el) return;
+    const moved = el.getBoundingClientRect().top - s.top;
+    if (Math.abs(moved) < 1) return;
+    const scroller = el.closest<HTMLElement>('.page-content');
+    if (scroller) scroller.scrollTop += moved; else window.scrollBy(0, moved);
+  }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/** For screen readers, what just arrived ("2 new replies"), since the page itself doesn't move to show it. */
+export function ArrivalNote({ arrived, one, many }: { arrived: ReadonlyMap<string, number> | undefined; one: string; many: string }) {
+  const latest = Math.max(0, ...(arrived?.values() ?? []));
+  const count = latest ? [...arrived!.values()].filter(at => at === latest).length : 0;
+  return <p className="sr-only" role="status" aria-live="polite">{count ? (count === 1 ? one : `${count} ${many}`) : ''}</p>;
 }
 
 /** Posts added in the last few seconds get a short highlight (styles.css .is-arrived), once. */
@@ -145,14 +177,13 @@ export function useConversationVisit(t: Thread | null, loaded: boolean): number 
  * conversation in the Conversations list; replies that don't answer the message above say which one they answer.
  * Each message keeps Atlas's actions (shown on hover or tap); "Reply" at the bottom answers the opened post.
  */
-export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, lastVisit, pending = 0, onShowPending, arrived, Gate, Content }: {
+export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, lastVisit, arrived, Gate, Content }: {
   thread: Thread; actions: Acts; onOpenInbox: () => void; onOpenPost: (p: FedizenPost) => void;
   /** The platform's keyword-filter gate (FilterGate, MobileFilterGate) and post content (PostContent,
    *  MobilePostContent: warnings, sensitive media, video, polls, previews), so B shows exactly what a card would. */
   Gate: ComponentType<{ post: FedizenPost; children: ReactNode }>; Content: ComponentType<{ post: FedizenPost }>;
   /** Where the reader left off before this visit (useConversationVisit), for the "New" line. */ lastVisit: number | undefined;
-  /** Messages that arrived while open and aren't shown yet, showing them, and those added (useThread). */
-  pending?: number; onShowPending?: () => void; arrived?: ReadonlyMap<string, number>;
+  /** Messages added while open, and when (useThread): marked New. */ arrived?: ReadonlyMap<string, number>;
 }) {
   const isMe = useIsMePost();
   const posts = useMemo(() => allPosts(t), [t]);
@@ -169,20 +200,25 @@ export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, 
   const muted = !!mark?.muted;
   const toggleMute = () => setMark(writeMark(rootKey, { muted: !muted })[rootKey]);
   const [active, setActive] = useState<string | null>(null);
-  // As in a chat: at the end, new messages simply appear; further up, a button below says how many wait.
+  // As in a chat: new messages appear at once; read at the end and the conversation follows them down, read further
+  // up and nothing moves (useScrollAnchor), the new ones marked New for when you get there.
   const end = useRef<HTMLDivElement>(null);
-  const [atEnd, setAtEnd] = useState(false);
+  const box = useRef<HTMLElement>(null);
+  const atEnd = useRef(false);
   useEffect(() => {
     const el = end.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(([e]) => setAtEnd(e.isIntersecting), { rootMargin: '0px 0px 80px 0px' });
+    const io = new IntersectionObserver(([e]) => { atEnd.current = e.isIntersecting; }, { rootMargin: '0px 0px 120px 0px' });
     io.observe(el);
     return () => io.disconnect();
   }, []);
-  useEffect(() => { if (atEnd && pending > 0) onShowPending?.(); }, [atEnd, pending, onShowPending]);
+  useScrollAnchor(box, t);
+  const count = arrived?.size ?? 0;
+  useLayoutEffect(() => { if (count && atEnd.current) end.current?.scrollIntoView({ block: 'end' }); }, [count]);
   const jump = () => document.getElementById('atlas-conv-new')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
 
-  return <section className="atlas-conv" aria-label={`Conversation: ${subject}`}>
+  return <section ref={box} className="atlas-conv" aria-label={`Conversation: ${subject}`}>
+    <ArrivalNote arrived={arrived} one="1 new message" many="new messages" />
     <header className="atlas-conv-head">
       <h2 className="atlas-conv-subject">{subject}</h2>
       <div className="atlas-conv-meta">
@@ -202,10 +238,9 @@ export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, 
         ? <li key={it.key} id="atlas-conv-new" className="atlas-conv-new" role="separator"><span>New</span></li>
         : it.post.tombstone
         ? <li key={it.key} className="atlas-conv-item"><div className="atlas-conv-msg is-first is-tombstone"><div className="atlas-conv-gutter" /><p className="atlas-conv-gone">This message was deleted or is no longer available.</p></div></li>
-        : <li key={it.key} className={justArrived(arrived, it.key) ? 'atlas-conv-item is-arrived' : 'atlas-conv-item'} style={branches.has(it.key) ? { '--branch': `var(--atlas-branch-${branches.get(it.key)})` } as CSSProperties : undefined}><Gate post={it.post}><Message item={it} actions={actions} mine={isMe(it.post)} active={active === it.key} onActivate={() => setActive(a => (a === it.key ? null : it.key))} onOpenPost={onOpenPost} Content={Content} /></Gate></li>)}
+        : <li key={it.key} className={justArrived(arrived, it.key) ? 'atlas-conv-item is-arrived' : 'atlas-conv-item'} style={branches.has(it.key) ? { '--branch': `var(--atlas-branch-${branches.get(it.key)})` } as CSSProperties : undefined}><Gate post={it.post}><Message item={it} actions={actions} mine={isMe(it.post)} fresh={!isMe(it.post) && !!arrived?.has(it.key)} active={active === it.key} onActivate={() => setActive(a => (a === it.key ? null : it.key))} onOpenPost={onOpenPost} Content={Content} /></Gate></li>)}
     </ol>
     <div ref={end} className="atlas-conv-end" aria-hidden="true" />
-    {onShowPending && <NewArrivals count={atEnd ? 0 : pending} onShow={() => { onShowPending(); requestAnimationFrame(() => end.current?.scrollIntoView({ block: 'end', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })); }} one="1 new message" many="new messages" place="bottom" />}
     <div className="atlas-conv-dock">
       <button type="button" className="atlas-conv-reply" onClick={() => actions.onReply(t.focus)} disabled={!actions.reactions.canAct}>
         <MessageSquareReply aria-hidden="true" />{actions.reactions.canAct ? `Reply to ${t.focus.author}` : 'Connect Fedizen to reply'}
@@ -214,13 +249,14 @@ export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, 
   </section>;
 }
 
-function Message({ item, actions, mine, active, onActivate, onOpenPost, Content }: { item: Extract<ReturnType<typeof chatItems>[number], { t: 'msg' }>; actions: Acts; mine: boolean; active: boolean; onActivate: () => void; onOpenPost: (p: FedizenPost) => void; Content: ComponentType<{ post: FedizenPost }> }) {
+function Message({ item, actions, mine, fresh, active, onActivate, onOpenPost, Content }: { item: Extract<ReturnType<typeof chatItems>[number], { t: 'msg' }>; actions: Acts; mine: boolean; fresh: boolean; active: boolean; onActivate: () => void; onOpenPost: (p: FedizenPost) => void; Content: ComponentType<{ post: FedizenPost }> }) {
   const p = item.post;
   const time = p.date ? new Date(p.date) : null;
-  return <div className={['atlas-conv-msg', item.first && 'is-first', mine && 'is-mine', item.focus && 'is-focus', active && 'is-active'].filter(Boolean).join(' ')}>
+  return <div className={['atlas-conv-msg', item.first && 'is-first', mine && 'is-mine', item.focus && 'is-focus', active && 'is-active', fresh && 'is-new'].filter(Boolean).join(' ')} data-status-id={p.statusId ?? p.id}>
     <div className="atlas-conv-gutter">{item.first && <Face post={p} size={32} />}</div>
     <div className="atlas-conv-main" onClick={e => { const t = e.target as Element; if (!t.closest('a, button, summary, video, audio, input, label')) onActivate(); }}>
-      {item.first && <p className="atlas-conv-who"><b>{p.author}</b> <span>{p.handle}</span>{time && <time dateTime={p.date} title={time.toLocaleString()}>{time.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time>}{p.editedAt && <span> · Edited</span>}</p>}
+      {fresh && !item.first && <span className="atlas-new-badge is-alone">New</span>}
+      {item.first && <p className="atlas-conv-who"><b>{p.author}</b> <span>{p.handle}</span>{fresh && <span className="atlas-new-badge">New</span>}{time && <time dateTime={p.date} title={time.toLocaleString()}>{time.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time>}{p.editedAt && <span> · Edited</span>}</p>}
       {item.parent && <ParentChip parent={item.parent} />}
       <div id={`atlas-msg-${p.statusId ?? p.id}`} className="atlas-conv-body">
         <BoostedBy post={p} className="atlas-post-boosted" />

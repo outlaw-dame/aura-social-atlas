@@ -1299,19 +1299,14 @@ ruby rt { font-size: .6em; }
 .atlas-ph > .atlas-ph-replies > .atlas-ph-li { background: linear-gradient(var(--line), var(--line)) no-repeat 2px 0 / var(--atlas-line-width) 100%; }
 .atlas-ph > .atlas-ph-replies > .atlas-ph-li:last-child { background-size: var(--atlas-line-width) 24px; }
 .atlas-ph > .atlas-ph-replies > .atlas-ph-li:first-child { background-position: 2px 6px; }
-/* Replies that arrive while a conversation is open: a button held on screen that shows them (A at the top, B at the
-   bottom, like a chat), then a short highlight in the branch colour. */
-.atlas-live { position: sticky; z-index: 20; display: flex; justify-content: center; height: 0; overflow: visible; pointer-events: none; }
-.atlas-live.is-top { top: calc(var(--f7-navbar-height, 0px) + env(safe-area-inset-top, 0px) + 8px); }
-.atlas-live.is-bottom { bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); }
-.atlas-live > button { pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 8px 16px; border: 0; border-radius: 999px; background: var(--accent, var(--f7-theme-color, #2563eb)); color: var(--accent-foreground, #fff); font: inherit; font-size: 14px; font-weight: 600; box-shadow: 0 4px 14px rgb(0 0 0 / .18); cursor: pointer; width: auto; animation: atlas-live-in .25s ease-out; }
-.atlas-live.is-bottom > button { transform: translateY(-100%); }
-.atlas-live > button svg { width: 16px; height: 16px; }
-.atlas-live > button:focus-visible { outline: 2px solid var(--accent, var(--f7-theme-color)); outline-offset: 3px; }
-@keyframes atlas-live-in { from { opacity: 0; translate: 0 -6px; } }
+/* Posts new to the reader — arrived while the conversation is open, or since their last visit — show in place,
+   marked "New" in their branch's colour; ones that just arrived also glow briefly. Nothing moves to show them. */
+.atlas-new-badge { align-self: center; display: inline-flex; align-items: center; padding: 3px 6px; border-radius: 5px; font-size: 10px; line-height: 1; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: color-mix(in oklab, var(--branch, var(--accent, #2563eb)) 80%, currentColor); background: color-mix(in oklab, var(--branch, var(--accent, #2563eb)) 16%, transparent); }
+.atlas-conv-who .atlas-new-badge { margin-inline-start: 6px; vertical-align: 1px; }
+.atlas-new-badge.is-alone { margin: 2px 0 4px; }
 .is-arrived:is(.atlas-ph-row, .atlas-conv-item) { animation: atlas-arrived 3s ease-out; }
 @keyframes atlas-arrived { from, 30% { background-color: color-mix(in oklab, var(--branch, var(--accent, #2563eb)) 18%, transparent); } }
-@media (prefers-reduced-motion: reduce) { .atlas-live > button { animation: none; } .is-arrived:is(.atlas-ph-row, .atlas-conv-item) { animation: none; box-shadow: inset 3px 0 0 var(--branch, var(--accent, #2563eb)); } }
+@media (prefers-reduced-motion: reduce) { .is-arrived:is(.atlas-ph-row, .atlas-conv-item) { animation: none; } }
 /* A post deleted while the conversation is open keeps its place. */
 .atlas-ph-row.is-tombstone { cursor: auto; padding-block: 12px 10px; }
 .atlas-ph-ghost { display: block; width: var(--av); height: var(--av); border-radius: var(--atlas-avatar-radius, 50%); border: 1.5px dashed color-mix(in oklab, currentColor 25%, transparent); }

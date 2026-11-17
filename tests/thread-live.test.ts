@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import { deepStrictEqual, ok, strictEqual } from 'node:assert';
-import { reconcile, reveal, touches, withDeleted, type ThreadData } from '../src/lib/thread-live';
+import { reconcile, touches, withDeleted, type ThreadData } from '../src/lib/thread-live';
 import type { FedizenPost } from '../src/lib/fedizen-feed';
 
 let n = 0;
@@ -10,27 +10,19 @@ const post = (id: string, who: string, parent?: string, extra: Partial<FedizenPo
 });
 const ids = (ps: FedizenPost[]) => ps.map(p => p.statusId);
 const none = new Set<string>();
-const opts = (o: Partial<Parameters<typeof reconcile>[2]> = {}) => ({ deleted: none, complete: true, autoShow: () => false, ...o });
+const opts = (o: Partial<Parameters<typeof reconcile>[2]> = {}) => ({ deleted: none, complete: true, ...o });
 
 describe('a conversation kept up to date while open', () => {
   n = 0;
   const f = post('f', 'ann'), a = post('a', 'bob', 'f'), b = post('b', 'cat', 'a');
   const shown: ThreadData = { post: f, ancestors: [], descendants: [a, b] };
 
-  test('new replies wait; nothing shown moves', () => {
-    const c = post('c', 'dan', 'f');
-    const r = reconcile(shown, { post: f, ancestors: [], descendants: [a, b, c] }, opts());
-    deepStrictEqual(ids(r.shown.descendants), ['a', 'b']);
-    deepStrictEqual(ids(r.pending), ['c']);
-    deepStrictEqual(ids(reveal(r.shown, r.pending).descendants), ['a', 'b', 'c']);
-  });
-
-  test("the reader's own replies show at once", () => {
-    const mine = post('m', 'me', 'b');
-    const r = reconcile(shown, { post: f, ancestors: [], descendants: [a, b, mine] }, opts({ autoShow: p => p.author === 'me' }));
-    deepStrictEqual(ids(r.shown.descendants), ['a', 'b', 'm']);
-    deepStrictEqual(ids(r.added), ['m']);
-    strictEqual(r.pending.length, 0);
+  test('new replies are added straight away, and listed as added', () => {
+    const c = post('c', 'dan', 'f'), m = post('m', 'me', 'b');
+    const r = reconcile(shown, { post: f, ancestors: [], descendants: [a, b, m, c] }, opts());
+    deepStrictEqual(ids(r.shown.descendants), ['a', 'b', 'm', 'c']);
+    deepStrictEqual(ids(r.added), ['c', 'm']); // oldest first
+    strictEqual(reconcile(r.shown, { post: f, ancestors: [], descendants: [a, b, m, c] }, opts()).added.length, 0);
   });
 
   test('edits show in place', () => {
@@ -53,7 +45,7 @@ describe('a conversation kept up to date while open', () => {
     strictEqual(withDeleted(shown, 'b').descendants[1].tombstone, true);
     const c = post('c', 'dan', 'f');
     const r = reconcile(shown, { post: f, ancestors: [], descendants: [a, b, c] }, opts({ deleted: new Set(['c', 'a']) }));
-    strictEqual(r.pending.length, 0);
+    strictEqual(r.added.length, 0);
     strictEqual(r.shown.descendants[0].tombstone, true);
   });
 

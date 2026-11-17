@@ -8,8 +8,8 @@ import type { FedizenPost } from './fedizen-feed';
  *  - edits show at once, in place;
  *  - a post deleted, or gone from the conversation, becomes a placeholder, so its replies keep their place
  *    (only when the read was complete: a partial answer says nothing about what's missing);
- *  - new posts wait, as `pending`, until the reader asks for them ("3 new replies"), except the reader's own;
- *  - a post above the opened one (its ancestors) is never held back: nothing below it moves.
+ *  - new posts are added straight away (`added`); the page keeps the reader's place (useScrollAnchor) and marks them
+ *    as new, so nothing has to be asked for and nothing jumps.
  */
 export type ThreadData = { post: FedizenPost; ancestors: FedizenPost[]; descendants: FedizenPost[] };
 
@@ -23,8 +23,7 @@ export function tombstone(p: FedizenPost): FedizenPost {
 export function reconcile(shown: ThreadData, live: ThreadData, opts: {
   /** Posts known to be deleted (live updates, or the reader's own deletes). */ deleted: ReadonlySet<string>;
   /** The read came back whole (no error), so a post missing from it is gone. */ complete: boolean;
-  /** New posts shown straight away: the reader's own. */ autoShow: (p: FedizenPost) => boolean;
-}): { shown: ThreadData; pending: FedizenPost[]; added: FedizenPost[] } {
+}): { shown: ThreadData; added: FedizenPost[] } {
   const liveBy = new Map<string, FedizenPost>();
   [live.post, ...live.ancestors, ...live.descendants].forEach(p => liveBy.set(key(p), p));
   const update = (p: FedizenPost): FedizenPost => {
@@ -41,20 +40,13 @@ export function reconcile(shown: ThreadData, live: ThreadData, opts: {
   const order = new Map(live.ancestors.map((a, i) => [key(a), i]));
   ancestors.sort((x, y) => (order.get(key(x)) ?? -1) - (order.get(key(y)) ?? -1));
   const descendants = shown.descendants.map(update);
-  const pending: FedizenPost[] = [];
   const added: FedizenPost[] = [];
   for (const d of live.descendants) {
     const k = key(d);
     if (had.has(k) || opts.deleted.has(k)) continue;
-    if (opts.autoShow(d)) { descendants.push(d); added.push(d); } else pending.push(d);
+    descendants.push(d); added.push(d);
   }
-  return { shown: { post: update(shown.post), ancestors, descendants }, pending: pending.sort(byTime), added };
-}
-
-/** The waiting posts, now shown. */
-export function reveal(shown: ThreadData, pending: readonly FedizenPost[]): ThreadData {
-  const had = new Set(shown.descendants.map(key));
-  return { ...shown, descendants: [...shown.descendants, ...pending.filter(p => !had.has(key(p)))] };
+  return { shown: { post: update(shown.post), ancestors, descendants }, added: added.sort(byTime) };
 }
 
 /** One post deleted while the conversation is open: its placeholder, without reading Fedizen again. */

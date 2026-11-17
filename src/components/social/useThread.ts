@@ -4,7 +4,7 @@ import { useServerFn } from '@tanstack/react-start';
 import { getFedizenThread } from '@/lib/fedizen.functions';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { buildThread, type ReplySort } from '@/lib/thread';
-import { reconcile, reveal, touches, withDeleted, type ThreadData } from '@/lib/thread-live';
+import { reconcile, touches, withDeleted, type ThreadData } from '@/lib/thread-live';
 import { useAtlasAuth } from './AuthState';
 import { getFedizenStatus } from '@/lib/fedizen.functions';
 import { fullAcct } from '@/lib/fedizen-feed';
@@ -27,8 +27,8 @@ const key = (p: FedizenPost) => p.statusId ?? p.id;
 /**
  * A post's conversation from Fedizen, arranged; the post that was tapped shows at once while the rest loads. Kept
  * up to date while open (thread-live.ts): read again on a live post or notification that may belong to it, every
- * 45 s while visible, on returning to the tab and on reconnecting. Edits and deletions show in place; new replies
- * wait in `pending` until `reveal()` (the reader's own show at once); `arrived` says which were added, and when.
+ * 45 s while visible, on returning to the tab and on reconnecting. Edits, deletions and new replies show in place at
+ * once; `arrived` says which posts were added while open, and when (the page keeps the reader's place and marks them).
  */
 export function useThread(statusId: string | null, seed?: FedizenPost) {
   const { user } = useAtlasAuth();
@@ -51,18 +51,20 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
   const deleted = useSyncExternalStore(deletedPosts.subscribe, deletedPosts.snapshot, deletedPosts.snapshot);
 
   // What the reader is looking at, reconciled with each read of Fedizen.
-  type View = { id: string; data: ThreadData; pending: FedizenPost[]; arrived: ReadonlyMap<string, number> };
+  type View = { id: string; data: ThreadData; arrived: ReadonlyMap<string, number> };
   const [view, setView] = useState<View | null>(null);
   useEffect(() => {
     const live = q.data;
     if (!statusId || !live?.post) return;
     const data: ThreadData = { post: live.post, ancestors: live.ancestors, descendants: live.descendants };
     setView(v => {
-      if (!v || v.id !== statusId) return { id: statusId, data, pending: [], arrived: new Map() };
-      const r = reconcile(v.data, data, { deleted, complete: !live.error, autoShow: isMe });
+      if (!v || v.id !== statusId) return { id: statusId, data, arrived: new Map() };
+      const r = reconcile(v.data, data, { deleted, complete: !live.error });
+      if (!r.added.length) return { ...v, data: r.shown };
       const arrived = new Map(v.arrived);
-      r.added.forEach(p => arrived.set(key(p), Date.now()));
-      return { ...v, data: r.shown, pending: r.pending, arrived };
+      const at = Date.now();
+      r.added.forEach(p => arrived.set(key(p), at));
+      return { ...v, data: r.shown, arrived };
     });
   }, [q.data, statusId]); // eslint-disable-line react-hooks/exhaustive-deps
   // A post deleted while open becomes its placeholder at once.
@@ -71,8 +73,7 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
       if (!v) return v;
       let data = v.data;
       for (const d of deleted) data = withDeleted(data, d);
-      const pending = v.pending.filter(p => !deleted.has(key(p)));
-      return data === v.data && pending.length === v.pending.length ? v : { ...v, data, pending };
+      return { ...v, data };
     });
   }, [deleted]);
 
@@ -93,22 +94,12 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
     return () => { clearTimeout(timer); window.removeEventListener(LIVE_POST_EVENT, onPost); window.removeEventListener(LIVE_NOTICE_EVENT, soon); };
   }, [statusId, refetch]);
 
-  const showPending = useCallback(() => setView(v => {
-    if (!v || !v.pending.length) return v;
-    const arrived = new Map(v.arrived);
-    const at = Date.now();
-    v.pending.forEach(p => arrived.set(key(p), at));
-    return { ...v, data: reveal(v.data, v.pending), pending: [], arrived };
-  }), []);
-
   const current = view && view.id === statusId ? view : null;
   const focus = current?.data.post ?? (seed?.statusId === statusId ? seed : undefined);
   const thread = useMemo(() => (focus ? buildThread(focus, current?.data.ancestors ?? [], current?.data.descendants ?? [], { sort, isMe }) : null), [focus, current?.data, sort, isMe]);
   return {
     thread, loading: q.isLoading, refreshing: q.isFetching && !q.isLoading,
     error: q.isError ? 'unavailable' as const : q.data?.error, refetch: () => void q.refetch(), sort, setSort, signedIn: !!user,
-    /** New replies not shown yet, oldest first. */ pending: current?.pending ?? [],
-    /** Show them. */ showPending,
     /** Posts added while the conversation was open, and when (ms). */ arrived: current?.arrived ?? EMPTY,
   };
 }
