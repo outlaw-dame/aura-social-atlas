@@ -75,7 +75,20 @@ export async function addDevice(userId: string, token: string, origin: string, d
   if (existingDevice && existingDevice.user_id !== userId) return { ok: false, error: 'bad-subscription' };
   const { data: existing, error: relayLookupError } = await db.from('atlas_push_relays').select('*').eq('user_id', userId).maybeSingle();
   if (relayLookupError) return { ok: false, error: 'unavailable' };
-  let row = (existing as RelayRow | null) ?? await newRelay(userId, v);
+  let row = existing as RelayRow | null;
+  if (!row) {
+    // Reserve one immutable relay ID/key pair per account *before* contacting Fedizen.
+    // Concurrent device enrollments may both see no row; ignoreDuplicates preserves
+    // the first reservation, and both requests then use that same canonical relay.
+    const candidate = await newRelay(userId, v);
+    const { error: reserveError } = await db.from('atlas_push_relays')
+      .upsert({ ...candidate, alerts: candidate.alerts as unknown as Json }, { onConflict: 'user_id', ignoreDuplicates: true });
+    if (reserveError) return { ok: false, error: 'unavailable' };
+    const { data: canonical, error: canonicalError } = await db.from('atlas_push_relays')
+      .select('*').eq('user_id', userId).maybeSingle();
+    if (canonicalError || !canonical) return { ok: false, error: 'unavailable' };
+    row = canonical as RelayRow;
+  }
   const alerts = choice?.alerts ?? (row.alerts as PushAlerts) ?? DEFAULT_ALERTS, policy = choice?.policy ?? (row.policy as PushPolicy) ?? 'all';
   // (Re)subscribe at Fedizen: Mastodon replaces the token's previous subscription, so this is safe to repeat.
   const r = await relayDeps.send(token, 'POST', '/api/v1/push/subscription', {
