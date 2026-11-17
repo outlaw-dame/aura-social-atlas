@@ -1001,10 +1001,13 @@ html.atlas-stack-open .view.atlas-stack { pointer-events: auto; }
 @media (hover: hover) { .atlas-post-opens { cursor: pointer; } .atlas-post-hit .atlas-post-card { cursor: pointer; } .atlas-post-hit .atlas-thread-focus { cursor: auto; } }
 button.atlas-post-time { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; width: auto; }
 .atlas-thread-up, .atlas-thread-continue, .atlas-thread-replies { list-style: none; margin: 0; padding: 0; }
-/* The posts above, joined by a line through their avatars down to the opened post. */
-.atlas-thread-up > li, .atlas-thread-continue > li { position: relative; }
-.atlas-thread-up > li:not(.atlas-thread-gap)::before { content: ''; position: absolute; z-index: 1; inset-inline-start: 19px; top: 52px; bottom: -14px; width: 2px; border-radius: 1px; background: color-mix(in oklab, currentColor 18%, transparent); pointer-events: none; }
-.atlas-thread-page .atlas-thread-up > li:not(.atlas-thread-gap)::before { inset-inline-start: calc(var(--f7-card-margin-horizontal, 16px) + 35px); top: 62px; }
+/* The posts above, and the author's follow-ups, on a rail beside them: one line of conversation leading to and from
+   the opened post (text runs under the avatar in Atlas's cards, so the rail sits outside them). */
+.atlas-thread-up, .atlas-thread-continue { margin-inline-start: 2px; padding-inline-start: 14px; border-inline-start: 2px solid color-mix(in oklab, currentColor 14%, transparent); }
+.atlas-thread-up { margin-bottom: 12px; }
+.atlas-thread-continue { margin-top: 12px; }
+.atlas-thread-page :is(.atlas-thread-up, .atlas-thread-continue) { margin-inline-start: var(--f7-card-margin-horizontal, 16px); padding-inline-start: 0; }
+.atlas-thread-page :is(.atlas-thread-up, .atlas-thread-continue) .atlas-post-card { margin-inline-start: 8px; }
 .atlas-thread-gap { font-size: 12px; opacity: .7; padding: 8px 2px; }
 .atlas-thread-page .atlas-thread-gap { padding: 8px var(--f7-card-margin-horizontal, 16px); }
 .atlas-thread-focus .atlas-post-text { font-size: 18px; line-height: 1.45; }
