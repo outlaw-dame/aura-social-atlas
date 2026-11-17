@@ -182,3 +182,44 @@ describe('posting with media', () => {
     expect(r.data[0]).toMatchObject({ configuration: { media_attachments: { image_size_limit: 8000000 } } });
   });
 });
+
+describe('Own posts, polls, follow requests and search: allowlisted', () => {
+  test('accepts exactly these paths and bodies', async () => {
+    const seen: [string, string | undefined, string | null][] = [];
+    globalThis.fetch = (async (url: string, init?: RequestInit) => { seen.push([String(url), init?.method, (init?.body as string) ?? null]); return new Response('{}'); }) as unknown as typeof fetch;
+    await fedizenSend('t', 'DELETE', '/api/v1/statuses/01ABC');
+    await fedizenSend('t', 'PUT', '/api/v1/statuses/01ABC', { status: 'fixed typo', spoiler_text: '' });
+    await fedizenSend('t', 'POST', '/api/v1/follow_requests/01ABC/authorize');
+    await fedizenSend('t', 'POST', '/api/v1/follow_requests/01ABC/reject');
+    await fedizenSend('t', 'POST', '/api/v1/polls/01ABC/votes', { choices: [0, 2] });
+    await fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'Which?', visibility: 'public', poll: { options: ['a', 'b'], expires_in: 86400, multiple: false } });
+    expect(seen.map(s => `${s[1]} ${s[0].replace('https://fedizen.net', '')}`)).toEqual([
+      'DELETE /api/v1/statuses/01ABC', 'PUT /api/v1/statuses/01ABC', 'POST /api/v1/follow_requests/01ABC/authorize',
+      'POST /api/v1/follow_requests/01ABC/reject', 'POST /api/v1/polls/01ABC/votes', 'POST /api/v1/statuses',
+    ]);
+  });
+  test('refuses what they mustn’t carry', async () => {
+    globalThis.fetch = (async () => new Response('{}')) as unknown as typeof fetch;
+    await expect(fedizenSend('t', 'PUT', '/api/v1/statuses/01ABC', { status: '', spoiler_text: '' })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'PUT', '/api/v1/statuses/01ABC', { status: 'x', spoiler_text: '', media_ids: ['1'] })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'x', visibility: 'public', media_ids: ['01A'], poll: { options: ['a', 'b'], expires_in: 3600, multiple: false } })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'x', visibility: 'public', poll: { options: ['a'], expires_in: 3600, multiple: false } })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/statuses', { status: 'x', visibility: 'public', poll: { options: ['a', 'b'], expires_in: 60, multiple: false } })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/polls/01ABC/votes', { choices: [] })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'DELETE', '/api/v1/statuses/../accounts')).rejects.toThrow('Unsupported Fedizen write path.');
+    await expect(fedizenGet('t', '/api/v2/search?q=x&type=accounts&limit=20')).rejects.toThrow('Unsupported Fedizen read path.');
+  });
+  test('reads follow requests, a post’s source, a poll and post search', async () => {
+    globalThis.fetch = (async (url: string) => {
+      const u = String(url);
+      if (u.includes('follow_requests')) return new Response(JSON.stringify([{ id: '01P', acct: 'ana@lemmy.ca', display_name: 'Ana', url: 'https://lemmy.ca/u/ana' }]));
+      if (u.endsWith('/source')) return new Response(JSON.stringify({ id: '01S', text: '<p>Hello</p>', spoiler_text: '' }));
+      if (u.includes('/polls/')) return new Response(JSON.stringify({ id: '01Q', expired: false, multiple: false, votes_count: 3, voted: true, own_votes: [1], options: [{ title: 'a', votes_count: 1 }, { title: 'b', votes_count: 2 }] }));
+      return new Response(JSON.stringify({ accounts: [], statuses: [{ id: '01T', content: '<p>atlas</p>' }], hashtags: [] }));
+    }) as unknown as typeof fetch;
+    expect((await fedizenGet('t', '/api/v1/follow_requests?limit=40')).data).toHaveLength(1);
+    expect((await fedizenGet('t', '/api/v1/statuses/01S/source')).data[0]).toMatchObject({ text: '<p>Hello</p>' });
+    expect((await fedizenGet('t', '/api/v1/polls/01Q')).data[0]).toMatchObject({ voted: true, own_votes: [1] });
+    expect(((await fedizenGet('t', `/api/v2/search?q=${encodeURIComponent('atlas app')}&type=statuses&limit=20`)).data[0] as { statuses: unknown[] }).statuses).toHaveLength(1);
+  });
+});

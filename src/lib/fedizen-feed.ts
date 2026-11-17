@@ -39,7 +39,11 @@ export type FedizenPost = { id: string; /** The post itself (the boosted one for
   /** Who can see it; a reply keeps to this audience. */ visibility?: 'public' | 'unlisted' | 'private' | 'direct';
   /** What keyword filters read besides the text: content warning, hashtags, image descriptions, link preview, poll
    *  options, the quoted post's words, and the author's account id (for "except people I follow"). */
-  cw?: string; tags?: string[]; alt?: string[]; linkTitle?: string; linkDescription?: string; poll?: string[]; quote?: string; authorId?: string };
+  cw?: string; tags?: string[]; alt?: string[]; linkTitle?: string; linkDescription?: string; poll?: string[]; quote?: string; authorId?: string;
+  /** The poll itself: options with counts, and whether the reader voted (Mastodon Poll). */ pollState?: FediPoll;
+  /** When its author last edited it. */ editedAt?: string };
+/** A poll as Fedizen reports it (Mastodon Poll). Counts may be absent while a poll hides them. */
+export type FediPoll = { id: string; options: { title: string; votes?: number }[]; multiple: boolean; expired: boolean; expiresAt?: string; votes?: number; voters?: number; voted: boolean; ownVotes: number[] };
 /** Someone shown beside a post (who boosted it), with what opens their profile. */
 export type FediPerson = { name: string; avatar?: string; acct?: string; actor?: string };
 /** A mention: the full handle, and the name it's written as in the text (the handle's first part). */
@@ -52,7 +56,7 @@ export type FedizenConversation = { id: string; unread: boolean; people: { name:
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string; url?: string | null; uri?: string | null };
 type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; sensitive?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
   replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null;
-  in_reply_to_id?: string | null; spoiler_text?: string | null; tags?: { name?: string }[] | null; mentions?: { acct?: string | null; username?: string | null }[] | null; poll?: { options?: { title?: string }[] } | null;
+  in_reply_to_id?: string | null; spoiler_text?: string | null; tags?: { name?: string }[] | null; mentions?: { acct?: string | null; username?: string | null }[] | null; poll?: { id?: string; expires_at?: string | null; expired?: boolean | null; multiple?: boolean | null; votes_count?: number | null; voters_count?: number | null; voted?: boolean | null; own_votes?: number[] | null; options?: { title?: string; votes_count?: number | null }[] } | null; edited_at?: string | null;
   quote?: { quoted_status?: { content?: string | null; spoiler_text?: string | null; media_attachments?: { description?: string | null }[] | null } | null } | null };
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
@@ -73,6 +77,20 @@ const name = (a?: Acct) => {
   const isHandle = !!dn && handle(dn).includes('@') && [a?.acct, a?.username].some(h => handle(h) === handle(dn));
   return (!isHandle && dn) || (a?.username || a?.acct || '').replace(/^@/, '').split('@')[0] || 'Someone';
 };
+
+/** A Mastodon Poll (in a status, or answered by voting) as Atlas shows it; null when it isn't one. */
+export function pollOf(p?: Status['poll'] | null): FediPoll | null {
+  if (!p?.id || !/^[A-Za-z0-9_-]{1,64}$/.test(p.id)) return null;
+  const options = (p.options ?? []).map(o => ({ title: (o.title ?? '').trim(), ...(typeof o.votes_count === 'number' ? { votes: o.votes_count } : {}) })).filter(o => o.title);
+  if (options.length < 2) return null;
+  const expiresAt = p.expires_at && !Number.isNaN(Date.parse(p.expires_at)) ? p.expires_at : undefined;
+  const expired = p.expired === true || (!!expiresAt && Date.parse(expiresAt) <= Date.now());
+  return {
+    id: p.id, options, multiple: p.multiple === true, expired, ...(expiresAt ? { expiresAt } : {}),
+    ...(typeof p.votes_count === 'number' ? { votes: p.votes_count } : {}), ...(typeof p.voters_count === 'number' ? { voters: p.voters_count } : {}),
+    voted: p.voted === true, ownVotes: (p.own_votes ?? []).filter(i => Number.isInteger(i) && i >= 0 && i < options.length),
+  };
+}
 
 /** A handle as Fedizen gives it, made whole: Fedizen's own members come without the domain. */
 export function fullAcct(raw?: string | null): string | undefined {
@@ -125,6 +143,8 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
       ...(o.card?.description ? { linkDescription: o.card.description } : {}),
       ...(o.account?.id ? { authorId: o.account.id } : {}),
       ...(() => { const p = (o.poll?.options ?? []).map(x => x.title?.trim()).filter((t): t is string => !!t); return p.length ? { poll: p } : {}; })(),
+      ...(() => { const p = pollOf(o.poll); return p ? { pollState: p } : {}; })(),
+      ...(o.edited_at && !Number.isNaN(Date.parse(o.edited_at)) ? { editedAt: o.edited_at } : {}),
       ...(() => {
         const q = o.quote?.quoted_status;
         if (!q) return {};

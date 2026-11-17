@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { missingAlt, useReading } from '@/lib/reading-prefs';
-import { AtSign, Globe2, ImagePlus, Loader2, Lock, MoonStar, Quote, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { AtSign, BarChart3, Globe2, ImagePlus, Loader2, Lock, MoonStar, Plus, Quote, Sparkles, TriangleAlert, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { QuotePolicy } from '@/lib/quote-policy';
 import { GifPicker } from './GifPicker';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MAX_ALT, MAX_CW, PICKER_ACCEPT, altReminderText } from '@/lib/compose-media';
-import { usePublish, type Audience } from './usePublish';
+import { MAX_POLL_OPTIONS, usePublish, type Audience } from './usePublish';
 import { QuotedPost } from './QuotedPost';
 
 const AUDIENCE_ICON: Record<Audience, typeof Globe2> = { public: Globe2, unlisted: MoonStar, private: Lock, direct: AtSign };
@@ -73,15 +73,18 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
         <Checkbox checked={p.sensitive} disabled={p.sensitiveLocked || p.sending} onCheckedChange={v => p.setSensitive(v === true)} />
         {p.sensitiveLocked ? 'Media is marked sensitive (the post has a content warning)' : 'Mark media as sensitive'}
       </label>}
+      {p.poll && <PollEditor p={p} />}
       {p.notice && <p role="alert" className="text-xs text-destructive">{p.notice}</p>}
     </div>
     <div className="flex items-center gap-1 border-t border-border p-2">
       <input ref={pick} type="file" accept={PICKER_ACCEPT} multiple hidden onChange={e => { if (e.target.files) p.add(e.target.files); e.target.value = ''; }} />
-      <Button variant="ghost" size="icon" aria-label="Add images or a video" title="Add images or a video" disabled={p.sending} onClick={() => pick.current?.click()}><ImagePlus /></Button>
+      <Button variant="ghost" size="icon" aria-label="Add images or a video" title={p.poll ? 'A post with a poll can’t have media' : 'Add images or a video'} disabled={p.sending || !!p.poll} onClick={() => pick.current?.click()}><ImagePlus /></Button>
+      <Button variant="ghost" size="icon" aria-label={p.poll ? 'Remove poll' : 'Add a poll'} aria-pressed={!!p.poll} title={p.poll ? 'Remove poll' : p.canPoll ? 'Add a poll' : 'A poll can’t go with media or a quote'}
+        disabled={p.sending || (!p.poll && !p.canPoll)} onClick={() => (p.poll ? p.removePoll() : p.startPoll())} className={p.poll ? 'bg-accent/15 text-accent hover:bg-accent/25' : ''}><BarChart3 /></Button>
       <Button variant="ghost" size="icon" aria-label="Content warning" title="Content warning" aria-pressed={p.cwOn} disabled={p.sending} onClick={() => p.setCwOn(!p.cwOn)} className={p.cwOn ? 'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-400' : ''}><TriangleAlert /></Button>
       {p.gifs && <Popover open={gifOpen} onOpenChange={setGifOpen}>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label="Add a GIF" title={gifFull ? 'This post has all the media it can take' : 'Add a GIF'} disabled={p.sending || gifFull}><span className="atlas-gif-glyph" aria-hidden>GIF</span></Button>
+          <Button variant="ghost" size="icon" aria-label="Add a GIF" title={gifFull ? 'This post has all the media it can take' : 'Add a GIF'} disabled={p.sending || gifFull || !!p.poll}><span className="atlas-gif-glyph" aria-hidden>GIF</span></Button>
         </PopoverTrigger>
         <PopoverContent side="top" align="start" className="w-[22rem] p-0"><GifPicker onPick={g => { if (p.addGif(g)) setGifOpen(false); }} /></PopoverContent>
       </Popover>}
@@ -93,9 +96,9 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
       </Select>
       {/* Who may quote (lib/quote-policy). Followers-only and mentions-only posts can't be quoted, as on Mastodon. */}
       <Select value={p.quoteLock === 'private' ? 'nobody' : p.quotePolicy} onValueChange={v => p.setQuotePolicy(v as QuotePolicy)} disabled={p.sending || !!p.quoteLock}>
-        <SelectTrigger aria-label="Who can quote it" title={p.quoteLock === 'private' ? 'Followers-only and mentions-only posts can’t be quoted' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : 'Who can quote it'}
+        <SelectTrigger aria-label="Who can quote it" title={p.quoteLock === 'private' ? 'Followers-only and mentions-only posts can’t be quoted' : p.quoteLock === 'poll' ? 'Quoting a poll follows your Fedizen default' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : 'Who can quote it'}
           className="h-8 w-auto gap-1.5 border-0 bg-transparent px-2 text-xs shadow-none">
-          <Quote className="size-3.5" /><span>{p.quoteLock === 'sensitive' ? 'Default' : (p.quotePolicies.find(q => q.id === (p.quoteLock === 'private' ? 'nobody' : p.quotePolicy))?.short)}</span>
+          <Quote className="size-3.5" /><span>{p.quoteLock === 'sensitive' || p.quoteLock === 'poll' ? 'Default' : (p.quotePolicies.find(q => q.id === (p.quoteLock === 'private' ? 'nobody' : p.quotePolicy))?.short)}</span>
         </SelectTrigger>
         <SelectContent>{p.quotePolicies.map(q => <SelectItem key={q.id} value={q.id}><span className="flex flex-col"><span>{q.label}</span>{q.note && <span className="text-[11px] opacity-70">{q.note}</span>}</span></SelectItem>)}</SelectContent>
       </Select>
@@ -112,4 +115,27 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
       </AlertDialogContent>
     </AlertDialog>
   </div>;
+}
+
+/** Desktop: the poll being composed, as Mastodon's: up to four choices, how long it runs, one choice or several. */
+function PollEditor({ p }: { p: ReturnType<typeof usePublish> }) {
+  const poll = p.poll!;
+  const set = (i: number, v: string) => p.editPoll({ options: poll.options.map((o, k) => (k === i ? v.slice(0, 200) : o)) });
+  return <fieldset className="space-y-2 rounded-xl border border-border p-3" disabled={p.sending}>
+    <legend className="px-1 text-xs font-medium text-muted-foreground">Poll</legend>
+    {poll.options.map((o, i) => <div key={i} className="flex items-center gap-2">
+      <input value={o} onChange={e => set(i, e.target.value)} maxLength={200} placeholder={`Choice ${i + 1}`} aria-label={`Choice ${i + 1}`}
+        className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+      {poll.options.length > 2 && <Button type="button" variant="ghost" size="icon" className="size-7" aria-label={`Remove choice ${i + 1}`} onClick={() => p.editPoll({ options: poll.options.filter((_, k) => k !== i) })}><X /></Button>}
+    </div>)}
+    {!p.pollValid && poll.options.every(o => o.trim()) && <p className="text-xs text-destructive">Each choice needs to be different.</p>}
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      {poll.options.length < MAX_POLL_OPTIONS && <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => p.editPoll({ options: [...poll.options, ''] })}><Plus />Add a choice</Button>}
+      <Select value={String(poll.expiresIn)} onValueChange={v => p.editPoll({ expiresIn: Number(v) })}>
+        <SelectTrigger aria-label="How long the poll runs" className="h-7 w-auto gap-1.5 px-2 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>{p.pollDurations.map(d => <SelectItem key={d.seconds} value={String(d.seconds)}>{d.label}</SelectItem>)}</SelectContent>
+      </Select>
+      <label className="flex items-center gap-2"><Checkbox checked={poll.multiple} onCheckedChange={v => p.editPoll({ multiple: v === true })} />Allow several choices</label>
+    </div>
+  </fieldset>;
 }

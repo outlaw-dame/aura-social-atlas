@@ -5,6 +5,7 @@ import { ProfileHoverCard } from './ProfileHoverCard';
 import { ArrowUpRight, AtSign, Bell, BarChart3, Heart, Layers3, Link2, PenLine, RefreshCw, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFedizen } from './useFedizen';
+import { useFollowRequests } from './useOwnPosts';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 const kinds: Record<string, { icon: typeof Bell; color: string }> = {
@@ -34,8 +35,8 @@ export function ActivityPage() {
     {f.error && <p role="alert" className="mt-3 text-destructive">{f.error}</p>}
   </>);
   const list = f.data.notices;
-  if (!list.length) return note('No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.');
-  return <ul className="divide-y divide-border">{list.map(n => {
+  if (!list.length) return <><FollowRequests />{note('No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.')}</>;
+  return <><FollowRequests /><ul className="divide-y divide-border">{list.map(n => {
     const k = kinds[n.type ?? ''] ?? { icon: Bell, color: 'var(--accent)' };
     const who = n.acct || n.actor ? { actor: n.actor, acct: n.acct, name: n.author } : null;
     const face = <span className="relative size-10 shrink-0">
@@ -47,7 +48,32 @@ export function ActivityPage() {
       <div className="min-w-0 flex-1"><p className="flex items-baseline justify-between gap-3 text-sm">{who ? <ProfileHoverCard target={who}><button type="button" className="font-semibold hover:underline" onClick={() => openFediProfile(who)}>{n.author}</button></ProfileHoverCard> : <span className="font-semibold">{n.author}</span>}<span className="shrink-0 text-xs text-muted-foreground">{when(n.date)}</span></p>
         <p className="mt-0.5 text-sm text-muted-foreground [overflow-wrap:anywhere]">{n.text}</p></div>
     </li>;
-  })}</ul>;
+  })}</ul></>;
+}
+
+/**
+ * People asking to follow you, with Accept and Decline, at the top of Activity as Mastodon lists follow requests. Only
+ * shown while there are some (an account that approves followers gets them).
+ */
+function FollowRequests() {
+  const r = useFollowRequests();
+  if (!r.people.length && !r.readError) return null;
+  return <section aria-labelledby="follow-requests" className="mb-6 rounded-2xl border border-border p-4">
+    <h2 id="follow-requests" className="mb-3 text-sm font-semibold">Follow requests <span className="text-muted-foreground">{r.people.length || ''}</span></h2>
+    {r.readError && <p role="alert" className="text-sm text-muted-foreground">{r.readError}</p>}
+    <ul className="space-y-3">{r.people.map(p => {
+      const who = { actor: p.actor, acct: p.acct, name: p.name };
+      return <li key={p.id} className="flex items-center gap-3">
+        <ProfileHoverCard target={who}><button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => openFediProfile(who)} aria-label={`${p.name} ${p.handle}. Open their profile`}>
+          <Face avatar={p.avatar} name={p.name} />
+          <span className="min-w-0"><span className="block truncate text-sm font-semibold">{p.name}</span><span className="block truncate text-xs text-muted-foreground">{p.handle}</span></span>
+        </button></ProfileHoverCard>
+        <Button size="sm" disabled={r.busyId === p.id} onClick={() => r.answer(p.id, true)}>Accept</Button>
+        <Button size="sm" variant="outline" disabled={r.busyId === p.id} onClick={() => r.answer(p.id, false)}>Decline</Button>
+      </li>;
+    })}</ul>
+    {r.error && <p role="alert" className="mt-2 text-sm text-destructive">{r.error}</p>}
+  </section>;
 }
 
 /** An avatar, or the initial when there's none or it won't load. */

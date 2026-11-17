@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import type { ForYouPost } from './feed-types';
 import { DEFAULT_LIMITS, MAX_ALT, MAX_CW, MAX_TEXT, UPLOAD_CEILING, type ComposeLimits } from './compose-media';
-import { allowedCallback, assertFedizenSessionIntent, creditsBesidesAuthor, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
+import { allowedCallback, assertFedizenSessionIntent, creditsBesidesAuthor, pollOf, type FediPoll, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
 
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const { tokenFor } = await import('./fedizen.server');
@@ -634,7 +634,8 @@ export const postOnFedizen = createServerFn({ method: 'POST' }).middleware([requ
     visibility: z.enum(['public', 'unlisted', 'private', 'direct']),
     mediaIds: z.array(ulid).max(4).default([]),
     sensitive: z.boolean().default(false),
-  }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty post').parse(d))
+    poll: z.object({ options: z.array(z.string().trim().min(1).max(200)).min(2).max(4), expiresIn: z.number().int().min(300).max(2_629_746), multiple: z.boolean() }).optional(),
+  }).refine(p => p.text.length > 0 || p.mediaIds.length > 0 || !!p.poll, 'empty post').refine(p => !(p.poll && p.mediaIds.length), 'a poll has no media').parse(d))
   .handler(async ({ data, context }): Promise<{ ok: true; url?: string; id?: string } | { ok: false; error: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId, true);
@@ -645,6 +646,7 @@ export const postOnFedizen = createServerFn({ method: 'POST' }).middleware([requ
       status: data.text, visibility: data.visibility,
       ...(data.cw ? { spoiler_text: data.cw } : {}),
       ...(media ? { media_ids: data.mediaIds, sensitive: data.sensitive || !!data.cw } : {}),
+      ...(data.poll ? { poll: { options: data.poll.options, expires_in: data.poll.expiresIn, multiple: data.poll.multiple } } : {}),
     });
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
     const url = typeof r.data?.url === 'string' && /^https:\/\/fedizen\.net\//.test(r.data.url) ? r.data.url : undefined;
@@ -744,4 +746,125 @@ export const attachGifOnFedizen = createServerFn({ method: 'POST' }).middleware(
     } catch (e) {
       return { ok: false, error: k.isTooLarge(e) ? 'too-large' : e instanceof k.KlipyError ? e.reason : 'unavailable' };
     }
+  });
+
+
+/* ── Your own posts, polls, follow requests and post search ───────────────────────────────────────────── */
+
+const statusId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+
+/** Deletes one of your own posts (Fedizen checks it's yours: Bonfire's delete_status answers 403 otherwise). */
+export const deleteFedizenPost = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ statusId }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true } | { ok: false; error: Problem | 'not-found' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const r = await fedizenSend(c.token, 'DELETE', `/api/v1/statuses/${data.statusId}`);
+    return r.status >= 200 && r.status < 300 ? { ok: true } : { ok: false, error: r.status === 404 ? 'not-found' : problem(r.status) };
+  });
+
+/**
+ * A post's text and content warning, to edit it, as Mastodon's edit starts from the status source. Bonfire answers
+ * the stored HTML; Atlas edits plain text, one paragraph per blank line.
+ */
+export const getFedizenPostSource = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ statusId }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; text: string; cw: string } | { ok: false; error: Problem | 'not-found' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const { htmlToParagraphs } = await import('./spotlight');
+    const r = await fedizenGet(c.token, `/api/v1/statuses/${data.statusId}/source`).catch(() => null);
+    const src = r?.status === 200 ? r.data[0] as { text?: string; spoiler_text?: string | null } | undefined : undefined;
+    if (!src) return { ok: false, error: r?.status === 404 ? 'not-found' : problem(r?.status ?? 503) };
+    const raw = src.text ?? '';
+    const text = /<[a-z][^>]*>/i.test(raw) ? htmlToParagraphs(raw).join('\n\n') : raw;
+    return { ok: true, text, cw: (src.spoiler_text ?? '').trim() };
+  });
+
+/** Edits the text and content warning of one of your own posts (Mastodon PUT /statuses/:id; Bonfire update_status). */
+export const editFedizenPost = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ statusId, text: z.string().trim().max(MAX_TEXT), cw: z.string().trim().max(MAX_CW).default('') })
+    .refine(p => p.text.length > 0 || p.cw.length > 0, 'empty post').parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true } | { ok: false; error: Problem | 'not-found' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const r = await fedizenSend(c.token, 'PUT', `/api/v1/statuses/${data.statusId}`, { status: data.text, spoiler_text: data.cw });
+    return r.status >= 200 && r.status < 300 ? { ok: true } : { ok: false, error: r.status === 404 ? 'not-found' : problem(r.status) };
+  });
+
+/** Votes in a poll by option index, and answers the poll's counts after the vote. */
+export const voteOnFedizenPoll = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ pollId: statusId, choices: z.array(z.number().int().min(0).max(99)).min(1).max(100) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; poll?: FediPoll } | { ok: false; error: Problem | 'closed' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const r = await fedizenSend(c.token, 'POST', `/api/v1/polls/${data.pollId}/votes`, { choices: [...new Set(data.choices)] });
+    if (r.status < 200 || r.status >= 300) return { ok: false, error: r.status === 422 ? 'closed' : problem(r.status) };
+    const poll = r.data ? pollOf({ ...(r.data as object), id: data.pollId } as never) : null;
+    return { ok: true, ...(poll ? { poll } : {}) };
+  });
+
+/** A poll's latest counts (to refresh results). */
+export const getFedizenPoll = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ pollId: statusId }).parse(d))
+  .handler(async ({ data, context }): Promise<{ poll: FediPoll | null }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { poll: null };
+    const { fedizenGet } = await import('./fedizen.server');
+    const r = await fedizenGet(c.token, `/api/v1/polls/${data.pollId}`).catch(() => null);
+    return { poll: r?.status === 200 ? pollOf(r.data[0] as never) : null };
+  });
+
+/** People asking to follow you: a locked account approves each one (Mastodon /follow_requests). */
+export const getFollowRequests = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ people: (FedizenPerson & { acct?: string; actor?: string })[]; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { people: [], error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const { fullAcct } = await import('./fedizen-feed');
+    const { isPublicHttpsUrl } = await import('./article-author');
+    const r = await fedizenGet(c.token, '/api/v1/follow_requests?limit=40').catch(() => null);
+    if (!r || r.status !== 200) return { people: [], error: r ? problem(r.status) : 'unavailable' };
+    const raw = r.data as { acct?: string; url?: string | null; uri?: string | null }[];
+    return { people: fromAccounts(r.data as never).map((p, i) => {
+      const acct = fullAcct(raw[i]?.acct), actor = [raw[i]?.uri, raw[i]?.url].find(u => isPublicHttpsUrl(u ?? undefined)) ?? undefined;
+      return { ...p, ...(acct ? { acct } : {}), ...(actor ? { actor } : {}) };
+    }) };
+  });
+
+/** Accepts or declines someone's request to follow you. */
+export const answerFollowRequest = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ accountId: statusId, accept: z.boolean() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const r = await fedizenSend(c.token, 'POST', `/api/v1/follow_requests/${data.accountId}/${data.accept ? 'authorize' : 'reject'}`);
+    return r.status >= 200 && r.status < 300 ? { ok: true } : { ok: false, error: problem(r.status) };
+  });
+
+/** Posts Fedizen knows about that match a search (Mastodon v2 search, statuses), as the reader may see them. */
+export const searchFedizenPosts = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ q: z.string().trim().min(2).max(200) }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { posts: [], error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const r = await fedizenGet(c.token, `/api/v2/search?q=${encodeURIComponent(data.q)}&type=statuses&limit=20`).catch(() => null);
+    if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
+    const found = (r.data[0] as { statuses?: unknown[] } | undefined)?.statuses ?? [];
+    return { posts: await withArticleAuthors(fromStatuses(found as never), 1500, c.token) };
   });

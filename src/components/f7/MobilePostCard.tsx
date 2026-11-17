@@ -7,6 +7,8 @@ import { openGroup } from '@/lib/groups';
 import { openTag } from '@/lib/hashtags';
 import { BoostedBy, canOpen, linkifyPost, openAuthor } from '@/components/social/PostPeople';
 import { ReplyParent } from '@/components/social/ReplyParent';
+import { PollView } from '@/components/social/PollView';
+import { useIsDeleted, useIsMine } from '@/components/social/useOwnPosts';
 import { useTagLine } from '@/components/social/useFeeds';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { useSaveToggle } from '@/components/social/useFedizenLibrary';
@@ -71,11 +73,13 @@ function Avatar({ post: p }: { post: FedizenPost }) {
 /** Phone: one post in a feed — author, text, media or link preview — with the standard post actions. */
 /** Phone: one post, unless the person's keyword filters hide it (or show it behind a notice, or blur its media). */
 export function MobilePostCard(props: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string }) {
+  if (useIsDeleted(props.post.statusId)) return null;
   return <MobileFilterGate post={props.post}><MobilePostCardBody {...props} /></MobileFilterGate>;
 }
 
 function MobilePostCardBody({ post: p, actions, reasons, inTag }: { post: FedizenPost; actions: MobileActions; reasons?: ForYouReason[]; /** The hashtag feed this card is in: no need to name that tag again. */ inTag?: string }) {
   const ago = shortAgo(p.date);
+  const mine = useIsMine(p);
   const tagLine = useTagLine(p, reasons).filter(t => t !== inTag);
   return <Card outline className="atlas-post-card">
     <CardContent>
@@ -87,11 +91,12 @@ function MobilePostCardBody({ post: p, actions, reasons, inTag }: { post: Fedize
         {canOpen(p)
           ? <button type="button" className="atlas-author-button atlas-author-fill" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}><Avatar post={p} /><span className="atlas-post-who"><b>{p.author}</b><small>{p.handle}</small></span></button>
           : <><Avatar post={p} /><span className="atlas-post-who"><b>{p.author}</b><small>{p.handle}</small></span></>}
-        {ago && <Link external target="_blank" href={p.url} className="atlas-post-time" aria-label={`Open the post on Fedizen, posted ${p.date ? new Date(p.date).toLocaleString() : ''}`}>{ago}</Link>}
+        {ago && <Link external target="_blank" href={p.url} className="atlas-post-time" aria-label={`Open the post on Fedizen, posted ${p.date ? new Date(p.date).toLocaleString() : ''}${p.editedAt ? ', edited' : ''}`}>{ago}{p.editedAt && <span className="atlas-post-edited"> · Edited</span>}</Link>}
       </div>
       <AuthorWarning cw={p.cw} phone>
       {p.paragraphs.map((t, i) => <p key={i} className="atlas-post-text">{linkifyPost(t, p.mentions, openTag)}</p>)}
       <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" {...(p.imageSize ? { width: p.imageSize.w, height: p.imageSize.h, style: { aspectRatio: `${p.imageSize.w} / ${p.imageSize.h}` } } : {})} />}</SensitiveMedia>
+      {p.pollState && <PollView poll={p.pollState} mine={mine} phone />}
       {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
         <Icon ios="f7:square_stack_3d_up" md="material:collections_bookmark" /><span><b>Collection</b><small>{new URL(link).hostname}</small></span><Icon ios="f7:chevron_right" md="material:chevron_right" />
       </button>)}
