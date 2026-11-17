@@ -17,7 +17,7 @@ export function NotificationSettingsPage() {
       <List strong inset dividers>
         <ListItem title="On this device"><Toggle slot="after" checked={p.on} disabled={p.busy || (!p.available && !p.on)} onToggleChange={() => void (p.on ? p.disable() : p.enable())} /></ListItem>
       </List>
-      <BlockFooter>{p.problem ?? p.note ?? (!p.configured && p.supported ? 'This Atlas server isn’t set up to send notifications yet.' : 'When something happens on Fedizen: a mention, a reply, a new follower. They come through Atlas, which passes on only what the notification says.')}</BlockFooter>
+      <BlockFooter>{p.problem ?? p.note ?? (!p.configured && p.supported && p.setupProblem ? p.setupProblem : 'When something happens on Fedizen: a mention, a reply, a new follower. They come through Atlas, which passes on only what the notification says.')}</BlockFooter>
       {p.on && alerts && <>
         <BlockTitle>Notify me about</BlockTitle>
         <List strong inset dividers>

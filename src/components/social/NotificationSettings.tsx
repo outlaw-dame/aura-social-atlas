@@ -24,7 +24,7 @@ export function NotificationSettings() {
         <p id="push-detail" className="mt-1 text-sm leading-relaxed text-muted-foreground">When something happens on Fedizen: a mention, a reply, a new follower. They come through Atlas, which passes on only what the notification says.</p></div>
       <Switch aria-label="Notifications on this device" aria-describedby="push-detail" checked={p.on} disabled={p.busy || (!p.available && !p.on)} onCheckedChange={v => void (v ? p.enable() : p.disable())} />
     </div>
-    {(p.problem || p.note || (!p.configured && p.supported)) && <p role="alert" className="mt-4 text-sm text-muted-foreground">{p.problem ?? p.note ?? 'This Atlas server isn’t set up to send notifications yet.'}</p>}
+    {(p.problem || p.note || (!p.configured && p.supported)) && <p role="alert" className="mt-4 text-sm text-muted-foreground">{p.problem ?? p.note ?? p.setupProblem}</p>}
     {p.on && alerts && <>
       <section className="border-b border-border py-6">
         <h2 className="text-base font-semibold">Notify me about</h2>

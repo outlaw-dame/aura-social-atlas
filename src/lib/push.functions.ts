@@ -14,10 +14,14 @@ const device = z.object({ endpoint: z.string().url().max(1024), p256dh: z.string
 const alerts = z.object({ mention: z.boolean(), status: z.boolean(), reblog: z.boolean(), follow: z.boolean(), follow_request: z.boolean(), favourite: z.boolean(), poll: z.boolean(), update: z.boolean(), quote: z.boolean() }).strict();
 const policy = z.enum(['all', 'followed', 'follower', 'none']);
 
+/** Whether push is set up and, if not, which secret to fix (never any value); the public key browsers subscribe with. */
 export const getPushConfig = createServerFn({ method: 'GET' }).handler(async () => {
-  const { vapid } = await import('./push/relay.server');
-  const v = vapid();
-  return { configured: !!v, publicKey: v ? process.env['ATLAS_VAPID_PUBLIC_KEY']! : null };
+  const { vapidConfig, vapidKeysMatch } = await import('./push/relay.server');
+  const { b64u } = await import('./push/webpush');
+  const v = vapidConfig();
+  if ('problem' in v) return { configured: false, publicKey: null, problem: v.problem };
+  if (!(await vapidKeysMatch(v))) return { configured: false, publicKey: null, problem: 'keys-do-not-match' as const };
+  return { configured: true, publicKey: b64u(v.pub), problem: null };
 });
 
 export const getPushState = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
