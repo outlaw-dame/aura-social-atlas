@@ -8,6 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { compareFolds } from "@/lib/compare-folds";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -149,6 +150,8 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  // ?compare-folds=1 / =0 on whichever page Atlas was opened with (lib/compare-folds.ts).
+  useEffect(() => { compareFolds(); }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

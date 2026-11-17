@@ -7,6 +7,7 @@ import { fullAcct } from '@/lib/fedizen-feed';
 import { shortAgo } from '@/lib/feed-types';
 import { buildThread, type Thread } from '@/lib/thread';
 import type { FoldStyle } from '@/lib/folding';
+import { compareFolds } from '@/lib/compare-folds';
 import { allPosts, branchesOf, chatItems, latestTime, participantsOf, readMarks, rootOf, subjectOf, unreadIn, writeMark, type ProtoStyle, type ReplyMode } from '@/lib/conversation';
 import { getFedizenStatus, getFedizenThread } from '@/lib/fedizen.functions';
 import { useSaveToggle } from './useFedizenLibrary';
@@ -44,16 +45,6 @@ export function useFoldStyle(): [FoldStyle, (s: FoldStyle) => void, boolean] {
   const [style, setStyle] = useStored<FoldStyle>('atlas.proto.folding', ['atlas', 'phanpy', 'bonfire'], 'atlas');
   return [compare ? style : 'atlas', setStyle, compare];
 }
-const COMPARE_KEY = 'atlas.dev.compareFolds';
-function compareFolds(): boolean {
-  try {
-    const q = new URLSearchParams(location.search).get('compare-folds');
-    if (q === '1') localStorage.setItem(COMPARE_KEY, '1');
-    if (q === '0') localStorage.removeItem(COMPARE_KEY);
-    return localStorage.getItem(COMPARE_KEY) === '1';
-  } catch { return false; }
-}
-
 const STYLES: { id: ProtoStyle; label: string; note: string }[] = [
   { id: 'a', label: 'A · Bonfire + Phanpy', note: 'A thread: the post in the middle, replies nested or flat, as Bonfire and Phanpy read one.' },
   { id: 'b', label: 'B · + Wavelength', note: 'A conversation: one subject, its messages in order, a New line where you left off, mute per conversation.' },
