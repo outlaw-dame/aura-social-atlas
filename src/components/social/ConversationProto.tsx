@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { BellOff, Bell, CornerDownRight, MessageSquareReply } from 'lucide-react';
@@ -11,7 +11,7 @@ import { getFedizenStatus, getFedizenThread } from '@/lib/fedizen.functions';
 import { useSaveToggle } from './useFedizenLibrary';
 import { useReactions } from './usePostActions';
 import { PostActionBar } from './PostActionBar';
-import { PostBody } from './PostBody';
+import { useFilterGate } from './FilterGate';
 import { BoostedBy } from './PostPeople';
 import { useAtlasAuth } from './AuthState';
 import { useNotificationGroups } from './useNotificationGroups';
@@ -95,8 +95,11 @@ type Acts = { save: ReturnType<typeof useSaveToggle>; reactions: ReturnType<type
  * conversation in the Conversations list; replies that don't answer the message above say which one they answer.
  * Each message keeps Atlas's actions (shown on hover or tap); "Reply" at the bottom answers the opened post.
  */
-export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, loaded }: {
+export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, loaded, Gate, Content }: {
   thread: Thread; actions: Acts; onOpenInbox: () => void; onOpenPost: (p: FedizenPost) => void;
+  /** The platform's keyword-filter gate (FilterGate, MobileFilterGate) and post content (PostContent,
+   *  MobilePostContent: warnings, sensitive media, video, polls, previews), so B shows exactly what a card would. */
+  Gate: ComponentType<{ post: FedizenPost; children: ReactNode }>; Content: ComponentType<{ post: FedizenPost }>;
   /** Fedizen has answered: only then is the conversation marked read. */ loaded: boolean;
 }) {
   const isMe = useIsMePost();
@@ -139,7 +142,7 @@ export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, 
         ? <li key={it.key} className="atlas-conv-day" role="separator"><span>{it.label}</span></li>
         : it.t === 'new'
         ? <li key={it.key} id="atlas-conv-new" className="atlas-conv-new" role="separator"><span>New</span></li>
-        : <Message key={it.key} item={it} actions={actions} mine={isMe(it.post)} active={active === it.key} onActivate={() => setActive(a => (a === it.key ? null : it.key))} onOpenPost={onOpenPost} />)}
+        : <li key={it.key} className="atlas-conv-item"><Gate post={it.post}><Message item={it} actions={actions} mine={isMe(it.post)} active={active === it.key} onActivate={() => setActive(a => (a === it.key ? null : it.key))} onOpenPost={onOpenPost} Content={Content} /></Gate></li>)}
     </ol>
     <div className="atlas-conv-dock">
       <button type="button" className="atlas-conv-reply" onClick={() => actions.onReply(t.focus)} disabled={!actions.reactions.canAct}>
@@ -149,27 +152,34 @@ export function ChatConversation({ thread: t, actions, onOpenInbox, onOpenPost, 
   </section>;
 }
 
-function Message({ item, actions, mine, active, onActivate, onOpenPost }: { item: Extract<ReturnType<typeof chatItems>[number], { t: 'msg' }>; actions: Acts; mine: boolean; active: boolean; onActivate: () => void; onOpenPost: (p: FedizenPost) => void }) {
+function Message({ item, actions, mine, active, onActivate, onOpenPost, Content }: { item: Extract<ReturnType<typeof chatItems>[number], { t: 'msg' }>; actions: Acts; mine: boolean; active: boolean; onActivate: () => void; onOpenPost: (p: FedizenPost) => void; Content: ComponentType<{ post: FedizenPost }> }) {
   const p = item.post;
   const time = p.date ? new Date(p.date) : null;
-  return <li className={['atlas-conv-msg', item.first && 'is-first', mine && 'is-mine', item.focus && 'is-focus', active && 'is-active'].filter(Boolean).join(' ')}>
+  return <div className={['atlas-conv-msg', item.first && 'is-first', mine && 'is-mine', item.focus && 'is-focus', active && 'is-active'].filter(Boolean).join(' ')}>
     <div className="atlas-conv-gutter">{item.first && <Face post={p} size={32} />}</div>
     <div className="atlas-conv-main" onClick={e => { const t = e.target as Element; if (!t.closest('a, button, summary, video, audio, input, label')) onActivate(); }}>
       {item.first && <p className="atlas-conv-who"><b>{p.author}</b> <span>{p.handle}</span>{time && <time dateTime={p.date} title={time.toLocaleString()}>{time.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time>}{p.editedAt && <span> · Edited</span>}</p>}
-      {item.parent && <button type="button" className="atlas-conv-parent" onClick={() => document.getElementById(`atlas-msg-${item.parent!.statusId ?? item.parent!.id}`)?.scrollIntoView({ block: 'center' })}>
-        <CornerDownRight aria-hidden="true" /><span>Replying to <b>{item.parent.author}</b>: {(item.parent.paragraphs[0] ?? '').slice(0, 80)}</span>
-      </button>}
+      {item.parent && <ParentChip parent={item.parent} />}
       <div id={`atlas-msg-${p.statusId ?? p.id}`} className="atlas-conv-body">
         <BoostedBy post={p} className="atlas-post-boosted" />
-        {p.cw ? <details><summary>{p.cw}</summary><PostBody post={p} onTag={() => {}} /></details> : <PostBody post={p} onTag={() => {}} />}
-        {p.image && !p.cw && <img src={p.image} alt={p.alt?.[0] ?? ''} loading="lazy" referrerPolicy="no-referrer" className="atlas-conv-image" />}
+        <Content post={p} />
       </div>
       <div className="atlas-conv-actions">
         <PostActionBar post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply}
           more={!item.focus && p.statusId ? <button type="button" className="atlas-conv-open" onClick={() => onOpenPost(p)}>Open</button> : undefined} />
       </div>
     </div>
-  </li>;
+  </div>;
+}
+
+/** What a message answers. Its words show only when the reader's filters let that post show, and never past a
+ *  content warning. */
+function ParentChip({ parent }: { parent: FedizenPost }) {
+  const g = useFilterGate(parent);
+  const words = g.kind === 'show' && !parent.cw ? (parent.paragraphs[0] ?? '').slice(0, 80) : '';
+  return <button type="button" className="atlas-conv-parent" onClick={() => document.getElementById(`atlas-msg-${parent.statusId ?? parent.id}`)?.scrollIntoView({ block: 'center' })}>
+    <CornerDownRight aria-hidden="true" /><span>Replying to <b>{parent.author}</b>{words && <>: {words}</>}</span>
+  </button>;
 }
 
 /* ── B: the Conversations list (Wavelength's inbox of threads) ──────────────────────────────────────── */

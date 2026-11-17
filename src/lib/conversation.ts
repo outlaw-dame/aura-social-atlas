@@ -107,8 +107,9 @@ function dayLabel(iso: string, now: number): string {
 export function flatReplies(t: Thread): { post: FedizenPost; parent?: FedizenPost }[] {
   const posts = allPosts(t);
   const byKey = new Map(posts.map(p => [key(p), p]));
-  const above = new Set([...t.ancestors.map(key), key(t.focus)]);
-  return posts.filter(p => !above.has(key(p))).map(p => {
+  // The posts above, the post and its author's follow-ups are drawn before the replies already.
+  const drawn = new Set([...t.ancestors.map(key), key(t.focus), ...t.continuation.map(key)]);
+  return posts.filter(p => !drawn.has(key(p))).map(p => {
     const parent = p.replyTo?.statusId && p.replyTo.statusId !== key(t.focus) ? byKey.get(p.replyTo.statusId) : undefined;
     return parent ? { post: p, parent } : { post: p };
   });

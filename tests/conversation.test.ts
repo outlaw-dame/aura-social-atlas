@@ -40,6 +40,12 @@ describe('prototype A: flat replies', () => {
     const t = buildThread(f, [], [post('a', 'bob', 1, 'f'), post('b', 'cat', 2, 'a'), post('c', 'dan', 3, 'f')]);
     deepStrictEqual(flatReplies(t).map(r => [r.post.statusId, r.parent?.statusId]), [['a', undefined], ['b', 'a'], ['c', undefined]]);
   });
+  test("the author's follow-ups, drawn above the replies, aren't listed again; replies to them are", () => {
+    const f = post('f', 'ann', 0);
+    const t = buildThread(f, [], [post('c1', 'ann', 1, 'f'), post('x', 'bob', 2, 'c1'), post('y', 'cat', 3, 'f')]);
+    deepStrictEqual(t.continuation.map(p => p.statusId), ['c1']);
+    deepStrictEqual(flatReplies(t).map(r => [r.post.statusId, r.parent?.statusId]), [['x', 'c1'], ['y', undefined]]);
+  });
 });
 
 describe('read positions and mutes on this device', () => {

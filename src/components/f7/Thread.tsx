@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Block, Button, Link, Navbar, Page } from 'framework7-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { FOLD_ABOVE, MAX_DEPTH, PAGE, REPLY_SORTS, facesIn, type Thread, type ThreadNode } from '@/lib/thread';
@@ -6,7 +6,8 @@ import { openPost } from '@/lib/open-post';
 import { useThread } from '@/components/social/useThread';
 import { FEED_PROBLEM } from '@/components/social/useFeeds';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
-import { MobilePostCard, useMobilePostActions, type MobileActions } from './MobilePostCard';
+import { MobilePostCard, MobilePostContent, useMobilePostActions, type MobileActions } from './MobilePostCard';
+import { MobileFilterGate } from './FilterGate';
 import { ChatConversation, ParticipantsStrip, ProtoSwitch, ReplyModeSwitch, useProtoStyle, useReplyMode } from '@/components/social/ConversationProto';
 import { flatReplies, type ReplyMode } from '@/lib/conversation';
 import { CONVERSATIONS_URL, pushPage } from './navigation';
@@ -34,11 +35,16 @@ export function ThreadPage({ f7route, seed }: { f7route?: { params: { id?: strin
       : <FilterPlaceProvider place="public">
         <div className="atlas-proto-wrap"><ProtoSwitch style={style} setStyle={setStyle} /></div>
         {style === 'b'
-          ? <ChatConversation thread={t.thread} actions={actions} loaded={!t.loading} onOpenInbox={() => pushPage(CONVERSATIONS_URL)} onOpenPost={p => openPost(p)} />
+          ? <ChatConversation thread={t.thread} actions={actions} loaded={!t.loading} Gate={MessageGate} Content={MobilePostContent} onOpenInbox={() => pushPage(CONVERSATIONS_URL)} onOpenPost={p => openPost(p)} />
           : <Conversation thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} sort={t.sort} setSort={t.setSort} retry={t.refetch} replyMode={replyMode} setReplyMode={setReplyMode} />}
       </FilterPlaceProvider>}
     {actions.sheet}
   </Page>;
+}
+
+/** B's messages behind the reader's filters, as a card's would be (no card frame). */
+function MessageGate({ post, children }: { post: FedizenPost; children: ReactNode }) {
+  return <MobileFilterGate post={post} card={false}>{children}</MobileFilterGate>;
 }
 
 function Conversation({ thread: t, actions, loading, partial, sort, setSort, retry, replyMode, setReplyMode }: { thread: Thread; actions: MobileActions; loading: boolean; partial: boolean; sort: string; setSort: (s: 'oldest' | 'newest' | 'top') => void; retry: () => void; replyMode: ReplyMode; setReplyMode: (m: ReplyMode) => void }) {

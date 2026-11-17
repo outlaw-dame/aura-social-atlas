@@ -5,7 +5,8 @@ import type { FedizenPost } from '@/lib/fedizen-feed';
 import { FOLD_ABOVE, MAX_DEPTH, PAGE, REPLY_SORTS, facesIn, type Thread, type ThreadNode } from '@/lib/thread';
 import { rememberSeed } from '@/lib/open-post';
 import { Button } from '@/components/ui/button';
-import { FeedPostCard, useFeedPostActions, type FeedActions } from './FeedPostCard';
+import { FeedPostCard, PostContent, useFeedPostActions, type FeedActions } from './FeedPostCard';
+import { FilterGate } from './FilterGate';
 import { FEED_PROBLEM } from './useFeeds';
 import { useThread } from './useThread';
 import { FilterPlaceProvider } from './useIntelligence';
@@ -37,7 +38,7 @@ export function ThreadView({ statusId, seed }: { statusId: string; seed?: Fedize
       : <FilterPlaceProvider place="public">
         <ProtoSwitch style={style} setStyle={setStyle} />
         {style === 'b'
-          ? <ChatConversation thread={t.thread} actions={actions} loaded={!t.loading} onOpenInbox={() => void navigate({ to: '/conversations' })}
+          ? <ChatConversation thread={t.thread} actions={actions} loaded={!t.loading} Gate={FilterGate} Content={PostContent} onOpenInbox={() => void navigate({ to: '/conversations' })}
               onOpenPost={p => { rememberSeed(p); void navigate({ to: '/post/$id', params: { id: p.statusId! } }); }} />
           : <Conversation thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} sort={t.sort} setSort={t.setSort} retry={t.refetch} replyMode={replyMode} setReplyMode={setReplyMode} />}
       </FilterPlaceProvider>}

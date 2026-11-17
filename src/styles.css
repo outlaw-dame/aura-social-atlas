@@ -1139,7 +1139,8 @@ ruby rt { font-size: .6em; }
 .atlas-conv-body { font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
 .atlas-conv-body p { margin: 0 0 4px; }
 .atlas-conv-body details > summary { cursor: pointer; font-weight: 500; }
-.atlas-conv-image { display: block; margin-top: 6px; max-height: 280px; max-width: 100%; border-radius: 12px; object-fit: cover; }
+.atlas-conv-item:empty { display: none; }
+.atlas-conv-body > .mt-3:first-of-type, .atlas-conv-body .atlas-post-text:first-child { margin-top: 0; }
 .atlas-conv-parent { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin: 2px 0 4px; padding: 2px 8px; border: 0; border-inline-start: 2px solid color-mix(in oklab, currentColor 25%, transparent); background: none; color: inherit; font: inherit; font-size: 12px; opacity: .7; text-align: start; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; width: auto; }
 .atlas-conv-parent svg { width: 13px; height: 13px; flex-shrink: 0; }
 .atlas-conv-parent > span { overflow: hidden; text-overflow: ellipsis; }

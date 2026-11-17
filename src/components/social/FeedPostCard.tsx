@@ -120,16 +120,27 @@ function FeedPostCardBody({ post: p, actions, reasons, inTag, mode = 'feed' }: {
             aria-label={`Open the conversation, posted ${p.date ? new Date(p.date).toLocaleString() : ago}${p.editedAt ? ', edited' : ''}`}>{ago}{p.editedAt && <span className="atlas-post-edited"> · Edited</span>}</Link>
         : <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline" title={p.date ? new Date(p.date).toLocaleString() : undefined}>{ago}{p.editedAt && <span className="atlas-post-edited" title={`Edited ${new Date(p.editedAt).toLocaleString()}`}> · Edited</span>}</a>)}
     </div>
-    <AuthorWarning cw={p.cw}>
-    <div className={cn('mt-3 space-y-2 leading-relaxed', mode === 'focus' ? 'text-base' : 'text-sm')}><PostBody post={p} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} /></div>
+    <PostContent post={p} large={mode === 'focus'} />
+    {mode === 'focus' && <FocusDetails post={p} />}
+    <Actions post={p} actions={actions} />
+  </article>;
+}
+
+/**
+ * What a post says and carries, behind its content warning: text, media (behind the sensitive veil and the reader's
+ * blur setting), poll, collections and link preview. Shared by feed cards and the conversation prototypes, so a
+ * layout never drops content or skips a warning.
+ */
+export function PostContent({ post: p, large = false }: { post: FedizenPost; large?: boolean }) {
+  const navigate = useNavigate();
+  const mine = useIsMine(p);
+  return <AuthorWarning cw={p.cw}>
+    <div className={cn('mt-3 space-y-2 leading-relaxed', large ? 'text-base' : 'text-sm')}><PostBody post={p} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} /></div>
     <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl bg-muted object-cover" {...reserve(p.imageSize)} />}</SensitiveMedia>
     {p.pollState && <PollView poll={p.pollState} mine={mine} />}
     <CollectionLinks links={p.collections} />
     <PostArticleCard article={p.article} />
-    </AuthorWarning>
-    {mode === 'focus' && <FocusDetails post={p} />}
-    <Actions post={p} actions={actions} />
-  </article>;
+  </AuthorWarning>;
 }
 
 /** The opened post's full date and time, and its counts, as Mastodon and Bluesky show them under the post. */
