@@ -253,3 +253,12 @@ describe('Mute, report, who reacted, liked posts and hashtag search: allowlisted
     await expect(fedizenGet('t', '/api/v2/search?q=atl&type=hashtags&limit=8&resolve=true')).rejects.toThrow('Unsupported Fedizen read path.');
   });
 });
+
+describe('Your recent posts, for the hashtags you used: allowlisted', () => {
+  test('reads only your own posts without boosts, 40 at a time', async () => {
+    globalThis.fetch = (async () => new Response(JSON.stringify([{ id: '01T', content: '<p>#atlas</p>', tags: [{ name: 'atlas' }] }]))) as unknown as typeof fetch;
+    expect((await fedizenGet('t', '/api/v1/accounts/01ABC/statuses?limit=40&exclude_reblogs=true')).data).toHaveLength(1);
+    await expect(fedizenGet('t', '/api/v1/accounts/01ABC/statuses?limit=40')).rejects.toThrow('Unsupported Fedizen read path.');
+    await expect(fedizenGet('t', '/api/v1/accounts/01ABC/statuses?limit=80&exclude_reblogs=true')).rejects.toThrow('Unsupported Fedizen read path.');
+  });
+});

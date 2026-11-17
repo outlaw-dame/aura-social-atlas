@@ -6,6 +6,7 @@ import { missingAlt, useReading } from '@/lib/reading-prefs';
 import { MAX_POLL_OPTIONS, usePublish, type Audience } from '@/components/social/usePublish';
 import { QuotedPost } from '@/components/social/QuotedPost';
 import { HashtagSuggestions } from '@/components/social/HashtagSuggestions';
+import { MentionSuggestions } from '@/components/social/MentionSuggestions';
 
 const composeField = () => document.querySelector<HTMLTextAreaElement>('.atlas-compose-text textarea');
 import { useComposeIntent } from '@/lib/compose-intent';
@@ -80,7 +81,7 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
         <List strong inset className="atlas-compose-text">
           <ListInput type="textarea" placeholder={p.quote ? 'Add your thoughts' : 'What’s on your mind?'} value={p.text} onInput={(e: { target: HTMLTextAreaElement }) => p.setText(e.target.value)} resizable inputStyle={{ minHeight: 120 }} />
         </List>
-        <div className="atlas-compose-tags"><HashtagSuggestions value={p.text} onChange={p.setText} input={composeField} /></div>
+        <div className="atlas-compose-tags"><MentionSuggestions value={p.text} onChange={p.setText} input={composeField} /><HashtagSuggestions value={p.text} onChange={p.setText} input={composeField} /></div>
         {p.quote && <div className="atlas-compose-quote"><QuotedPost post={p.quote} onRemove={p.sending ? undefined : () => p.setQuote(null)} /></div>}
         {p.media.length > 0 && <div className={`atlas-compose-media ${p.media.length > 1 ? 'is-grid' : ''}`}>
           {p.media.map(m => <figure key={m.key}>

@@ -12,6 +12,7 @@ import { MAX_ALT, MAX_CW, PICKER_ACCEPT, altReminderText } from '@/lib/compose-m
 import { MAX_POLL_OPTIONS, usePublish, type Audience } from './usePublish';
 import { QuotedPost } from './QuotedPost';
 import { HashtagSuggestions } from './HashtagSuggestions';
+import { MentionSuggestions } from './MentionSuggestions';
 
 const composeField = () => document.getElementById('compose-post') as HTMLTextAreaElement | null;
 
@@ -47,6 +48,7 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
       <textarea ref={inputRef} id="compose-post" value={p.text} onChange={e => p.setText(e.target.value)} placeholder={p.quote ? 'Add your thoughts' : 'What’s on your mind?'}
         onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } }}
         className={`${p.quote ? 'h-20' : 'h-32'} w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-muted-foreground`} />
+      <MentionSuggestions value={p.text} onChange={p.setText} input={composeField} />
       <HashtagSuggestions value={p.text} onChange={p.setText} input={composeField} />
       {p.quote && <QuotedPost post={p.quote} onRemove={p.sending ? undefined : () => p.setQuote(null)} />}
       {p.media.length > 0 && <ul className={`grid gap-2 ${p.media.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`} aria-label="Attached media">

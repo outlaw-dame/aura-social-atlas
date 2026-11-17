@@ -925,8 +925,15 @@ export const getMutedAccounts = createServerFn({ method: 'GET' }).middleware([re
     const c = await connection(context.userId);
     if ('error' in c) return { people: [], error: c.error };
     const { fedizenGet } = await import('./fedizen.server');
-    const r = await fedizenGet(c.token, '/api/v1/mutes?limit=80').catch(() => null);
-    return r?.status === 200 ? { people: fromAccounts(r.data as never) } : { people: [], error: r ? problem(r.status) : 'unavailable' };
+    // Bonfire lists everyone it silences as muted, and a block silences too (BoundariesApiGraphQL.list_muted_users), so
+    // people you block are left out here: they're in Blocked people. Instances are never in either list.
+    const [r, blocked] = await Promise.all([
+      fedizenGet(c.token, '/api/v1/mutes?limit=80').catch(() => null),
+      fedizenGet(c.token, '/api/v1/blocks?limit=80').catch(() => null),
+    ]);
+    if (r?.status !== 200) return { people: [], error: r ? problem(r.status) : 'unavailable' };
+    const skip = new Set(blocked?.status === 200 ? fromAccounts(blocked.data as never).map(p => p.id) : []);
+    return { people: fromAccounts(r.data as never).filter(p => !skip.has(p.id)) };
   });
 
 /** Reports an account, and optionally some of its posts, to Fedizen's moderators (Mastodon's report categories). */
@@ -982,6 +989,26 @@ export const getLikedPosts = createServerFn({ method: 'GET' }).middleware([requi
   });
 
 /** Hashtags starting with what's typed after "#" (Mastodon v2 search, hashtags), for the composer. */
+/** Hashtags you used in your 40 newest posts, most recent first (at most 20), for the composer. */
+export const getRecentHashtags = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ tags: string[] }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor, fedizenGet } = await import('./fedizen.server');
+    const t = await tokenFor(context.userId);
+    if (!t?.account_handle) return { tags: [] };
+    const id = await accountIdFor(t.access_token, { acct: t.account_handle });
+    if (typeof id !== 'string') return { tags: [] };
+    const r = await fedizenGet(t.access_token, `/api/v1/accounts/${id}/statuses?limit=40&exclude_reblogs=true`).catch(() => null);
+    if (r?.status !== 200) return { tags: [] };
+    const seen = new Map<string, string>();
+    for (const st of r.data as { tags?: { name: string }[] | null }[]) for (const tag of st.tags ?? []) {
+      const k = tag.name.toLowerCase();
+      if (!seen.has(k) && /^[\p{L}\p{N}_]{1,100}$/u.test(tag.name)) seen.set(k, tag.name);
+    }
+    return { tags: [...seen.values()].slice(0, 20) };
+  });
+
 export const suggestHashtags = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.extend({ q: z.string().regex(/^[\p{L}\p{N}_]{1,100}$/u) }).parse(d))
   .handler(async ({ data, context }): Promise<{ tags: string[] }> => {

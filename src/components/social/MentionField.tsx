@@ -7,10 +7,10 @@ import type { FedizenPerson } from '@/lib/fedizen-feed';
 import { insertMention, mentionQueryAt, mentionSegments, mergeSuggestions } from '@/lib/mentions';
 import { useAtlasAuth } from './AuthState';
 
-type Person = Pick<FedizenPerson, 'handle' | 'name' | 'avatar'>;
+export type Person = Pick<FedizenPerson, 'handle' | 'name' | 'avatar'>;
 
 /** Fedizen people matching what follows "@", asked for after a short pause in typing. */
-function usePeopleSearch(query: string | null) {
+export function usePeopleSearch(query: string | null) {
   const { user } = useAtlasAuth();
   const search = useServerFn(searchFedizenPeople);
   const [q, setQ] = useState<string | null>(null);
@@ -24,7 +24,7 @@ function usePeopleSearch(query: string | null) {
   });
 }
 
-function Face({ p }: { p: Person }) {
+export function Face({ p }: { p: Person }) {
   const [broken, setBroken] = useState(false);
   return p.avatar && !broken
     ? <img src={p.avatar} alt="" width={28} height={28} referrerPolicy="no-referrer" loading="lazy" onError={() => setBroken(true)} />

@@ -528,6 +528,8 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v1\/favourites\?limit=40$/, schema: bookmarksSchema },
   // Who liked or boosted a post.
   { match: new RegExp(`^/api/v1/statuses/${ID}/(favourited_by|reblogged_by)\\?limit=40$`), schema: accountsSchema },
+  // Your own recent posts, without boosts: the hashtags you used lately come first in the composer's suggestions.
+  { match: new RegExp(`^/api/v1/accounts/${ID}/statuses\\?limit=40&exclude_reblogs=true$`), schema: homeSchema },
 ];
 
 const MAX_PRIVATE_READ_BYTES = 2 * 1024 * 1024;

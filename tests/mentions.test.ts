@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hashtagQueryAt, insertHashtag, insertMention, mentionQueryAt, mentionSegments, mentionToken, mergeSuggestions } from "../src/lib/mentions";
+import { hashtagQueryAt, insertHashtag, mergeTagSuggestions, insertMention, mentionQueryAt, mentionSegments, mentionToken, mergeSuggestions } from "../src/lib/mentions";
 
 describe("Mentions, as iMessage does them", () => {
   test("finds the @word at the caret, and nothing inside an email or a finished word", () => {
@@ -33,11 +33,16 @@ describe("Hashtag suggestions while typing", () => {
   test("finds #word at the caret, not in a URL fragment, an entity or the middle of a word", () => {
     expect(hashtagQueryAt("love #atl", 9)).toEqual({ start: 5, query: "atl" });
     expect(hashtagQueryAt("#café", 5)).toEqual({ start: 0, query: "café" });
-    expect(hashtagQueryAt("#", 1)).toBeNull();
+    expect(hashtagQueryAt("#", 1)).toEqual({ start: 0, query: "" });
     expect(hashtagQueryAt("see page#top", 12)).toBeNull();
     expect(hashtagQueryAt("https://x.org/#frag", 19)).toBeNull();
     expect(hashtagQueryAt("&#39", 4)).toBeNull();
     expect(hashtagQueryAt("love #atlas now", 15)).toBeNull();
+  });
+  test("your recent hashtags come first, then Fedizen's; what's typed exactly isn't offered back", () => {
+    expect(mergeTagSuggestions("at", ["Atlas", "art", "atproto"], ["atlas", "athletics", "cat"])).toEqual(["Atlas", "atproto", "athletics", "cat"]);
+    expect(mergeTagSuggestions("", ["Atlas", "fediverse"], [])).toEqual(["Atlas", "fediverse"]);
+    expect(mergeTagSuggestions("atlas", ["Atlas"], ["atlas"])).toEqual([]);
   });
   test("picking a tag replaces what was typed and leaves the caret after a space", () => {
     expect(insertHashtag("love #atl", 5, 9, "atlas")).toEqual({ text: "love #atlas ", caret: 12 });
