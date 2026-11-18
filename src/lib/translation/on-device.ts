@@ -17,6 +17,9 @@ type DetectorApi = { availability(): Promise<Availability>; create(): Promise<De
 const api = <T>(name: string): T | null => (typeof self !== 'undefined' && name in self ? (self as unknown as Record<string, T>)[name] : null);
 const gesture = () => typeof navigator !== 'undefined' && !!(navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation?.isActive;
 
+/** How long to wait for the browser to say whether a pair can be translated here. */
+const AVAILABILITY_MS = 4000;
+
 /** Whether this browser can translate on the device at all. */
 export const canTranslateOnDevice = () => !!api<TranslatorApi>('Translator');
 
@@ -24,7 +27,9 @@ export const canTranslateOnDevice = () => !!api<TranslatorApi>('Translator');
 export async function onDeviceStatus(source: string, target: string): Promise<Availability> {
   const T = api<TranslatorApi>('Translator');
   if (!T) return 'unavailable';
-  try { return await T.availability({ sourceLanguage: source, targetLanguage: target }); } catch { return 'unavailable'; }
+  // A browser that never answers (seen in headless Chrome) counts as unable, so a post isn't left "Translating…".
+  const timeout = new Promise<Availability>(r => setTimeout(() => r('unavailable'), AVAILABILITY_MS));
+  try { return await Promise.race([T.availability({ sourceLanguage: source, targetLanguage: target }), timeout]); } catch { return 'unavailable'; }
 }
 
 const translators = new Map<string, Promise<TranslatorLike>>();

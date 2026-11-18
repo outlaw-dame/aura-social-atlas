@@ -3,7 +3,7 @@ import { NotificationSettingsPage } from './NotificationSettings';
 import { useOpenActivityFromPush } from '@/components/social/usePush';
 import { LiveUpdates } from '@/components/social/LiveUpdates';
 import { SemanticIndexer } from '@/components/social/useSemanticIndex';
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Framework7 from 'framework7/lite-bundle';
 import Framework7React, {
   App, View, Page, Navbar, Link, Toolbar, Tabs, Tab, PageContent,
@@ -72,6 +72,21 @@ const LAYOUT_VARS = ['--atlas-main-w', '--atlas-rail-w', '--atlas-hinge', '--atl
 /** Applies the device profile to Framework7: navigation (tab bar, side tab bar, rail, sidebar, tabletop deck),
  *  panes (single column, or the desktop-style feed + voices column, split at the fold when folded). Layout comes from window size and the fold only. */
 function useAdaptiveLayout(profile: DeviceProfile) {
+  const hasTabbar = (p: DeviceProfile) => p.nav === 'tabbar' || p.nav === 'tabbar-side' || p.nav === 'deck';
+  const tabbarNow = useRef(hasTabbar(profile));
+  // Framework7 shows the tab bar again on every page that comes in unless the page carries "no-toolbar"
+  // (components/toolbar, pageBeforeIn), so with a rail or sidebar a pushed page (a conversation, a tag) brought the
+  // tab bar back beside it. React owns the pages' class names, so instead the bar is hidden again right after
+  // Framework7's own handler, in the same event, before anything is painted.
+  useEffect(() => {
+    let off = () => {};
+    f7ready(() => {
+      const keep = () => { if (!tabbarNow.current) f7.toolbar.hide('.atlas-tabbar', false); };
+      f7.on('pageBeforeIn', keep);
+      off = () => f7.off('pageBeforeIn', keep);
+    });
+    return () => off();
+  }, []);
   useEffect(() => {
     const html = document.documentElement;
     for (const k of LAYOUT_KEYS) html.dataset[k] = String(profile[k]);
@@ -105,7 +120,8 @@ function useAdaptiveLayout(profile: DeviceProfile) {
           panel.enableVisibleBreakpoint();
         }
       }
-      const tabbar = profile.nav === 'tabbar' || profile.nav === 'tabbar-side' || profile.nav === 'deck';
+      const tabbar = hasTabbar(profile);
+      tabbarNow.current = tabbar;
       if (tabbar) f7.toolbar.show('.atlas-tabbar', false); else f7.toolbar.hide('.atlas-tabbar', false);
       // Floating players (video, podcast) sit above the tab bar only when there is one (not with a rail or sidebar).
       html.classList.toggle('atlas-has-tabbar', tabbar);
