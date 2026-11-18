@@ -34,3 +34,10 @@ export function engines(p: FedizenPost, prefs: TranslationPrefs, o: { manual: bo
   if (prefs.cloud !== 'none' && o.cloudReady && canLeaveDevice(p) && (o.manual || prefs.autoCloud)) out.push(prefs.cloud);
   return out;
 }
+
+/** Why a tap on Translate has nothing to translate with (engines() is empty), so the line can say what to change. */
+export function noEngine(p: FedizenPost, prefs: TranslationPrefs, o: { device: boolean; cloudReady: boolean }): 'private' | 'no-key' | 'no-ai' | 'device-off' | 'setup' {
+  if (prefs.cloud !== 'none' && o.cloudReady && !canLeaveDevice(p)) return 'private';
+  if (prefs.cloud !== 'none' && !o.cloudReady) return prefs.cloud === 'deepl' ? 'no-key' : 'no-ai';
+  return o.device && !prefs.useDevice ? 'device-off' : 'setup';
+}

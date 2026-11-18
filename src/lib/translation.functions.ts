@@ -9,7 +9,7 @@ import type { DeeplProblem } from './translation/deepl.server';
  * - DeepL: the key is checked with DeepL (its usage), then kept encrypted in Atlas's key vault, shown again only as its
  *   last four characters, and sent nowhere but DeepL.
  * - The person's AI provider (Intelligence) translates through intelligence.functions.ts' key and settings.
- * The browser sends only posts that may leave the device (public or unlisted; lib/translation/engine.ts decides).
+ * The browser sends only posts that may leave the device (public or unlisted; lib/translation/plan.ts decides).
  */
 export type TranslateProblem = DeeplProblem | 'not-configured' | 'no-key' | 'storage';
 export type TranslationKeys = { serverKeys: boolean; deepl: { hint: string; plan: 'free' | 'pro'; used?: number; limit?: number } | null };

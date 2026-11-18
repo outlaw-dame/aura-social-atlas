@@ -6,7 +6,7 @@ import type { FedizenPost } from '@/lib/fedizen-feed';
 import { getTranslationKeys, translateWithDeepl } from '@/lib/translation.functions';
 import { browserCode, deeplSource, deeplTarget, languageName, TARGET_LANGUAGES } from '@/lib/translation/languages';
 import { targetOf, useTranslationPrefs } from '@/lib/translation/prefs';
-import { engines, offer, type Engine } from '@/lib/translation/plan';
+import { engines, noEngine, offer, type Engine } from '@/lib/translation/plan';
 import { detectionText, translationJob, type Mode } from '@/lib/translation/segments';
 import { canTranslateOnDevice, detectLanguage, onDeviceStatus, translateOnDevice } from '@/lib/translation/on-device';
 import { PROVIDERS } from '@/lib/intelligence/providers';
@@ -45,6 +45,8 @@ export type TranslationLine =
 const PROBLEM: Record<string, string> = {
   'bad-key': 'The translation key was refused.', quota: 'Your DeepL allowance for this period is used up.', 'rate-limited': 'Too many translations just now. Try again shortly.',
   'too-long': 'This post is too long to translate in one go.', unsupported: 'This language pair can’t be translated.', 'no-key': 'Add a key in Settings → Intelligence to translate with it.',
+  'no-ai': 'Turn on Intelligence with a key to translate with it.', 'device-off': 'Translating on this device is off. Turn it on, or choose a service, in Settings → Intelligence.',
+  private: 'Only public posts are sent to a translation service, and this browser can’t translate on the device.',
   'not-configured': 'This Atlas server can’t keep keys.', failed: 'The browser couldn’t translate it.', unavailable: 'Translation isn’t available right now.',
 };
 
@@ -106,7 +108,7 @@ export function usePostTranslation(post: FedizenPost): PostTranslation {
   const run = useCallback(async (manual: boolean, from = lang) => {
     if (!from) return;
     const list = engines(post, prefs, { manual, device, cloudReady });
-    if (!list.length) { if (manual) setState({ problem: device || prefs.cloud !== 'none' ? 'unavailable' : 'setup' }); return; }
+    if (!list.length) { if (manual) setState({ problem: noEngine(post, prefs, { device, cloudReady }) }); return; }
     const key = `${id}|${post.editedAt ?? ''}|${target}|${from}`;
     const cached = made.get(key);
     if (cached) { setDone({ ...cached, key }); setOriginal(false); return; }
@@ -156,7 +158,7 @@ export function usePostTranslation(post: FedizenPost): PostTranslation {
   if (done) line = { kind: 'done', source: sourceName, via: via(done.engine), original, toggle: () => setOriginal(o => !o), retranslate: l => { setSource(l); void run(true, l); } };
   else if (!offered) line = null;
   else if (state.busy) line = { kind: 'busy', source: sourceName };
-  else if (state.problem) line = { kind: 'problem', source: sourceName, message: state.problem === 'setup' ? 'This browser can’t translate on the device. Choose a translation service in Settings → Intelligence.' : PROBLEM[state.problem] ?? PROBLEM.unavailable, settings: state.problem === 'setup' || state.problem === 'no-key', run: () => void run(true) };
+  else if (state.problem) line = { kind: 'problem', source: sourceName, message: state.problem === 'setup' ? 'This browser can’t translate on the device. Choose a translation service in Settings → Intelligence.' : PROBLEM[state.problem] ?? PROBLEM.unavailable, settings: ['setup', 'no-key', 'no-ai', 'device-off'].includes(state.problem), run: () => void run(true) };
   else line = { kind: 'offer', source: sourceName, download: !!state.download && prefs.useDevice && device, run: () => void run(true) };
 
   return { ref, shown, shownLang: done && !original ? target : post.language, line };

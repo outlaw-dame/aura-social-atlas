@@ -119,6 +119,15 @@ describe('when to offer, and with what', () => {
     deepStrictEqual(engines({ ...p, visibility: 'direct' }, deepl, { manual: true, device: false, cloudReady: true }), []);
     deepStrictEqual(engines({ ...p, visibility: undefined }, deepl, { manual: true, device: false, cloudReady: true }), []);
   });
+  test('with nothing to translate with, the reason says what to change', () => {
+    const { noEngine } = require('../src/lib/translation/plan') as typeof import('../src/lib/translation/plan');
+    const deepl = { ...prefs, cloud: 'deepl' as const }, ai = { ...prefs, cloud: 'ai' as const };
+    strictEqual(noEngine({ ...p, visibility: 'direct' }, deepl, { device: false, cloudReady: true }), 'private');
+    strictEqual(noEngine(p, deepl, { device: false, cloudReady: false }), 'no-key');
+    strictEqual(noEngine(p, ai, { device: false, cloudReady: false }), 'no-ai');
+    strictEqual(noEngine(p, { ...prefs, useDevice: false }, { device: true, cloudReady: false }), 'device-off');
+    strictEqual(noEngine(p, prefs, { device: false, cloudReady: false }), 'setup');
+  });
 });
 
 describe('DeepL', () => {
