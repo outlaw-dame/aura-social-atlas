@@ -160,3 +160,18 @@ describe('DeepL', () => {
     await deeplTranslate('k-1234567890', { texts: ['a', 'b'], target: 'DE' }, fake).then(() => ok(false), (e: unknown) => strictEqual((e as InstanceType<typeof DeeplError>).code, 'unavailable'));
   });
 });
+
+describe('on this device', () => {
+  test('a browser translator that never says whether it can translate counts as unable', async () => {
+    const g = globalThis as unknown as { self?: unknown; Translator?: unknown };
+    const before = { self: g.self, Translator: g.Translator };
+    g.Translator = { availability: () => new Promise(() => {}), create: () => new Promise(() => {}) };
+    g.self = globalThis;
+    try {
+      const { onDeviceStatus } = require('../src/lib/translation/on-device') as typeof import('../src/lib/translation/on-device');
+      const t0 = Date.now();
+      strictEqual(await onDeviceStatus('fr', 'en'), 'unavailable');
+      ok(Date.now() - t0 < 6000);
+    } finally { g.Translator = before.Translator; g.self = before.self; }
+  }, 10_000);
+});
