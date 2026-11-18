@@ -58,5 +58,3 @@ export const tagPageUrl = (tag: string) => `/tag/${encodeURIComponent(tag.toLowe
 
 export const postPageUrl = (id: string) => `/post/${encodeURIComponent(id)}/`;
 
-/** Prototype B's list of conversations (f7/Conversations.tsx). */
-export const CONVERSATIONS_URL = '/conversations/';

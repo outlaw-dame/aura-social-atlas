@@ -8,18 +8,17 @@ import { FilterGate } from './FilterGate';
 import { FEED_PROBLEM } from './useFeeds';
 import { useThread } from './useThread';
 import { FilterPlaceProvider } from './useIntelligence';
-import { ChatConversation, ProtoSwitch, useConversationVisit, useProtoStyle, useReplyMode } from './ConversationProto';
-import { ThreadA } from './ThreadA';
+import { useConversationVisit, useReplyMode } from './ConversationParts';
+import { ConversationThread } from './ConversationThread';
 
 /**
- * Desktop: a post's conversation (/post/$id), in either prototype — A, Bonfire + Phanpy (ThreadA.tsx), or B,
- * + Wavelength (ConversationProto.tsx) — arranged by thread.ts. Any post here opens as its own conversation.
+ * Desktop: a post's conversation (/post/$id), drawn by ConversationThread.tsx and arranged by thread.ts. Any post here
+ * opens as its own conversation.
  */
 export function ThreadView({ statusId, seed }: { statusId: string; seed?: FedizenPost }) {
   const t = useThread(statusId, seed);
   const actions = useFeedPostActions();
   const navigate = useNavigate();
-  const [style, setStyle] = useProtoStyle();
   const [replyMode, setReplyMode] = useReplyMode();
   const lastVisit = useConversationVisit(t.thread, !t.loading);
   const open = (p: FedizenPost) => { rememberSeed(p); void navigate({ to: '/post/$id', params: { id: p.statusId! } }); };
@@ -35,12 +34,8 @@ export function ThreadView({ statusId, seed }: { statusId: string; seed?: Fedize
       : !t.thread && t.loading ? <p className="text-sm text-muted-foreground" aria-live="polite">Loading the conversation…</p>
       : !t.thread ? <Problem error={t.error} retry={t.refetch} />
       : <FilterPlaceProvider place="public">
-        <ProtoSwitch style={style} setStyle={setStyle} />
-        {style === 'b'
-          ? <ChatConversation thread={t.thread} actions={actions} lastVisit={lastVisit} arrived={t.arrived} Gate={FilterGate} Content={PostContent} onOpenInbox={() => void navigate({ to: '/conversations' })}
-              onOpenPost={open} />
-          : <ThreadA thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} sort={t.sort} setSort={t.setSort}
-              replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} arrived={t.arrived} Gate={FilterGate} Content={PostContent} onOpenPost={open} />}
+        <ConversationThread thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} sort={t.sort} setSort={t.setSort}
+          replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} arrived={t.arrived} Gate={FilterGate} Content={PostContent} onOpenPost={open} />
       </FilterPlaceProvider>}
     {actions.dialog}
   </main>;
