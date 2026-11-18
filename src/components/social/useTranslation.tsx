@@ -88,7 +88,8 @@ export function usePostTranslation(post: FedizenPost): PostTranslation {
   // A translation belongs to one version of the post, one target and one source: when any changes (an edit arrives,
   // the target is changed), it's no longer shown, and an answer still on its way for the old one is ignored.
   const [made1, setDone] = useState<(Done & { key: string }) | null>(null);
-  const done = made1?.key === cacheKey ? made1 : made.get(cacheKey) ?? null;
+  // Turning translation off shows every post as written again, even ones already translated.
+  const done = !prefs.enabled ? null : made1?.key === cacheKey ? made1 : made.get(cacheKey) ?? null;
   const latest = useRef(cacheKey);
   latest.current = cacheKey;
   const [original, setOriginal] = useState(false);
