@@ -1,0 +1,552 @@
+{
+ "capturedAt": "2026-11-07T21:40:09Z",
+ "totalGroups": 455,
+ "joined": [
+  "01M4CFA3PH5ESAX6HKBZV5RZPA",
+  "01M6H1DWNEPEGAP2GM9QDVS135",
+  "01M6MRDS81MMETABKJE9F84Q6E"
+ ],
+ "groups": [
+  {
+   "id": "01M6VMXYXEC4GW14YJ489SK9HX",
+   "name": "Canada",
+   "user": "canada@lemmy.ca",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "What’s going on Canada?",
+    "Related communities: Meta, provinces and territories, cities and local communities."
+   ],
+   "icon": "https://lemmy.ca/pictrs/image/e9bd4530-b423-4a1c-8de0-04ca4ce1ae99.webp",
+   "banner": null
+  },
+  {
+   "id": "01M6VEM5JBM4F4NVDN1JYX2SHV",
+   "name": "Politics",
+   "user": "politics@beehaw.org",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "In-depth political discussion from around the world; if it’s a political happening, you can post it here."
+   ],
+   "icon": "https://beehaw.org/pictrs/image/cd7879c3-cd1c-4108-806e-f9ca45e9b22a.png",
+   "banner": null
+  },
+  {
+   "id": "01M6VBP06F2SBK25DPK5RF82B9",
+   "name": "Servo Browser Engine",
+   "user": "Servo@programming.dev",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "Website - Git Repo",
+    "Servo is an experimental browser engine designed to take advantage of the memory safety properties and concurrency features of the Rust programming language."
+   ],
+   "icon": "https://lemmy.zip/pictrs/image/72359748-bc01-4f50-b4c7-c51101bcb66b.avif",
+   "banner": "https://lemmy.zip/pictrs/image/80ae0559-a13a-4386-8eff-31ac57490d96.avif"
+  },
+  {
+   "id": "01M6TEHJ1K8KRNBMVC6JY99KY6",
+   "name": "Repair Café Saint-Étienne",
+   "user": "repaircafe_stetienne@mobilizon.fabriquedelatransition.fr",
+   "members": 1,
+   "dims": {
+    "membership": "on_request",
+    "visibility": "global",
+    "participation": "group_members"
+   },
+   "summary": [
+    "(Groupe Mobilizon) Les Cafés de réparation collaborative « Repair Cafés » sont animés par des bénévoles et se déroulent dans différents lieux de l’agglomération stéphanoise."
+   ],
+   "icon": null,
+   "banner": null
+  },
+  {
+   "id": "01M6TEH87PB5W7YNZ9ABHRNMR3",
+   "name": "Reparatur Initiativen",
+   "user": null,
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "unlisted",
+    "participation": "anyone"
+   },
+   "summary": [
+    "Reparaturinitiativen aus dem deutschsprachigen Raum",
+    "A Fediverse boosting group"
+   ],
+   "icon": null,
+   "banner": null
+  },
+  {
+   "id": "01M6SJ13JPHEY1Y4K1V5322SRS",
+   "name": "RetroGaming",
+   "user": "retrogaming@lemmy.world",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "Vintage gaming community.",
+    "Be kind. No spam, AI slop, or soliciting for money."
+   ],
+   "icon": "https://lemmy.world/pictrs/image/e8842a5a-3702-4103-8102-b71875cd9eda.png",
+   "banner": null
+  },
+  {
+   "id": "01M6S5820GNP17TV5JCWG69WJM",
+   "name": "Murder Hornet 100",
+   "user": "murderhornet_100@lemmy.world",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "This is a space for those brave enough to take on the 100-day challenge designed to push your body, mind, and discipline to the limit."
+   ],
+   "icon": "https://lemmy.world/pictrs/image/087b0909-2217-4964-b45a-a1f945aeabb4.jpeg",
+   "banner": "https://lemmy.world/pictrs/image/8761e60f-1ad2-4f5f-b061-6d274ed27c91.jpeg"
+  },
+  {
+   "id": "01M6S580TDP8XDJ21GPAD3ZDXH",
+   "name": "A Mile A Day",
+   "user": "amileaday@lemmy.world",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "A community for those who run, row, or bike at least a mile, every single day."
+   ],
+   "icon": "https://lemmy.world/pictrs/image/ea3420bd-b4c8-4bb2-a2ad-473b41c7a5e8.jpeg",
+   "banner": "https://lemmy.world/pictrs/image/5ef3c1bd-f519-4a7f-a01e-5ef2957c3486.jpeg"
+  },
+  {
+   "id": "01M6S57ZP2C5H6JTKNWKRFX3SZ",
+   "name": "Tales from the Cryptic Lemmy",
+   "user": "talesfromthecrypticlemmy@lemmy.world",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "Welcome to this pulp horror writing space, where I’m bringing back the gritty, wild days of pulpy horror and bizarre storytelling!"
+   ],
+   "icon": "https://lemmy.world/pictrs/image/47c6f109-2932-4338-bb83-7b4d9a04598c.jpeg",
+   "banner": "https://lemmy.world/pictrs/image/7c4f1536-fa46-4882-8396-6b96f1d01a6c.jpeg"
+  },
+  {
+   "id": "01M6RV4NJG240BFW34AVGHM7B6",
+   "name": "radiolemmy",
+   "user": "radiolemmy@lemmy.blahaj.zone",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "-= COMING SOON =-",
+    "Contribute music/programming. Apply to be a live DJ."
+   ],
+   "icon": "https://lemmy.blahaj.zone/pictrs/image/ed451662-8ba0-46a3-8cfa-56839fc2fb17.webp",
+   "banner": null
+  },
+  {
+   "id": "01M6R08X4J27EVT9YC5VV787BK",
+   "name": "Fairphone",
+   "user": "fairphone@lemmy.ml",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "Community for the FairPhone"
+   ],
+   "icon": "https://lemmy.ml/pictrs/image/834ddd2c-c95c-40cc-9286-17066a981365.png",
+   "banner": "https://lemmy.ml/pictrs/image/637b7099-2935-4dc4-bdd1-a5788ce611cf.jpeg"
+  },
+  {
+   "id": "01M6QR66SHQM2B3DHH7SDEZV5X",
+   "name": "Bandcamp",
+   "user": "bandcamp@piefed.social",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "Share and discuss bandcamp music"
+   ],
+   "icon": "https://media.piefed.social/communities/AX/iz/AXizKbcEd4lGQxW.png",
+   "banner": "https://media.piefed.social/communities/94/lW/94lWVfA5KzbOkdJ.jpg"
+  },
+  {
+   "id": "01M6Q932ZJ31WWEG1XMH86BT8P",
+   "name": "Space & Astronomy",
+   "user": "space_astronomy@piefed.social",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "A community for sharing space & astronomy-related news, content, research, photographs, etc."
+   ],
+   "icon": "https://media.piefed.social/communities/cJ/XW/cJXW93kruH5sWse.png",
+   "banner": "https://media.piefed.social/communities/bI/kI/bIkIFTDJVzAJYPy.webp"
+  },
+  {
+   "id": "01M6PWPXBJ1M16NQK0QMMNQ02R",
+   "name": "NZ Politics",
+   "user": "politics@lemmy.nz",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "Kia ora and welcome to the NZ Politics community!",
+    "This is a place for respectful discussions about everything that’s political and kiwi."
+   ],
+   "icon": "https://lemmy.nz/pictrs/image/96335bc2-99a4-4591-ae88-1b84a4eeac26.png",
+   "banner": "https://lemmy.nz/pictrs/image/96d35283-9821-4620-a2eb-4ede14b2eb04.jpeg"
+  },
+  {
+   "id": "01M6NSDG90573EZBCNTTBM7PWQ",
+   "name": "UK Nature and Environment",
+   "user": "nature@feddit.uk",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "UK-specific nature and environment news and discussion."
+   ],
+   "icon": "https://feddit.uk/pictrs/image/54d26023-c773-4699-996f-7c5fd6dc534d.jpeg",
+   "banner": "https://feddit.uk/pictrs/image/34dcbca1-57df-4865-a1fd-d6b71e35538d.webp"
+  },
+  {
+   "id": "01M6N0MKR6NPTS8E2DBKJ8Z4XA",
+   "name": "Risa",
+   "user": "risa@startrek.website",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "Star Trek memes and shitposts",
+    "Come on’n get your jamaharon on! There are no real rules—just don’t break the weather control network."
+   ],
+   "icon": "https://startrek.website/pictrs/image/6d72a462-e85e-408a-861f-c16ac6e81d71.png",
+   "banner": "https://startrek.website/pictrs/image/e9b25b3b-4323-4d09-8023-ac3ae487e2c8.jpeg"
+  },
+  {
+   "id": "01M6N0A7J2F69HZ2WTR5YG7CBQ",
+   "name": "Hiking",
+   "user": "hiking@lemmy.world",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [],
+   "icon": null,
+   "banner": null
+  },
+  {
+   "id": "01M6MRDS81MMETABKJE9F84Q6E",
+   "name": "Ping ( Apple Group)",
+   "user": "Ping_Apple_Group",
+   "members": 1,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "This group is for Apple enthusiasts, developers and anyone interested in connecting over Apple products, services, news, rumours, support"
+   ],
+   "icon": null,
+   "banner": null
+  },
+  {
+   "id": "01M6H1DWNEPEGAP2GM9QDVS135",
+   "name": "Bonfire Networks",
+   "user": "Bonfire_Networks@bonfire.cafe",
+   "members": 3,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "A federated group for people involved or interested in https://bonfirenetworks.org",
+    "See also the sub-topics and related groups, such as these for people involved in co-designing those flavours."
+   ],
+   "icon": "https://bonfire.cafe/files/redir/local/data/uploads/01JSC2WAV3P752DW3W0H3847DP/icons/01M6H4F5E143X6382CPK0WB99V.svg",
+   "banner": "https://bonfire.cafe/files/redir/local/data/uploads/01JSHXHVD56ZFCS6K7VP952TP5/banners/01M6H57XT372AEQW5FAH0X9KQS.jpg"
+  },
+  {
+   "id": "01M5AX9V1JKRPK91EJ08ZJ5CJV",
+   "name": "Godot",
+   "user": "godot@programming.dev",
+   "members": 2,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "Welcome to the programming.dev Godot community!",
+    "This is a place where you can discuss about anything relating to the Godot game engine. Feel free to ask questions, post tutorials, show off your godot game, etc."
+   ],
+   "icon": "https://programming.dev/pictrs/image/85d00bc1-2c76-448b-9b6e-c0228beee85c.webp",
+   "banner": "https://programming.dev/pictrs/image/fac01c49-ad74-4c2e-a395-f2640be85094.jpeg"
+  },
+  {
+   "id": "01M4CFA3PH5ESAX6HKBZV5RZPA",
+   "name": "Fediverse",
+   "user": "fediverse@lemmy.world",
+   "members": 8,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "A community to talk about the Fediverse and all it’s related services using ActivityPub (Mastodon, Lemmy, Mbin, etc).",
+    "Posts must be on topic. Be respectful of others."
+   ],
+   "icon": "https://lemmy.world/pictrs/image/eb9cfeb5-4eb5-4b1b-a75c-8d9e04c3f856.png",
+   "banner": "https://lemmy.world/pictrs/image/9094f077-e4da-4125-9bcb-b2b42b264748.png"
+  },
+  {
+   "id": "01M48259KE8PYBVH5347K5K3VM",
+   "name": "Fedizen Development",
+   "user": "Fedizen_Development",
+   "members": 6838,
+   "dims": {
+    "membership": "open",
+    "visibility": "global",
+    "participation": "anyone"
+   },
+   "summary": [
+    "This is a meta-discussion about Fedizen.net, its development, and our ideas. Over time, we’re hoping to cultivate feedback from a user community to make this thing more polished and accessible!"
+   ],
+   "icon": null,
+   "banner": "https://fedizen.net/files/redir/s3/data/uploads/01M4817C2S71ST9DCDVPG1XESJ/banners/01M5XWJ2C75FEZ9AEE886XWEQ7.jpg"
+  }
+ ],
+ "topics": [
+  {
+   "id": "01M6R66ATSH8ZBAA7S210J8KGZ",
+   "name": "UX & Design",
+   "parent": "01M6H1DWNEPEGAP2GM9QDVS135",
+   "user": "UX_Design@bonfire.cafe"
+  },
+  {
+   "id": "01M6R64ZA9HBGAB18C9HZZ13NK",
+   "name": "Tech support",
+   "parent": "01M6H1DWNEPEGAP2GM9QDVS135",
+   "user": "Tech_support@bonfire.cafe"
+  },
+  {
+   "id": "01M6R643JK54RFXCQQAY2547RZ",
+   "name": "Testing & Feedback",
+   "parent": "01M6H1DWNEPEGAP2GM9QDVS135",
+   "user": "Testing_Feedback@bonfire.cafe"
+  },
+  {
+   "id": "01M6R5Z4B8R29HBTZE3NPKV00S",
+   "name": "Federation & Interop",
+   "parent": "01M6H1DWNEPEGAP2GM9QDVS135",
+   "user": "Federation_interop@bonfire.cafe"
+  },
+  {
+   "id": "01M6R5T5TJ5266KATXZRHER24S",
+   "name": "Third party apps",
+   "parent": "01M6H1DWNEPEGAP2GM9QDVS135",
+   "user": "Third_party_apps@bonfire.cafe"
+  },
+  {
+   "id": "01M4SVHMG5EJ5DYVGXBZTYTGQX",
+   "name": "Testing",
+   "parent": "01M48259KE8PYBVH5347K5K3VM",
+   "user": "Testing"
+  }
+ ],
+ "posts": [
+  {
+   "group": "01M5AX9V1JKRPK91EJ08ZJ5CJV",
+   "author": "FooBarrington@lemmy.world",
+   "user": "FooBarrington@lemmy.world",
+   "date": "2026-11-07T20:40:57Z",
+   "title": "[Discussion] How do you (unit-)test your shaders?",
+   "text": "Hey all! I’ve been thinking about how to best unit-test my shader code, since TDD has been very helpful for me. But I’ve been able to find surprisingly little information. If possible, I’d love to hear from your experiences!"
+  },
+  {
+   "group": "01M6H1DWNEPEGAP2GM9QDVS135",
+   "author": "Nelfaneor",
+   "user": "nelfan@gotosocial.social",
+   "date": "2026-11-07T20:03:51Z",
+   "title": "",
+   "text": "Your social media strategy is important too and I’m very pleased and relieved to find you and your party on the #Fediverse. The ideal and best tool to manage your proposition is @Bonfire_Networks in order to organise a long-term interactive discussion about it."
+  },
+  {
+   "group": "01M5AX9V1JKRPK91EJ08ZJ5CJV",
+   "author": "MousePotatoDoesStuff",
+   "user": "MousePotatoDoesStuff@piefed.social",
+   "date": "2026-11-07T19:48:54Z",
+   "title": "How to expand a Control object to fill its H/Vbox container in Godot 4",
+   "text": "Been struggling with this for too long before discovering this, made this video so you don’t have to. Tested with Godot 4.8, but this feature has probably been around since 4.0."
+  },
+  {
+   "group": "01M4CFA3PH5ESAX6HKBZV5RZPA",
+   "author": "bretton.dev",
+   "user": "bretton.dev@coves.social",
+   "date": "2026-11-07T00:40:11Z",
+   "title": "How private do you consider your votes in the Threadiverse?",
+   "text": "From the technical side anyone can spin up their own Lemmy instance and view all votes, but I’m curious at what the community’s perspective on how “private” that is. I think Mbin already shows upvoters? Piefed allows anonymous voting."
+  },
+  {
+   "group": "01M6H1DWNEPEGAP2GM9QDVS135",
+   "author": "Misha Velthuis",
+   "user": "misha@bonfire.opentech-auc.org",
+   "date": "2026-11-06T11:24:26Z",
+   "title": "Organize groups?",
+   "text": "Would it be an idea to allow people to organize groups in categories or spaces? So let’s say on our Bonfire instance there would be a space called “Courses”, which would then contain all the groups of AUC courses?"
+  },
+  {
+   "group": "01M4CFA3PH5ESAX6HKBZV5RZPA",
+   "author": "hatingfedizen@lemmy.dbzer0.com",
+   "user": "hatingfedizen@lemmy.dbzer0.com",
+   "date": "2026-11-06T11:14:29Z",
+   "title": "Government must move away from toxic social media platforms | Open Rights Group [Video]",
+   "text": "We shouldn’t be forced to use toxic platforms that track and profile us in order to get public information."
+  },
+  {
+   "group": "01M6H1DWNEPEGAP2GM9QDVS135",
+   "author": "Carlos Cámara",
+   "user": "ccamara@bonfire.cim.warwick.ac.uk",
+   "date": "2026-11-06T10:12:30Z",
+   "title": "Welcoming bonfire groups!",
+   "text": "👋 hello from another bonfire instance! Amazing idea!"
+  },
+  {
+   "group": "01M6H1DWNEPEGAP2GM9QDVS135",
+   "author": "mayel",
+   "user": "mayel@fedihood.social",
+   "date": "2026-11-06T10:12:33Z",
+   "title": "hello from fedihood",
+   "text": "is this thing on?"
+  },
+  {
+   "group": "01M4CFA3PH5ESAX6HKBZV5RZPA",
+   "author": "Baldur",
+   "user": "baldur@normals.me",
+   "date": "2026-11-05T07:48:37Z",
+   "title": "Hi from normals.me. If you can read this, the federation works",
+   "text": "This post is written on normals.me and delivered to !fediverse@lemmy.world over #ActivityPub, so if you are reading it the basic plumbing works."
+  },
+  {
+   "group": "01M5AX9V1JKRPK91EJ08ZJ5CJV",
+   "author": "diablo3d_danny@lemmy.world",
+   "user": "diablo3d_danny@lemmy.world",
+   "date": "2026-11-05T08:59:08Z",
+   "title": "Showcase: Diablo (1996) remade in first person in Godot 4, with its original level generator ported to GDScript",
+   "text": "We’ve rebuilt Tristram and the first Cathedral level of the original Diablo as a first-person game in Godot 4, and the free demo is out."
+  },
+  {
+   "group": "01M4CFA3PH5ESAX6HKBZV5RZPA",
+   "author": "DosDude",
+   "user": "DosDude@retrofed.com",
+   "date": "2026-11-05T22:52:47Z",
+   "title": "Fedigest, a hand-picked front page for Lemmy, PieFed and Mbin",
+   "text": "Made a thing. Fedigest is a self-hosted site where you pick posts from anywhere in the threadiverse, write a few lines about why they’re worth reading, and publish them as one front page."
+  },
+  {
+   "group": "01M4CFA3PH5ESAX6HKBZV5RZPA",
+   "author": "klu9",
+   "user": "klu9@piefed.social",
+   "date": "2026-11-04T19:11:32Z",
+   "title": "Anyone know about Harmony (ActivityPub chat like Discord)?",
+   "text": "Federated social app: Discord-style servers and chat with ActivityPub. I don’t remember hearing of it till now, yet it claims a lot of desired features."
+  },
+  {
+   "group": "01M48259KE8PYBVH5347K5K3VM",
+   "author": "Sean Tilley",
+   "user": "deadsuperhero@fedizen.net",
+   "date": "2026-10-27T05:08:54Z",
+   "title": "",
+   "text": "Fedizen has been updated to 1.1.0-beta.21! There should be some improvements in some of the logic behind groups and the social UI, as well as Mastodon client support."
+  },
+  {
+   "group": "01M48259KE8PYBVH5347K5K3VM",
+   "author": "Sean Tilley",
+   "user": "deadsuperhero@fedizen.net",
+   "date": "2026-10-19T19:27:01Z",
+   "title": "Federated Groups!",
+   "text": "Group functionality continues to mature for Bonfire Community, so I recommend that everyone ought to check out a group to join! Any group from Lemmy, NodeBB, MBin, or PieFed ought to work!"
+  },
+  {
+   "group": "01M48259KE8PYBVH5347K5K3VM",
+   "author": "We Distribute",
+   "user": "wedistribute@fedizen.net",
+   "date": "2026-10-20T04:59:35Z",
+   "title": "Circle Up!",
+   "text": "One of Bonfire’s premiere social features is Circles, which is kind of like a hybrid between an Access Control list and a Mastodon collection."
+  },
+  {
+   "group": "01M48259KE8PYBVH5347K5K3VM",
+   "author": "Sean Tilley",
+   "user": "deadsuperhero@fedizen.net",
+   "date": "2026-10-08T17:56:17Z",
+   "title": "Queue Stuff",
+   "text": "Today, we’re looking into database and queue optimization for better performance."
+  }
+ ],
+ "icons": {
+  "01M6VMXYXEC4GW14YJ489SK9HX": "data:image/webp;base64,UklGRrYDAABXRUJQVlA4WAoAAAAgAAAAJwAAJwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggyAEAANAJAJ0BKigAKAA+0VylTygkoyIqtVqpABoJaADG2WZ6duwDeTmdKwyfPa+zGcH4jBDKcKEewjCx8tZj27/NRz19UGolC5Xg5HPCOffcI+dX/VFHfRXaAAD+92wPN4RvfR7P7zVnSoBelWL1uT9P+vdWmNuwjX8a5dyUi9dUpaoCOfrQ/C22P4ZeJf15jTgNVGsrwlK3vbRTRMfx6hweGbGJBZDNyrwp7JMyImMJnRzi3masT48w9JWqS1pR1g1LzWpwW1GF4+NtzKJAr4TKI4IH2I5isN8ml2KMslf3hgzG9ZpjqgY6zgh2yfoSErchLR67919FvNXEFZKE6P8NgF12p/ad/PA+VdcD57wJPLF2pYL1b5WwpNgkOqIg7QfqSnM32hfePGYw1uRRjHrXNSoWnczAmSMmkBaXtZLfPoP/OjJ0N4osQfPBb67qzZZJQxKkSbIDI4OvklK+uasDYI/6ha1P5KzYgbwx6b8OTVON1UKbfDHIjGdlhe+Tc8JDxirO0w+1RFML5MkMXNFiyUfX0r2KByD+g0BmhCEiFWrhB0hD/yN4zE8FHrSEN8ZOEAJt+QT7Drvci3mJLPyK4mwjapBoyoAAAA==",
+  "01M6VEM5JBM4F4NVDN1JYX2SHV": "data:image/webp;base64,UklGRrIDAABXRUJQVlA4WAoAAAAgAAAAJwAAJwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggxAEAALAKAJ0BKigAKAA+yVqjS6eloyGquq6o8BkJbADBFUDhdCj3DvQ7tq+d70y/9bjuBri2HIxkT1Yj/GKp7yanltkONVsv9p0rUp+l9JyudGVRu6N5+DW1eWOqjA95bgAA/vYHyGNKth04mFlo6APntnk14uNsD6mkPNwygpVt3yNf+v4OntCsup3c8jMNmgtQpZoEknThxlXBehCnkUbaViogBA6USCTVqFRzbkJwDwlueXb249vNAS9zDyYJPZx3nE2Wr7NRCzmut7cjp1Mjmv3zEx7Y5jNiy0SgvRXkwV+IzwOXDaU3Yji5H01+0H7mcmQF1S3rm0nKNYzBG37ttTrEjDm4FJbuA8TqUPToZGIWdBuLTxyFPki72WjBIy4epyyaQde8K0Tgo+5C1h4D0UBj5UwFX60xO831EjthJF/dZkp8fj3iJxVQRgX8XUNdozJCdJm4HqE43uQwrhbyis8J/tb4/3GhDBMxuvCwOB/VrTDoSuy8yoOKl6pxbeERR+uwtus9GZ+esF/E/XGDmB729RM70snXTmzXT41GaKEFtRU43SlVrPsWrR/KTC9e9QWLxsKS0grU7Xza4yg+g64jwAAA",
+  "01M6SJ13JPHEY1Y4K1V5322SRS": "data:image/webp;base64,UklGRogDAABXRUJQVlA4WAoAAAAgAAAAJwAAJwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggmgEAAPAHAJ0BKigAKAA+0VqmTaglI6InLJEAGglmAMtM02Nn3gmgJUEM98aLwa24cs/1ozCY0EUSGUxIVtZ8L1x5mC1f+CVG/vIhAAD++qRHbFrkluGrX7Xs64P39OUfHvNNDHEEmrGfmvqfZFLkVhNJzBwNeqpE24N3U46ok3P3+bh1lvQeQ6w75yvbSk33VFCfBPt9SeROPNCWsBtCRYmY4FOgbZCc2YE/2m4MfF1b9oXZ+Y4iMI73Qwa7ppOIAviw+ECxpgNflYIX07vei/sD26P6eTdwFvw0gC8lqxvWL9Mo0hx1eipXewYawnGa+3Vf1K2pzxVQwfxEDCehEvcrCt+2RZwMk1Ub70tPaliQ7GxRnDt8Fe1jCSXFQmY3ug6/d1gAUuN6BTKGmZhqxP3gN+yYO6RfkDVfnsp5fcL5EGRDuiWJARxR5YtQr3BLji9AtkoOYfGBkSicgYp+U479OayWkg4517ADhzZuPMA4NS+Z0gZ0Sv5t4f62w7ZVR4yEiOt2poe2e47//cygIYFDNBcnCCzhmbARCAAA",
+  "01M6S5820GNP17TV5JCWG69WJM": "data:image/webp;base64,UklGRjYEAABXRUJQVlA4WAoAAAAgAAAAJwAAJwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggSAIAAJAKAJ0BKigAKAA+yUqeS6ejoqGx3MwA8BkJQBib1vOymUDDBTLfFl9UewR5WPsZ9FwbZ3s/4SmjrXciMG1P79XFYS6uU0jm4kHYczEFsK6qgvZ8Zqt38SDIQOS0gAD8MM6gi/dRuTclGhNOKf586aeMfc6w3NvDRlRg5WDfK0CubM4+Lasf1mhjjcnEmk8tIJGQ3q3htJD80FGst4XJpFK5HEsOQUoaZB7BgcsBC2ofMeOrm9CURrCZVef1uiXgHIyj/vrpQ5OctIRC3U1phjArJKKsYwfbdYtWDDOSMnHxkfKiYOY9TP9ZKXr/bCgbnOMBGKSB47DJ3J50uqbUdAVVLMYnmfWJDLjSyGJSw87rxx+ktN+u/FgL/saalFUJA67UGJCMA8RAmBLn3h+B8XgTyuiPEQXlehFrMIUx25H7VeY/i91mjl9yEU3GEdvsqxakOGKth6t/FK8UapMj+tngCs0wULypynkanRhXYJhReK0HhQAkF0oN81hk9kN/VpAD+itMWvyTLVLsGWCeJeCrsUeASAPncUoY9izVBwiM/oZ0Qwc8MXzOtwKbEU47U5MRd9YYvKKp79AYOHv6eCzEtcZX7BkBw4cr7x/m2YBp1mTTYGB8kRnp3fZhIxI1cn/TjL6sz4sAHvMRWVMHEmY7ASwlQFHGD1pfV8uWCQw3lFv01FQW6oA9z+i7ph5jvZJLfc/kegc01hcN2ZRhTKU4LegUt13yN9CKtgiJsgH6KaeycBOPmfmlqF819lZE7h3KAfaWn8AA",
+  "01M6S580TDP8XDJ21GPAD3ZDXH": "data:image/webp;base64,UklGRgwEAABXRUJQVlA4WAoAAAAgAAAAJwAAJwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggHgIAABALAJ0BKigAKAA+0VKgTSgkIqIuO/mZABoJYgDAH5t/Grh8eASY1a12WfpYmbyYru0rgQnDg9GRMpIGVesAP43wcVVak7uU23/O3TFPSIX40agGMFBGkURkT90PEV5oqwAA/vrqVtRYe+h1WaeCg8K3h5bLT1L9CsdU4qjNddu8XXzkQ3UwAi3DQ1Os0Pps7SyaypljqES9dYuOIjL734Zv/cTOv4bWwfyQqtW1Zt4C/nHH8Ni1plQwkTGYcbWoVxm1HsMxdzx13BRojovsbmbN/D8Wwzv7fbmwSBF/fOleg1wIcekT87m9e3bgRLNpWmFxUV7K5ZK/NnhEsGLpC9DwFYTf08KXIq4WFhOoyyXPOIbPNPG9n/08n/wTD1x7b3vcWVPko2L8U5miTU3uI1W3GsOGvfnbq0SU95JHJbS68l5Jl8zz+3kcnCRtSKtx6PlYTEz6jZRvrbaVAPPMQ55PuTfk2CfhuO4nfLCs8tX/Kf16KpGgb/JuFgPp2GX3Z+wsEUCTYmRxQb9/Zmnf9Fb9kwsT2QAMjgnTyE16FAw+IO19aPmtgd81T70qdtsV5YHI9Z0y1zav8IYdbIZhw8JTwShsFFPeK0m/MMlT3Uf8ZWSdu0MnzTD0OxQUDMY8QvIN5huMaYTg9EafqkrKEX1XrLqDXPNW+Z19Q36Huj2T0Pqg66DHGlxMVDdVc5IyS+vVHkHA52wqYByrAAAA",
+  "01M6S57ZP2C5H6JTKNWKRFX3SZ": "data:image/webp;base64,UklGRtADAABXRUJQVlA4WAoAAAAgAAAAJwAAJwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDgg4gEAAHAKAJ0BKigAKAA+0VafS6gkoqGuO/zJABoJQBgy3l62jqRbHLO0ss0Xx+vgCyb0WiB3Cd0ui4wxJqGPhRD5apoxHXIsFetTff5mBXSZ0zHkq/ER+pRyGA0/RUFgAP76XlySJPnwqcr2hK2QwXsN7u76Idp/bRmpXZeLRl9zm9wDkOBQzQbFdB/r7H+1oVwgDk2W2Lep05Kd86e3UzIJt2T7T+UEI4nc5AbeUki1ZFomscvR67UkY7KToV4DcEKvFjWdZAETRcrR8FI6vAuoL5oZnvmvHVGMJLgC3sXxDJ0b7Sp4IjN3h/CkE1kaBZ7jy6CBoodg2uInWcJmhxdvNtaIqyTVIHCyCWJCXEH6OdYoZ7YPH4o/NzeXQ8Xs6gGwuYEosHDyr5wGmeoXTR8oy1Y55PgklzULIpbeHPrRe5ZJPDkKYyauNUiXa1FnfonGOS6AaGHqWGsG4GWTNNdyEGY90apUZUIkI7Ujorh1FRgL08A1m5p9hXx132tzSa/8MEnvKk+Ornq+UIszyI1KBTvZ4JAtLYcnaommsCGkHcftXm0cTMYNKt5Q9srqHZo5FuQrBfu1SZcPs1ixE0jk36JSx/0ge/h07af54wcV2UjFb51MRyC2Oy/lQ27ABV9yAAAA",
+  "01M6R08X4J27EVT9YC5VV787BK": "data:image/webp;base64,UklGRtIDAABXRUJQVlA4WAoAAAAgAAAAJwAAJwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDgg5AEAABALAJ0BKigAKAA+0VqjTaglIyIquqwBABoJbACl2yL7Nw8z3dR31H7Y83U5QPBPSlM8bwAf/+PcVgveC7PzYdL08PsuToaarmAaHjBBOCJlSu6a2rKwv3BAsTHPFJZYgAAA/vfpmE5oaGjUGEnWKTq1GatjcISBEFyZV0eypvdctQQaiVbXLMPEsGD01SSjpCKANL9IIzrjxLkgEIGzX/oXdDJ0Ab9uFC0yhu5ncwLavEVUkrZeYujBul0iJmBY+o/+/yDf5Ig9PyIt+H9kUou/ROkzCRYSMonxMA8eKaQqqbGlrPIQvq/5p/pO0YIxvf2zHXUFc0+/7TkyjPizL5I4RMGxCj0KUZNQAUzZJBMJqAUTHPyZOcjmaIDsQYAj5peTthaJLQFJnPWYthAqo2Pmw0eVKAaLtKzVGkf2H/YYdPzHuEKLhzTbQQP53qO2hWHmP1Xa+Y1U5KnFSwgK61FPK8OoEmT0MRwnIXiUAFNje4hotFlgLN53hIx6s4xEE7LGr/Z3WoJDMv6PvO2nG5OLXzexeiCry+8dkVZis0BVm/TVLAaD0s7s7zwQDR6XrxyicSCMwkoHyNG9lEqt9gvCt8rrJUOTE0r41CWeqBracduzzxSncWb0JKA+6R/EresEAAA=",
+  "01M6PWPXBJ1M16NQK0QMMNQ02R": "data:image/webp;base64,UklGRvgDAABXRUJQVlA4WAoAAAAgAAAAJwAAJwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggCgIAAHAMAJ0BKigAKAA+0WKkTygloyInKkkAGglsAMULl/bHu/EuSceQjGbY+7R/QA6YJfyyUdmzdV+hL+qpRdZlT5HOcmFe0HKJ2j2VI9m089rla9QZ8gQNQwhaOP3GzzFf/NwOMHnCk2dAKp98AAD++6M1qu80voWVx4WMD1c741QHQjVirNohwXWfvZ2i9b45LjLP2ex9KQs65bV+MRk4vckksiGruqVIzQx+8FN46fQ/zlif9l9yiOksmwj91WSSCAObXWUfb8R9KUzcAHcO+WPsdAszmnrj17Xy7So2hN1l8dr6/z0iC+2YVy+od+VMAfanflYU8HzVVtA3bQYXBwlceKKi8k8CbsNc4YUMZnDUpWYEwfVvxoTW0QOwkoSnhQG2GMdSz0Lw9OQ1F2H+/IwmGBb4ncLyLTceyNHJhGd0R3poAnYVA2aU02WnFIv9SLWPEfMmNpMjyv5SXS4t6YZgT93kkdDsS4T/incbGEZ1wVbE0IkvjB92qd7XyQBlfKOGWWfcNP/rSSjnCR+/9EPS/Z/3GZhPedWeMo0fbzBfxPo3n7QL6PrHEFjKlB7cjaxwv3TQC7XKXdepjh4Bkb4IGMt+NhfoW+1dXfkAF3keVJyf9qeMy+gPVBQumsVCk1pTQ0NumqEMXbCXLJeiABux7xR287qZljWYBvAgtQi0H6DUn7BBNaEAAA==",
+  "01M6NSDG90573EZBCNTTBM7PWQ": "data:image/webp;base64,UklGRiAEAABXRUJQVlA4WAoAAAAgAAAAJwAAJwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggMgIAABAMAJ0BKigAKAA+0V6hTSglIqIquq1RABoJaQATnLlgj83e+WaC+mcD6A9gr9a+rT6CxDzNMyI73kXGbZC/GbfZ8kyvol0sv1PPNP6za/Nf4hZH4MFyluti6fvQB5M78yKP8tjMAsFYAAD+9wbuX+TEJPgwrPO7gLC5rNYZk8fQbH3sYjWHPICyjRrAf1Nw02BLbJz2F7ALbAx1ScjcOPmJhqUKfNUB5xslVbDVQVYZwzpcVQP+ZJjsxT9t0Oy0UpDtcEmR0PL6tk6YznwtmNdV+gI+t/2SvfuwN/JEm4Z+U4BEZtWIcIE9rIBaamLhKUV/I38kd6ioVw57DlLV7zr/nnw7qe9b9d/S//kvjbt7LHaeasEOprGMSbq5TN4NLgv8Tsv+fX2B0g7HQiJ5hITou9ihDlxT/3j2J5gupXN2i5argXhZT0I4hLQF6TuX9vCiCf8ElWm367fLyqYLqUb1znxcKmC5FU0RUIP3X4HPKnnDXdwdjWLfdX6FNGMsv/w15Y9cxRgQPDTnyBE+ELznnRlL0AEMNaflp9il0oNS9uEo6uTnyrrx33HSLp3GICsUGfOdIaRpen5deae79BE+B0oWS4H/B9GrIDLEKe7a1vuDvqZMtoZ2C/Kq9OD/WLdmM7LOMd9xUi7J8tLkoZI+vPuZOf/tbejnseHKt3aFnMvoaJDVQ28ZpG4rfANcjrH0cL1n2zaqRX+XcscnQc3HRmz364JRyrTbzwTEcbAAAAA=",
+  "01M5AX9V1JKRPK91EJ08ZJ5CJV": "data:image/webp;base64,UklGRnIDAABXRUJQVlA4WAoAAAAgAAAAJwAAJwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDgghAEAADAJAJ0BKigAKAA+0VikTCglI6IqtV6pABoJbADPGoBfh2gbyC7gFABuAaQJmw79WKI/41CXfzWtkfvUkbel2zG2RmEE/wIlktDOYAJMma8STgAA/vxEPkLrwdd54dUylt2zL1/XRTUDALyTPrmTdAHWR6TgoX2E3f8n1vY1Ep/OP5OvYQjezb3DdXyH0q0KVRNVj9g3z7LKerjROmAGN3TJiCWED+QSFvmXV2aq3eJF3RHzv1Ewy6qFG4PbASeVbMQ01ZN/ODdsOPzqCnWQBnQjyp+T+OkTDYHeBK9GORlfec1kzYTMOqzp9PCE6RsCKSEm9rdP1sWiDPypfmTzflC/rkUhbZxgAq3CmZPsZ91QVVlVRz1RN2BSlTE7RVbwTotvQNiBET4WUB6/AsnWgeI7296PFcBOvbFgZ0ftJ3VjFJbw0wNpKs5A/17AOzz2AJAuSjTWggNwSF2CVvCprQwhHQMTQBUlCXW3l0KX/mJP5JPAdktOagQsj+pBdixFup0AAAA=",
+  "01M4CFA3PH5ESAX6HKBZV5RZPA": "data:image/webp;base64,UklGRvgDAABXRUJQVlA4WAoAAAAgAAAAJwAAJwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggCgIAANALAJ0BKigAKAA+xUqiS6ekIyGx2Z348BiJbADJDUEL/VqiNQt9tR5gPOZ9AHngdRXvPVdR1wVoKAD3LPA1xauMnLpKGXOn9+io64q2b4p/214WWPATGef9uPCrir0InYUOEJ8oB0AA/vso4G9wGkx/uX0p/qg469hjdV57TlL+G2CKjHyfH32AdZjPw43B8hgUMMlP7Al/X1IsAL/Br/Yv7jeWstsn2wMPD1Skc4JlrQfLa+jOHeLYjZhvyuuITWF/9c4CSk+oJB9xWZTTuue6EvoWQ/tv7Nd5pVhWHFMr7gm7ZAv5RmGtJFqtNqZcLqUizvm0T9xa9i42u79JXJwR+efF0gbUILfgG4ID6ov2+eKWTeNgWhyc1s1TOtydC1w2TnbV3gkqW8Sq+7cw9pmZUL1zO61mlh8sMCrnw/ngfEpEaS5KF+x2qh5C8/kXDGAKDQGRX5O2KfOX6G38Th7amkqiIyF+h8C18qwV/AF599wRp/bIwlOj+IGAsNg6elgnHuqRUM+p6rkyWGRtb8QSDhNWsakCtkbrZqDU8PlnlIfURFt0/Ja6Toaag8eiv/Wn297sl644YHI5eB3uLDSCgRuvQ1ofKiczEHYWrXHvgiObdTfgGBrnWlS42ODNScYh5eqaj00Q+LlqrqKufblFpuTO/9Um80TRLduT1+BXoA+kmhEaiGsAAA=="
+ }
+}

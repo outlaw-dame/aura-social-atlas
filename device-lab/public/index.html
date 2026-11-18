@@ -1,0 +1,430 @@
+<meta charset="utf-8">
+<title>Atlas Device Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a bench — controls and readouts on the left, the device under test on the right, the verification matrix below. */
+:root {
+  --bg: #F6F5F1; --panel: #FFFFFF; --ink: #1B1B20; --muted: #64646E; --line: #E3E1DA;
+  --accent: #FA243C; --accent-soft: rgba(250,36,60,.09); --pass: #1F8A5B; --pass-soft: rgba(31,138,91,.12); --fail: #C42B1C; --fail-soft: rgba(196,43,28,.12);
+  --bezel: #1E1E23; --stage: #E9E7E1;
+  --display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --body: 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141418; --panel: #1C1C22; --ink: #EDEBE6; --muted: #9B9AA3; --line: #2D2D35;
+  --accent: #FF4A5E; --accent-soft: rgba(255,74,94,.14); --pass: #4CC38A; --pass-soft: rgba(76,195,138,.14); --fail: #FF6B5B; --fail-soft: rgba(255,107,91,.14);
+  --bezel: #050507; --stage: #101014; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #141418; --panel: #1C1C22; --ink: #EDEBE6; --muted: #9B9AA3; --line: #2D2D35;
+  --accent: #FF4A5E; --accent-soft: rgba(255,74,94,.14); --pass: #4CC38A; --pass-soft: rgba(76,195,138,.14); --fail: #FF6B5B; --fail-soft: rgba(255,107,91,.14);
+  --bezel: #050507; --stage: #101014; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 20px; }
+header h1 { font: 400 clamp(30px, 4vw, 42px)/1.05 var(--display); margin: 0; text-wrap: balance; }
+header h1 em { color: var(--accent); }
+header p { margin: 8px 0 0; color: var(--muted); max-width: 70ch; }
+.meta { font: 12px/1.4 var(--mono); color: var(--muted); margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+
+.bench { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.label { font: 600 11px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.group { display: grid; gap: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 13px/1 var(--body); padding: 8px 11px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+.chip:hover { border-color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip:focus-visible, .seg button:focus-visible, .btn:focus-visible, .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg { display: inline-grid; grid-auto-flow: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { font: 500 13px/1 var(--body); padding: 8px 12px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.seg button:disabled { color: var(--muted); opacity: .45; cursor: not-allowed; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch span { width: 34px; height: 20px; border-radius: 999px; background: var(--line); position: relative; transition: background .15s; }
+.switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--panel); transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(14px); }
+.select-wrap { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.select-wrap select { font: 500 13px/1 var(--body); padding: 7px 8px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.btn { font: 500 13px/1 var(--body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn:hover { border-color: var(--muted); }
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.steps .btn { padding: 8px 4px; font-size: 12px; }
+.steps-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.steps .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+dl.kv { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 7px 10px; margin: 0; font-size: 13px; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+dl.kv dd .pill { margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
+.pill { display: inline-block; padding: 2px 7px; border-radius: 999px; font: 600 11px/1.4 var(--mono); }
+.pill.pass { background: var(--pass-soft); color: var(--pass); }
+.pill.fail { background: var(--fail-soft); color: var(--fail); }
+.pill.wait { background: var(--line); color: var(--muted); }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+
+.stage { background: var(--stage); border-radius: 18px; min-height: 420px; padding: 24px 16px; display: grid; place-items: center; gap: 12px; overflow: hidden; position: relative; }
+.stage-caption { font: 12px/1.3 var(--mono); color: var(--muted); text-align: center; }
+.device-box { position: relative; }
+.device { position: absolute; top: 0; left: 0; transform-origin: 0 0; background: var(--bezel); box-shadow: 0 30px 60px -24px rgba(0,0,0,.45); }
+.device iframe { display: block; border: 0; background: #FBFAF6; position: absolute; }
+.device[data-frame="phone"] { border-radius: 52px; }
+.device[data-frame="phone"] iframe { border-radius: 40px; }
+.device[data-frame="duo"] { border-radius: 34px; }
+.device[data-frame="duo"] iframe { border-radius: 24px; }
+.device[data-frame="tablet"] { border-radius: 36px; }
+.device[data-frame="tablet"] iframe { border-radius: 18px; }
+.device[data-frame="laptop"] { border-radius: 14px; }
+.device[data-frame="laptop"] iframe { border-radius: 4px; }
+.device[data-frame="dual"] { border-radius: 26px; }
+.device[data-frame="dual"] iframe { border-radius: 10px; }
+.hinge { position: absolute; pointer-events: none; z-index: 2; }
+.hinge.gap { background: linear-gradient(90deg, #0b0b0e, #34343b 45%, #34343b 55%, #0b0b0e); }
+.hinge.fold-v { background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.16), rgba(0,0,0,0)); }
+.hinge.fold-h { background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.18), rgba(0,0,0,0)); }
+.real-frame { width: 100%; height: min(78vh, 900px); border: 1px solid var(--line); border-radius: 14px; background: #FBFAF6; display: block; }
+
+.matrix-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; }
+.matrix-head h2 { font: 400 26px/1.1 var(--display); margin: 0; }
+.summary { font: 500 13px/1.3 var(--mono); }
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 13px; }
+th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 11px/1.2 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--bg); position: sticky; top: 0; }
+tbody tr:last-child td { border-bottom: 0; }
+td.mono { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+td .exp { display: block; color: var(--muted); font-size: 11px; }
+td.bad { color: var(--fail); }
+tbody tr.running { background: var(--accent-soft); }
+.offscreen { position: absolute; left: -20000px; top: 0; width: 0; height: 0; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Atlas <em>Device</em> Lab</h1>
+    <p>Atlas’s own phone app, built from the repository, running on sample data. Pick a device: the app reads that device’s user agent, screen and posture with its own device profile, then sets Framework7’s navigation and, on wide screens, the desktop-style Discover layout to match. Everything in it is the app’s real code; only Fedizen and Atlas’s server are stood in for.</p>
+    <p class="note">Sample data: the people, posts, messages and notifications are written for the Lab, and the groups directory is fedizen.net’s public list as captured on 7 November 2026. Likes, saves, joins, follows and posts change the sample data until the page reloads; nothing is sent anywhere.</p>
+    <div class="meta" id="build-meta"><span>device-lab build</span></div>
+  </header>
+
+  <section class="bench">
+    <div class="card" id="controls">
+      <div class="group">
+        <span class="label">Apple</span>
+        <div class="chips" data-group="Apple"></div>
+      </div>
+      <div class="group">
+        <span class="label">Android</span>
+        <div class="chips" data-group="Android"></div>
+      </div>
+      <div class="group">
+        <span class="label">Desktop and real hardware</span>
+        <div class="chips" data-group="Desktop"><button type="button" class="chip" id="chip-real" aria-pressed="false">This device</button></div>
+      </div>
+      <div class="row">
+        <div class="seg" role="group" aria-label="Orientation">
+          <button type="button" id="o-portrait" aria-pressed="true">Portrait</button>
+          <button type="button" id="o-landscape" aria-pressed="false">Landscape</button>
+        </div>
+        <label class="select-wrap">Opened as
+          <select id="insets">
+            <option value="0">Browser tab</option>
+            <option value="1">Installed app</option>
+          </select>
+        </label>
+      </div>
+      <div class="group">
+        <span class="label">Walk the iPhone Duo</span>
+        <div class="steps">
+          <button type="button" class="btn" data-walk="duo-cover">Closed</button>
+          <button type="button" class="btn" data-walk="duo-open">Open</button>
+          <button type="button" class="btn" data-walk="duo-book">Book</button>
+          <button type="button" class="btn" data-walk="duo-split">Split</button>
+        </div>
+        <p class="note">Same app session, no reload: each step resizes the screen and reports the new posture, and Framework7 rearranges in place.</p>
+      </div>
+      <div class="group">
+        <span class="label">Live updates</span>
+        <div class="steps steps-2">
+          <button type="button" class="btn" data-lab="conversation">Open the conversation</button>
+          <button type="button" class="btn" data-lab="reply">A reply arrives</button>
+          <button type="button" class="btn" data-lab="edit">A reply is edited</button>
+          <button type="button" class="btn" data-lab="delete">A reply is deleted</button>
+        </div>
+        <p class="note">Plays what Fedizen’s live stream would send while the sample “ISS pass” conversation is open; the app reads the conversation again and shows the change in place, as it does with Fedizen. Translation uses this browser’s own translator where it has one (desktop Chrome and Edge).</p>
+      </div>
+      <div class="group">
+        <span class="label">Detected</span>
+        <dl class="kv" id="detected"></dl>
+      </div>
+      <div class="group">
+        <span class="label">Framework7, as rendered</span>
+        <dl class="kv" id="wiring"></dl>
+      </div>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="device-box" id="device-box"></div>
+      <div class="stage-caption" id="caption"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="matrix-head">
+      <h2>Verification matrix</h2>
+      <div class="row"><span class="summary" id="summary">Waiting to run</span><button type="button" class="btn primary" id="rerun">Run again</button></div>
+    </div>
+    <p class="note">Each row loads a fresh copy of the app at that device’s size and environment, then reads back what Framework7 actually rendered. Every visible control must sit clear of a 24 px zone around any fold, and a folded list pane must end exactly at the fold. Expected values are written out by hand from the layout rules, not computed by the code under test. Safe-area insets come from CSS env(), which a page can’t simulate: check those on a real device.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Device</th><th>Orientation</th><th>Detected as</th><th>Size class</th><th>Theme</th><th>Navigation</th><th>Panes</th><th>Fold deck</th><th>Clear of insets &amp; fold</th><th>Result</th></tr></thead>
+        <tbody id="matrix"></tbody>
+      </table>
+    </div>
+  </section>
+  <div class="offscreen" id="runner" aria-hidden="true"></div>
+</div>
+
+<script src="presets.js?v=g19"></script>
+<script>
+/* Bumped on every publish so browsers (and iOS home-screen apps) never show a cached app.html. */
+var LAB_V = 'r1';
+
+(function () {
+  'use strict';
+  var P = window.AtlasPresets.PRESETS;
+  // Hand-written expectations — independent of device.js.
+  // Hand-written from the layout rules (size class + fold, never device identity) — independent of device.js.
+  // nav: tabbar | tabbar-side | rail | sidebar | deck     panes: single | flat | fold
+  var E = function (name, layout, theme, nav, panes) { return { name: name, layout: layout, theme: theme, nav: nav, panes: panes, deck: nav === 'deck' }; };
+  var EXPECT = {
+    'iphone:portrait':         E('iPhone', 'compact', 'ios', 'tabbar', 'single'),
+    'iphone:landscape':        E('iPhone', 'compact', 'ios', 'tabbar-side', 'single'),
+    'duo-cover:portrait':      E('iPhone Duo · cover display', 'compact', 'ios', 'tabbar', 'single'),
+    'duo-cover:landscape':     E('iPhone Duo · cover display', 'compact', 'ios', 'tabbar-side', 'single'),
+    'duo-open:portrait':       E('iPhone Duo · inner display', 'regular', 'ios', 'rail', 'single'),
+    'duo-open:landscape':      E('iPhone Duo · inner display', 'regular', 'ios', 'rail', 'flat'),
+    'duo-book:landscape':      E('iPhone Duo · inner display', 'regular', 'ios', 'rail', 'fold'),
+    'duo-split:landscape':     E('iPhone Duo · Split View', 'compact', 'ios', 'tabbar', 'single'),
+    'ipad:portrait':           E('iPad', 'regular', 'ios', 'rail', 'single'),
+    'ipad:landscape':          E('iPad', 'expanded', 'ios', 'sidebar', 'flat'),
+    'android-phone:portrait':  E('Android phone', 'compact', 'md', 'tabbar', 'single'),
+    'android-phone:landscape': E('Android phone', 'compact', 'md', 'tabbar-side', 'single'),
+    'android-fold:portrait':   E('Android foldable · inner display', 'regular', 'md', 'rail', 'single'),
+    'android-fold:landscape':  E('Android foldable · inner display', 'regular', 'md', 'rail', 'flat'),
+    'android-flex:portrait':   E('Android foldable · inner display', 'tabletop', 'md', 'deck', 'single'),
+    'dual-spanned:landscape':  E('Android foldable · inner display', 'expanded', 'md', 'sidebar', 'fold'),
+    'android-tablet:portrait': E('Android tablet', 'regular', 'md', 'rail', 'single'),
+    'android-tablet:landscape':E('Android tablet', 'expanded', 'md', 'sidebar', 'flat'),
+    'desktop:landscape':       E('Mac', 'expanded', 'ios', 'sidebar', 'flat')
+  };
+  var BEZEL = { phone: 12, duo: 10, tablet: 18, laptop: 14, dual: 14 };
+  var BRAND = { phone: 'phone', duo: 'foldable', tablet: 'tablet', laptop: 'desktop', dual: 'dual-screen' };
+
+  var sel = { key: 'duo-open', o: 'landscape', sa: '0', real: false };
+  try { var saved = JSON.parse(localStorage.getItem('atlas-lab-sel') || 'null'); if (saved && P[saved.key]) sel = Object.assign(sel, saved, { real: false, sa: String(saved.sa || '0') }); } catch (e) {}
+  var frame = null, frameTheme = null, frameDevice = null, last = null;
+  // One physical device = one app session: rotating, folding or changing safe areas keeps the reader's place;
+  // picking a different device starts that device fresh. All four iPhone Duo states are the same phone.
+  function physicalDevice(key) { return key.indexOf('duo-') === 0 ? 'iphone-duo' : key; }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  function orients(key) { return Object.keys(P[key].o); }
+  function fixOrient() { if (!P[sel.key].o[sel.o]) sel.o = orients(sel.key)[0]; }
+  function themeOf(key) { return P[key].env.ua.indexOf('Android') >= 0 ? 'md' : 'ios'; }
+  function save() { try { localStorage.setItem('atlas-lab-sel', JSON.stringify({ key: sel.key, o: sel.o, sa: sel.sa })); } catch (e) {} }
+
+  /* Device chips */
+  Object.keys(P).forEach(function (k) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = P[k].label; b.dataset.key = k;
+    b.addEventListener('click', function () { sel.key = k; sel.real = false; fixOrient(); show(); });
+    var g = document.querySelector('.chips[data-group="' + P[k].group + '"]');
+    if (P[k].group === 'Desktop') g.insertBefore(b, $('chip-real')); else g.appendChild(b);
+  });
+  $('chip-real').addEventListener('click', function () { sel.real = true; show(); });
+  $('o-portrait').addEventListener('click', function () { sel.o = 'portrait'; fixOrient(); show(); });
+  $('o-landscape').addEventListener('click', function () { sel.o = 'landscape'; fixOrient(); show(); });
+  $('insets').addEventListener('change', function () { sel.sa = this.value; show(); });
+  document.querySelectorAll('[data-lab]').forEach(function (b) {
+    b.addEventListener('click', function () { var f = $('stage').querySelector('iframe'); if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'atlas-lab', action: b.dataset.lab }, '*'); });
+  });
+  // Which commit this Lab was built from (build.json, written by device-lab/vite.config.ts).
+  fetch('build.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (b) {
+    if (!b) return;
+    $('build-meta').innerHTML = '<span>aura-social-atlas ' + esc(b.commit) + '</span><span>built ' + esc(b.date) + '</span><span>framework7 ' + esc(b.framework7) + '</span><span>iPhone Duo sizes: WebKit, Safari 27.1</span>';
+  }).catch(function () {});
+  document.querySelectorAll('[data-walk]').forEach(function (b) {
+    b.addEventListener('click', function () { sel.key = b.dataset.walk; sel.real = false; sel.o = b.dataset.walk === 'duo-cover' ? 'portrait' : 'landscape'; fixOrient(); show(); });
+  });
+
+  function syncControls() {
+    document.querySelectorAll('.chip[data-key]').forEach(function (b) { b.setAttribute('aria-pressed', String(!sel.real && b.dataset.key === sel.key)); });
+    $('chip-real').setAttribute('aria-pressed', String(sel.real));
+    var os = sel.real ? [] : orients(sel.key);
+    $('o-portrait').disabled = os.indexOf('portrait') < 0; $('o-landscape').disabled = os.indexOf('landscape') < 0;
+    $('o-portrait').setAttribute('aria-pressed', String(!sel.real && sel.o === 'portrait'));
+    $('o-landscape').setAttribute('aria-pressed', String(!sel.real && sel.o === 'landscape'));
+    $('insets').disabled = sel.real; $('insets').value = sel.sa;
+    document.querySelectorAll('[data-walk]').forEach(function (b) { b.setAttribute('aria-pressed', String(!sel.real && b.dataset.walk === sel.key)); });
+  }
+
+  /* Stage */
+  function fit() {
+    if (sel.real || !frame) return;
+    var p = P[sel.key], o = p.o[sel.o], b = BEZEL[p.frame];
+    var W = o.w + b * 2, H = o.h + b * 2;
+    var stage = $('stage'), availW = stage.clientWidth - 32, availH = Math.max(380, Math.min(window.innerHeight * 0.78, 900));
+    var s = Math.min(1, availW / W, availH / H);
+    var box = $('device-box'); box.style.width = W * s + 'px'; box.style.height = H * s + 'px';
+    var dev = box.querySelector('.device'); dev.style.transform = 'scale(' + s + ')';
+    $('caption').textContent = p.label + ' · ' + sel.o + ' · ' + o.w + ' × ' + o.h + ' CSS px' + (s < 1 ? ' · shown at ' + Math.round(s * 100) + '%' : '') + (sel.sa === '1' ? ' · installed app' : '');
+  }
+  function drawHinge(dev, p, o, b) {
+    dev.querySelectorAll('.hinge').forEach(function (h) { h.remove(); });
+    if (!o.segs) return;
+    var a = o.segs[0], c = o.segs[1], h = document.createElement('div');
+    if (c.x > a.x) {
+      var gap = c.x - (a.x + a.width);
+      h.className = 'hinge ' + (gap > 2 ? 'gap' : 'fold-v');
+      var w = gap > 2 ? gap : 24;
+      h.style.left = b + a.x + a.width + (gap > 2 ? 0 : -12) + 'px'; h.style.top = b + 'px'; h.style.width = w + 'px'; h.style.height = o.h + 'px';
+    } else {
+      h.className = 'hinge fold-h';
+      h.style.top = b + a.y + a.height - 12 + 'px'; h.style.left = b + 'px'; h.style.height = '24px'; h.style.width = o.w + 'px';
+    }
+    dev.appendChild(h);
+  }
+  function show() {
+    fixOrient(); syncControls(); save();
+    var box = $('device-box');
+    if (sel.real) {
+      box.style.width = '100%'; box.style.height = 'auto';
+      box.innerHTML = '<iframe class="real-frame" title="Atlas app on this device" src="app.html?v=' + LAB_V + '"></iframe>';
+      frame = box.querySelector('iframe'); frameTheme = null; last = null;
+      $('caption').innerHTML = 'Running on this browser with no simulation. On a phone or foldable, also try <a href="app.html?v=' + LAB_V + '" target="_blank" rel="noopener">the app on its own</a>.';
+      renderReadout(null); return;
+    }
+    var p = P[sel.key], o = p.o[sel.o], b = BEZEL[p.frame], theme = themeOf(sel.key);
+    var dev = box.querySelector('.device');
+    var canLive = frame && dev && frameTheme === theme && frameDevice === physicalDevice(sel.key) && !frame.classList.contains('real-frame');
+    if (!canLive) {
+      box.innerHTML = '<div class="device"><iframe title="Atlas app"></iframe></div>';
+      dev = box.querySelector('.device'); frame = dev.querySelector('iframe');
+      frame.src = 'app.html?v=' + LAB_V + '&p=' + encodeURIComponent(sel.key) + '&o=' + sel.o + '&sa=' + sel.sa;
+      frameTheme = theme; frameDevice = physicalDevice(sel.key);
+    }
+    dev.dataset.frame = p.frame;
+    dev.style.width = o.w + b * 2 + 'px'; dev.style.height = o.h + b * 2 + 'px';
+    frame.style.left = b + 'px'; frame.style.top = b + 'px'; frame.style.width = o.w + 'px'; frame.style.height = o.h + 'px';
+    drawHinge(dev, p, o, b);
+    fit();
+    if (canLive) frame.contentWindow.postMessage({ type: 'atlas-sim', key: sel.key, o: sel.o, sa: sel.sa }, '*');
+    last = null; renderReadout(null);
+  }
+  window.addEventListener('resize', fit);
+  if (window.ResizeObserver) new ResizeObserver(fit).observe($('stage'));
+
+  /* Readout */
+  function kv(el, rows) {
+    el.innerHTML = rows.map(function (r) {
+      var mark = r[2] == null ? '' : '<span class="pill ' + (r[2] ? 'pass' : 'fail') + '">' + (r[2] ? 'as expected' : 'expected ' + esc(r[3])) + '</span>';
+      return '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + mark + '</dd>';
+    }).join('');
+  }
+  function renderReadout(msg) {
+    if (!msg) { kv($('detected'), [['Status', 'Loading the app…', null]]); kv($('wiring'), []); return; }
+    var pr = msg.profile, f = msg.f7, ex = sel.real ? null : EXPECT[sel.key + ':' + sel.o];
+    var chk = function (actual, exp) { return ex ? actual === exp : null; };
+    kv($('detected'), [
+      ['Device', pr.name, chk(pr.name, ex && ex.name), ex && ex.name],
+      ['OS · browser', pr.os + ' · ' + pr.browser, null],
+      ['Posture', pr.posture + (pr.span !== 'none' ? ' · spanned ' + pr.span : ''), null],
+      ['Input · display', pr.input + ' · ' + pr.display, null],
+      ['Viewport', pr.width + ' × ' + pr.height, null],
+      ['Size class', pr.layout, chk(pr.layout, ex && ex.layout), ex && ex.layout]
+    ]);
+    kv($('wiring'), [
+      ['Theme', f.theme, chk(f.theme, ex && ex.theme), ex && ex.theme],
+      ['Navigation', f.nav, chk(f.nav, ex && ex.nav), ex && ex.nav],
+      ['Panes', f.panes, chk(f.panes, ex && ex.panes), ex && ex.panes],
+      ['Fold deck', f.deck ? 'open' : 'closed', chk(f.deck, ex && ex.deck), ex && (ex.deck ? 'open' : 'closed')],
+      ['Clear of insets', msg.checks ? (msg.checks.insetsSimulated === false ? 'real device only' : msg.checks.insetHits.length ? msg.checks.insetHits.join(', ') : 'yes') : '…', msg.checks && msg.checks.insetsSimulated !== false ? !msg.checks.insetHits.length : null, 'yes'],
+      ['Clear of fold', msg.checks ? (msg.checks.foldHits.length ? msg.checks.foldHits.join(', ') : (pr.span === 'none' ? 'no fold' : 'yes')) : '…', msg.checks ? !msg.checks.foldHits.length : null, 'yes'],
+      ['Route', f.route, null]
+    ]);
+  }
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || d.type !== 'atlas-state') return;
+    if (frame && e.source === frame.contentWindow) { last = d; renderReadout(d); return; }
+    if (runner.frame && e.source === runner.frame.contentWindow && d.settled) runner.onState(d);
+  });
+
+  /* Verification matrix */
+  var CASES = Object.keys(EXPECT).map(function (k) { var s = k.split(':'); return { key: s[0], o: s[1] }; });
+  var runner = { frame: null, i: 0, pass: 0, timer: 0, onState: function () {} };
+  function cell(actual, expected, fmt) {
+    var ok = actual === expected, a = fmt ? fmt(actual) : actual;
+    return '<td class="mono' + (ok ? '' : ' bad') + '">' + esc(a) + (ok ? '' : '<span class="exp">expected ' + esc(fmt ? fmt(expected) : expected) + '</span>') + '</td>';
+  }
+  var op = function (v) { return v ? 'open' : 'closed'; };
+  function clearCell(d) {
+    var c = d.checks, bad = c.insetHits.concat(c.foldHits);
+    var splitBad = d.f7.panes === 'fold' && (c.splitOffset == null || Math.abs(c.splitOffset) > 2);
+    if (splitBad) bad.push('list pane ends ' + c.splitOffset + 'px from the fold');
+    return { ok: !bad.length, html: '<td class="mono' + (bad.length ? ' bad' : '') + '">' + (bad.length ? esc(bad.join('; ')) : (d.profile.span !== 'none' ? 'yes · split at fold' : 'yes')) + '</td>' };
+  }
+  function rowHTML(c, d) {
+    var ex = EXPECT[c.key + ':' + c.o], p = P[c.key];
+    if (!d) return '<td>' + esc(p.label) + '</td><td class="mono">' + c.o + '</td><td colspan="7" class="mono" style="color:var(--muted)">' + (d === false ? 'No response within 8 s' : 'Queued') + '</td><td>' + (d === false ? '<span class="pill fail">fail</span>' : '<span class="pill wait">…</span>') + '</td>';
+    var pr = d.profile, f = d.f7, cl = clearCell(d);
+    var ok = pr.name === ex.name && pr.layout === ex.layout && f.theme === ex.theme && f.nav === ex.nav && f.panes === ex.panes && f.deck === ex.deck && cl.ok;
+    return '<td>' + esc(p.label) + '</td><td class="mono">' + c.o + '</td>' + cell(pr.name, ex.name) + cell(pr.layout, ex.layout) + cell(f.theme, ex.theme)
+      + cell(f.nav, ex.nav) + cell(f.panes, ex.panes) + cell(f.deck, ex.deck, op) + cl.html
+      + '<td><span class="pill ' + (ok ? 'pass' : 'fail') + '">' + (ok ? 'pass' : 'fail') + '</span></td>';
+  }
+  function runAll() {
+    clearTimeout(runner.timer);
+    $('matrix').innerHTML = CASES.map(function (c, i) { return '<tr id="m' + i + '">' + rowHTML(c, null) + '</tr>'; }).join('');
+    runner.i = 0; runner.pass = 0; $('rerun').disabled = true; next();
+  }
+  function next() {
+    var c = CASES[runner.i];
+    if (!c) {
+      $('summary').textContent = runner.pass + ' of ' + CASES.length + ' passed';
+      $('summary').style.color = runner.pass === CASES.length ? 'var(--pass)' : 'var(--fail)';
+      $('rerun').disabled = false; $('runner').innerHTML = ''; runner.frame = null; return;
+    }
+    $('summary').style.color = ''; $('summary').textContent = 'Running ' + (runner.i + 1) + ' of ' + CASES.length + '…';
+    var tr = $('m' + runner.i); tr.className = 'running';
+    var o = P[c.key].o[c.o];
+    $('runner').innerHTML = '<iframe title="verification run" style="width:' + o.w + 'px;height:' + o.h + 'px;border:0"></iframe>';
+    runner.frame = $('runner').querySelector('iframe');
+    var done = function (d) {
+      clearTimeout(runner.timer); runner.onState = function () {};
+      tr.className = ''; tr.innerHTML = rowHTML(c, d || false);
+      if (d && tr.querySelector('.pill.pass')) runner.pass++;
+      runner.i++; setTimeout(next, 30);
+    };
+    runner.onState = done;
+    runner.timer = setTimeout(function () { done(null); }, 8000);
+    runner.frame.src = 'app.html?v=' + LAB_V + '&p=' + encodeURIComponent(c.key) + '&o=' + c.o + '&sa=0&run=' + Date.now();
+  }
+  $('rerun').addEventListener('click', runAll);
+
+  show();
+  setTimeout(runAll, 600);
+})();
+</script>
