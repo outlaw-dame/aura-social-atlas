@@ -2,12 +2,14 @@ import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { ProfileHoverCard } from './ProfileHoverCard';
-import { ArrowUpRight, AtSign, Bell, BarChart3, Heart, Layers3, Link2, PenLine, RefreshCw, UserPlus } from 'lucide-react';
+import { ArrowUpRight, AtSign, Bell, BarChart3, Heart, Layers3, Link2, PenLine, Quote, RefreshCw, Reply, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFedizen } from './useFedizen';
 import { useFollowRequests } from './useOwnPosts';
 import { useNotificationGroups } from './useNotificationGroups';
-import { groupSentence, type FedizenNoticeGroup } from '@/lib/fedizen-feed';
+import { groupSentence, type FedizenNotice, type FedizenNoticeGroup } from '@/lib/fedizen-feed';
+import { noticeActionLabel, noticeTarget, singleNoticeTarget, type NoticeTarget } from '@/lib/notice-target';
+import { openCollection } from '@/lib/collections';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 const kinds: Record<string, { icon: typeof Bell; color: string }> = {
@@ -16,6 +18,10 @@ const kinds: Record<string, { icon: typeof Bell; color: string }> = {
   follow: { icon: UserPlus, color: '#6364ff' },
   follow_request: { icon: UserPlus, color: '#6364ff' },
   mention: { icon: AtSign, color: 'var(--accent)' },
+  reply: { icon: Reply, color: 'var(--accent)' },
+  quote: { icon: Quote, color: 'var(--accent)' },
+  update: { icon: PenLine, color: 'var(--accent)' },
+  quoted_update: { icon: PenLine, color: 'var(--accent)' },
   status: { icon: PenLine, color: 'var(--accent)' },
   poll: { icon: BarChart3, color: 'var(--accent)' },
   // Mastodon 4.6 collections: someone featured you, or changed a collection you're in.
@@ -61,21 +67,39 @@ function GroupedActivity({ fallback }: { fallback: React.ReactNode }) {
   </section>;
 }
 
+/**
+ * A notification row's whole-row target (notice-target.ts), as Mastodon's web app opens a notification: a real link
+ * to the conversation (so it opens in a new tab too), or a button for a profile or collection. It covers the row
+ * (`after:` inset), under the faces and names, which stay their own buttons. Several people (grouped follows) have no
+ * one place to go; their faces are.
+ */
+function RowTarget({ t, label }: { t: NoticeTarget | null; label: string }) {
+  if (!t || t.kind === 'people') return null;
+  const cls = 'absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+  const name = `${label}. ${noticeActionLabel(t)}`;
+  if (t.kind === 'post') return <Link to="/post/$id" params={{ id: t.statusId }} className={cls} aria-label={name} />;
+  const go = t.kind === 'profile' ? () => openFediProfile({ actor: t.person.actor, acct: t.person.acct, name: t.person.name }) : () => openCollection(t.link);
+  return <button type="button" className={cls} aria-label={name} onClick={go} />;
+}
+const rowClass = (t: NoticeTarget | null) => `relative -mx-3 flex gap-4 rounded-xl px-3 py-4 ${t && t.kind !== 'people' ? 'transition-colors hover:bg-muted/60' : ''}`;
+
 function GroupRow({ g }: { g: FedizenNoticeGroup }) {
   const k = kinds[g.type] ?? { icon: Bell, color: 'var(--accent)' };
   const s = groupSentence(g);
+  const t = noticeTarget(g);
   const first = g.people[0];
   const open = (p: FedizenNoticeGroup['people'][number]) => (p.acct || p.actor ? () => openFediProfile({ actor: p.actor, acct: p.acct, name: p.name }) : undefined);
-  return <li className="flex gap-4 py-4">
+  return <li className={rowClass(t)}>
+    <RowTarget t={t} label={`${s.names} ${s.rest}`} />
     <span className="grid size-10 shrink-0 place-items-center rounded-full text-white" style={{ background: k.color }}><k.icon className="size-5" aria-hidden="true" /></span>
-    <div className="min-w-0 flex-1">
+    <div className="pointer-events-none min-w-0 flex-1">
       {g.people.length > 0 && <div className="mb-1.5 flex -space-x-2">{g.people.slice(0, 6).map((p, i) => {
         const face = <span className="block atlas-avatar ring-2 ring-background"><Face avatar={p.avatar} name={p.name} small /></span>;
         const go = open(p);
-        return go ? <ProfileHoverCard key={i} target={{ actor: p.actor, acct: p.acct, name: p.name }}><button type="button" onClick={go} aria-label={`${p.name}. Open their profile`}>{face}</button></ProfileHoverCard> : <span key={i}>{face}</span>;
+        return go ? <ProfileHoverCard key={i} target={{ actor: p.actor, acct: p.acct, name: p.name }}><button type="button" className="pointer-events-auto relative" onClick={go} aria-label={`${p.name}. Open their profile`}>{face}</button></ProfileHoverCard> : <span key={i}>{face}</span>;
       })}</div>}
       <p className="flex items-baseline justify-between gap-3 text-sm">
-        <span>{first && open(first) && g.people.length === 1 ? <button type="button" className="font-semibold hover:underline" onClick={open(first)}>{s.names}</button> : <span className="font-semibold">{s.names}</span>} <span className="text-muted-foreground">{s.rest}</span></span>
+        <span>{first && open(first) && g.people.length === 1 ? <button type="button" className="pointer-events-auto relative font-semibold hover:underline" onClick={open(first)}>{s.names}</button> : <span className="font-semibold">{s.names}</span>} <span className="text-muted-foreground">{s.rest}</span></span>
         <span className="shrink-0 text-xs text-muted-foreground">{when(g.date)}</span>
       </p>
       {g.post?.text && <p className="mt-1 line-clamp-3 text-sm text-muted-foreground [overflow-wrap:anywhere]">{g.post.text}</p>}
@@ -84,18 +108,20 @@ function GroupRow({ g }: { g: FedizenNoticeGroup }) {
 }
 
 /** Single notifications, for a Fedizen that can't group them. */
-function SingleActivity({ notices: list, note }: { notices: { id: string; type: string; author: string; avatar?: string; date?: string; text: string; acct?: string; actor?: string }[]; note: (c: React.ReactNode) => React.ReactNode }) {
+function SingleActivity({ notices: list, note }: { notices: FedizenNotice[]; note: (c: React.ReactNode) => React.ReactNode }) {
   if (!list.length) return <>{note('No activity yet. Follows, mentions, likes and boosts on Fedizen will show up here.')}</>;
   return <><ul className="divide-y divide-border">{list.map(n => {
     const k = kinds[n.type ?? ''] ?? { icon: Bell, color: 'var(--accent)' };
     const who = n.acct || n.actor ? { actor: n.actor, acct: n.acct, name: n.author } : null;
+    const t = singleNoticeTarget(n);
     const face = <span className="relative size-10 shrink-0">
         <Face avatar={n.avatar} name={n.author} />
         <span className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full text-white ring-2 ring-background" style={{ background: k.color }}><k.icon className="size-3" aria-hidden="true" /></span>
       </span>;
-    return <li key={n.id} className="flex gap-4 py-4">
-      {who ? <ProfileHoverCard target={who}><button type="button" className="shrink-0 rounded-full" onClick={() => openFediProfile(who)} aria-label={`${n.author}. Open their profile`}>{face}</button></ProfileHoverCard> : face}
-      <div className="min-w-0 flex-1"><p className="flex items-baseline justify-between gap-3 text-sm">{who ? <ProfileHoverCard target={who}><button type="button" className="font-semibold hover:underline" onClick={() => openFediProfile(who)}>{n.author}</button></ProfileHoverCard> : <span className="font-semibold">{n.author}</span>}<span className="shrink-0 text-xs text-muted-foreground">{when(n.date)}</span></p>
+    return <li key={n.id} className={rowClass(t)}>
+      <RowTarget t={t} label={`${n.author} ${n.text}`} />
+      {who ? <ProfileHoverCard target={who}><button type="button" className="relative shrink-0 rounded-full" onClick={() => openFediProfile(who)} aria-label={`${n.author}. Open their profile`}>{face}</button></ProfileHoverCard> : face}
+      <div className="pointer-events-none min-w-0 flex-1"><p className="flex items-baseline justify-between gap-3 text-sm">{who ? <ProfileHoverCard target={who}><button type="button" className="pointer-events-auto relative font-semibold hover:underline" onClick={() => openFediProfile(who)}>{n.author}</button></ProfileHoverCard> : <span className="font-semibold">{n.author}</span>}<span className="shrink-0 text-xs text-muted-foreground">{when(n.date)}</span></p>
         <p className="mt-0.5 text-sm text-muted-foreground [overflow-wrap:anywhere]">{n.text}</p></div>
     </li>;
   })}</ul></>;

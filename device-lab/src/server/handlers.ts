@@ -89,7 +89,7 @@ const NOTICES: FedizenNoticeGroup[] = [
   { key: 'g3', type: 'reply', count: 1, date: ago(39), people: [fedi('priya')], verb: 'replied to you', post: { id: ISS_REPLIES.find(p => p.paragraphs[0].startsWith('Have fun'))!.id, text: 'Have fun! Binoculars are plenty for the ISS.' } },
   { key: 'g4', type: 'reblog', count: 6, date: ago(90), people: [fedi('hearth'), fedi('mara')], verb: 'boosted your post', post: { id: MY_POSTS[0].id, text: MY_POSTS[0].paragraphs[0] } },
   { key: 'g5', type: 'follow', count: 3, date: ago(180), people: [fedi('jonas'), fedi('tomas'), fedi('lea')], verb: 'followed you' },
-  { key: 'g6', type: 'poll', count: 1, date: ago(600), people: [fedi('sam')], verb: 'A poll you voted in has ended', post: { id: 'poll-old', text: 'Which planet should we look at first on Friday?' } },
+  { key: 'g6', type: 'poll', count: 1, date: ago(600), people: [fedi('sam')], verb: 'A poll you voted in has ended', post: (() => { const p = HOME.find(x => x.pollState)!; return { id: p.id, text: p.paragraphs[0] }; })() },
   { key: 'g7', type: 'added_to_collection', count: 1, date: ago(1440), people: [fedi('mara')], verb: 'added you to a collection' },
 ];
 

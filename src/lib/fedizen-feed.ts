@@ -51,7 +51,7 @@ export type FediPerson = { name: string; avatar?: string; acct?: string; actor?:
 /** A mention: the full handle, and the name it's written as in the text (the handle's first part). */
 export type FediMention = { acct: string; username: string };
 export type PostArticle = { url: string; title?: string; provider?: string; byline?: string; /** The preview's summary and image. */ description?: string; image?: string; /** The preview's author link: checked for an ActivityPub account, never shown as-is. */ authorUrl?: string; authors?: FediAuthor[]; /** A podcast episode Atlas can play in place. */ episode?: FediEpisode; /** A video (PeerTube) Atlas can play in place. */ video?: FediVideo };
-export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string; /** Who did it, to open their profile in Atlas. */ acct?: string; actor?: string };
+export type FedizenNotice = { id: string; type: string; author: string; avatar?: string; date?: string; text: string; /** Who did it, to open their profile in Atlas. */ acct?: string; actor?: string; /** The post it's about, to open its conversation. */ statusId?: string };
 /** A direct conversation (Mastodon `Conversation`): the other people in it and its latest message, as plain text. */
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
@@ -168,11 +168,18 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
   });
 }
 
-const verbs: Record<string, string> = { favourite: 'liked your post', reblog: 'boosted your post', follow: 'followed you', mention: 'mentioned you', status: 'posted', poll: 'poll ended', follow_request: 'asked to follow you', added_to_collection: 'added you to a collection', collection_update: 'updated a collection you’re in' };
+/** Mastodon's notification types (docs.joinmastodon.org/entities/Notification), worded as Mastodon words them. */
+const verbs: Record<string, string> = {
+  favourite: 'liked your post', reblog: 'boosted your post', follow: 'followed you', mention: 'mentioned you', status: 'posted', poll: 'poll ended',
+  follow_request: 'asked to follow you', update: 'edited a post you boosted', quote: 'quoted your post', quoted_update: 'edited a post you quoted',
+  'admin.sign_up': 'signed up', 'admin.report': 'filed a report', severed_relationships: 'some of your follows were cut off', moderation_warning: 'moderators took action on your account',
+  added_to_collection: 'added you to a collection', collection_update: 'updated a collection you’re in',
+};
 export function fromNotifications(list: Notice[]): FedizenNotice[] {
   return list.map(n => ({
     id: n.id, type: n.type ?? 'other', author: name(n.account), avatar: avatarOf(n.account), date: n.created_at,
     ...(() => { const a = person(n.account); return { ...(a.acct ? { acct: a.acct } : {}), ...(a.actor ? { actor: a.actor } : {}) }; })(),
+    ...(n.status?.id ? { statusId: n.status.id } : {}),
     text: `${verbs[n.type ?? ''] ?? 'interacted with you'}${n.status?.content ? ` — ${htmlToParagraphs(n.status.content).join(' ').slice(0, 140)}` : ''}`,
   }));
 }
@@ -186,12 +193,14 @@ export type FedizenNoticeGroup = {
   key: string; type: string; count: number; date?: string; people: FediPerson[];
   /** The post it's about (yours for likes and boosts; theirs for mentions and replies), as plain text. */
   post?: { id: string; text: string; url?: string };
+  /** The collection it's about (added_to_collection, collection_update), as its Mastodon page. */
+  collection?: string;
   /** Mastodon's own wording for one, e.g. "mentioned you". */ verb: string;
 };
 type Grouped = {
   accounts?: (Acct & { id?: string | null })[] | null;
   statuses?: Status[] | null;
-  notification_groups?: { group_key: string; notifications_count?: number | null; type?: string | null; latest_page_notification_at?: string | null; sample_account_ids?: string[] | null; status_id?: string | null }[] | null;
+  notification_groups?: { group_key: string; notifications_count?: number | null; type?: string | null; latest_page_notification_at?: string | null; sample_account_ids?: string[] | null; status_id?: string | null; collection?: { url?: string | null } | null }[] | null;
 };
 export const GROUPABLE = new Set(['favourite', 'reblog', 'follow']);
 
@@ -207,6 +216,7 @@ export function fromGroupedNotifications(g: Grouped): FedizenNoticeGroup[] {
       key: n.group_key, type, count: Math.max(1, n.notifications_count ?? people.length ?? 1), date: n.latest_page_notification_at ?? undefined, people,
       verb: verbs[type] ?? 'interacted with you',
       ...(st ? { post: { id: st.id, text, ...(http(st.url) ?? http(st.uri) ? { url: http(st.url) ?? http(st.uri) } : {}) } } : {}),
+      ...(n.collection?.url && mastodonCollectionApi(n.collection.url) ? { collection: n.collection.url } : {}),
     };
   });
 }

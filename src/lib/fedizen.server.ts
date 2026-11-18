@@ -464,6 +464,8 @@ const groupedSchema = z.object({
     latest_page_notification_at: z.string().max(64).nullish().catch(null),
     sample_account_ids: z.array(z.string().max(64)).max(400).nullish().catch(null),
     status_id: z.string().max(64).nullish().catch(null),
+    /** Mastodon 4.6: the collection behind added_to_collection / collection_update; only its page URL is kept. */
+    collection: z.object({ url: z.string().max(500).nullish().catch(null) }).nullish().catch(null),
   })).max(80),
 });
 /** Mastodon Relationship (Bonfire answers it for groups too; members follow their groups). */
