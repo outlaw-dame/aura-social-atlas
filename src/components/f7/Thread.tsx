@@ -7,20 +7,17 @@ import { FEED_PROBLEM } from '@/components/social/useFeeds';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { MobilePostContent, useMobilePostActions } from './MobilePostCard';
 import { MobileFilterGate } from './FilterGate';
-import { ChatConversation, ProtoSwitch, useConversationVisit, useProtoStyle, useReplyMode } from '@/components/social/ConversationProto';
-import { ThreadA } from '@/components/social/ThreadA';
-import { CONVERSATIONS_URL, pushPage } from './navigation';
+import { useConversationVisit, useReplyMode } from '@/components/social/ConversationParts';
+import { ConversationThread } from '@/components/social/ConversationThread';
 
 /**
  * Phone: a post's conversation, pushed onto the stack when a post is tapped (back chevron, swipe back; pull down to
- * refresh), in either prototype — A, Bonfire + Phanpy (ThreadA.tsx), or B,
- * + Wavelength (ConversationProto.tsx). thread.ts arranges it.
+ * refresh). ConversationThread.tsx draws it; thread.ts arranges it.
  */
 export function ThreadPage({ f7route, seed }: { f7route?: { params: { id?: string } }; seed?: FedizenPost }) {
   const id = f7route?.params.id ?? null;
   const t = useThread(id, seed);
   const actions = useMobilePostActions();
-  const [style, setStyle] = useProtoStyle();
   const [replyMode, setReplyMode] = useReplyMode();
   const lastVisit = useConversationVisit(t.thread, !t.loading);
   return <Page className="atlas-thread-page" ptr onPtrRefresh={(done: () => void) => { t.refetch(); setTimeout(done, 600); }}>
@@ -32,17 +29,14 @@ export function ThreadPage({ f7route, seed }: { f7route?: { params: { id?: strin
           ? 'This post isn’t available. It may have been deleted, or you may not be able to see it.'
           : <>{t.error && t.error in FEED_PROBLEM ? FEED_PROBLEM[t.error as keyof typeof FEED_PROBLEM] : FEED_PROBLEM.unavailable} <Link onClick={t.refetch}>Try again</Link></>}</Block>
       : <FilterPlaceProvider place="public">
-        <div className="atlas-proto-wrap"><ProtoSwitch style={style} setStyle={setStyle} /></div>
-        {style === 'b'
-          ? <ChatConversation thread={t.thread} actions={actions} lastVisit={lastVisit} arrived={t.arrived} Gate={MessageGate} Content={MobilePostContent} onOpenInbox={() => pushPage(CONVERSATIONS_URL)} onOpenPost={p => openPost(p)} />
-          : <div className="atlas-proto-wrap"><ThreadA thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} sort={t.sort} setSort={t.setSort}
-              replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} arrived={t.arrived} Gate={MessageGate} Content={MobilePostContent} onOpenPost={p => openPost(p)} /></div>}
+        <div className="atlas-proto-wrap"><ConversationThread thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} sort={t.sort} setSort={t.setSort}
+          replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} arrived={t.arrived} Gate={MessageGate} Content={MobilePostContent} onOpenPost={p => openPost(p)} /></div>
       </FilterPlaceProvider>}
     {actions.sheet}
   </Page>;
 }
 
-/** Posts in either prototype behind the reader's filters, as a card's would be (no card frame). */
+/** Posts behind the reader's filters, as a card's would be (no card frame). */
 function MessageGate({ post, children }: { post: FedizenPost; children: ReactNode }) {
   return <MobileFilterGate post={post} card={false}>{children}</MobileFilterGate>;
 }

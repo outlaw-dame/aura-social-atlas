@@ -3,38 +3,37 @@ import { ArrowUpRight, ChevronDown, CornerDownRight, MessageCircle, Repeat2 } fr
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { PAGE, REPLY_SORTS, type ReplySort, type Thread, type ThreadNode } from '@/lib/thread';
 import { allPosts, branchesOf, flatReplies, rootOf, threadNumbers, type ReplyMode } from '@/lib/conversation';
-import { ATLAS, BONFIRE, PHANPY, atlasFolds, calibration, postHeight, bonfireFolds, bonfireMoreLabel, phanpyFolds, reasonWords, replyFaces, type AtlasFold, type AtlasReason, type PhanpyFold } from '@/lib/folding';
+import { ATLAS, atlasFolds, calibration, postHeight, reasonWords, replyFaces, type AtlasFold, type AtlasReason } from '@/lib/folding';
 import { fullAcct } from '@/lib/fedizen-feed';
 import { isPostClick } from '@/lib/open-post';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { shortAgo } from '@/lib/feed-types';
 import { PostActionBar } from './PostActionBar';
-import { ArrivalNote, Face, FoldSwitch, ParticipantsStrip, ReplyModeSwitch, justArrived, useFoldStyle, useIsMePost, useMyAcct, useScrollAnchor } from './ConversationProto';
+import { ArrivalNote, Face, ParticipantsStrip, ReplyModeSwitch, justArrived, useIsMePost, useMyAcct, useScrollAnchor } from './ConversationParts';
 import { useFilterGate } from './FilterGate';
 import { useFollowedAmong } from './useIntelligence';
 import type { useSaveToggle } from './useFedizenLibrary';
 import type { useReactions } from './usePostActions';
 
 /**
- * Prototype A, Bonfire + Phanpy, drawn as Phanpy draws a conversation (src/pages/status.jsx, src/app.css
+ * A post's conversation, drawn as Phanpy draws one (src/pages/status.jsx, src/app.css
  * `.timeline.contextual`, src/components/status.css), on Bonfire's thread (Bonfire.Social.Threads):
  *  - one continuous column, not separate cards: avatar on the left, the post beside it;
  *  - the posts above and the opened post joined by a 3px line through the avatars; the opened post ("hero") larger,
  *    with its full date and counts and its actions always shown;
  *  - the author's self-thread marked "Thread 2/3" (Phanpy's orange Thread badge);
  *  - replies curving off the line into each avatar, indented a step per level;
- *  - replies hidden as Atlas does (by the screen they'd take, never hiding what the reader wants, − / + and the
- *    line by hand, collapse or expand all, find-in-page reaches folded text, remembered per conversation on this
- *    device, indentation capped with "Replying to"), or as Phanpy does (by weight, no depth limit, sideways scroll
- *    from level 4), or as Bonfire does (by sub-thread size, − / + by hand, 3 levels at a time, indented 3 levels) —
- *    folding.ts has the rules and their sources;
+ *  - long side-threads folded by the screen they'd take, never hiding what the reader wants; − / + and the line by
+ *    hand, collapse or expand all, find-in-page reaches folded text, folds remembered per conversation on this
+ *    device, indentation capped with "Replying to" (folding.ts has the rule and why: it combines what Phanpy and
+ *    Bonfire each do);
  *  - Bonfire's parts: Nested or Flat (thread_mode), sorting, participants;
  *  - Phanpy's colours for kinds of post: orange for replying-to and Thread, purple for boosts. Atlas adds one colour
  *    per branch (conversation.ts, branchesOf) to the lines, so a sub-conversation is easy to follow down the page.
  */
 
 type Acts = { save: ReturnType<typeof useSaveToggle>; reactions: ReturnType<typeof useReactions>; onReply: (p: FedizenPost) => void };
-export type ThreadAProps = {
+export type ConversationThreadProps = {
   thread: Thread; actions: Acts; loading: boolean; partial: boolean; retry: () => void;
   sort: ReplySort; setSort: (s: ReplySort) => void; replyMode: ReplyMode; setReplyMode: (m: ReplyMode) => void;
   onOpenPost: (p: FedizenPost) => void;
@@ -47,20 +46,13 @@ export type ThreadAProps = {
 
 const keyOf = (p: FedizenPost) => p.statusId ?? p.id;
 
-/** Phanpy's cachedRepliesToggle: what the reader opened or closed, by the first reply of the set, for as long as a
- *  conversation is on screen. */
-const remembered = new Map<string, boolean>();
-
-export function ThreadA(props: ThreadAProps) {
+export function ConversationThread(props: ConversationThreadProps) {
   const { thread: t, loading, partial, retry, sort, setSort, replyMode, setReplyMode } = props;
   const [shown, setShown] = useState(PAGE);
-  const [folding, setFolding, compareFolds] = useFoldStyle();
   const branches = useMemo(() => branchesOf(t), [t]);
   const numbers = useMemo(() => threadNumbers(t), [t]);
   const flat = useMemo(() => flatReplies(t), [t]);
-  const folds = useMemo(() => phanpyFolds(t), [t]);
-  useEffect(() => () => remembered.clear(), []);
-  const atlas = useAtlasFolding(t, props.lastVisit, props.arrived, replyMode === 'nested' && folding === 'atlas');
+  const atlas = useAtlasFolding(t, props.lastVisit, props.arrived, replyMode === 'nested');
   // Replies arriving, edits and placeholders show at once; the reader's place is kept, and what's new is marked.
   const top = useRef<HTMLDivElement>(null);
   useScrollAnchor(top, t);
@@ -72,7 +64,7 @@ export function ThreadA(props: ThreadAProps) {
   const host = hostOf(t.focus.url);
   const row = (p: FedizenPost, kind: RowKind, extra: Partial<RowProps> = {}) =>
     <Row post={p} kind={kind} number={numbers.get(keyOf(p))} {...rowProps} {...extra} />;
-  const ctx: BranchCtx = { t, props: rowProps, numbers, folds, lazy: t.total > PHANPY.lazyAbove, atlas };
+  const ctx: BranchCtx = { t, props: rowProps, numbers, atlas };
 
   return <div className="atlas-ph" ref={el => { top.current = el; atlas.measureRef(el); }}>
     <ol className="atlas-ph-context">
@@ -88,9 +80,8 @@ export function ThreadA(props: ThreadAProps) {
       {replyMode === 'nested' && t.replies.length > 1 && <div role="radiogroup" aria-label="Sort replies" className="atlas-proto-switch atlas-proto-small">
         {REPLY_SORTS.map(s => <button key={s.id} type="button" role="radio" aria-checked={sort === s.id} onClick={() => setSort(s.id)} className={sort === s.id ? 'is-on' : undefined}>{s.label}</button>)}
       </div>}
-      {compareFolds && replyMode === 'nested' && t.replies.some(n => n.replies.length) && <FoldSwitch style={folding} setStyle={setFolding} />}
     </div>
-    {replyMode === 'nested' && folding === 'atlas' && atlas.keys.length > 0 && <div className="atlas-at-all">
+    {replyMode === 'nested' && atlas.keys.length > 0 && <div className="atlas-at-all">
       <button type="button" onClick={() => atlas.setAll(true)}>Collapse replies</button>
       <button type="button" onClick={() => atlas.setAll(false)}>Expand all</button>
       {atlas.chose && <span className="atlas-at-note">Your folds are kept on this device only.</span>}
@@ -103,11 +94,8 @@ export function ThreadA(props: ThreadAProps) {
       ? <ol className="atlas-ph-replies atlas-ph-flat">{flat.slice(0, shown).map(r => <li key={keyOf(r.post)} className="atlas-ph-li" style={branchStyle(branches.get(keyOf(r.post)))}>
           {row(r.post, 'reply', { replyingTo: r.parent })}
         </li>)}</ol>
-      : <ol className={`atlas-ph-replies is-${folding}`}>{t.replies.slice(0, shown).map(n => folding === 'atlas'
-          ? <AtlasBranch key={keyOf(n.post)} node={n} branch={branches.get(keyOf(n.post))} ctx={ctx} />
-          : folding === 'phanpy'
-          ? <PhanpyBranch key={keyOf(n.post)} node={n} branch={branches.get(keyOf(n.post))} ctx={ctx} />
-          : <BonfireBranch key={keyOf(n.post)} node={n} branch={branches.get(keyOf(n.post))} ctx={ctx} loadedTo={BONFIRE.loadLevels} />)}</ol>}
+      : <ol className="atlas-ph-replies is-atlas">{t.replies.slice(0, shown).map(n =>
+          <AtlasBranch key={keyOf(n.post)} node={n} branch={branches.get(keyOf(n.post))} ctx={ctx} />)}</ol>}
     {count > shown && <button type="button" className="atlas-ph-more" onClick={() => setShown(s => s + PAGE)}>Show more replies ({count - shown})</button>}
     {!loading && host && host !== 'fedizen.net' && <p className="atlas-ph-note">
       Replies come from Fedizen, which may not have every reply from other servers yet. <a href={t.focus.url} target="_blank" rel="noopener noreferrer" className="atlas-ph-link">See it on {host}<ArrowUpRight aria-hidden="true" /></a>
@@ -118,8 +106,8 @@ export function ThreadA(props: ThreadAProps) {
 const branchStyle = (b: number | undefined): CSSProperties | undefined => (b === undefined ? undefined : { '--branch': `var(--atlas-branch-${b})` } as CSSProperties);
 
 /** What every row gets: the conversation's props, and whether a post is new to the reader. */
-type RowBase = ThreadAProps & { newCheck?: (p: FedizenPost) => boolean };
-type BranchCtx = { t: Thread; props: RowBase; numbers: Map<string, { index: number; total: number }>; folds: Map<string, PhanpyFold>; lazy: boolean; atlas: AtlasFolding };
+type RowBase = ConversationThreadProps & { newCheck?: (p: FedizenPost) => boolean };
+type BranchCtx = { t: Thread; props: RowBase; numbers: Map<string, { index: number; total: number }>; atlas: AtlasFolding };
 
 /** The start of a reply: which part of the author's thread it answers, and the post. */
 function Head({ node: n, ctx, replyingTo }: { node: ThreadNode; ctx: BranchCtx; replyingTo?: FedizenPost }) {
@@ -129,67 +117,7 @@ function Head({ node: n, ctx, replyingTo }: { node: ThreadNode; ctx: BranchCtx; 
   </>;
 }
 
-/* ── Phanpy: weighed, remembered, no depth limit ─────────────────────────────────────────────────────── */
-
-function PhanpyBranch({ node: n, branch, ctx }: { node: ThreadNode; branch?: number; ctx: BranchCtx }) {
-  const unloaded = !n.replies.length && (n.post.counts?.replies ?? 0) > 0 ? n.post.counts!.replies : 0;
-  return <li className="atlas-ph-li is-reply" style={{ ...branchStyle(branch), '--level': n.depth } as CSSProperties}>
-    <Head node={n} ctx={ctx} />
-    {unloaded > 0 && <p className="atlas-ph-unloaded" title="Replies Fedizen hasn’t loaded here"><MessageCircle aria-hidden="true" />{unloaded}<span className="sr-only"> {unloaded === 1 ? 'reply' : 'replies'} not loaded here</span></p>}
-    {n.replies.length > 0 && <PhanpyReplies node={n} branch={branch} ctx={ctx} />}
-  </li>;
-}
-
-function PhanpyReplies({ node: n, branch, ctx }: { node: ThreadNode; branch?: number; ctx: BranchCtx }) {
-  const f = ctx.folds.get(keyOf(n.post)) ?? { open: true, replies: n.replies.length, comments: n.size };
-  const first = keyOf(n.replies[0].post);
-  const [open, setOpen] = useState(() => remembered.get(first) ?? f.open);
-  const level = n.depth;
-  const list = <ol className="atlas-ph-replies atlas-ph-nested" data-level={level} data-scrolls={level === PHANPY.scrollLevel || undefined}>
-    {n.replies.map(r => <PhanpyBranch key={keyOf(r.post)} node={r} branch={branch} ctx={ctx} />)}
-  </ol>;
-  // An open set is just the replies: no summary, nothing to close (Phanpy renders it as a plain div).
-  if (f.open) return list;
-  return <details className="atlas-ph-fold" open={open} onToggle={e => { const o = e.currentTarget.open; setOpen(o); remembered.set(first, o); }}>
-    <summary>
-      <span className="atlas-ph-faces" aria-hidden="true">{replyFaces(n).map(p => <Face key={p.handle} post={p} size={20} />)}</span>
-      <span><b>{f.replies} {f.replies === 1 ? 'reply' : 'replies'}</b>{f.comments !== f.replies && f.comments > 1 && <> · {f.comments} comments</>}</span>
-      <ChevronDown aria-hidden="true" className="atlas-ph-chevron" />
-      <button type="button" className="atlas-ph-parent" title="View post with its replies" aria-label={`Open ${n.post.author}’s post with its replies`}
-        onClick={e => { e.preventDefault(); e.stopPropagation(); ctx.props.onOpenPost(n.post); }}>»</button>
-    </summary>
-    {(open || !ctx.lazy) && list}
-  </details>;
-}
-
-/* ── Bonfire: by sub-thread size, − / + by hand, three levels at a time ──────────────────────────────── */
-
-function BonfireBranch({ node: n, branch, ctx, loadedTo }: { node: ThreadNode; branch?: number; ctx: BranchCtx; loadedTo: number }) {
-  const auto = bonfireFolds(ctx.t, n);
-  const [folded, setFolded] = useState(auto);
-  const [more, setMore] = useState(false);
-  const has = n.replies.length > 0;
-  const atLimit = has && n.depth >= loadedTo && !more;
-  const under = more ? n.depth + BONFIRE.loadLevels : loadedTo;
-  const capped = n.depth >= BONFIRE.indentLevels;
-  return <li className="atlas-ph-li is-reply" style={{ ...branchStyle(branch), '--level': n.depth } as CSSProperties}>
-    <Head node={n} ctx={ctx} />
-    {has && !atLimit && !(folded && auto) && <button type="button" className="atlas-bf-toggle" aria-expanded={!folded} aria-label={folded ? 'Show replies' : 'Hide replies'} onClick={() => setFolded(v => !v)}>{folded ? '+' : '−'}</button>}
-    {atLimit && <button type="button" className="atlas-ph-continue" onClick={() => setMore(true)}>{bonfireMoreLabel(n)}</button>}
-    {has && !atLimit && folded && auto && <div className="atlas-bf-summary">
-      <button type="button" aria-expanded="false" onClick={() => setFolded(false)}>
-        <span className="atlas-ph-faces" aria-hidden="true">{replyFaces(n).map(p => <Face key={p.handle} post={p} size={20} />)}</span>
-        <span>{n.size} {n.size === 1 ? 'reply' : 'replies'}</span>
-        <ChevronDown aria-hidden="true" className="atlas-ph-chevron" />
-      </button>
-    </div>}
-    {has && !atLimit && !folded && <ol className={capped ? 'atlas-ph-replies atlas-ph-nested is-capped' : 'atlas-ph-replies atlas-ph-nested'}>
-      {n.replies.map(r => <BonfireBranch key={keyOf(r.post)} node={r} branch={branch} ctx={ctx} loadedTo={under} />)}
-    </ol>}
-  </li>;
-}
-
-/* ── Atlas: sized to the screen, never hiding what the reader wants, every fold in the reader's hands ──── */
+/* ── Folding: sized to the screen, never hiding what the reader wants, every fold in the reader's hands ─── */
 
 type AtlasFolding = {
   /** Whether a set (keyed by the post it answers) is folded: the reader's choice if they made one, else the rule. */
