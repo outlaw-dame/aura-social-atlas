@@ -11,6 +11,7 @@ import { useAtlasAuth } from '@/components/social/AuthState';
 import { useSocial } from '@/components/social/SocialState';
 import { pushPage } from './navigation';
 import { MobileSemanticSettings } from './SemanticSettings';
+import { MobileTranslationSettings } from './TranslationSettings';
 
 /** Phone: Settings → Intelligence, a pushed page (swipe back). */
 export function IntelligencePage() {
@@ -26,14 +27,16 @@ export function IntelligencePage() {
   const saved = s ? [...s.keys.map(k => ({ ...k, where: 'server' as const })), ...s.deviceKeys.map(k => ({ ...k, where: 'device' as const }))] : [];
   return <Page>
     <Navbar title="Intelligence" backLink backLinkShowText={false} />
-    {!user ? <Block strong inset>Sign in to Atlas to use Intelligence.</Block>
+    {!user ? <><Block strong inset>Sign in to Atlas to use Intelligence.</Block><MobileTranslationSettings /></>
       : q.isLoading ? <Block strong inset>Loading…</Block>
-      : !s?.available ? <><Block strong inset>Intelligence isn’t set up on this Atlas server yet.</Block><MobileSemanticSettings /></>
+      : !s?.available ? <><Block strong inset>Intelligence isn’t set up on this Atlas server yet.</Block><MobileTranslationSettings /><MobileSemanticSettings /></>
       : <>
         <List strong inset dividers>
           <ListItem title="Use AI in Atlas"><Toggle slot="after" checked={s.enabled} disabled={act.busy} onToggleChange={() => void act.update({ enabled: !s.enabled })} /></ListItem>
         </List>
         <BlockFooter>Atlas works fully without AI. With your own key, a provider only receives what a feature needs: posts your filters are checking, your filter list when you ask for suggestions, and what you type to the assistant. Direct messages are never sent.</BlockFooter>
+
+        <MobileTranslationSettings />
 
         {saved.length > 0 && <>
           <BlockTitle>Your keys</BlockTitle>

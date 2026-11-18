@@ -1190,7 +1190,7 @@ ruby rt { font-size: .6em; }
 :is(.atlas-ph-boost, .atlas-ph-replyto, .atlas-ph-part) svg { width: 14px; height: 14px; }
 .atlas-ph-replyto svg { color: var(--atlas-reply-color); }
 .atlas-ph-content { font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
-.atlas-ph-content > .mt-3:first-child, .atlas-ph-content .atlas-post-text:first-child { margin-top: 4px; }
+.atlas-ph-content > .atlas-post-content > .mt-3:first-child, .atlas-ph-content .atlas-post-text:first-child { margin-top: 4px; }
 .atlas-ph-content.is-large { font-size: 18px; line-height: 1.4; }
 .atlas-ph-content.is-large .atlas-post-text { font-size: 18px; }
 /* Actions: always on the opened post; on others on hover, keyboard focus or a first tap (Phanpy keeps them off context posts). */
@@ -1313,3 +1313,15 @@ ruby rt { font-size: .6em; }
 .atlas-ph-gone, .atlas-conv-gone { margin: 8px 0 0; font-size: 14px; font-style: italic; opacity: .6; }
 .atlas-conv-msg.is-tombstone { cursor: auto; }
 .atlas-conv-end { height: 1px; }
+
+/* Translation (useTranslation.tsx): one quiet line under a post's text — Translate, or where the translation came
+   from and Show original. Same on desktop and the phone. */
+.atlas-tr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 8px 0 2px; font-size: 13px; line-height: 1.4; }
+.atlas-tr.is-phone { margin-inline: var(--f7-card-content-padding-horizontal, 0); font-size: 14px; }
+.atlas-tr svg { width: 15px; height: 15px; flex-shrink: 0; }
+.atlas-tr-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 10px 4px 8px; border-radius: 999px; border: 1px solid color-mix(in oklab, currentColor 18%, transparent); background: none; color: inherit; font: inherit; cursor: pointer; width: auto; opacity: .85; }
+.atlas-tr-btn:hover { opacity: 1; background: color-mix(in oklab, currentColor 5%, transparent); }
+.atlas-tr-btn:focus-visible, .atlas-tr-link:focus-visible, .atlas-tr-source select:focus-visible { outline: 2px solid var(--accent, var(--f7-theme-color)); outline-offset: 2px; }
+.atlas-tr-note { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; opacity: .65; }
+.atlas-tr-link { border: 0; background: none; padding: 4px 0; color: var(--accent, var(--f7-theme-color)); font: inherit; font-weight: 600; cursor: pointer; width: auto; }
+.atlas-tr-source select { appearance: none; -webkit-appearance: none; border: 0; padding: 0 2px; margin: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; field-sizing: content; max-width: 12em; }

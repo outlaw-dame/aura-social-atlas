@@ -15,6 +15,9 @@ import { supabaseAdmin } from '@/integrations/supabase/client.server';
 import type { Credential, ProviderId } from './providers';
 
 export type { Credential };
+/** What can have a key here: the AI providers, and DeepL for translation (lib/translation/deepl.server.ts). */
+export type KeyService = ProviderId | 'deepl';
+type Sealable = { provider: KeyService; key: string; account?: string };
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 const b64 = (u: Uint8Array) => btoa(String.fromCharCode(...u));
@@ -45,9 +48,9 @@ export async function vaultReady(): Promise<boolean> {
   return !!(await loadSecrets());
 }
 
-const aad = (userId: string, provider: ProviderId) => enc.encode(`atlas-ai-key|${userId}|${provider}`);
+const aad = (userId: string, provider: KeyService) => enc.encode(`atlas-ai-key|${userId}|${provider}`);
 
-export async function sealCredential(userId: string, c: Credential) {
+export async function sealCredential(userId: string, c: Sealable) {
   const s = await loadSecrets();
   if (!s) throw new VaultError('not-configured');
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -68,7 +71,7 @@ export async function openRow(userId: string, row: Row): Promise<{ credential: C
   const secret = s.all.find(x => x.id === row.key_id);
   if (!secret) throw new VaultError('unreadable');
   try {
-    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(row.iv), additionalData: aad(userId, row.provider as ProviderId) }, secret.key, unb64(row.ciphertext));
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(row.iv), additionalData: aad(userId, row.provider as KeyService) }, secret.key, unb64(row.ciphertext));
     const v = JSON.parse(dec.decode(plain)) as { key: string; account?: string };
     return { credential: { provider: row.provider as ProviderId, key: v.key, ...(v.account ? { account: v.account } : {}) }, stale: secret.id !== s.current.id };
   } catch {
@@ -89,20 +92,31 @@ export async function credentialFor(userId: string, provider: ProviderId): Promi
   return credential;
 }
 
-/** What the settings page may show about saved keys: which providers, the key's last four characters, the models. */
+/** What the settings page may show about saved AI keys: which providers, the key's last four characters, the models.
+ *  A DeepL key isn't an AI provider's: serviceKey reads it. */
 export async function savedKeys(userId: string) {
-  const { data, error } = await supabaseAdmin.from('atlas_ai_keys').select('provider, hint, models, updated_at').eq('user_id', userId);
+  const { data, error } = await supabaseAdmin.from('atlas_ai_keys').select('provider, hint, models, updated_at').eq('user_id', userId).neq('provider', 'deepl');
   if (error) throw new VaultError('storage');
   return (data ?? []).map(r => ({ provider: r.provider as ProviderId, hint: r.hint, models: Array.isArray(r.models) ? (r.models as string[]) : [], updatedAt: r.updated_at }));
 }
 
-export async function storeCredential(userId: string, c: Credential, hint: string, models: string[]) {
+/** A non-AI service's key (DeepL), decrypted, and its hint; null when there's none. */
+export async function serviceKey(userId: string, service: 'deepl'): Promise<{ key: string; hint: string } | null> {
+  const { data, error } = await supabaseAdmin.from('atlas_ai_keys').select('provider, ciphertext, iv, key_id, hint').eq('user_id', userId).eq('provider', service).maybeSingle();
+  if (error) throw new VaultError('storage');
+  if (!data) return null;
+  const { credential, stale } = await openRow(userId, data);
+  if (stale) await storeCredential(userId, { provider: service, key: credential.key }, data.hint, []);
+  return { key: credential.key, hint: data.hint };
+}
+
+export async function storeCredential(userId: string, c: Sealable, hint: string, models: string[]) {
   const sealed = await sealCredential(userId, c);
   const { error } = await supabaseAdmin.from('atlas_ai_keys').upsert({ user_id: userId, provider: c.provider, ...sealed, hint, models, updated_at: new Date().toISOString() });
   if (error) throw new VaultError('storage');
 }
 
-export async function forgetCredential(userId: string, provider: ProviderId) {
+export async function forgetCredential(userId: string, provider: KeyService) {
   const { error } = await supabaseAdmin.from('atlas_ai_keys').delete().eq('user_id', userId).eq('provider', provider);
   if (error) throw new VaultError('storage');
 }

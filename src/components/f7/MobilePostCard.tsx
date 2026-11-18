@@ -18,6 +18,8 @@ import { ArticleCard } from './ArticleAuthors';
 import { MobilePostActions, ReplySheet } from './PostActions';
 import { Icon } from './F7Extras';
 import { MobileFilterGate } from './FilterGate';
+import { pushPage } from './navigation';
+import { TranslationLineView, usePostTranslation } from '@/components/social/useTranslation';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
 import type { CardMode } from '@/components/social/FeedPostCard';
@@ -73,11 +75,15 @@ export type MobileActions = ReturnType<typeof useMobilePostActions>;
  * reader's blur setting), poll, collections and link preview. Shared by feed cards and the conversation prototypes,
  * so a layout never drops content or skips a warning.
  */
-export function MobilePostContent({ post: p }: { post: FedizenPost }) {
-  const mine = useIsMine(p);
-  return <>
+export function MobilePostContent({ post: original }: { post: FedizenPost }) {
+  const mine = useIsMine(original);
+  // Translated in place when the person reads another language (useTranslation.tsx).
+  const tr = usePostTranslation(original);
+  const p = tr.shown;
+  return <div ref={tr.ref} lang={tr.shownLang} className="atlas-post-content">
       <AuthorWarning cw={p.cw} phone>
     <PostBody post={p} onTag={openTag} pClassName="atlas-post-text" />
+    <TranslationLineView line={tr.line} onSettings={() => pushPage('/intelligence/')} className="is-phone" />
     <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" {...(p.imageSize ? { width: p.imageSize.w, height: p.imageSize.h, style: { aspectRatio: `${p.imageSize.w} / ${p.imageSize.h}` } } : {})} />}</SensitiveMedia>
     {p.pollState && <PollView poll={p.pollState} mine={mine} phone />}
     {p.collections?.map(link => <button key={link} type="button" className="atlas-coll-link" onClick={() => openCollection(link)}>
@@ -85,7 +91,7 @@ export function MobilePostContent({ post: p }: { post: FedizenPost }) {
     </button>)}
     <ArticleCard article={p.article} />
     </AuthorWarning>
-  </>;
+  </div>;
 }
 
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ');

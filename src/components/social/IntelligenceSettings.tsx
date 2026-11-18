@@ -10,6 +10,7 @@ import { intelligenceReady, useIntelligence, useIntelligenceActions } from './us
 import { useAtlasAuth } from './AuthState';
 import { useSocial } from './SocialState';
 import { SemanticSettings } from './SemanticSettings';
+import { TranslationSettings } from './TranslationSettings';
 
 export const DEVICE_KEY_NOTE = 'Never sent to Atlas: this browser calls the provider itself. But anything running in Atlas’s page could read it (an injected script or a browser extension), Safari may clear it after 7 days without a visit unless Atlas is on your Home Screen, and you’ll enter it again on each device. The assistant needs a key on Atlas’s server.';
 
@@ -23,9 +24,9 @@ export function IntelligenceSettings() {
   const ready = intelligenceReady(s);
   const [adding, setAdding] = useState<ProviderId | null>(null);
 
-  if (!user) return <p className="mt-6 text-sm text-muted-foreground">Sign in to Atlas to use Intelligence.</p>;
+  if (!user) return <><p className="mt-6 text-sm text-muted-foreground">Sign in to Atlas to use Intelligence.</p><TranslationSettings /></>;
   if (q.isLoading) return <p className="mt-6 text-sm text-muted-foreground">Loading…</p>;
-  if (!s?.available) return <><p className="mt-6 text-sm text-muted-foreground">Intelligence isn’t set up on this Atlas server yet.</p><SemanticSettings /></>;
+  if (!s?.available) return <><p className="mt-6 text-sm text-muted-foreground">Intelligence isn’t set up on this Atlas server yet.</p><TranslationSettings /><SemanticSettings /></>;
 
   const active = s.active;
   const activeModels = active ? (active.where === 'device' ? s.deviceKeys : s.keys).find(k => k.provider === active.provider)?.models ?? [] : [];
@@ -35,6 +36,8 @@ export function IntelligenceSettings() {
     <Row title="Use AI in Atlas" detail="With your own key, from the provider you choose. A provider only receives what a feature needs: posts your filters are checking, your filter list when you ask for suggestions, and what you type to the assistant. Direct messages are never sent." id="ai-enabled">
       <Switch aria-label="Use AI in Atlas" aria-describedby="ai-enabled" checked={s.enabled} disabled={act.busy} onCheckedChange={v => void act.update({ enabled: v })} />
     </Row>
+
+    <TranslationSettings />
 
     <section className="border-b border-border py-6">
       <h2 className="text-base font-semibold">Providers</h2>

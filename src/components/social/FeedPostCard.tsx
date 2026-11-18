@@ -26,6 +26,7 @@ import { AuthorWarning } from '@/components/social/ContentWarning';
 import { cn } from '@/lib/utils';
 import { isPostClick, isStatusId, rememberSeed } from '@/lib/open-post';
 import { PostBody } from './PostBody';
+import { TranslationLineView, usePostTranslation } from './useTranslation';
 
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
   const [broken, setBroken] = useState(false);
@@ -131,16 +132,22 @@ function FeedPostCardBody({ post: p, actions, reasons, inTag, mode = 'feed' }: {
  * blur setting), poll, collections and link preview. Shared by feed cards and the conversation prototypes, so a
  * layout never drops content or skips a warning.
  */
-export function PostContent({ post: p, large = false }: { post: FedizenPost; large?: boolean }) {
+export function PostContent({ post: original, large = false }: { post: FedizenPost; large?: boolean }) {
   const navigate = useNavigate();
-  const mine = useIsMine(p);
-  return <AuthorWarning cw={p.cw}>
-    <div className={cn('mt-3 space-y-2 leading-relaxed', large ? 'text-base' : 'text-sm')}><PostBody post={p} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} /></div>
-    <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl bg-muted object-cover" {...reserve(p.imageSize)} />}</SensitiveMedia>
-    {p.pollState && <PollView poll={p.pollState} mine={mine} />}
-    <CollectionLinks links={p.collections} />
-    <PostArticleCard article={p.article} />
-  </AuthorWarning>;
+  const mine = useIsMine(original);
+  // Translated in place when the person reads another language (useTranslation.tsx).
+  const tr = usePostTranslation(original);
+  const p = tr.shown;
+  return <div ref={tr.ref} lang={tr.shownLang} className="atlas-post-content">
+    <AuthorWarning cw={p.cw}>
+      <div className={cn('mt-3 space-y-2 leading-relaxed', large ? 'text-base' : 'text-sm')}><PostBody post={p} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} /></div>
+      <TranslationLineView line={tr.line} onSettings={() => void navigate({ to: '/settings/intelligence' })} />
+      <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl bg-muted object-cover" {...reserve(p.imageSize)} />}</SensitiveMedia>
+      {p.pollState && <PollView poll={p.pollState} mine={mine} />}
+      <CollectionLinks links={p.collections} />
+      <PostArticleCard article={p.article} />
+    </AuthorWarning>
+  </div>;
 }
 
 /** The opened post's full date and time, and its counts, as Mastodon and Bluesky show them under the post. */
