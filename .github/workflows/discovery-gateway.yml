@@ -194,3 +194,7 @@ jobs:
         run: bun test tests
       - name: Build Atlas client
         run: bun run build
+      - name: Device Lab sample data still matches the app's server functions
+        run: bun run lab:check
+      - name: Build the Device Lab (the phone app on sample data)
+        run: bun run lab:build
