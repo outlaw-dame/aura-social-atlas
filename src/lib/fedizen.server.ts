@@ -407,6 +407,8 @@ const status = z.object({
   visibility: z.enum(['public', 'unlisted', 'private', 'direct']).nullish().catch(null),
   /** The post this one replies to, shown above it in feeds (fetched from Fedizen as the reader may see it). */
   in_reply_to_id: z.string().max(64).nullish().catch(null),
+  /** Whose post that is: a reply to the reader's own post is a reply to them (Activity's "replied to you"). */
+  in_reply_to_account_id: z.string().max(64).nullish().catch(null),
   /** The link preview Bonfire builds for the post's first link (no `authors`: Atlas works those out itself). */
   // Each field fails on its own (to null), so one odd preview never empties a feed.
   card: z.object({
@@ -462,11 +464,17 @@ const groupedSchema = z.object({
     notifications_count: z.number().int().nonnegative().nullish().catch(null),
     type: z.string().max(64).nullish(),
     latest_page_notification_at: z.string().max(64).nullish().catch(null),
+    /** The newest notification in the group (a string; Mastodon's docs once showed a number), for read and unread. */
+    most_recent_notification_id: z.union([z.string().max(64), z.number().int().nonnegative()]).nullish().catch(null),
     sample_account_ids: z.array(z.string().max(64)).max(400).nullish().catch(null),
     status_id: z.string().max(64).nullish().catch(null),
     /** Mastodon 4.6: the collection behind added_to_collection / collection_update; only its page URL is kept. */
     collection: z.object({ url: z.string().max(500).nullish().catch(null) }).nullish().catch(null),
   })).max(80),
+});
+/** Mastodon Marker for notifications: the last one read. Bonfire answers {} when there is none yet. */
+const markersSchema = z.object({
+  notifications: z.object({ last_read_id: z.string().max(64).nullish().catch(null), updated_at: z.string().max(64).nullish().catch(null) }).nullish().catch(null),
 });
 /** Mastodon Relationship (Bonfire answers it for groups too; members follow their groups). */
 const relationship = z.object({
@@ -511,8 +519,11 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   // The next (older) page of Home, from the cursor Fedizen's Link header gave (rel="next", max_id).
   { match: /^\/api\/v1\/timelines\/home\?limit=20&max_id=[A-Za-z0-9_\-.~=%]{1,512}$/, schema: homeSchema },
   { match: /^\/api\/v1\/notifications\?limit=20$/, schema: notificationsSchema },
-  // Grouped notifications for Activity: all of them, or mentions only (Bluesky's Mentions tab), then older pages.
-  { match: /^\/api\/v2\/notifications\?limit=40(&types%5B%5D=mention)?(&max_id=[A-Za-z0-9_\-.~=%]{1,512})?$/, schema: groupedSchema, single: true },
+  // Grouped notifications for Activity: all of them, or one tab's kinds (Replies: mention, status, quote; Follows:
+  // follow, follow_request), then older pages.
+  { match: /^\/api\/v2\/notifications\?limit=40(&types%5B%5D=(mention|status|quote|follow|follow_request)){0,5}(&max_id=[A-Za-z0-9_\-.~=%]{1,512})?$/, schema: groupedSchema, single: true },
+  // Where the reader stopped reading notifications (Mastodon markers; Bonfire: MarkersController over its Seen edges).
+  { match: /^\/api\/v1\/markers\?timeline%5B%5D=notifications$/, schema: markersSchema, single: true },
   { match: /^\/api\/v1\/conversations\?limit=30$/, schema: conversationsSchema },
   { match: new RegExp(`^/api/v1/accounts/relationships\\?id%5B%5D=${ID}(&id%5B%5D=${ID}){0,39}$`), schema: relationshipsSchema },
   { match: /^\/api\/v1\/bookmarks\?limit=40$/, schema: bookmarksSchema },
@@ -701,6 +712,8 @@ const WRITES: { method: 'POST' | 'PUT' | 'DELETE'; match: RegExp; body?: z.ZodTy
   // Your own posts: delete, and edit their text and content warning (Bonfire: delete_status, update_status).
   { method: 'DELETE', match: new RegExp(`^/api/v1/statuses/${ID}$`) },
   { method: 'PUT', match: new RegExp(`^/api/v1/statuses/${ID}$`), body: edit },
+  // Mark notifications read up to one (Mastodon markers), so Fedizen's own unread count and other apps agree.
+  { method: 'POST', match: /^\/api\/v1\/markers$/, body: z.object({ notifications: z.object({ last_read_id: z.string().regex(new RegExp(`^${ID}$`)) }).strict() }).strict() },
   // Answer someone asking to follow you.
   { method: 'POST', match: new RegExp(`^/api/v1/follow_requests/${ID}/(authorize|reject)$`) },
   // Vote in a poll, by option index (Bonfire: MastoPollController.vote).
@@ -722,6 +735,8 @@ const writeReply = z.object({
   /** Boosting answers with the boost, which wraps the post (whose flags and counts are what changed). */
   reblog: z.object({ reblogged: z.boolean().nullish(), reblogs_count: z.number().int().min(0).nullish() }).nullish(),
   group: z.object({ member: z.boolean().nullish() }).nullish(),
+  /** Markers answer with the marker saved. */
+  notifications: z.object({ last_read_id: z.string().max(64).nullish().catch(null) }).nullish().catch(null),
   /** Voting answers with the poll itself. */
   options: pollSchema.shape.options.nullish().catch(null),
   votes_count: z.number().int().min(0).nullish().catch(null),

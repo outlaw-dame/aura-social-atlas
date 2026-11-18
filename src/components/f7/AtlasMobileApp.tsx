@@ -12,7 +12,7 @@ import Framework7React, {
 import { holdF7Styles } from './f7-styles';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
 import { promptSignInToSave } from './save-prompt';
-import { Fab, NavRight, NavLeft, Panel, Popup, f7, f7ready } from 'framework7-react';
+import { Fab, NavRight, NavLeft, Panel, Popup, f7, f7ready, Badge } from 'framework7-react';
 import { creators, posts, networks, matchesCreator, fullHandle, postsByTag, type Creator } from '@/lib/social-catalogue';
 import { NetworkBadge } from '@/lib/networks';
 import { OPEN_TAG_EVENT, linkifyHashtagsWith, hashtagLabel, TagText } from '@/lib/hashtags';
@@ -33,6 +33,7 @@ import { OPEN_GROUP_EVENT, groupStub, type Group, type GroupTarget } from '@/lib
 import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
 import { MobileRecentArticles, MobileActivity, MessagesPopup } from './FedizenMobile';
+import { badgeText, useUnreadActivity } from '@/components/social/useNotificationGroups';
 import { MobileFeeds } from './MobileFeeds';
 import { FollowedTagsPage, TagFeedPage } from './TagFeed';
 import { bindStack, popToRoot, postPageUrl, pushPage, showTab, tagPageUrl } from './navigation';
@@ -215,6 +216,9 @@ export default function AtlasMobileApp() {
   const [title, setTitle] = useState('Discover');
   // Feeds stays mounted under the other dock tabs; it counts posts as seen only while its tab is on screen.
   const [feedsShown, setFeedsShown] = useState(false);
+  const [activityShown, setActivityShown] = useState(false);
+  // Unread notifications, on the Activity tab as Bluesky and Mastodon's apps badge it (Fedizen's notifications marker).
+  const unread = badgeText(useUnreadActivity());
   const [network, setNetwork] = useState<string>('All networks');
 
   useEffect(() => { setMode(dark ? 'dark' : 'light'); }, []);
@@ -314,7 +318,7 @@ export default function AtlasMobileApp() {
           <Block className="atlas-brand" style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', fontSize: 32, marginTop: 24 }}>Atlas</Block>
           <List strong inset dividers>
             {dock.map(d => (
-              <ListItem key={d.id} link="#" panelClose title={d.label} selected={title === d.label} onClick={() => showTab(d.id)}>
+              <ListItem key={d.id} link="#" panelClose title={d.label} selected={title === d.label} onClick={() => showTab(d.id)} {...(d.id === 'tab-activity' && unread ? { badge: unread, badgeColor: 'red' } : {})}>
                 {d.avatar ? <img slot="media" className="atlas-dock-avatar" src={d.avatar} alt="" width={28} height={28} /> : <Icon slot="media" ios={d.ios} md={d.md} />}
               </ListItem>
             ))}
@@ -333,8 +337,8 @@ export default function AtlasMobileApp() {
       <View main>
         <Toolbar tabbar icons bottom className="atlas-tabbar">
           {dock.map(d => (
-            <Link key={d.id} tabLink={`#${d.id}`} tabLinkActive={d.id === 'tab-discover'} onClick={popToRoot} aria-label={d.avatar ? 'Your profile' : undefined}>
-              {d.avatar ? <img className="icon atlas-dock-avatar" src={d.avatar} alt="" width={28} height={28} /> : <Icon ios={d.ios} md={d.md} />}
+            <Link key={d.id} tabLink={`#${d.id}`} tabLinkActive={d.id === 'tab-discover'} onClick={popToRoot} aria-label={d.avatar ? 'Your profile' : d.id === 'tab-activity' && unread ? `Activity, ${unread} unread` : undefined}>
+              {d.avatar ? <img className="icon atlas-dock-avatar" src={d.avatar} alt="" width={28} height={28} /> : <Icon ios={d.ios} md={d.md}>{d.id === 'tab-activity' && unread && <Badge color="red" aria-hidden="true">{unread}</Badge>}</Icon>}
               <span className="tabbar-label">{d.label}</span>
             </Link>
           ))}
@@ -418,8 +422,8 @@ export default function AtlasMobileApp() {
               <MobileGroups onOpen={setGroupOpen} />
             </Tab>
 
-            <Tab id="tab-activity" className="page-content" onTabShow={() => setTitle('Activity')}>
-              <MobileActivity />
+            <Tab id="tab-activity" className="page-content" onTabShow={() => { setTitle('Activity'); setActivityShown(true); }} onTabHide={() => setActivityShown(false)}>
+              <MobileActivity visible={activityShown} />
             </Tab>
 
             <Tab id="tab-profile" className="page-content" onTabShow={() => setTitle('Profile')}>

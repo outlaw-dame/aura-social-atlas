@@ -58,7 +58,7 @@ export type FedizenConversation = { id: string; unread: boolean; people: { name:
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string; url?: string | null; uri?: string | null };
 type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; emojis?: unknown; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; sensitive?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
   replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null; language?: string | null;
-  in_reply_to_id?: string | null; spoiler_text?: string | null; tags?: { name?: string }[] | null; mentions?: { acct?: string | null; username?: string | null }[] | null; poll?: { id?: string; expires_at?: string | null; expired?: boolean | null; multiple?: boolean | null; votes_count?: number | null; voters_count?: number | null; voted?: boolean | null; own_votes?: number[] | null; options?: { title?: string; votes_count?: number | null }[] } | null; edited_at?: string | null;
+  in_reply_to_id?: string | null; in_reply_to_account_id?: string | null; spoiler_text?: string | null; tags?: { name?: string }[] | null; mentions?: { acct?: string | null; username?: string | null }[] | null; poll?: { id?: string; expires_at?: string | null; expired?: boolean | null; multiple?: boolean | null; votes_count?: number | null; voters_count?: number | null; voted?: boolean | null; own_votes?: number[] | null; options?: { title?: string; votes_count?: number | null }[] } | null; edited_at?: string | null;
   quote?: { quoted_status?: { content?: string | null; spoiler_text?: string | null; media_attachments?: { description?: string | null }[] | null } | null } | null };
 type Notice = { id: string; type?: string; created_at?: string; account?: Acct; status?: Status | null };
 
@@ -171,7 +171,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
 /** Mastodon's notification types (docs.joinmastodon.org/entities/Notification), worded as Mastodon words them. */
 const verbs: Record<string, string> = {
   favourite: 'liked your post', reblog: 'boosted your post', follow: 'followed you', mention: 'mentioned you', status: 'posted', poll: 'poll ended',
-  follow_request: 'asked to follow you', update: 'edited a post you boosted', quote: 'quoted your post', quoted_update: 'edited a post you quoted',
+  follow_request: 'asked to follow you', reply: 'replied to you', update: 'edited a post you boosted', quote: 'quoted your post', quoted_update: 'edited a post you quoted',
   'admin.sign_up': 'signed up', 'admin.report': 'filed a report', severed_relationships: 'some of your follows were cut off', moderation_warning: 'moderators took action on your account',
   added_to_collection: 'added you to a collection', collection_update: 'updated a collection you’re in',
 };
@@ -188,35 +188,71 @@ export function fromNotifications(list: Notice[]): FedizenNotice[] {
  * A grouped notification (Mastodon 4.3's /api/v2/notifications): "Ann, Ben and 3 others liked your post". Mastodon and
  * Bonfire group likes, boosts and follows; Bonfire groups within each page it returns, so groups of the same kind on the
  * same post that land on different pages are merged here (mergeNoticeGroups). `people` are the sample, newest first.
+ *
+ * Atlas reads more out of each than Mastodon's own app shows, as Bluesky does: whether a post is a reply, and to whom
+ * (Bonfire sends a reply that doesn't name you as `status`, which Mastodon words "posted"; Mastodon sends every reply
+ * as `mention`), the whole post for replies, mentions and quotes (to answer, like or boost in place), your post's
+ * picture for likes and boosts, and when the post is gone.
  */
+export type NoticePost = { id: string; text: string; url?: string; image?: string };
 export type FedizenNoticeGroup = {
-  key: string; type: string; count: number; date?: string; people: FediPerson[];
+  /** Kind: Mastodon's type, except `reply` for a reply (Bluesky has one; Mastodon and Bonfire don't). */
+  key: string; type: string; count: number; date?: string; people: (FediPerson & { id?: string })[];
   /** The post it's about (yours for likes and boosts; theirs for mentions and replies), as plain text. */
-  post?: { id: string; text: string; url?: string };
+  post?: NoticePost;
+  /** Several of your posts one person liked or boosted ("Ann liked 3 of your posts"), newest first (combineMultiPost). */
+  posts?: NoticePost[];
+  /** The whole post, for a reply, mention, quote or new post: shown with its actions. */
+  status?: FedizenPost;
+  /** Fedizen named a post that's no longer there (deleted, or no longer visible to you). */
+  gone?: true;
   /** The collection it's about (added_to_collection, collection_update), as its Mastodon page. */
   collection?: string;
+  /** The newest notification in it (Mastodon most_recent_notification_id), to tell read from unread. */
+  latestId?: string;
   /** Mastodon's own wording for one, e.g. "mentioned you". */ verb: string;
 };
 type Grouped = {
   accounts?: (Acct & { id?: string | null })[] | null;
   statuses?: Status[] | null;
-  notification_groups?: { group_key: string; notifications_count?: number | null; type?: string | null; latest_page_notification_at?: string | null; sample_account_ids?: string[] | null; status_id?: string | null; collection?: { url?: string | null } | null }[] | null;
+  notification_groups?: { group_key: string; notifications_count?: number | null; type?: string | null; latest_page_notification_at?: string | null; most_recent_notification_id?: string | number | null; sample_account_ids?: string[] | null; status_id?: string | null; collection?: { url?: string | null } | null }[] | null;
 };
 export const GROUPABLE = new Set(['favourite', 'reblog', 'follow']);
+/** Kinds whose post is someone else's, shown whole. */
+export const CONVERSATION_KINDS = new Set(['mention', 'reply', 'status', 'quote']);
 
-export function fromGroupedNotifications(g: Grouped): FedizenNoticeGroup[] {
+/**
+ * What a post-carrying notification is, read from the post: a reply to you, a reply elsewhere, or not a reply. `meId`
+ * is the reader's Fedizen account id, when known.
+ */
+export function replyKind(type: string, st: Pick<Status, 'in_reply_to_id' | 'in_reply_to_account_id'> | undefined, meId?: string): { type: string; verb?: string } {
+  if (!st?.in_reply_to_id || (type !== 'mention' && type !== 'status')) return { type };
+  const toMe = meId && st.in_reply_to_account_id ? st.in_reply_to_account_id === meId : undefined;
+  if (toMe) return { type: 'reply', verb: 'replied to you' };
+  // A mention in a reply to someone else is still a mention; a reply that names nobody reached you some other way.
+  if (type === 'mention') return { type };
+  return { type: 'reply', verb: toMe === false ? 'replied in a conversation' : 'replied' };
+}
+
+export function fromGroupedNotifications(g: Grouped, meId?: string): FedizenNoticeGroup[] {
   const accounts = new Map((g.accounts ?? []).filter(a => a?.id).map(a => [a.id!, a]));
   const statuses = new Map((g.statuses ?? []).filter(s => s?.id).map(s => [s.id, s]));
   return (g.notification_groups ?? []).filter(n => n && typeof n.group_key === 'string').map(n => {
-    const type = n.type ?? 'other';
     const st = n.status_id ? statuses.get(n.status_id) : undefined;
-    const people = (n.sample_account_ids ?? []).map(id => accounts.get(id)).filter((a): a is Acct => !!a).map(person);
+    const r = replyKind(n.type ?? 'other', st, meId);
+    const type = r.type;
+    const people = (n.sample_account_ids ?? []).flatMap(id => { const a = accounts.get(id); return a ? [{ ...person(a), id }] : []; });
     const text = st?.content ? htmlToParagraphs(st.content).join(' ').slice(0, 200) : '';
+    const image = st ? http((st.media_attachments ?? []).find(m => m.type === 'image')?.preview_url ?? (st.media_attachments ?? []).find(m => m.type === 'image')?.url) : undefined;
+    const latest = n.most_recent_notification_id == null ? undefined : String(n.most_recent_notification_id);
     return {
       key: n.group_key, type, count: Math.max(1, n.notifications_count ?? people.length ?? 1), date: n.latest_page_notification_at ?? undefined, people,
-      verb: verbs[type] ?? 'interacted with you',
-      ...(st ? { post: { id: st.id, text, ...(http(st.url) ?? http(st.uri) ? { url: http(st.url) ?? http(st.uri) } : {}) } } : {}),
+      verb: r.verb ?? verbs[type] ?? 'interacted with you',
+      ...(st ? { post: { id: st.id, text, ...(http(st.url) ?? http(st.uri) ? { url: http(st.url) ?? http(st.uri) } : {}), ...(image ? { image } : {}) } } : {}),
+      ...(st && CONVERSATION_KINDS.has(type) ? { status: fromStatuses([st])[0] } : {}),
+      ...(n.status_id && !st ? { gone: true as const } : {}),
       ...(n.collection?.url && mastodonCollectionApi(n.collection.url) ? { collection: n.collection.url } : {}),
+      ...(latest && /^[A-Za-z0-9_-]{1,64}$/.test(latest) ? { latestId: latest } : {}),
     };
   });
 }
@@ -239,10 +275,68 @@ export function mergeNoticeGroups(groups: FedizenNoticeGroup[]): FedizenNoticeGr
   return out;
 }
 
+/** What a reply, mention, quote or new post is, above the post itself: "Replied to you", "Quoted your post". */
+export function noticeLabel(g: Pick<FedizenNoticeGroup, 'type' | 'verb'>): string {
+  const v = g.type === 'status' && g.verb === 'posted' ? 'new post' : g.verb;
+  return v.charAt(0).toUpperCase() + v.slice(1);
+}
+
+const DAY = 86_400_000;
+/**
+ * One person liking or boosting several of your posts within a day, as one row ("Ann liked 3 of your posts"), as
+ * Bluesky groups them. Mastodon and Bonfire only group many people on one post, so a reader who shares a thread and
+ * gets five likes from one friend sees five rows there. Only single-person, single-post groups are joined.
+ */
+export function combineMultiPost(groups: FedizenNoticeGroup[]): FedizenNoticeGroup[] {
+  const out: FedizenNoticeGroup[] = [];
+  const at = new Map<string, number>();
+  for (const g of groups) {
+    const who = g.people.length === 1 && g.count === 1 ? g.people[0].acct ?? g.people[0].actor : undefined;
+    const k = (g.type === 'favourite' || g.type === 'reblog') && who && g.post ? `${g.type}|${who}` : null;
+    const i = k ? at.get(k) : undefined;
+    const m = i === undefined ? undefined : out[i];
+    const near = m && (!m.date || !g.date || Date.parse(m.date) - Date.parse(g.date) <= DAY);
+    if (k && m && near && g.post && !(m.posts ?? (m.post ? [m.post] : [])).some(p => p.id === g.post!.id)) {
+      const posts = [...(m.posts ?? (m.post ? [m.post] : [])), g.post];
+      out[i!] = { ...m, posts, count: posts.length, verb: `${g.type === 'favourite' ? 'liked' : 'boosted'} ${posts.length} of your posts` };
+      continue;
+    }
+    if (k) at.set(k, out.length);
+    out.push(g);
+  }
+  return out;
+}
+
+/**
+ * Which of two notification ids is newer. Mastodon's are numbers in a string (Snowflake ids, compared by length then
+ * digits); Bonfire's are ULIDs, which sort as text. Either way: longer is newer, then the larger.
+ */
+export function newerId(a: string, b: string): boolean {
+  return a.length !== b.length ? a.length > b.length : a > b;
+}
+/** Not yet read: newer than the reader's notifications marker (Mastodon /api/v1/markers, which Bonfire keeps too). */
+export const isUnreadGroup = (g: Pick<FedizenNoticeGroup, 'latestId'>, lastRead: string | null | undefined): boolean =>
+  !!lastRead && !!g.latestId && newerId(g.latestId, lastRead);
+
+/** Activity's tabs, as Bluesky's: everything, replies (with mentions and quotes), follows, and people you follow. */
+export type NoticeFilter = 'all' | 'replies' | 'follows' | 'following';
+/** Mastodon types[] each tab asks Fedizen for (People you follow is read from All and kept to people you follow). */
+export const FILTER_TYPES: Record<NoticeFilter, string[] | null> = {
+  all: null, following: null, replies: ['mention', 'status', 'quote'], follows: ['follow', 'follow_request'],
+};
+/** What a tab keeps of what Fedizen sent: Replies leaves out new posts from people you get alerts for. */
+export function inFilter(g: FedizenNoticeGroup, f: NoticeFilter, followed?: ReadonlySet<string>): boolean {
+  if (f === 'replies') return g.type === 'reply' || g.type === 'mention' || g.type === 'quote';
+  if (f === 'follows') return g.type === 'follow' || g.type === 'follow_request';
+  if (f === 'following') return g.people.some(p => !!p.id && !!followed?.has(p.id));
+  return true;
+}
+
 /** "Ann liked your post", "Ann and Ben…", "Ann, Ben and 3 others…", as Mastodon and Bluesky word a group. */
-export function groupSentence(g: Pick<FedizenNoticeGroup, 'people' | 'count' | 'verb'>): { names: string; rest: string } {
+export function groupSentence(g: Pick<FedizenNoticeGroup, 'people' | 'count' | 'verb'> & Partial<Pick<FedizenNoticeGroup, 'posts'>>): { names: string; rest: string } {
   const names = g.people.slice(0, 2).map(p => p.name);
-  const others = Math.max(0, g.count - names.length);
+  // One person's likes on several posts count posts, not people.
+  const others = Math.max(0, (g.posts ? g.people.length : g.count) - names.length);
   const who = !names.length ? (g.count === 1 ? 'Someone' : `${g.count} people`)
     : others === 0 ? names.join(' and ')
     : `${names.join(', ')} and ${others === 1 ? '1 other' : `${others} others`}`;

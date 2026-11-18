@@ -83,15 +83,29 @@ function thread(statusId: string) {
 }
 
 /* ── Activity ─────────────────────────────────────────────────────────────────────────────────────────── */
+// In Fedizen's shape after fromGroupedNotifications: ids rise with time (newer is larger), as Bonfire's ULIDs do.
+const nid = (n: number) => `01LAB${String(n).padStart(6, '0')}`;
+const fediId = (k: PersonKey) => ({ ...fedi(k), id: `acct-${k}` });
+const { boostedBy: _b, booster: _o, ...QUOTED } = HOME.find(p => p.quote)! as FedizenPost & { booster?: unknown };
+const PRIYA = ISS_REPLIES.find(p => p.paragraphs[0].startsWith('Have fun'))!;
+const POLL = HOME.find(x => x.pollState)!;
+const brief = (p: FedizenPost) => ({ id: p.statusId ?? p.id, text: p.paragraphs[0], ...(p.image ? { image: p.image } : {}) });
 const NOTICES: FedizenNoticeGroup[] = [
-  { key: 'g1', type: 'mention', count: 1, date: ago(3), people: [fedi('ana')], verb: 'mentioned you', post: { id: HOME[0].id, text: HOME[0].paragraphs[0] } },
-  { key: 'g2', type: 'favourite', count: 14, date: ago(20), people: [fedi('mara'), fedi('theo'), fedi('grace'), fedi('sam')], verb: 'liked your post', post: { id: MY_POSTS[0].id, text: MY_POSTS[0].paragraphs[0] } },
-  { key: 'g3', type: 'reply', count: 1, date: ago(39), people: [fedi('priya')], verb: 'replied to you', post: { id: ISS_REPLIES.find(p => p.paragraphs[0].startsWith('Have fun'))!.id, text: 'Have fun! Binoculars are plenty for the ISS.' } },
-  { key: 'g4', type: 'reblog', count: 6, date: ago(90), people: [fedi('hearth'), fedi('mara')], verb: 'boosted your post', post: { id: MY_POSTS[0].id, text: MY_POSTS[0].paragraphs[0] } },
-  { key: 'g5', type: 'follow', count: 3, date: ago(180), people: [fedi('jonas'), fedi('tomas'), fedi('lea')], verb: 'followed you' },
-  { key: 'g6', type: 'poll', count: 1, date: ago(600), people: [fedi('sam')], verb: 'A poll you voted in has ended', post: (() => { const p = HOME.find(x => x.pollState)!; return { id: p.id, text: p.paragraphs[0] }; })() },
-  { key: 'g7', type: 'added_to_collection', count: 1, date: ago(1440), people: [fedi('mara')], verb: 'added you to a collection' },
+  { key: 'g1', type: 'mention', count: 1, date: ago(3), people: [fediId('ana')], verb: 'mentioned you', post: brief(HOME[0]), status: HOME[0], latestId: nid(20) },
+  { key: 'g2', type: 'favourite', count: 14, date: ago(20), people: [fediId('mara'), fediId('theo'), fediId('grace'), fediId('sam')], verb: 'liked your post', post: brief(MY_POSTS[0]), latestId: nid(19) },
+  { key: 'g3', type: 'reply', count: 1, date: ago(39), people: [fediId('priya')], verb: 'replied to you', post: brief(PRIYA), status: PRIYA, latestId: nid(18) },
+  { key: 'g8', type: 'follow', count: 1, date: ago(55), people: [fediId('lea')], verb: 'followed you', latestId: nid(17) },
+  { key: 'g9', type: 'favourite', count: 1, date: ago(70), people: [fediId('kenji')], verb: 'liked your post', post: brief(MY_POSTS[1]), latestId: nid(16) },
+  { key: 'g4', type: 'reblog', count: 6, date: ago(90), people: [fediId('hearth'), fediId('mara')], verb: 'boosted your post', post: brief(MY_POSTS[0]), latestId: nid(15) },
+  { key: 'g10', type: 'favourite', count: 1, date: ago(120), people: [fediId('kenji')], verb: 'liked your post', post: brief(MY_POSTS[2]), latestId: nid(14) },
+  { key: 'g11', type: 'quote', count: 1, date: ago(150), people: [fediId('theo')], verb: 'quoted your post', post: brief(QUOTED), status: QUOTED, latestId: nid(13) },
+  { key: 'g5', type: 'follow', count: 3, date: ago(180), people: [fediId('jonas'), fediId('tomas'), fediId('grace')], verb: 'followed you', latestId: nid(12) },
+  { key: 'g6', type: 'poll', count: 1, date: ago(600), people: [fediId('sam')], verb: 'poll ended', post: brief(POLL), latestId: nid(11) },
+  { key: 'g12', type: 'favourite', count: 2, date: ago(900), people: [fediId('studio'), fediId('orbit')], verb: 'liked your post', gone: true, latestId: nid(10) },
+  { key: 'g7', type: 'added_to_collection', count: 1, date: ago(1440), people: [fediId('mara')], verb: 'added you to a collection', latestId: nid(9) },
 ];
+/** Read up to here: the newest few are unread when the Lab opens. */
+let notificationMarker: string | null = nid(16);
 
 /* ── Groups: Fedizen's real public directory, captured from fedizen.net (see data/fedizen-groups.json) ─────── */
 type Captured = { id: string; name: string; user: string | null; members: number; dims: { membership: string; visibility: string; participation: string }; summary: string[] };
@@ -161,7 +175,18 @@ export const fedizen: Impl<typeof Fedizen> = {
   getFedizenHome: () => ({ connected: true, canWrite: true, accountHandle: LAB_FEDIZEN_HANDLE, nativeReadEnabled: false, posts: shown([...posted, ...HOME]), next: 'older-1', notices: [] }),
   getFedizenHomePage: (d: { max?: string }) => (d?.max === 'older-1' ? { posts: shown(HOME_OLDER) } : { posts: [] }),
   getFedizenHomeLatest: () => ({ posts: shown([...posted, ...HOME]), next: 'older-1', notices: [] }),
-  getGroupedNotifications: (d: { mentions?: boolean; max?: string }) => (d?.max ? { groups: [] } : { groups: d?.mentions ? NOTICES.filter(n => n.type === 'mention' || n.type === 'reply') : NOTICES }),
+  getGroupedNotifications: (d: { filter?: string; max?: string }) => {
+    if (d?.max) return { groups: [] };
+    const types = d?.filter === 'replies' ? ['mention', 'reply', 'status', 'quote'] : d?.filter === 'follows' ? ['follow', 'follow_request'] : null;
+    return { groups: types ? NOTICES.filter(n => types.includes(n.type)) : NOTICES };
+  },
+  getNotificationMarker: () => ({ lastRead: notificationMarker }),
+  setNotificationMarker: (d: { lastRead: string }) => { notificationMarker = d.lastRead; return { ok: true as const }; },
+  followFedizenAccount: (d: { accountId: string; on: boolean }) => {
+    const k = d.accountId.replace(/^acct-/, '') as PersonKey;
+    if (d.on) following.add(k); else following.delete(k);
+    return { ok: true as const, state: d.on ? 'following' as const : 'none' as const };
+  },
   getFedizenMessages: () => ({
     connected: true,
     conversations: [
@@ -321,7 +346,8 @@ export const intelligence: Impl<typeof Intelligence> = {
   describePostForFilter: () => ({ error: 'not-ready' as const }),
   embedTextsFor: () => ({ error: 'not-ready' as const }),
   searchWordingsFor: () => ({ error: 'not-ready' as const }),
-  followingAmong: (d: { accts: string[] }) => ({ following: Object.fromEntries((d?.accts ?? []).map(a => { const x = personByAcct(a); const k = x ? (Object.keys(PEOPLE) as PersonKey[]).find(y => PEOPLE[y] === x) : undefined; return [a, !!k && following.has(k)]; })) }),
+  // The app asks by Fedizen account id (acct-<person> here), as relationships does.
+  followingAmong: (d: { ids: string[] }) => ({ following: Object.fromEntries((d?.ids ?? []).map(id => [id, following.has(id.replace(/^acct-/, '') as PersonKey)])) }),
   altTextForImage: () => ({ error: 'not-ready' as const }),
 };
 export const push: Impl<typeof Push> = {

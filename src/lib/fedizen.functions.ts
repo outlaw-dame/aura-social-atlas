@@ -120,21 +120,83 @@ export const getFedizenHome = createServerFn({ method: 'GET' }).middleware([requ
  * page are joined across pages in the browser (mergeNoticeGroups).
  */
 export const getGroupedNotifications = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => z.object({ expectedAtlasUserId: z.string().uuid(), mentions: z.boolean().default(false), max: z.string().min(1).max(512).optional() }).parse(d))
+  .inputValidator(d => z.object({ expectedAtlasUserId: z.string().uuid(), filter: z.enum(['all', 'replies', 'follows', 'following']).default('all'), max: z.string().min(1).max(512).optional() }).parse(d))
   .handler(async ({ data, context }): Promise<{ groups: FedizenNoticeGroup[]; next?: string; error?: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const { tokenFor, fedizenGet, PAGE_CURSOR } = await import('./fedizen.server');
+    const { FILTER_TYPES } = await import('./fedizen-feed');
     const cursor = data.max ? encodeURIComponent(data.max) : null;
     if (cursor && !PAGE_CURSOR.test(cursor)) return { groups: [], error: 'unavailable' };
     const t = await tokenFor(context.userId);
     if (!t) return { groups: [], error: 'not-connected' };
-    const r = await fedizenGet(t.access_token, `/api/v2/notifications?limit=40${data.mentions ? '&types%5B%5D=mention' : ''}${cursor ? `&max_id=${cursor}` : ''}`).catch(() => null);
+    const types = (FILTER_TYPES[data.filter] ?? []).map(x => `&types%5B%5D=${x}`).join('');
+    const r = await fedizenGet(t.access_token, `/api/v2/notifications?limit=40${types}${cursor ? `&max_id=${cursor}` : ''}`).catch(() => null);
     if (!r || r.status !== 200) return { groups: [], error: r ? problem(r.status) : 'unavailable' };
-    const groups = fromGroupedNotifications(r.data[0] as never);
+    const page = r.data[0] as Parameters<typeof fromGroupedNotifications>[0];
+    // Whose post a reply answers tells "replied to you" from a reply elsewhere: only looked up when a page has replies.
+    const replies = (page.statuses ?? []).some(s => s?.in_reply_to_account_id);
+    const meId = replies ? await myAccountId(t.access_token, t.account_handle) : undefined;
+    const groups = fromGroupedNotifications(page, meId);
     // Fedizen's placeholder pictures: read each person's own from their actor, as for single notifications.
     const faces = await actorAvatars(groups.flatMap(g => g.people.flatMap(p => (!p.avatar && p.actor ? [p.actor] : []))), 1000);
     const withFaces = faces.size ? groups.map(g => ({ ...g, people: g.people.map(p => (!p.avatar && p.actor && faces.get(p.actor) ? { ...p, avatar: faces.get(p.actor) } : p)) })) : groups;
     return { groups: withFaces, ...(r.next ? { next: r.next } : {}) };
+  });
+
+/** The reader's own Fedizen account id, from their handle (kept per handle for this server instance's life). */
+const myIds = new Map<string, string>();
+async function myAccountId(token: string, handle: string | null | undefined): Promise<string | undefined> {
+  if (!handle) return undefined;
+  const hit = myIds.get(handle);
+  if (hit) return hit;
+  const { fedizenGet } = await import('./fedizen.server');
+  const r = await fedizenGet(token, `/api/v1/accounts/lookup?acct=${encodeURIComponent(handle.replace(/^@/, ''))}`).catch(() => null);
+  const id = r?.status === 200 ? (r.data[0] as { id?: string } | undefined)?.id : undefined;
+  if (id && /^[A-Za-z0-9_-]{1,64}$/.test(id)) { if (myIds.size > 500) myIds.clear(); myIds.set(handle, id); }
+  return id;
+}
+
+/**
+ * Follow (or unfollow) someone by their Fedizen account id, as Fedizen itself named them in a notification: "Follow
+ * back" in Activity. No handle check is needed, unlike following from a profile, since the id came from Fedizen.
+ */
+export const followFedizenAccount = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ accountId: statusId, on: z.boolean() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; state: 'following' | 'requested' | 'none' } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const r = await fedizenSend(c.token, 'POST', `/api/v1/accounts/${data.accountId}/${data.on ? 'follow' : 'unfollow'}`);
+    if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
+    const rel = r.data as { following?: boolean | null; requested?: boolean | null } | null;
+    return { ok: true, state: rel?.following ? 'following' : rel?.requested ? 'requested' : data.on ? 'requested' : 'none' };
+  });
+
+/** Where the reader stopped reading notifications (Mastodon markers), for unread rows and the Activity badge. */
+export const getNotificationMarker = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ lastRead: string | null; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { lastRead: null, error: c.error };
+    const { fedizenGet } = await import('./fedizen.server');
+    const r = await fedizenGet(c.token, '/api/v1/markers?timeline%5B%5D=notifications').catch(() => null);
+    if (!r || r.status !== 200) return { lastRead: null, error: r ? problem(r.status) : 'unavailable' };
+    const id = (r.data[0] as { notifications?: { last_read_id?: string | null } | null } | undefined)?.notifications?.last_read_id;
+    return { lastRead: id && statusId.safeParse(id).success ? id : null };
+  });
+
+/** Mark notifications read up to this one (Mastodon markers); Fedizen keeps it for every app. */
+export const setNotificationMarker = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ lastRead: statusId }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { fedizenSend } = await import('./fedizen.server');
+    const r = await fedizenSend(c.token, 'POST', '/api/v1/markers', { notifications: { last_read_id: data.lastRead } });
+    return r.status >= 200 && r.status < 300 ? { ok: true } : { ok: false, error: problem(r.status) };
   });
 
 /** An older page of Home (max_id cursor from the previous page's Link header), loaded before the reader reaches it. */

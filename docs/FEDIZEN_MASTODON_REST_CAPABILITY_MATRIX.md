@@ -37,6 +37,7 @@ Mastodon REST has **no standard equivalent of GraphQL introspection**. An HTTP r
 | Publishing/reactions/follows | Bonfire GraphQL mutations, verified permissions | `POST /api/v1/statuses`, status favorite/reblog endpoints, follow/unfollow | NO mutations tested or enabled; require disposable test accounts and no blind retries |
 | Media/emoji | Bonfire-authoritative media & rendering | `/api/v1/media/{id}`, `/api/v1/custom_emojis` | Emoji route restricted anonymously; media/upload support not confirmed |
 | Search, filters, markers, polls, push | Bonfire extensions when supported | `/api/v2/search`, filters, markers, polls, push endpoints | Upstream documentation lists these as coming soon; do not implement from Mastodon assumptions |
+| Notifications marker (Activity unread) | `GET`/`POST /api/v1/markers` (notifications only) | — | Present in Bonfire source ([`MarkersController`](https://github.com/bonfire-networks/bonfire_api_graphql/blob/main/lib/web/masto_markers_controller.ex), added 2026-02; `Bonfire.Social.Markers` keeps Seen edges in step). Not yet verified live on Fedizen: if the read fails, Activity shows no unread tint or badge and never marks |
 | Groups | Bonfire GraphQL groups/categories first | Proposed `/api/v1-bonfire/groups` extension | [Bonfire groups REST proposal](https://docs.bonfirenetworks.org/masto_groups_api.html) is a draft, NOT evidence of deployed availability; leave existing Groups PR isolated |
 
 ## Next contract and safety gates
