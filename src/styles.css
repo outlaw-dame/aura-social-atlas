@@ -1204,10 +1204,6 @@ ruby rt { font-size: .6em; }
 .atlas-at-note { align-self: center; font-size: 12px; opacity: .6; }
 /* Phone: a little tighter. */
 .atlas-thread-page .atlas-ph { --av: 36px; --av-gap: 10px; --step: 14px; }
-/* B picks up the branch colours: a stripe beside each message, and its "Replying to" chip. */
-.atlas-conv-item[style] .atlas-conv-main { border-inline-start: 3px solid var(--branch); border-start-start-radius: 0; border-end-start-radius: 0; padding-inline-start: 9px; }
-.atlas-conv-parent { color: var(--atlas-reply-text); opacity: 1; border-inline-start-color: var(--branch, var(--atlas-reply-color)); }
-.atlas-conv-parent svg { color: var(--atlas-reply-color); }
 /* The trunk: a grey line down the left of the top-level replies, ending at the last one's elbow, with each reply
    branching off it in its colour — Phanpy draws its descendants' line the same way (a background on each li). */
 .atlas-ph > .atlas-ph-replies > .atlas-ph-li { background: linear-gradient(var(--line), var(--line)) no-repeat 2px 0 / var(--atlas-line-width) 100%; }
@@ -1216,17 +1212,13 @@ ruby rt { font-size: .6em; }
 /* Posts new to the reader — arrived while the conversation is open, or since their last visit — show in place,
    marked "New" in their branch's colour; ones that just arrived also glow briefly. Nothing moves to show them. */
 .atlas-new-badge { align-self: center; display: inline-flex; align-items: center; padding: 3px 6px; border-radius: 5px; font-size: 10px; line-height: 1; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: color-mix(in oklab, var(--branch, var(--accent, #2563eb)) 80%, currentColor); background: color-mix(in oklab, var(--branch, var(--accent, #2563eb)) 16%, transparent); }
-.atlas-conv-who .atlas-new-badge { margin-inline-start: 6px; vertical-align: 1px; }
-.atlas-new-badge.is-alone { margin: 2px 0 4px; }
-.is-arrived:is(.atlas-ph-row, .atlas-conv-item) { animation: atlas-arrived 3s ease-out; }
+.is-arrived.atlas-ph-row { animation: atlas-arrived 3s ease-out; }
 @keyframes atlas-arrived { from, 30% { background-color: color-mix(in oklab, var(--branch, var(--accent, #2563eb)) 18%, transparent); } }
-@media (prefers-reduced-motion: reduce) { .is-arrived:is(.atlas-ph-row, .atlas-conv-item) { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .is-arrived.atlas-ph-row { animation: none; } }
 /* A post deleted while the conversation is open keeps its place. */
 .atlas-ph-row.is-tombstone { cursor: auto; padding-block: 12px 10px; }
 .atlas-ph-ghost { display: block; width: var(--av); height: var(--av); border-radius: var(--atlas-avatar-radius, 50%); border: 1.5px dashed color-mix(in oklab, currentColor 25%, transparent); }
-.atlas-ph-gone, .atlas-conv-gone { margin: 8px 0 0; font-size: 14px; font-style: italic; opacity: .6; }
-.atlas-conv-msg.is-tombstone { cursor: auto; }
-.atlas-conv-end { height: 1px; }
+.atlas-ph-gone { margin: 8px 0 0; font-size: 14px; font-style: italic; opacity: .6; }
 
 /* Translation (useTranslation.tsx): one quiet line under a post's text — Translate, or where the translation came
    from and Show original. Same on desktop and the phone. */
