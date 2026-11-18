@@ -76,6 +76,9 @@ export default defineConfig({
     ],
     dedupe: ['react', 'react-dom', '@tanstack/react-query', '@tanstack/react-router'],
   },
+  // ASCII-only output: library code holds characters like U+FFFD in strings, which the artifact host refuses
+  // as-is; escaped (\uFFFD) they mean the same.
+  esbuild: { charset: 'ascii' },
   define: {
     'import.meta.env.VITE_DISCOVERY_GATEWAY_URL': JSON.stringify(''),
   },
