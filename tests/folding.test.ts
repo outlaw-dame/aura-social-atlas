@@ -141,3 +141,18 @@ test('calibration: the median of drawn over estimated, held between 0.6 and 2, 1
   strictEqual(calibration([[10, 100], [10, 100], [10, 100]]), 0.6);
   strictEqual(calibration([[900, 100], [900, 100], [900, 100], [900, 100]]), 2);
 });
+
+test('?compare-folds=1 turns the comparison on for the device, =0 off, nothing leaves it as it was', () => {
+  const { compareFolds } = require('../src/lib/compare-folds') as typeof import('../src/lib/compare-folds');
+  const store = new Map<string, string>();
+  const g = globalThis as unknown as { localStorage?: unknown };
+  const before = g.localStorage;
+  g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) };
+  try {
+    strictEqual(compareFolds(''), false);
+    strictEqual(compareFolds('?compare-folds=1'), true);
+    strictEqual(compareFolds('?tab=feeds'), true);
+    strictEqual(compareFolds('?compare-folds=0'), false);
+    strictEqual(compareFolds(''), false);
+  } finally { g.localStorage = before; }
+});

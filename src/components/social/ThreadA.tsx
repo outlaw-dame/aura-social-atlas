@@ -54,7 +54,7 @@ const remembered = new Map<string, boolean>();
 export function ThreadA(props: ThreadAProps) {
   const { thread: t, loading, partial, retry, sort, setSort, replyMode, setReplyMode } = props;
   const [shown, setShown] = useState(PAGE);
-  const [folding, setFolding] = useFoldStyle();
+  const [folding, setFolding, compareFolds] = useFoldStyle();
   const branches = useMemo(() => branchesOf(t), [t]);
   const numbers = useMemo(() => threadNumbers(t), [t]);
   const flat = useMemo(() => flatReplies(t), [t]);
@@ -88,7 +88,7 @@ export function ThreadA(props: ThreadAProps) {
       {replyMode === 'nested' && t.replies.length > 1 && <div role="radiogroup" aria-label="Sort replies" className="atlas-proto-switch atlas-proto-small">
         {REPLY_SORTS.map(s => <button key={s.id} type="button" role="radio" aria-checked={sort === s.id} onClick={() => setSort(s.id)} className={sort === s.id ? 'is-on' : undefined}>{s.label}</button>)}
       </div>}
-      {replyMode === 'nested' && t.replies.some(n => n.replies.length) && <FoldSwitch style={folding} setStyle={setFolding} />}
+      {compareFolds && replyMode === 'nested' && t.replies.some(n => n.replies.length) && <FoldSwitch style={folding} setStyle={setFolding} />}
     </div>
     {replyMode === 'nested' && folding === 'atlas' && atlas.keys.length > 0 && <div className="atlas-at-all">
       <button type="button" onClick={() => atlas.setAll(true)}>Collapse replies</button>

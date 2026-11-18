@@ -7,6 +7,7 @@ import { fullAcct } from '@/lib/fedizen-feed';
 import { shortAgo } from '@/lib/feed-types';
 import { buildThread, type Thread } from '@/lib/thread';
 import type { FoldStyle } from '@/lib/folding';
+import { compareFolds } from '@/lib/compare-folds';
 import { allPosts, branchesOf, chatItems, latestTime, participantsOf, readMarks, rootOf, subjectOf, unreadIn, writeMark, type ProtoStyle, type ReplyMode } from '@/lib/conversation';
 import { getFedizenStatus, getFedizenThread } from '@/lib/fedizen.functions';
 import { useSaveToggle } from './useFedizenLibrary';
@@ -34,8 +35,16 @@ function useStored<T extends string>(k: string, ok: readonly T[], fallback: T): 
 }
 export const useProtoStyle = () => useStored<ProtoStyle>('atlas.proto.style', ['a', 'b'], 'a');
 export const useReplyMode = () => useStored<ReplyMode>('atlas.proto.replyMode', ['nested', 'flat'], 'nested');
-export const useFoldStyle = () => useStored<FoldStyle>('atlas.proto.folding', ['atlas', 'phanpy', 'bonfire'], 'atlas');
-
+/**
+ * How replies fold. Atlas folds is the design; Phanpy's and Bonfire's own rules stay available for comparison only to
+ * someone who asks for them: opening any page with ?compare-folds=1 shows the switch on this device (=0 hides it
+ * again). Without it, conversations always use Atlas folds, whatever was chosen before.
+ */
+export function useFoldStyle(): [FoldStyle, (s: FoldStyle) => void, boolean] {
+  const [compare] = useState(compareFolds);
+  const [style, setStyle] = useStored<FoldStyle>('atlas.proto.folding', ['atlas', 'phanpy', 'bonfire'], 'atlas');
+  return [compare ? style : 'atlas', setStyle, compare];
+}
 const STYLES: { id: ProtoStyle; label: string; note: string }[] = [
   { id: 'a', label: 'A · Bonfire + Phanpy', note: 'A thread: the post in the middle, replies nested or flat, as Bonfire and Phanpy read one.' },
   { id: 'b', label: 'B · + Wavelength', note: 'A conversation: one subject, its messages in order, a New line where you left off, mute per conversation.' },
