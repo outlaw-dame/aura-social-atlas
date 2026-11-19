@@ -81,8 +81,8 @@
   --secondary-foreground: oklch(0.97 0 0);
   --muted: oklch(0.27 0.01 260);
   --muted-foreground: oklch(0.7 0.01 260);
-  --accent: #FA243C;
-  --accent-foreground: oklch(0.99 0 0);
+  /* No --accent here: the reader's accent (src/lib/accent.ts, set on <html>) must reach dark mode too. Desktop puts
+     .dark on a wrapper <div>, where redeclaring it would override the reader's choice with Atlas Red. */
   --destructive: oklch(0.7 0.19 22);
   --destructive-foreground: oklch(0.97 0 0);
   --border: oklch(1 0 0 / 10%);
