@@ -37,8 +37,10 @@ import { badgeText, useUnreadActivity } from '@/components/social/useNotificatio
 import { MobileFeeds } from './MobileFeeds';
 import { FollowedTagsPage, TagFeedPage } from './TagFeed';
 import { bindStack, popToRoot, postPageUrl, pushPage, showTab, tagPageUrl } from './navigation';
-import { ModerationPopup } from './Moderation';
-import { IntelligencePage, KeywordFiltersPage } from './Intelligence';
+import { setThemeMode, useThemeMode } from './theme-mode';
+import { ModerationPage } from './Moderation';
+import { AppearancePage, MobileSettingsList } from './SettingsPages';
+import { IntelligencePage, KeywordFilterPage, KeywordFiltersPage } from './Intelligence';
 import { intelligenceReady, useIntelligence } from '@/components/social/useIntelligence';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
@@ -48,7 +50,6 @@ import { describeProfile, type DeviceProfile } from '@/lib/device-profile';
 import { useDeviceProfile } from '@/lib/use-device-profile';
 import { VideoDock } from '@/components/social/VideoDock';
 import { registerAppServiceWorker } from '@/lib/register-sw';
-import { MobileReadingSettings } from './ReadingSettings';
 import { useComposeIntent } from '@/lib/compose-intent';
 import { ThreadPage } from './Thread';
 import { OPEN_POST_EVENT, type OpenPostDetail } from '@/lib/open-post';
@@ -201,7 +202,6 @@ export default function AtlasMobileApp() {
   const [creatorOpen, setCreatorOpen] = useState<Creator | null>(null);
   const [fabHidden, setFabHidden] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
-  const [moderationOpen, setModerationOpen] = useState(false);
   const accent = useAccent();
   useAvatarShape();
   // Framework7 derives its theme palette from the primary color; recompute it when the reader picks another accent.
@@ -212,7 +212,8 @@ export default function AtlasMobileApp() {
     showTab('tab-discover');
     window.setTimeout(() => { const el = document.querySelector<HTMLInputElement>('#tab-discover .searchbar input'); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus(); }, 80);
   };
-  const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
+  const mode = useThemeMode();
+  const setMode = setThemeMode;
   const [title, setTitle] = useState('Discover');
   // Feeds stays mounted under the other dock tabs; it counts posts as seen only while its tab is on screen.
   const [feedsShown, setFeedsShown] = useState(false);
@@ -431,43 +432,7 @@ export default function AtlasMobileApp() {
             </Tab>
 
             <Tab id="tab-settings" className="page-content" onTabShow={() => setTitle('Settings')}>
-              <BlockTitle>Appearance</BlockTitle>
-              <List strong inset dividers>
-                <ListItem title="Light" radio radioIcon="end" name="mode" checked={mode === 'light'} onChange={() => setMode('light')} />
-                <ListItem title="Dark" radio radioIcon="end" name="mode" checked={mode === 'dark'} onChange={() => setMode('dark')} />
-                <ListItem title="Match device" radio radioIcon="end" name="mode" checked={mode === 'system'} onChange={() => setMode('system')} />
-              </List>
-              <BlockTitle>Accent color</BlockTitle>
-              <Block strong inset><AccentPicker /></Block>
-              <BlockTitle>Avatars</BlockTitle>
-              <Block strong inset><AvatarShapePicker /></Block>
-              <MobileReadingSettings />
-              <BlockTitle>Following</BlockTitle>
-              <List strong inset dividers>
-                <ListItem link="#" title="Followed hashtags" onClick={() => pushPage('/followed-tags/')}>
-                  <Icon slot="media" ios="f7:tag" md="material:sell" />
-                </ListItem>
-              </List>
-              <BlockTitle>Safety</BlockTitle>
-              <List strong inset dividers>
-                <ListItem link="#" title="Keyword filters" onClick={() => pushPage('/keyword-filters/')}>
-                  <Icon slot="media" ios="f7:text_badge_xmark" md="material:filter_alt" />
-                </ListItem>
-                <ListItem link="#" title="Moderation" footer="Blocked people and blocked instances" onClick={() => setModerationOpen(true)}>
-                  <Icon slot="media" ios="f7:shield_lefthalf_fill" md="material:shield" />
-                </ListItem>
-              </List>
-              <List strong inset dividers>
-                <ListItem link="#" title="Notifications" footer="Mentions, replies and new followers on this device." onClick={() => pushPage('/notifications-settings/')}>
-                  <Icon slot="media" ios="f7:bell" md="material:notifications_none" />
-                </ListItem>
-              </List>
-              <BlockTitle>Intelligence</BlockTitle>
-              <List strong inset dividers>
-                <ListItem link="#" title="Intelligence" footer="Off by default. AI with your own key: smarter keyword filters and the assistant." onClick={() => pushPage('/intelligence/')}>
-                  <Icon slot="media" ios="f7:sparkles" md="material:auto_awesome" />
-                </ListItem>
-              </List>
+              <MobileSettingsList />
               <Block>
                 <Chip text={theme === 'ios' ? 'iOS design' : 'Material 3 design'} />
                 <p style={{ opacity: 0.6, fontSize: 13 }}>
@@ -487,7 +452,6 @@ export default function AtlasMobileApp() {
       <CollectionPopup opened={!!collectionOpen} onClose={() => setCollectionOpen(null)} collection={collectionOpen?.collection} id={collectionOpen?.id} link={collectionOpen?.link} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
       <MessagesPopup opened={messagesOpen} onClose={() => setMessagesOpen(false)} />
-      <ModerationPopup opened={moderationOpen} onClose={() => setModerationOpen(false)} />
       <FediProfilePopup target={fediProfile.target} onClose={fediProfile.close} />
       <MiniPlayer />
       <VideoDock />
@@ -529,5 +493,8 @@ const STACK_ROUTES = [
   { path: '/intelligence/', component: IntelligencePage },
   { path: '/notifications-settings/', component: NotificationSettingsPage },
   { path: '/keyword-filters/', component: KeywordFiltersPage },
+  { path: '/keyword-filters/:id/', component: KeywordFilterPage },
+  { path: '/appearance/', component: AppearancePage },
+  { path: '/moderation/', component: ModerationPage },
   { path: '/creator-tag/:creator/:tag/', component: SampleTagPage },
 ];
