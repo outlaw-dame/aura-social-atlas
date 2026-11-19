@@ -1,12 +1,21 @@
-import { Block, Button, Link, List, ListItem, Navbar, NavRight, Page } from 'framework7-react';
+import { Block, BlockFooter, Button, Card, CardContent, CardFooter, Link, List, ListItem, Navbar, NavRight, Page } from 'framework7-react';
+import { useQuery } from '@tanstack/react-query';
+import { getTagFeed } from '@/lib/tag-feed.functions';
+import { NetworkBadge } from '@/lib/networks';
+import { openFediProfile } from '@/lib/fedi-profile';
+import { linkifyPost } from '@/components/social/PostPeople';
+import { SensitiveMedia } from '@/components/social/SensitiveMedia';
+import { AuthorWarning } from '@/components/social/ContentWarning';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useFedizen } from '@/components/social/useFedizen';
 import { FEED_PROBLEM, useTagFeed } from '@/components/social/useFeeds';
 import { useFollowedTagList, useTagFollow, useTagFollowState } from '@/components/social/useTagFollow';
-import { hashtagLabel, TagText } from '@/lib/hashtags';
+import { hashtagLabel, openTag, TagText } from '@/lib/hashtags';
 import { pushPage, tagPageUrl } from './navigation';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
+import { MobileFilterGate } from './FilterGate';
+import { gatedTagPost } from '@/lib/tag-post';
 
 /**
  * Phone: a hashtag's feed, opened from a hashtag in a post or a followed-tag line. It's a page pushed onto the main
@@ -38,9 +47,12 @@ export function TagFeedPage({ f7route }: { f7route?: { params: { tag?: string } 
         {follow.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{follow.error}</p></Block>}
         {feedOk && state.failed && <Block strong inset><p role="alert" style={{ margin: 0 }}>Couldn’t check whether you follow this hashtag. <Link onClick={state.retry}>Try again</Link></p></Block>}
         {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
-        {!user ? <Block strong inset>Sign in to Atlas and connect Fedizen to see posts tagged {tag}.</Block>
+        {/* As desktop's /tags/$tag: only signed out, or not connected, does it fall back to public posts from
+            mastodon.social. A connected person whose read fails sees that, with retry or reconnect. */}
+        {!user ? <PublicTagPosts tag={tag} />
           : q.isLoading ? <Block strong inset>Loading posts tagged {tag}…</Block>
           : q.isError || q.data?.error === 'unavailable' ? <Block strong inset>{FEED_PROBLEM.unavailable} <Link onClick={() => void q.refetch()}>Try again</Link></Block>
+          : q.data?.error === 'not-connected' ? <><Block strong inset><p style={{ marginTop: 0 }}>{FEED_PROBLEM['not-connected']}</p><ConnectFedizen /></Block><PublicTagPosts tag={tag} /></>
           : q.data?.error ? <Block strong inset><p style={{ marginTop: 0 }}>{FEED_PROBLEM[q.data.error]}</p><ConnectFedizen /></Block>
           : !q.data?.posts.length ? <Block strong inset>No posts you can see are tagged {tag} yet.</Block>
           : <FilterPlaceProvider place="public">{q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} inTag={tag} />)}</FilterPlaceProvider>}
@@ -90,4 +102,32 @@ export function FollowedTagsPage() {
       </List>}
     {q.data?.full && <Block><p style={{ fontSize: 13, opacity: 0.6 }}>Showing the first 200.</p></Block>}
   </Page>;
+}
+
+/**
+ * Public posts tagged `tag` from mastodon.social (getTagFeed), for a signed-out or not-connected reader, as desktop
+ * shows them: author (opens their profile in Atlas), the post with its warning and sensitive media, counts linking to
+ * the original.
+ */
+function PublicTagPosts({ tag }: { tag: string }) {
+  const { data, isLoading, error } = useQuery({ queryKey: ['tag-feed', tag], queryFn: () => getTagFeed({ data: { tag } }), staleTime: 60_000 });
+  return <>
+    <BlockFooter><span className="atlas-spot-meta">From <NetworkBadge network="Mastodon" /> mastodon.social</span></BlockFooter>
+    {isLoading ? <Block strong inset>Loading posts…</Block>
+      : error ? <Block strong inset>This hashtag feed couldn’t be loaded. Please try again shortly.</Block>
+      : !data?.length ? <Block strong inset>No public posts are tagged {tag} yet.</Block>
+      : <FilterPlaceProvider place="public">{data.map(p => <MobileFilterGate key={p.id} post={gatedTagPost(p)}><Card outline className="atlas-f7-card atlas-public-tag-post">
+        <CardContent>
+          <Link className="atlas-public-tag-author" onClick={() => openFediProfile({ actor: p.author.url, acct: p.author.acct, name: p.author.name })} aria-label={`${p.author.name} ${p.author.acct}. Open their profile`}>
+            <img src={p.author.avatar} alt="" width={40} height={40} className="atlas-avatar" loading="lazy" referrerPolicy="no-referrer" />
+            <span><b>{p.author.name}</b><small>@{p.author.acct.replace(/^@/, '')}</small></span>
+            <time dateTime={p.createdAt}>{new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time>
+          </Link>
+          <AuthorWarning cw={p.cw}>{p.text.map((t, i) => <p key={i}>{linkifyPost(t, undefined, t2 => openTag(t2))}</p>)}
+            <SensitiveMedia sensitive={p.sensitive}>{p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ width: '100%', borderRadius: 12, maxHeight: 384, objectFit: 'cover' }} />}</SensitiveMedia>
+          </AuthorWarning>
+        </CardContent>
+        <CardFooter><Link external target="_blank" href={p.url} aria-label="Open original post">↩ {p.replies} · ↻ {p.boosts} · ★ {p.favourites}</Link></CardFooter>
+      </Card></MobileFilterGate>)}</FilterPlaceProvider>}
+  </>;
 }

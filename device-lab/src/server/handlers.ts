@@ -11,6 +11,7 @@ import type * as Fedizen from '@/lib/fedizen.functions';
 import type * as Groups from '@/lib/groups.functions';
 import type * as Intelligence from '@/lib/intelligence.functions';
 import type * as Push from '@/lib/push.functions';
+import type * as TagFeed from '@/lib/tag-feed.functions';
 import type * as Spotlight from '@/lib/spotlight.functions';
 import type * as Translation from '@/lib/translation.functions';
 import type * as Voices from '@/lib/voices.functions';
@@ -366,6 +367,16 @@ export const push: Impl<typeof Push> = {
   disablePush: () => ({ ok: true }),
   setPushChoice: () => ({ ok: true }),
 };
+// Public posts for a hashtag, as mastodon.social would answer a signed-out reader (invented sample).
+export const tagFeed: Impl<typeof TagFeed> = {
+  getTagFeed: (d: { tag: string }) => HOME.slice(0, 3).map((p, i) => ({
+    id: `pub-${i}`, url: `https://mastodon.example/@sample/${i}`, createdAt: ago(60 * (i + 1)),
+    text: [`${p.paragraphs[0]} #${d.tag.replace(/^#/, '')}`],
+    author: { name: p.author, acct: (p.acct ?? p.handle).replace(/^@/, ''), avatar: p.avatar ?? '', url: `https://mastodon.example/@sample${i}` },
+    replies: i, boosts: 2 * i, favourites: 3 + i,
+  })),
+};
+
 export const spotlight: Impl<typeof Spotlight> = { getSpotlight: () => ({ items: SPOTLIGHT, bonfireCount: 1 }) };
 export const translation: Impl<typeof Translation> = {
   getTranslationKeys: () => ({ serverKeys: true, deepl: null }),

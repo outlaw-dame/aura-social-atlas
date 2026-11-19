@@ -7,13 +7,13 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import Framework7 from 'framework7/lite-bundle';
 import Framework7React, {
   App, View, Page, Navbar, Link, Toolbar, Tabs, Tab, PageContent,
-  Searchbar, List, ListItem, Block, BlockTitle, Card, CardContent, CardFooter, Button, Chip, Toggle, Segmented,
+  Searchbar, List, ListItem, Block, BlockFooter, BlockTitle, Card, CardContent, CardFooter, Button, Chip, Toggle, Segmented,
 } from 'framework7-react';
 import { holdF7Styles } from './f7-styles';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
 import { promptSignInToSave } from './save-prompt';
 import { Fab, NavRight, NavLeft, Panel, Popup, f7, f7ready, Badge } from 'framework7-react';
-import { creators, posts, networks, matchesCreator, fullHandle, postsByTag, type Creator } from '@/lib/social-catalogue';
+import { creators, posts, networks, topics, matchesCreator, fullHandle, postsByTag, type Creator } from '@/lib/social-catalogue';
 import { NetworkBadge } from '@/lib/networks';
 import { OPEN_TAG_EVENT, linkifyHashtagsWith, hashtagLabel, TagText } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
@@ -40,6 +40,7 @@ import { bindStack, popToRoot, postPageUrl, pushPage, showTab, tagPageUrl } from
 import { setThemeMode, useThemeMode } from './theme-mode';
 import { ModerationPage } from './Moderation';
 import { AppearancePage, MobileSettingsList } from './SettingsPages';
+import { MobileSpotlight, MobileVoicesToKnow } from './Discover';
 import { IntelligencePage, KeywordFilterPage, KeywordFiltersPage } from './Intelligence';
 import { intelligenceReady, useIntelligence } from '@/components/social/useIntelligence';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
@@ -244,7 +245,11 @@ export default function AtlasMobileApp() {
     return () => { document.removeEventListener('scroll', on, true); clearTimeout(t); };
   }, []);
 
-  const results = creators.filter(c => matchesCreator(c, query, network, 'All topics'));
+  const [topic, setTopic] = useState<string>('All topics');
+  const results = creators.filter(c => matchesCreator(c, query, network, topic));
+  // Stories follow the same search, network and topic, as on desktop's Discover.
+  const filtering = !!query.trim() || network !== 'All networks' || topic !== 'All topics';
+  const stories = posts.filter(p => results.some(c => c.id === p.creatorId));
   const creatorOf = (id: string) => creators.find(c => c.id === id);
   // A sample creator's stories under one of their tags: pushed like any feed, titled by the tag.
   const openCreatorTag = (creatorId: string, tag: string) => {
@@ -394,12 +399,20 @@ export default function AtlasMobileApp() {
                     {networks.map(n => <Button key={n} small active={network === n} onClick={() => setNetwork(n)}>{n.replace(' networks', '')}</Button>)}
                   </Segmented>
                 </Block>
+                <div className="atlas-notice-tabs" role="tablist" aria-label="Filter by topic">
+                  {topics.map(t => <button key={t} type="button" role="tab" aria-selected={topic === t} className={topic === t ? 'is-on' : undefined} onClick={() => setTopic(t)}>{t === 'All topics' ? 'All topics' : t}</button>)}
+                </div>
+                {filtering && <BlockFooter><span role="status">{stories.length} {stories.length === 1 ? 'story' : 'stories'}{query.trim() ? ` for “${query.trim()}”` : ''}</span> · <Link onClick={() => { setQuery(''); f7.searchbar.clear('#tab-discover .searchbar'); setNetwork('All networks'); setTopic('All topics'); }}>Reset filters</Link></BlockFooter>}
                 {!wide && creatorList}
-                <Block className="px-3"><GatewayDiscovery /></Block>
-                {wide && <Block className="atlas-d-spotlight"><div className="atlas-desktop-embed"><Spotlight /></div></Block>}
-                <MobileRecentArticles />
-                <BlockTitle>Stories</BlockTitle>
-                <div className="atlas-story-grid">{posts.map(postCard)}</div>
+                {!filtering && <>
+                  <Block className="px-3"><GatewayDiscovery /></Block>
+                  {wide ? <Block className="atlas-d-spotlight"><div className="atlas-desktop-embed"><Spotlight /></div></Block> : <MobileSpotlight />}
+                  <MobileRecentArticles />
+                </>}
+                <BlockTitle>{filtering ? 'From the community' : 'From our creators'}</BlockTitle>
+                {stories.length ? <div className="atlas-story-grid">{stories.map(postCard)}</div>
+                  : <Block strong inset><b>No matches this time.</b> Try another topic, network, or search.</Block>}
+                {!wide && <MobileVoicesToKnow />}
               </div>
               {wide && (
                 <aside className="atlas-d-rail" aria-label="Creator discovery">

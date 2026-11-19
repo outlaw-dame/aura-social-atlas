@@ -9,7 +9,7 @@ import { Segmented } from 'framework7-react';
 import { openTag } from '@/lib/hashtags';
 import { useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
-import { Block, BlockTitle, Button, Card, CardContent, CardFooter, Link, List, ListItem, Navbar, NavRight, Page, Popup } from 'framework7-react';
+import { Block, BlockTitle, Button, Card, CardContent, CardFooter, Link, List, ListItem, Navbar, NavRight, Page, Popup, f7 } from 'framework7-react';
 import { getRecentArticles, getFedizenPublic } from '@/lib/bonfire.functions';
 import type { BonfireArticle } from '@/lib/spotlight';
 import { useFedizen, useFedizenMessages } from '@/components/social/useFedizen';
@@ -75,13 +75,16 @@ export function MobileFedizenFeed() {
     {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
     {!f.signedIn ? <Block strong inset>Sign in to Atlas to see your Fedizen feed. <Link href="/auth" external>Sign in</Link></Block>
       : f.loading ? <Block strong inset>Loading your Fedizen feed…</Block>
+      : f.queryError ? <Block strong inset>Atlas couldn’t check your Fedizen connection. <Link onClick={f.retry}>Try again</Link></Block>
       : !f.data?.connected || f.data.error === 'expired' ? <Block strong inset>
         <p style={{ marginTop: 0 }}>{f.data?.error === 'expired' ? 'Fedizen ended Atlas’s access. Connect again to keep reading.' : 'Connect your Fedizen account to see your timeline and notifications here, and to join groups and follow people from Atlas.'}</p>
         {f.embedded ? <Button fill round external target="_blank" href={`${window.location.origin}/app`}>Open Atlas in a new tab to connect</Button> : <Button fill round onClick={f.connect}>Connect Fedizen</Button>}
         {f.error && <p role="alert" style={{ color: 'var(--f7-theme-color)' }}>{f.error}</p>}
       </Block>
-      : !tl.posts.length ? <Block strong inset>Your Fedizen timeline is empty.</Block>
+      : !tl.posts.length ? <Block strong inset>{f.data.error ? <>Fedizen couldn’t send your timeline right now. <Link onClick={f.retry}>Try again</Link></> : 'Your Fedizen timeline is empty.'}</Block>
       : <div ref={list} className="atlas-home-list">
+        {f.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{f.error}</p></Block>}
+        {f.data.error && <Block strong inset>Fedizen couldn’t send your timeline right now. <Link onClick={f.retry}>Try again</Link></Block>}
         {/* New posts wait here until asked for (Bonfire: "Show N new activities"; Mastodon: "N new items"). */}
         {tl.newCount > 0 && <div className="atlas-new-posts"><button type="button" onClick={tl.reveal}><Icon ios="f7:arrow_up" md="material:arrow_upward" />{tl.newCount === 1 ? '1 new post' : `${tl.newCount}${tl.gap ? '+' : ''} new posts`}</button></div>}
         {tl.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}
@@ -92,6 +95,10 @@ export function MobileFedizenFeed() {
         </div>}
       </div>}
     {(!f.signedIn || (!f.loading && (!f.data?.connected || f.data.error === 'expired'))) && <MobilePublicFedizen />}
+    {/* As desktop's Following: Atlas can stop using the Fedizen account (the grant is revoked at Fedizen too). */}
+    {f.signedIn && f.data?.connected && <Block className="atlas-disconnect">
+      <Link onClick={() => f7.dialog.create({ title: 'Disconnect Fedizen?', text: 'Atlas will stop reading and acting for your Fedizen account until you connect again.', buttons: [{ text: 'Cancel' }, { text: 'Disconnect', color: 'red', strong: true, onClick: () => void f.disconnect() }] }).open()} className={f.actionBusy ? 'disabled' : undefined}>{f.actionBusy ? 'Disconnecting…' : 'Disconnect Fedizen'}</Link>
+    </Block>}
     {actions.sheet}
   </>;
 }
