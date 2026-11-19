@@ -5,12 +5,12 @@ import { ProfileHoverCard } from './ProfileHoverCard';
 import { ArrowUp, ArrowUpRight, AtSign, Bell, BarChart3, ChevronDown, ChevronUp, Heart, Layers3, Link2, PenLine, Quote, RefreshCw, Reply, UserCheck, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFedizen } from './useFedizen';
-import { useActivityReadState, useNewActivityPill, useNotificationGroups } from './useNotificationGroups';
+import { useActivityReadState, useHiddenByFilter, useNewActivityPill, useNotificationGroups } from './useNotificationGroups';
 import { useFollowBack } from './useFollowBack';
 import { useFollowRequests, useWhoReacted } from './useOwnPosts';
 import { FilterPlaceProvider } from './useIntelligence';
 import { FeedPostCard, useFeedPostActions, type FeedActions } from './FeedPostCard';
-import { groupSentence, noticeLabel, type FediPerson, type FedizenNotice, type FedizenNoticeGroup, type NoticeFilter, type NoticePost } from '@/lib/fedizen-feed';
+import { groupSentence, noticeLabel, type FediPerson, type FedizenPost, type FedizenNotice, type FedizenNoticeGroup, type NoticeFilter, type NoticePost } from '@/lib/fedizen-feed';
 import { noticeActionLabel, noticeTarget, singleNoticeTarget, type NoticeTarget } from '@/lib/notice-target';
 import { openCollection } from '@/lib/collections';
 
@@ -82,7 +82,7 @@ function GroupedActivity({ fallback }: { fallback: React.ReactNode }) {
     {g.loading ? <p className="text-sm text-muted-foreground">Loading your activity…</p>
       : g.error ? <p role="alert" className="text-sm text-muted-foreground">{g.error} <Button variant="link" size="sm" className="px-1" onClick={() => void g.refresh()}>Try again</Button></p>
       : !g.groups.length ? <p className="rounded-2xl border border-border p-6 text-sm text-muted-foreground">{EMPTY[filter]}</p>
-      : <FilterPlaceProvider place="account"><ul className="divide-y divide-border">{g.groups.map(x => <GroupRow key={x.key} g={x} unread={read.isUnread(x)} actions={actions} />)}</ul></FilterPlaceProvider>}
+      : <FilterPlaceProvider place="home"><ul className="divide-y divide-border">{g.groups.map(x => <GroupRow key={x.key} g={x} unread={read.isUnread(x)} actions={actions} />)}</ul></FilterPlaceProvider>}
     {g.more && <Button variant="outline" className="mt-4 w-full rounded-full" disabled={g.loadingMore} onClick={g.more}>{g.loadingMore ? 'Loading…' : 'Show older'}</Button>}
     {actions.dialog}
   </section>;
@@ -110,11 +110,7 @@ function GroupRow({ g, unread, actions }: { g: FedizenNoticeGroup; unread: boole
   const s = groupSentence(g);
   const t = noticeTarget(g);
   const label = `${s.names} ${s.rest}${unread ? ', unread' : ''}`;
-  // A reply, mention, quote or new post: the post itself, to answer, like or boost in place.
-  if (g.status) return <li className={`py-3 ${unread ? '-mx-3 rounded-xl bg-accent/[0.07] px-3' : ''}`}>
-    <p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground"><span className="grid size-5 place-items-center rounded-full text-white" style={{ background: k.color }}><k.icon className="size-3" aria-hidden="true" /></span>{noticeLabel(g)}{unread && <span className="sr-only">, unread</span>}</p>
-    <FeedPostCard post={g.status} actions={actions} />
-  </li>;
+  if (g.status) return <NoticePost g={g} post={g.status} unread={unread} actions={actions} />;
   const toggles = t?.kind === 'people' || t?.kind === 'posts';
   const expands = toggles || (g.people.length > 1 && (g.type === 'favourite' || g.type === 'reblog'));
   const single = g.people.length === 1 && (g.type === 'follow' || g.type === 'follow_request') ? g.people[0] : null;
@@ -143,6 +139,19 @@ function GroupRow({ g, unread, actions }: { g: FedizenNoticeGroup; unread: boole
   </li>;
 }
 const first = (g: FedizenNoticeGroup) => g.people[0];
+
+/**
+ * A reply, mention, quote or new post: the post itself, to answer, like or boost in place. Filters for Home apply;
+ * what one catches is left out, with no notice (Settings → Keyword filters counts it).
+ */
+function NoticePost({ g, post, unread, actions }: { g: FedizenNoticeGroup; post: FedizenPost; unread: boolean; actions: FeedActions }) {
+  const k = kinds[g.type] ?? { icon: Bell, color: 'var(--accent)' };
+  if (useHiddenByFilter(post)) return null;
+  return <li className={`py-3 ${unread ? '-mx-3 rounded-xl bg-accent/[0.07] px-3' : ''}`}>
+    <p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground"><span className="grid size-5 place-items-center rounded-full text-white" style={{ background: k.color }}><k.icon className="size-3" aria-hidden="true" /></span>{noticeLabel(g)}{unread && <span className="sr-only">, unread</span>}</p>
+    <FeedPostCard post={post} actions={actions} />
+  </li>;
+}
 
 function FollowBack({ p, back }: { p: FedizenNoticeGroup['people'][number]; back: boolean }) {
   const f = useFollowBack(p);

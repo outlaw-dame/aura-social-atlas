@@ -22,7 +22,7 @@ import { joinModeOf } from '@/lib/groups';
 import type { Collection } from '@/lib/collections';
 import type { FediProfile } from '@/lib/fedi-profile';
 import type { SpotlightItem, BonfireArticle } from '@/lib/spotlight';
-import type { ContentFilter } from '@/lib/content-filter';
+import { filterKind, normalizeFilterText, type ContentFilter } from '@/lib/content-filter';
 import { podcastVoices, videoVoices, voices as writerVoices } from '@/lib/voices';
 import { DEFAULT_LIMITS } from '@/lib/compose-media';
 import space from '@/assets/news-space.jpg';
@@ -337,8 +337,16 @@ export const intelligence: Impl<typeof Intelligence> = {
   removeAiKey: () => aiStatus,
   updateIntelligence: (d: { deepMatching?: boolean }) => { if (d.deepMatching != null) aiStatus.deepMatching = d.deepMatching; return aiStatus; },
   listContentFilters: () => ({ filters }),
-  addContentFilters: (d: { filters: Omit<ContentFilter, 'id'>[] }) => { for (const f of d.filters) filters.push({ ...(f as ContentFilter), id: crypto.randomUUID() }); return { filters }; },
-  updateContentFilter: (d: { id: string; patch: Partial<ContentFilter> }) => { const f = filters.find(x => x.id === d.id); if (f) Object.assign(f, d.patch); return { filters }; },
+  // In the real functions' shapes: words plus options in; the whole list back.
+  addContentFilters: (d: { texts: string[]; action: ContentFilter['action']; places: ContentFilter['places']; expiresAt: string | null; exceptFollowing: boolean }) => {
+    for (const raw of d.texts) {
+      const text = normalizeFilterText(raw);
+      if (!text || filters.some(f => f.text.toLowerCase() === text.toLowerCase())) continue;
+      filters.push({ id: crypto.randomUUID(), text, kind: filterKind(text), action: d.action, semantic: true, expansions: [], places: d.places, expiresAt: d.expiresAt, exceptFollowing: d.exceptFollowing });
+    }
+    return { filters };
+  },
+  updateContentFilter: (d: { id: string } & Partial<ContentFilter>) => { const { id, ...patch } = d; const f = filters.find(x => x.id === id); if (f) Object.assign(f, patch); return { filters }; },
   deleteContentFilter: (d: { id: string }) => { const i = filters.findIndex(x => x.id === d.id); if (i >= 0) filters.splice(i, 1); return { filters }; },
   expandContentFilter: () => ({ error: 'not-ready' as const }),
   judgeFilteredPosts: () => ({ error: 'not-ready' as const }),

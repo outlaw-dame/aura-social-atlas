@@ -14,6 +14,7 @@ import { PROVIDERS, type Credential, type ProviderId } from '@/lib/intelligence/
 import type { DeviceKey, DevicePrefs } from '@/lib/intelligence/device-keys';
 import type { ImageInput } from '@/lib/intelligence/llm';
 import { useAtlasAuth } from './AuthState';
+import { forgetFilterStats, recordFiltered } from '@/lib/filter-stats';
 import { makeSimilar, useSemantic } from './useSemanticIndex';
 
 export const AI_PROBLEM: Record<AiProblem, string> = {
@@ -268,7 +269,7 @@ export function useFilterActions() {
       put(r.filters);
       if (patch.semantic) void widen(r.filters, new Set([filterId]));
     },
-    remove: async (filterId: string) => { put((await del({ data: { expectedAtlasUserId: id, id: filterId } })).filters); },
+    remove: async (filterId: string) => { put((await del({ data: { expectedAtlasUserId: id, id: filterId } })).filters); forgetFilterStats(id, filterId); },
     /** Re-asks for a filter's other wordings. */
     widen: async (filterId: string): Promise<string | null> => {
       const f = current().find(x => x.id === filterId);
@@ -292,7 +293,7 @@ export function useFilterCautions(filters: ContentFilter[]) {
 
 /* ── Applying filters in every feed ──────────────────────────────────────────────────────────── */
 
-type FilterEnv = { engine: FilterEngine; me: string | null; product: string | null ; following: FollowLookup };
+type FilterEnv = { engine: FilterEngine; me: string | null; product: string | null ; following: FollowLookup; /** Atlas account, for filter counts. */ account: string | null };
 const EngineContext = createContext<FilterEnv | null>(null);
 const PlaceContext = createContext<FilterPlace>('home');
 
@@ -344,7 +345,7 @@ export function ContentFilterProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     engine.configure({ filters: list, ai: runner.ready, deep: !!ai?.deepMatching, scope: `${user?.id}:${runner.where}:${semantic.model ?? ''}`, judge: runner.judge(list), similar, following });
   }, [engine, list, runner, ai?.deepMatching, user?.id, following, similar, semantic.model]);
-  const env = useMemo(() => ({ engine, me: fedizen.data?.handle ?? null, product: ai?.active ? PROVIDERS[ai.active.provider].product : null, following }), [engine, fedizen.data?.handle, ai?.active, following]);
+  const env = useMemo(() => ({ engine, me: fedizen.data?.handle ?? null, product: ai?.active ? PROVIDERS[ai.active.provider].product : null, following, account: user?.id ?? null }), [engine, fedizen.data?.handle, ai?.active, following, user?.id]);
   return <EngineContext.Provider value={env}>{children}</EngineContext.Provider>;
 }
 
@@ -355,6 +356,25 @@ export function isOwnPost(postHandle: string | undefined, myHandle: string | nul
   return norm(postHandle) === norm(myHandle);
 }
 
+/**
+ * Of these posts, the ids a filter hides or warns on in `place` (no notice is drawn; for counts like Activity's badge,
+ * which shouldn't count what Activity leaves out). Blurred posts stay; pending ones count as shown.
+ */
+export function useFilteredOut(posts: (FilterablePost & { handle?: string })[], place: FilterPlace): Set<string> {
+  const env = useContext(EngineContext);
+  const revision = useSyncExternalStore(env?.engine.subscribe ?? noop, env?.engine.getRevision ?? zero, zero);
+  return useMemo(() => {
+    const out = new Set<string>();
+    if (!env) return out;
+    for (const p of posts) {
+      if (isOwnPost(p.handle, env.me)) continue;
+      const v = env.engine.evaluate(p, place);
+      if (v.state === 'filtered' && v.action !== 'blur') out.add(p.id);
+    }
+    return out;
+  }, [env, posts, place, revision]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 /** What a feed should do with this post: show it, hide it, show it behind a notice, or blur its media. */
 export function usePostFilter(post: FilterablePost & { handle?: string }): { verdict: Verdict; place: FilterPlace; product: string | null } {
   const env = useContext(EngineContext);
@@ -363,6 +383,10 @@ export function usePostFilter(post: FilterablePost & { handle?: string }): { ver
   const subject = useMemo(() => (isOwnPost(post.handle, env?.me ?? null) ? { ...post, mine: true } : post), [post, env?.me]);
   const verdict = useMemo(() => (env ? env.engine.evaluate(subject, place) : CLEAR), [env, subject, place, revision]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { env?.engine.request(subject, place); }, [env, subject, place, revision]);
+  // Counted for Settings → Keyword filters ("Filtered 12 posts in the last 30 days"), once per post.
+  useEffect(() => {
+    if (verdict.state === 'filtered' && env?.account) recordFiltered(env.account, verdict.filter.id, subject.statusId ?? subject.id);
+  }, [verdict, env?.account, subject.statusId, subject.id]);
   return { verdict, place, product: env?.product ?? null };
 }
 

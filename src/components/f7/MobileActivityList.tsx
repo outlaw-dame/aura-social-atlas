@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Block, Button } from 'framework7-react';
-import { groupSentence, noticeLabel, type FediPerson, type FedizenNoticeGroup, type NoticeFilter, type NoticePost } from '@/lib/fedizen-feed';
+import { groupSentence, noticeLabel, type FediPerson, type FedizenPost, type FedizenNoticeGroup, type NoticeFilter, type NoticePost } from '@/lib/fedizen-feed';
 import { noticeActionLabel, noticeTarget, type NoticeTarget } from '@/lib/notice-target';
 import { openPost } from '@/lib/open-post';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { openCollection } from '@/lib/collections';
 import { shortAgo } from '@/lib/feed-types';
-import { useActivityReadState, useNewActivityPill, useNotificationGroups } from '@/components/social/useNotificationGroups';
+import { useActivityReadState, useHiddenByFilter, useNewActivityPill, useNotificationGroups } from '@/components/social/useNotificationGroups';
 import { useFollowBack } from '@/components/social/useFollowBack';
 import { useWhoReacted } from '@/components/social/useOwnPosts';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
@@ -39,8 +39,8 @@ export function MobileGroupedActivity({ visible, fallback }: { visible: boolean;
   const pill = useNewActivityPill(g.refresh, read.restart);
   const actions = useMobilePostActions();
   if (g.unsupported && filter === 'all') return <>{fallback}</>;
-  // Filters apply as on a profile: something addressed to you that a filter catches shows as a notice, never vanishes.
-  return <FilterPlaceProvider place="account">
+  // Filters for Home apply. What one catches is left out of Activity, with no notice; Settings → Keyword filters counts it.
+  return <FilterPlaceProvider place="home">
     <div className="atlas-notice-tabs" role="tablist" aria-label="Show">
       {TABS.map(t => <button key={t.id} type="button" role="tab" aria-selected={filter === t.id} className={filter === t.id ? 'is-on' : undefined} onClick={() => setFilter(t.id)}>{t.label}</button>)}
     </div>
@@ -60,12 +60,18 @@ export function MobileGroupedActivity({ visible, fallback }: { visible: boolean;
 function MobileNotice({ g, unread, actions }: { g: FedizenNoticeGroup; unread: boolean; actions: ReturnType<typeof useMobilePostActions> }) {
   const i = iconFor(g.type);
   const cls = `atlas-notice${unread ? ' is-unread' : ''}`;
-  // A reply, mention, quote or new post: the post itself, with what it is above it.
-  if (g.status) return <div role="listitem" className={`${cls} atlas-notice-post`}>
-    <p className="atlas-notice-label"><span className={`atlas-notice-kind atlas-activity-${g.type}`}><Icon ios={i.ios} md={i.md} /></span>{noticeLabel(g)}{unread && <span className="atlas-sr">, unread</span>}</p>
-    <MobilePostCard post={g.status} actions={actions} />
-  </div>;
+  if (g.status) return <MobileNoticePost g={g} post={g.status} unread={unread} cls={cls} actions={actions} />;
   return <MobileNoticeRow g={g} unread={unread} cls={cls} />;
+}
+
+/** A reply, mention, quote or new post: the post itself, with what it is above it. Left out when a filter catches it. */
+function MobileNoticePost({ g, post, unread, cls, actions }: { g: FedizenNoticeGroup; post: FedizenPost; unread: boolean; cls: string; actions: ReturnType<typeof useMobilePostActions> }) {
+  const i = iconFor(g.type);
+  if (useHiddenByFilter(post)) return null;
+  return <div role="listitem" className={`${cls} atlas-notice-post`}>
+    <p className="atlas-notice-label"><span className={`atlas-notice-kind atlas-activity-${g.type}`}><Icon ios={i.ios} md={i.md} /></span>{noticeLabel(g)}{unread && <span className="atlas-sr">, unread</span>}</p>
+    <MobilePostCard post={post} actions={actions} />
+  </div>;
 }
 
 function MobileNoticeRow({ g, unread, cls }: { g: FedizenNoticeGroup; unread: boolean; cls: string }) {

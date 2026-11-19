@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { getGroupedNotifications, getNotificationMarker, setNotificationMarker } from '@/lib/fedizen.functions';
+import type { FedizenPost } from '@/lib/fedizen-feed';
 import { combineMultiPost, inFilter, isUnreadGroup, mergeNoticeGroups, newerId, type FedizenNoticeGroup, type NoticeFilter } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from './AuthState';
 import { LIBRARY_PROBLEM } from './useFedizenLibrary';
-import { useFollowedAmong } from './useIntelligence';
+import { useFilteredOut, useFollowedAmong, usePostFilter } from './useIntelligence';
 import { LIVE_NOTICE_EVENT } from './LiveUpdates';
 
 /** People you follow is read from All (Fedizen can't filter by who you follow), so it shares All's pages. */
@@ -62,7 +63,10 @@ export function useUnreadActivity(): number {
   const { user } = useAtlasAuth();
   const m = useMarker();
   const g = useNotificationGroups('all', !!user);
-  return useMemo(() => (m.known ? g.groups.filter(x => isUnreadGroup(x, m.lastRead)).reduce((n, x) => n + x.count, 0) : 0), [g.groups, m.known, m.lastRead]);
+  // What Activity leaves out (a filter caught the post) isn't counted either.
+  const posts = useMemo(() => g.groups.flatMap(x => (x.status ? [x.status] : [])), [g.groups]);
+  const out = useFilteredOut(posts, 'home');
+  return useMemo(() => (m.known ? g.groups.filter(x => isUnreadGroup(x, m.lastRead) && !(x.status && out.has(x.status.id))).reduce((n, x) => n + x.count, 0) : 0), [g.groups, m.known, m.lastRead, out]);
 }
 /** The badge's words: "30+" past what one page can tell. */
 export const badgeText = (n: number) => (n <= 0 ? '' : n > 30 ? '30+' : String(n));
@@ -112,4 +116,13 @@ export function useNewActivityPill(refresh: () => Promise<unknown> | void, resta
   }, []);
   const show = useCallback(async () => { setFresh(false); await refresh(); restart(); }, [refresh, restart]);
   return { fresh, show };
+}
+
+/**
+ * Whether Activity leaves a post out: a filter hides or warns on it (a blur only veils its media, so it stays), or the
+ * check is still running. No notice is shown in Activity; the filter's count in Settings records it.
+ */
+export function useHiddenByFilter(post: FedizenPost): boolean {
+  const { verdict } = usePostFilter(post);
+  return verdict.state === 'pending' || (verdict.state === 'filtered' && verdict.action !== 'blur');
 }

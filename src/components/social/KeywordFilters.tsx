@@ -9,6 +9,7 @@ import { FILTER_PLACES, MAX_EXPANSIONS, type ContentFilter, type FilterAction, t
 import { AI_PROBLEM, DEFAULT_OPTIONS, intelligenceReady, useContentFilters, useFilterActions, useFilterCautions, useIntelligence, type FilterOptions } from './useIntelligence';
 import { ACTION_LABEL, DURATIONS, PLACE_LABEL, downloadExport, expiresAfter, filterSummary, parseImport } from './filter-options';
 import { useAtlasAuth } from './AuthState';
+import { countLabel, totalLabel, useFilteredCounts } from '@/lib/filter-stats';
 
 type Suggestions = { suggestions: { text: string; reason: string }[]; cautions: { filterId: string; issue: string }[] };
 
@@ -23,6 +24,7 @@ export function KeywordFilters() {
   const act = useFilterActions();
   const filters = q.data && 'filters' in q.data ? q.data.filters : [];
   const cautions = useFilterCautions(filters);
+  const counts = useFilteredCounts(user?.id);
   const [text, setText] = useState(''), [options, setOptions] = useState<FilterOptions>(DEFAULT_OPTIONS), [duration, setDuration] = useState(0), [more, setMore] = useState(false);
   const [note, setNote] = useState<string | null>(null), [busy, setBusy] = useState(false), [thinking, setThinking] = useState(false);
   const [suggested, setSuggested] = useState<Suggestions | null>(null), [importing, setImporting] = useState(false), [pasted, setPasted] = useState('');
@@ -56,10 +58,10 @@ export function KeywordFilters() {
     {note && <p role="alert" className="mt-2 text-sm text-destructive">{note}</p>}
 
     {q.isLoading ? <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
-      : <ul className="mt-4 divide-y divide-border">
-          {filters.map(f => <FilterRow key={f.id} filter={f} ai={ai} cautions={[...(cautions.get(f.id) ?? []), ...(aiCautions.get(f.id) ?? [])]} />)}
+      : <>{filters.length > 0 && <p className="mt-4 text-sm text-muted-foreground">{totalLabel(filters, counts)}</p>}<ul className="mt-2 divide-y divide-border">
+          {filters.map(f => <FilterRow key={f.id} filter={f} ai={ai} count={counts.get(f.id) ?? 0} cautions={[...(cautions.get(f.id) ?? []), ...(aiCautions.get(f.id) ?? [])]} />)}
           {!filters.length && <li className="py-3 text-sm text-muted-foreground">No keyword filters yet.</li>}
-        </ul>}
+        </ul></>}
 
     <div className="mt-4 flex flex-wrap gap-2">
       {ai && filters.length > 0 && <Button variant="outline" className="rounded-full" disabled={thinking} onClick={async () => {
@@ -123,14 +125,14 @@ function OptionsEditor({ options, onChange, duration, onDuration, className = ''
   </div>;
 }
 
-function FilterRow({ filter: f, ai, cautions }: { filter: ContentFilter; ai: boolean; cautions: string[] }) {
+function FilterRow({ filter: f, ai, count, cautions }: { filter: ContentFilter; ai: boolean; count: number; cautions: string[] }) {
   const act = useFilterActions();
   const [busy, setBusy] = useState(false), [editing, setEditing] = useState(false), [note, setNote] = useState<string | null>(null);
   const run = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
   const summary = filterSummary(f);
   return <li className="py-3">
     <div className="flex flex-wrap items-center gap-3">
-      <span className="min-w-0 flex-1"><span className="block break-words text-sm font-semibold">{f.text}</span>{summary && <span className="block text-xs text-muted-foreground">{summary}</span>}</span>
+      <span className="min-w-0 flex-1"><span className="block break-words text-sm font-semibold">{f.text}</span>{summary && <span className="block text-xs text-muted-foreground">{summary}</span>}<span className="block text-xs text-muted-foreground">{countLabel(count)}</span></span>
       {ai && <label className="flex items-center gap-2 text-xs text-muted-foreground">In context<Switch checked={f.semantic} disabled={busy} aria-label={`Check “${f.text}” in context`} onCheckedChange={v => void run(() => act.update(f.id, { semantic: v }))} /></label>}
       <Button variant="ghost" size="icon" aria-label={`Edit “${f.text}”`} aria-expanded={editing} onClick={() => setEditing(v => !v)}><Pencil /></Button>
       <Button variant="ghost" size="icon" aria-label={`Remove “${f.text}”`} disabled={busy} onClick={() => void run(() => act.remove(f.id))}><Trash2 /></Button>
