@@ -240,6 +240,27 @@
 .atlas-activity-added_to_collection, .atlas-activity-collection_update { background: #b8860b; }
 .atlas-activity .item-text { -webkit-line-clamp: 3; }
 /* Activity, Bluesky's shape (MobileActivityList.tsx): tabs, rows that open what they're about, posts in full. */
+.atlas-disconnect { text-align: center; font-size: 14px; }
+.atlas-disconnect .link { color: var(--muted-foreground); }
+/* Discover: Spotlight's featured stories swipe sideways; the rest are rows (f7/Discover.tsx). */
+.atlas-spot-rail { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 16px; padding: 0 16px 8px; scrollbar-width: none; }
+.atlas-spot-rail::-webkit-scrollbar { display: none; }
+.atlas-spot-slide { flex: none; width: 85%; scroll-snap-align: start; }
+.atlas-spot-slide .atlas-article { margin: 6px 0 0; }
+.atlas-spot-meta { display: inline-flex; align-items: center; min-height: 20px; gap: 4px; font-size: 12px; color: var(--muted-foreground); }
+.atlas-spot-meta b { color: var(--accent); font-weight: 600; }
+.atlas-spot-thumb { border-radius: 10px; object-fit: cover; }
+.atlas-spot-list .item-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; font-family: 'Instrument Serif', serif; font-size: 18px; line-height: 1.2; }
+.atlas-voices-blurb { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.atlas-voices-blurb .link { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.atlas-voices-blurb .icon { font-size: 15px; }
+.atlas-voice-meta { display: flex; align-items: center; gap: 4px; font-size: 12px; opacity: .75; }
+.atlas-voice-bio { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-top: 4px; font-size: 13px; }
+.link.atlas-public-tag-author, .atlas-public-tag-author { display: flex; width: 100%; align-items: flex-start; gap: 10px; color: inherit; margin-bottom: 8px; }
+.atlas-public-tag-author img { width: 40px; height: 40px; object-fit: cover; }
+.atlas-public-tag-author span { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.atlas-public-tag-author small { opacity: .6; }
+.atlas-public-tag-author time { margin-left: auto; flex: none; align-self: flex-start; padding-top: 2px; font-size: 12px; opacity: .6; }
 .atlas-destructive .item-title { color: var(--f7-color-red, #ff3b30); }
 .atlas-filter-caution { color: #b45309; }
 .dark .atlas-filter-caution { color: #fbbf24; }
