@@ -11,6 +11,8 @@ import { useFedizen } from '@/components/social/useFedizen';
 import { Button } from '@/components/ui/button';
 import { FeedPostCard, useFeedPostActions } from '@/components/social/FeedPostCard';
 import { getTagFeed } from '@/lib/tag-feed.functions';
+import { gatedTagPost } from '@/lib/tag-post';
+import { FilterGate } from '@/components/social/FilterGate';
 import { linkifyPost } from '@/components/social/PostPeople';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { NetworkBadge } from '@/lib/networks';
@@ -105,7 +107,7 @@ function PublicTagPage({ tag }: { tag: string }) {
     {isLoading && <p className="text-sm text-muted-foreground">Loading posts…</p>}
     {error && <p className="text-sm text-muted-foreground">This hashtag feed couldn't be loaded. Please try again shortly.</p>}
     {data && !data.length && <p className="text-sm text-muted-foreground">No public posts are tagged {tag} yet.</p>}
-    <ol className="divide-y divide-border">{data?.map(p => <li key={p.id} className="py-5">
+    <FilterPlaceProvider place="public"><ol className="divide-y divide-border">{data?.map(p => <li key={p.id} className="py-5"><FilterGate post={gatedTagPost(p)}>
       <button type="button" onClick={() => openFediProfile({ actor: p.author.url, acct: p.author.acct, name: p.author.name })} aria-label={`${p.author.name} ${p.author.acct}. Open their profile`} className="atlas-author-button mb-3 flex w-full items-center gap-3 text-left">
         <img src={p.author.avatar} alt="" width={40} height={40} className="size-10 atlas-avatar object-cover ring-1 ring-border" loading="lazy" referrerPolicy="no-referrer" />
         <span className="min-w-0"><span className="block truncate text-sm font-semibold">{p.author.name}</span><span className="block truncate text-xs text-muted-foreground">{p.author.acct}</span></span>
@@ -118,6 +120,6 @@ function PublicTagPage({ tag }: { tag: string }) {
         <span className="flex items-center gap-1"><RefreshCw className="size-3.5" />{p.boosts}</span>
         <span className="flex items-center gap-1"><Star className="size-3.5" />{p.favourites}</span>
       </a>
-    </li>)}</ol>
+    </FilterGate></li>)}</ol></FilterPlaceProvider>
   </main>;
 }

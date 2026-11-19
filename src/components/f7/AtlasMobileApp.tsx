@@ -402,7 +402,7 @@ export default function AtlasMobileApp() {
                 <div className="atlas-notice-tabs" role="tablist" aria-label="Filter by topic">
                   {topics.map(t => <button key={t} type="button" role="tab" aria-selected={topic === t} className={topic === t ? 'is-on' : undefined} onClick={() => setTopic(t)}>{t === 'All topics' ? 'All topics' : t}</button>)}
                 </div>
-                {filtering && <BlockFooter><span role="status">{stories.length} {stories.length === 1 ? 'story' : 'stories'}{query.trim() ? ` for “${query.trim()}”` : ''}</span> · <Link onClick={() => { setNetwork('All networks'); setTopic('All topics'); }}>Reset filters</Link></BlockFooter>}
+                {filtering && <BlockFooter><span role="status">{stories.length} {stories.length === 1 ? 'story' : 'stories'}{query.trim() ? ` for “${query.trim()}”` : ''}</span> · <Link onClick={() => { setQuery(''); f7.searchbar.clear('#tab-discover .searchbar'); setNetwork('All networks'); setTopic('All topics'); }}>Reset filters</Link></BlockFooter>}
                 {!wide && creatorList}
                 {!filtering && <>
                   <Block className="px-3"><GatewayDiscovery /></Block>

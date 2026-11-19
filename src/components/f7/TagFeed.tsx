@@ -14,6 +14,8 @@ import { hashtagLabel, openTag, TagText } from '@/lib/hashtags';
 import { pushPage, tagPageUrl } from './navigation';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
+import { MobileFilterGate } from './FilterGate';
+import { gatedTagPost } from '@/lib/tag-post';
 
 /**
  * Phone: a hashtag's feed, opened from a hashtag in a post or a followed-tag line. It's a page pushed onto the main
@@ -114,7 +116,7 @@ function PublicTagPosts({ tag }: { tag: string }) {
     {isLoading ? <Block strong inset>Loading posts…</Block>
       : error ? <Block strong inset>This hashtag feed couldn’t be loaded. Please try again shortly.</Block>
       : !data?.length ? <Block strong inset>No public posts are tagged {tag} yet.</Block>
-      : data.map(p => <Card key={p.id} outline className="atlas-f7-card atlas-public-tag-post">
+      : <FilterPlaceProvider place="public">{data.map(p => <MobileFilterGate key={p.id} post={gatedTagPost(p)}><Card outline className="atlas-f7-card atlas-public-tag-post">
         <CardContent>
           <Link className="atlas-public-tag-author" onClick={() => openFediProfile({ actor: p.author.url, acct: p.author.acct, name: p.author.name })} aria-label={`${p.author.name} ${p.author.acct}. Open their profile`}>
             <img src={p.author.avatar} alt="" width={40} height={40} className="atlas-avatar" loading="lazy" referrerPolicy="no-referrer" />
@@ -126,6 +128,6 @@ function PublicTagPosts({ tag }: { tag: string }) {
           </AuthorWarning>
         </CardContent>
         <CardFooter><Link external target="_blank" href={p.url} aria-label="Open original post">↩ {p.replies} · ↻ {p.boosts} · ★ {p.favourites}</Link></CardFooter>
-      </Card>)}
+      </Card></MobileFilterGate>)}</FilterPlaceProvider>}
   </>;
 }
