@@ -8,6 +8,7 @@ import { AI_PROBLEM, DEFAULT_OPTIONS, intelligenceReady, useContentFilters, useF
 import { ACTION_LABEL, ACTION_SHORT, DURATIONS, PLACE_LABEL, downloadExport, expiresAfter, filterSummary, parseImport } from '@/components/social/filter-options';
 import { DEVICE_KEY_NOTE } from '@/components/social/IntelligenceSettings';
 import { useAtlasAuth } from '@/components/social/AuthState';
+import { countLabel, totalLabel, useFilteredCounts } from '@/lib/filter-stats';
 import { useSocial } from '@/components/social/SocialState';
 import { pushPage } from './navigation';
 import { MobileSemanticSettings } from './SemanticSettings';
@@ -117,6 +118,7 @@ export function KeywordFiltersPage() {
   const ai = intelligenceReady(useIntelligence().data);
   const act = useFilterActions();
   const filters = q.data && 'filters' in q.data ? q.data.filters : [];
+  const counts = useFilteredCounts(user?.id);
   const cautions = useFilterCautions(filters);
   const [text, setText] = useState(''), [options, setOptions] = useState<FilterOptions>(DEFAULT_OPTIONS), [duration, setDuration] = useState(0), [note, setNote] = useState<string | null>(null);
   const [suggested, setSuggested] = useState<{ text: string; reason: string }[] | null>(null), [thinking, setThinking] = useState(false);
@@ -152,9 +154,11 @@ export function KeywordFiltersPage() {
         <BlockFooter>Add * to catch longer words too: spam* also hides spammer. A #hashtag matches only the hashtag.{ai ? ' Describe a topic in a few words to filter it whatever words a post uses.' : ''}</BlockFooter>
         {note && <BlockFooter><span role="alert">{note}</span></BlockFooter>}
 
+        {!q.isLoading && filters.length > 0 && <BlockFooter>{totalLabel(filters, counts)}</BlockFooter>}
         {q.isLoading ? <Block strong inset>Loading…</Block> : <List strong inset dividers>
           {filters.map(f => <ListItem key={f.id} link="#" title={f.text} after={ACTION_SHORT[f.action]} onClick={() => pushFilter(f, ai, act, setNote)}
             footer={[
+              countLabel(counts.get(f.id)),
               filterSummary(f),
               ai && f.semantic && f.expansions.length ? `Also catches ${f.expansions.slice(0, 5).join(', ')}${f.expansions.length > 5 ? '…' : ''}` : '',
               !ai && f.kind === 'topic' ? 'A topic matches posts only with Intelligence on.' : '',

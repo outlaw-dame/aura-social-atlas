@@ -310,3 +310,28 @@ describe('Grouped notifications: allowlisted', () => {
     await expect(fedizenGet('t', '/api/v2/notifications?limit=40&types%5B%5D=favourite')).rejects.toThrow('Unsupported Fedizen read path.');
   });
 });
+
+describe('Activity: tab filters, the notifications marker and Follow back', () => {
+  test('grouped notifications take only the tabs’ types; the marker reads and writes notifications only', async () => {
+    let called = false;
+    globalThis.fetch = (async () => { called = true; return new Response('{}'); }) as unknown as typeof fetch;
+    await expect(fedizenGet('t', '/api/v2/notifications?limit=40&types%5B%5D=admin.report')).rejects.toThrow('Unsupported Fedizen read path.');
+    await expect(fedizenGet('t', '/api/v1/markers?timeline%5B%5D=home')).rejects.toThrow('Unsupported Fedizen read path.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/markers', { home: { last_read_id: '1' } })).rejects.toThrow('Unsupported Fedizen write body.');
+    await expect(fedizenSend('t', 'POST', '/api/v1/markers', { notifications: { last_read_id: '../x' } })).rejects.toThrow('Unsupported Fedizen write body.');
+    expect(called).toBe(false);
+  });
+  test('reads a tab’s grouped notifications with each group’s newest id, and the marker', async () => {
+    globalThis.fetch = (async (url: string) => new Response(JSON.stringify(String(url).includes('markers')
+      ? { notifications: { last_read_id: '01JB', updated_at: '2026-11-18T00:00:00Z', extra: 1 } }
+      : { accounts: [], statuses: [{ id: 's', content: '<p>x</p>', in_reply_to_id: 'p', in_reply_to_account_id: 'me' }], notification_groups: [{ group_key: 'g', type: 'mention', most_recent_notification_id: '01JC', status_id: 's' }] }))) as unknown as typeof fetch;
+    const g = await fedizenGet('t', '/api/v2/notifications?limit=40&types%5B%5D=mention&types%5B%5D=status&types%5B%5D=quote');
+    const page = g.data[0] as { notification_groups: { most_recent_notification_id: string }[]; statuses: { in_reply_to_account_id: string }[] };
+    expect(page.notification_groups[0].most_recent_notification_id).toBe('01JC');
+    expect(page.statuses[0].in_reply_to_account_id).toBe('me');
+    const m = await fedizenGet('t', '/api/v1/markers?timeline%5B%5D=notifications');
+    expect(m.data[0]).toEqual({ notifications: { last_read_id: '01JB', updated_at: '2026-11-18T00:00:00Z' } });
+    const w = await fedizenSend('t', 'POST', '/api/v1/markers', { notifications: { last_read_id: '01JC' } });
+    expect(w.status).toBe(200);
+  });
+});
