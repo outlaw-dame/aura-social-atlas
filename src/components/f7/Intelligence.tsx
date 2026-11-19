@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Block, BlockFooter, BlockTitle, Button, Link, List, ListInput, ListItem, Navbar, Page, Toggle, f7 } from 'framework7-react';
 import { PROVIDERS, PROVIDER_IDS, type ProviderId } from '@/lib/intelligence/providers';
 import { BROWSER_CAPABLE } from '@/lib/intelligence/llm';
-import { FILTER_PLACES, type ContentFilter, type FilterAction, type FilterPlace } from '@/lib/content-filter';
+import { FILTER_PLACES, MAX_EXPANSIONS, type FilterAction, type FilterPlace } from '@/lib/content-filter';
 import { FEDIZEN_KEYWORD_FILTERS_URL } from '@/lib/fedizen-feed';
 import { AI_PROBLEM, DEFAULT_OPTIONS, intelligenceReady, useContentFilters, useFilterActions, useFilterCautions, useIntelligence, useIntelligenceActions, type FilterOptions } from '@/components/social/useIntelligence';
 import { ACTION_LABEL, ACTION_SHORT, DURATIONS, PLACE_LABEL, downloadExport, expiresAfter, filterSummary, parseImport } from '@/components/social/filter-options';
@@ -156,7 +156,7 @@ export function KeywordFiltersPage() {
 
         {!q.isLoading && filters.length > 0 && <BlockFooter>{totalLabel(filters, counts)}</BlockFooter>}
         {q.isLoading ? <Block strong inset>Loading…</Block> : <List strong inset dividers>
-          {filters.map(f => <ListItem key={f.id} link="#" title={f.text} after={ACTION_SHORT[f.action]} onClick={() => pushFilter(f, ai, act, setNote)}
+          {filters.map(f => <ListItem key={f.id} link="#" title={f.text} after={ACTION_SHORT[f.action]} onClick={() => pushPage(`/keyword-filters/${f.id}/`)}
             footer={[
               countLabel(counts.get(f.id)),
               filterSummary(f),
@@ -192,21 +192,78 @@ export function KeywordFiltersPage() {
   </Page>;
 }
 
-type Actions = ReturnType<typeof useFilterActions>;
+/**
+ * Phone: one keyword filter (Settings → Moderation → Keyword filters → the filter), with everything desktop's editor
+ * has: what it does, where, how long, not from people you follow, checking in context, the wordings it also catches
+ * (remove, add, ask the AI again), what it caught, and Remove.
+ */
+export function KeywordFilterPage({ f7route, f7router }: { f7route?: { params: { id?: string } }; f7router?: { back: () => void } }) {
+  const { user } = useAtlasAuth();
+  const q = useContentFilters();
+  const ai = intelligenceReady(useIntelligence().data);
+  const act = useFilterActions();
+  const filters = q.data && 'filters' in q.data ? q.data.filters : [];
+  const f = filters.find(x => x.id === f7route?.params.id);
+  const counts = useFilteredCounts(user?.id);
+  const cautions = useFilterCautions(filters);
+  const [busy, setBusy] = useState(false), [note, setNote] = useState<string | null>(null), [draft, setDraft] = useState('');
+  const run = async (work: () => Promise<unknown>) => { setBusy(true); setNote(null); try { const r = await work(); if (typeof r === 'string') setNote(r); } finally { setBusy(false); } };
+  if (!f) return <Page><Navbar title="Keyword filter" backLink backLinkShowText={false} />
+    <Block strong inset>{q.isLoading ? 'Loading…' : 'This filter was removed.'}</Block></Page>;
+  const update = (patch: Parameters<Actions['update']>[1]) => run(() => act.update(f.id, patch));
+  const togglePlace = (p: FilterPlace) => {
+    const next = f.places.includes(p) ? f.places.filter(x => x !== p) : [...f.places, p];
+    if (next.length) void update({ places: FILTER_PLACES.filter(x => next.includes(x)) });
+  };
+  const until = f.expiresAt ? (Date.parse(f.expiresAt) <= Date.now() ? 'Expired' : `Until ${new Date(f.expiresAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`) : null;
+  const addWording = () => { const w = draft.trim(); if (!w || f.expansions.includes(w)) return; void update({ expansions: [...f.expansions, w] }); setDraft(''); };
+  return <Page>
+    <Navbar title={f.text} backLink backLinkShowText={false} />
+    <BlockFooter>{countLabel(counts.get(f.id))}</BlockFooter>
+    {[...(cautions.get(f.id) ?? []), ...(!ai && f.kind === 'topic' ? ['A topic matches posts only through its wordings, which come with Intelligence.'] : [])].map(c => <BlockFooter key={c}><span className="atlas-filter-caution">{c}</span></BlockFooter>)}
 
-/** A filter's choices, as an action sheet (Apple HIG: a short list of actions on one item). */
-function pushFilter(f: ContentFilter, ai: boolean, act: Actions, setNote: (n: string | null) => void) {
-  const editWordings = () => f7.dialog.prompt('Separate them with commas. Remove any you don’t want caught.', `“${f.text}” also catches`, v => {
-    void act.update(f.id, { expansions: v.split(',').map(x => x.trim()).filter(Boolean) });
-  }, () => {}, f.expansions.join(', '));
-  f7.actions.create({ buttons: [[
-    { text: f.text, label: true },
-    ...(['hide', 'warn', 'blur'] as const).filter(a => a !== f.action).map(a => ({ text: ACTION_LABEL[a], onClick: () => void act.update(f.id, { action: a }) })),
-    ...DURATIONS.map(d => ({ text: d.ms === null ? 'Keep forever' : `Keep for ${d.label}`, onClick: () => void act.update(f.id, { expiresAt: expiresAfter(d.ms) }) })),
-    { text: f.exceptFollowing ? 'Include people I follow' : 'Not from people I follow', onClick: () => void act.update(f.id, { exceptFollowing: !f.exceptFollowing }) },
-    ...(ai ? [{ text: f.semantic ? 'Match words only' : 'Check in context', onClick: () => void act.update(f.id, { semantic: !f.semantic }) }] : []),
-    ...(ai || f.expansions.length ? [{ text: 'Edit what it also catches', onClick: editWordings }] : []),
-    ...(ai ? [{ text: 'Ask the AI for wordings again', onClick: async () => setNote(await act.widen(f.id)) }] : []),
-    { text: 'Remove', color: 'red', onClick: () => void act.remove(f.id) },
-  ], [{ text: 'Cancel', strong: true }]] }).open();
+    <BlockTitle>What it does</BlockTitle>
+    <List strong inset dividers>
+      {(['hide', 'warn', 'blur'] as const).map(a => <ListItem key={a} title={ACTION_LABEL[a]} radio radioIcon="end" name="filter-action" checked={f.action === a} disabled={busy} onChange={() => void update({ action: a })} />)}
+    </List>
+
+    <BlockTitle>Where</BlockTitle>
+    <List strong inset dividers>
+      {FILTER_PLACES.map(p => <ListItem key={p} checkbox title={PLACE_LABEL[p]} checked={f.places.includes(p)} disabled={busy || (f.places.length === 1 && f.places.includes(p))} onChange={() => togglePlace(p)} />)}
+      <ListItem title="Not from people I follow" footer="Their posts always show."><Toggle slot="after" checked={f.exceptFollowing} disabled={busy} onToggleChange={() => void update({ exceptFollowing: !f.exceptFollowing })} /></ListItem>
+    </List>
+
+    <BlockTitle>For</BlockTitle>
+    <List strong inset>
+      <ListInput type="select" value={until ? -1 : 0} disabled={busy} onChange={e => { const i = Number((e.target as HTMLSelectElement).value); if (i >= 0) void update({ expiresAt: expiresAfter(DURATIONS[i].ms) }); }}>
+        {until && <option value={-1}>{until}</option>}
+        {DURATIONS.map((d, i) => <option key={d.label} value={i}>{d.label}</option>)}
+      </ListInput>
+    </List>
+
+    {ai && <List strong inset dividers>
+      <ListItem title="Check in context" footer="Your AI model reads posts that match, so a word used another way isn’t caught."><Toggle slot="after" checked={f.semantic} disabled={busy} onToggleChange={() => void update({ semantic: !f.semantic })} /></ListItem>
+    </List>}
+
+    {(ai || f.expansions.length > 0) && <>
+      <BlockTitle>Also catches</BlockTitle>
+      <List strong inset dividers>
+        {f.expansions.map(w => <ListItem key={w} title={w}><Link slot="after" className={busy ? 'disabled' : undefined} onClick={() => void update({ expansions: f.expansions.filter(x => x !== w) })} aria-label={`Stop catching “${w}”`}>Remove</Link></ListItem>)}
+        {!f.expansions.length && <ListItem title="Nothing else yet." />}
+        <ListInput type="text" placeholder="Another word, phrase or #hashtag" value={draft} maxlength={60} disabled={busy || f.expansions.length >= MAX_EXPANSIONS}
+          onInput={e => setDraft((e.target as HTMLInputElement).value)} clearButton />
+      </List>
+      <Block>
+        <Button tonal round disabled={busy || !draft.trim()} onClick={addWording}>Add wording</Button>
+        {ai && <Button round disabled={busy} style={{ marginTop: 8 }} onClick={() => void run(() => act.widen(f.id))}>Ask the AI for wordings again</Button>}
+      </Block>
+    </>}
+
+    {note && <BlockFooter><span role="alert">{note}</span></BlockFooter>}
+    <List strong inset>
+      <ListItem link="#" title="Remove filter" className="atlas-destructive" onClick={() => f7.dialog.confirm(`Stop filtering “${f.text}”?`, 'Remove filter', async () => { await act.remove(f.id); f7router?.back(); })} />
+    </List>
+  </Page>;
 }
+
+type Actions = ReturnType<typeof useFilterActions>;
