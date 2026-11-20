@@ -435,7 +435,14 @@
 /* visibility (not display) so the trailing navbar buttons keep their place. */
 html[data-nav="rail"] .atlas-nav-menu, html[data-nav="sidebar"] .atlas-nav-menu { visibility: hidden; pointer-events: none; }
 html.atlas-rail .atlas-panel .atlas-hide-in-rail, html.atlas-rail .atlas-panel .item-after { display: none; }
-html.atlas-rail .atlas-panel .atlas-brand { font-size: 0 !important; padding: 0; margin: 0; }
+/* The rail keeps the app's name, in the corner above it, level with the page title (as iPad apps put their name or
+   logo at the top of a sidebar). Sized to sit inside the rail's width. */
+html.atlas-rail .atlas-panel .page-content { padding-top: var(--atlas-sa-top); }
+html.atlas-rail .atlas-panel .atlas-brand { font-size: 26px !important; line-height: 1; height: var(--f7-navbar-height); margin: 0 !important; padding: 0; display: flex; align-items: center; justify-content: center; }
+html.atlas-rail .atlas-panel .atlas-brand + .list { margin-top: 0; }
+/* The sidebar's name sits level with the page title too. */
+html[data-nav="sidebar"] .atlas-panel .page-content { padding-top: var(--atlas-sa-top); }
+html[data-nav="sidebar"] .atlas-panel .atlas-brand { height: var(--f7-navbar-height); margin-top: 0 !important; margin-bottom: 8px; display: flex; align-items: center; }
 html.atlas-rail .atlas-panel .list { margin-left: 6px; margin-right: 6px; }
 html.atlas-rail .atlas-panel .item-content { flex-direction: column; justify-content: center; padding: 8px 0 !important; min-height: 60px; }
 html.atlas-rail .atlas-panel .item-media { padding: 0 !important; margin: 0 !important; min-width: 0 !important; }
