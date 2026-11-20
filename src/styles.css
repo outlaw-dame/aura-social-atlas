@@ -446,6 +446,10 @@ html.atlas-rail .atlas-panel .item-title { font-size: 10px; font-weight: 600; }
 /* Side tab bar: wide-but-short compact windows (iPhone Duo cover display in landscape, phones in landscape),
    mirroring iOS placing tab bars on the trailing edge on iPhone Duo. */
 html[data-nav="tabbar-side"] .view-main { margin-right: calc(var(--atlas-side-tab) + var(--atlas-sa-right)); --f7-safe-area-right: 0px; }
+/* Landscape iPhone: the camera housing sits in one side inset (Apple HIG, Layout: keep controls inside the safe area). The
+   side tab bar takes the right inset; the main view starts after the left one. */
+html[data-nav="tabbar-side"] .view-main { margin-left: var(--atlas-sa-left); }
+html[data-nav="tabbar-side"] body, html[data-nav="tabbar-side"] #app { background: var(--f7-page-bg-color); }
 html[data-nav="tabbar-side"] .atlas-tabbar { position: fixed; top: 0; bottom: 0; right: 0; left: auto; width: calc(var(--atlas-side-tab) + var(--atlas-sa-right)); height: auto; padding: var(--atlas-sa-top) var(--atlas-sa-right) var(--atlas-sa-bottom) 0; }
 html[data-nav="tabbar-side"] .atlas-tabbar::before { display: none; }
 html[data-nav="tabbar-side"] .atlas-tabbar .toolbar-inner { position: static; flex-direction: column; justify-content: center; gap: 6px; height: 100%; padding: 0; }
@@ -629,8 +633,8 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-pip[hidden] { display: none; }
 .atlas-pip[data-corner="br"] { right: var(--pip-gap); bottom: var(--pip-bottom); }
 .atlas-pip[data-corner="bl"] { left: var(--pip-gap); bottom: var(--pip-bottom); }
-.atlas-pip[data-corner="tr"] { right: var(--pip-gap); top: calc(var(--pip-gap) + env(safe-area-inset-top, 0px) + 56px); }
-.atlas-pip[data-corner="tl"] { left: var(--pip-gap); top: calc(var(--pip-gap) + env(safe-area-inset-top, 0px) + 56px); }
+.atlas-pip[data-corner="tr"] { right: var(--pip-gap); top: calc(var(--pip-gap) + var(--atlas-sa-top) + 56px); }
+.atlas-pip[data-corner="tl"] { left: var(--pip-gap); top: calc(var(--pip-gap) + var(--atlas-sa-top) + 56px); }
 html.atlas-has-tabbar .atlas-pip { --pip-bottom: calc(var(--pip-gap) + var(--f7-toolbar-height, 50px) + var(--f7-safe-area-bottom, 0px) + var(--atlas-player-offset, 0px)); }
 .atlas-pip-slot { position: absolute; inset: 0; }
 .atlas-pip-ui { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; color: #fff; opacity: 0; transition: opacity .2s; background: linear-gradient(rgba(0,0,0,.55), transparent 35%, transparent 60%, rgba(0,0,0,.6)); cursor: grab; }
@@ -1044,14 +1048,14 @@ html.atlas-stack-open .view.atlas-stack { pointer-events: auto; }
 .atlas-gif-sheet { border-radius: 14px 14px 0 0; overflow: hidden; }
 
 /* Phone: who liked or boosted a post. */
-.atlas-reactors { list-style: none; margin: 0; padding: 0 0 calc(12px + env(safe-area-inset-bottom)); overflow-y: auto; max-height: 60vh; }
+.atlas-reactors { list-style: none; margin: 0; padding: 0 0 calc(12px + var(--atlas-sa-bottom)); overflow-y: auto; max-height: 60vh; }
 .atlas-reactors button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 16px; min-height: 52px; background: none; border: 0; color: inherit; text-align: left; font: inherit; }
 .atlas-reactors button span { min-width: 0; display: flex; flex-direction: column; }
 .atlas-reactors b, .atlas-reactors small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .atlas-reactors small { opacity: .65; }
 .atlas-reactor-face { width: 40px; height: 40px; flex: none; object-fit: cover; border-radius: var(--atlas-avatar-radius, 50%); display: inline-flex; align-items: center; justify-content: center; }
 .atlas-mention-bar.atlas-tag-bar button { padding: 0 14px; font-weight: 500; }
-.atlas-compose-tags { margin: -8px calc(16px + env(safe-area-inset-right)) 8px calc(16px + env(safe-area-inset-left)); }
+.atlas-compose-tags { margin: -8px calc(16px + var(--atlas-sa-right)) 8px calc(16px + var(--atlas-sa-left)); }
 .atlas-compose-tags:empty { display: none; }
 
 /* Phone Activity, grouped: up to three faces overlapping in the 40px slot, and the All / Mentions control. */

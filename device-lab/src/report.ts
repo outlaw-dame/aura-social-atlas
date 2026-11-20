@@ -2,9 +2,11 @@
  * Tells the Lab bench what the app did with the device: the profile Atlas detected (src/lib/device-profile.ts, the
  * app's own code) and what Framework7 drew (theme, navigation, panes), read from the page itself, plus whether any
  * control sits on the fold. The bench compares these with what each device should get (its verification matrix).
- * Safe-area insets can't be simulated in a page (CSS env()), so they are reported as not simulated.
+ * Safe-area insets are the ones the simulator pinned (sim.ts): a preset with the device's real figures is checked
+ * against them; one without is reported as not simulated.
  */
 import { describeProfile, detectProfile, readEnv } from '@/lib/device-profile';
+import { pinned } from './sim';
 
 type Rect = DOMRect;
 const overlaps = (r: Rect, x0: number, y0: number, x1: number, y1: number) => Math.min(r.right, x1) - Math.max(r.left, x0) > 0.5 && Math.min(r.bottom, y1) - Math.max(r.top, y0) > 0.5;
@@ -66,7 +68,10 @@ function state(settled: boolean) {
         split = Math.abs(endGap) > Math.abs(railGap) ? endGap : railGap;
       }
     }
-    msg.checks = { insets: { top: 0, right: 0, bottom: 0, left: 0 }, insetsSimulated: false, insetHits: [], foldHits, splitOffset: split };
+    const { insets: i, known } = pinned;
+    const insetHits = known ? controls().filter(c => overlaps(c.r, 0, 0, innerWidth, i.top) || overlaps(c.r, 0, innerHeight - i.bottom, innerWidth, innerHeight)
+      || overlaps(c.r, 0, 0, i.left, innerHeight) || overlaps(c.r, innerWidth - i.right, 0, innerWidth, innerHeight)).map(c => c.label) : [];
+    msg.checks = { insets: i, insetsSimulated: known, insetHits, foldHits, splitOffset: split };
     msg.settled = true;
   }
   return msg;
