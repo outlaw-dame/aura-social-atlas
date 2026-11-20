@@ -184,7 +184,7 @@ tbody tr.running { background: var(--accent-soft); }
       <h2>Verification matrix</h2>
       <div class="row"><span class="summary" id="summary">Waiting to run</span><button type="button" class="btn primary" id="rerun">Run again</button></div>
     </div>
-    <p class="note">Each row loads a fresh copy of the app at that device’s size and environment, then reads back what Framework7 actually rendered. Every visible control must sit clear of a 24 px zone around any fold, and a folded list pane must end exactly at the fold. Expected values are written out by hand from the layout rules, not computed by the code under test. Safe-area insets come from CSS env(), which a page can’t simulate: check those on a real device.</p>
+    <p class="note">Each row loads a fresh copy of the app at that device’s size and environment, then reads back what Framework7 actually rendered. Every visible control must sit clear of a 24 px zone around any fold, and a folded list pane must end exactly at the fold. Expected values are written out by hand from the layout rules, not computed by the code under test. Safe-area insets are pinned to each device’s published figures where there are any (iPhone) and to none otherwise, so the phone you view the Lab on can’t shift the frame; devices without published figures (iPhone Duo, foldables) still need checking on the real device.</p>
     <div class="table-scroll">
       <table>
         <thead><tr><th>Device</th><th>Orientation</th><th>Detected as</th><th>Size class</th><th>Theme</th><th>Navigation</th><th>Panes</th><th>Fold deck</th><th>Clear of insets &amp; fold</th><th>Result</th></tr></thead>
