@@ -456,7 +456,7 @@ html[data-nav="tabbar-side"] .view-main { margin-right: calc(var(--atlas-side-ta
 /* Landscape iPhone: the camera housing sits in one side inset (Apple HIG, Layout: keep controls inside the safe area). The
    side tab bar takes the right inset; the main view starts after the left one. */
 html[data-nav="tabbar-side"] .view-main { margin-left: var(--atlas-sa-left); }
-html[data-nav="tabbar-side"] body, html[data-nav="tabbar-side"] #app { background: var(--f7-page-bg-color); }
+html[data-nav="tabbar-side"] body { background: var(--f7-page-bg-color); }
 html[data-nav="tabbar-side"] .atlas-tabbar { position: fixed; top: 0; bottom: 0; right: 0; left: auto; width: calc(var(--atlas-side-tab) + var(--atlas-sa-right)); height: auto; padding: var(--atlas-sa-top) var(--atlas-sa-right) var(--atlas-sa-bottom) 0; }
 html[data-nav="tabbar-side"] .atlas-tabbar::before { display: none; }
 html[data-nav="tabbar-side"] .atlas-tabbar .toolbar-inner { position: static; flex-direction: column; justify-content: center; gap: 6px; height: 100%; padding: 0; }
