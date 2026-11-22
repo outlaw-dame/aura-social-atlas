@@ -1,45 +1,61 @@
 # Atlas Bonfire GraphQL Capability Matrix
 
-> **Version:** 2026-11-08 / first draft. **Fedizen live root and selected nested-type metadata captured 2026-11-09; full effective SDL, installed image digest, and authenticated permission contract remain incomplete.** This table is a **research-backed candidate map**, *not a list of available production mutations*. Maintain alongside [implementation plan](ATLAS_IMPLEMENTATION_PLAN.md). Current primary test instance is `https://fedizen.net`, reported Bonfire Community v1.1.0-rc.1, actual image digest/extension set unconfirmed.
+> **Version:** 2026-11-22. **This is the progress tracker for Atlas's Bonfire API work.** The status table below is current; the dated sections after it are the original 2026-11-08/09 evidence record, kept unchanged. Fedizen (`https://fedizen.net`) reports Bonfire Community **v1.1.0-rc.1**; Bonfire **v1.1.0** was released on 2026-11-18. Maintain alongside the [implementation plan](ATLAS_IMPLEMENTATION_PLAN.md).
 
-## Evidence protocol
+## Where Atlas stands (2026-11-22)
 
-**Status key:** `existing-client-code` (source read, not acceptance), `candidate-upstream` (exists in current upstream source or documentation, NOT checked on Fedizen), `observed-fedizen` (schema/operation witnessed on active instance, may still be unusable), `implemented-test`, `verified-live`, `released`, `not-exposed`, `forbidden`, `deferred`, `blocked`.
+Atlas reaches Fedizen two ways: Bonfire's **GraphQL** API (`/api/graphql`) and Bonfire's **Mastodon-compatible REST** API (`masto_compatible_router`). Every REST call goes through the allowlist in `src/lib/fedizen.server.ts` (`READS` / `WRITES`, a schema per route); every GraphQL document is in `src/lib/bonfire/graphql/operations.ts` or the public readers (`bonfire.server.ts`, `groups.server.ts`).
 
-For each row, add **exact** deployed root field, args/return, type fragments, OAuth scope, relationship/boundary decision, request/response fixtures with PII removed, PR, CI link, live test date and deployed image digest. Fields are shown in camelCase as conventional GraphQL spelling; **introspection must verify casing, argument names and types**. A repository field name is not a deploy contract.
+**How the GraphQL column was checked:** the GraphQL `field` definitions of `bonfire_social`, `bonfire_me`, `bonfire_social_graph`, `bonfire_classify`, `bonfire_files`, `bonfire_search`, `bonfire_messages` and `bonfire_api_graphql` were read at the exact commits pinned by bonfire-app's `mix.lock` for **v1.1.0-rc.1** and for **v1.1.0**. The two are the same for every operation below; the only difference is that v1.1.0 drops the events fields from `bonfire_social`. So upgrading Fedizen to v1.1.0 adds nothing to GraphQL; v1.1.0's changes are in its own pages, federation, notifications and the Mastodon API. "In schema" means defined in that source and, where marked, seen in Fedizen's live root introspection (2026-11-09); it is **not** proof that the operation works for a signed-in person on Fedizen.
 
-| Capability / phase | Candidate GraphQL operation(s) or present fallback | Evidence today | Current status | Atlas priority and acceptance |
+Status key: **in use** (Atlas calls it today), **flag-gated** (written and tested, off unless `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS=verified`, which is not set on Lovable), **in schema** (defined upstream, not used by Atlas), **none** (no GraphQL operation in these extensions), **missing** (Atlas has no way to do this yet), **broken** (in use, failing on Fedizen).
+
+| Capability | Atlas today | GraphQL on Bonfire rc.1 / 1.1.0 | GraphQL status | Next |
 | --- | --- | --- | --- | --- |
-| Public local feed (A/C) | `feedActivities(filter:{feedName:"local"})` | Live 2026-11-09: minimal first:1 HTTP 200 ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42559791682)); actual Atlas first:20 query + normalization accepted, 20 posts ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42560027193)) | observed-fedizen | P0: verify ordering, cursors and canonical fidelity |
-| Articles feed (A/C) | `feedActivities(filter:{feedName:"articles"})` | Live 2026-11-09: minimal first:1 HTTP 200 ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42559791682)); actual Atlas first:20 query + normalization accepted, 20 articles ([run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42560027193)) | observed-fedizen | P0: verify pagination, ordering and native article fidelity |
-| Personal Home feed (A/C) | `me.myFeed(first:Int,after:String):ActivityConnection` + existing scoped REST fallback | Observed live root and Me fields [run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42609196886); typed gated Atlas code PR #94 | observed-fedizen / implemented-test | P0: consented owner/other-user denial, paging and fidelity before enabling |
-| Account / me (A/C) | `me:Me`, `user(filter:CharacterFilters):User` | Observed live [root](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42608303102), [selectors](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42617139471); real API token not consent-tested | observed-fedizen / implemented-test | P0: verify real Atlas OIDC and delegated bearer map to one account |
-| User profile and counts (C) | `user(filter:{id})`, `user(filter:{username})`, `User.profile/character/followersCount/followingCount/statusesCount` | Live field/argument metadata [run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42617139471); gated readers PR #105 | observed-fedizen / implemented-test | P0: consented own/public/private profile visibility before UI |
-| Status / post (C) | `post(filter:{id}):Post`, `Post.postContent/creator/activity`, `activity(filter:ActivityFilter)` | Deployed metadata [run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42617139471); gated adapter PR #105 | observed-fedizen / implemented-test | P0: real post permission, canonical source and data fidelity |
-| Threads (C) | `threadContext`, `replied` | `bonfire_social` source | candidate-upstream | P0: ancestors/replies/visibility and pagination |
-| Post reactions/state (C) | `Activity.likedByMe/boostedByMe/bookmarkedByMe` plus counters | Deployed schema confirms fields [run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42617139471); read-only post projection, no mutations verified | observed-fedizen / implemented-test | P0: consented viewer-specific state and denied-scope tests |
-| Notifications (C/F) | `me.notifications(first:Int,after:String,filter:FeedFilters):ActivityConnection` + REST fallback | Deployed schema [run](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/42609196886); gated snapshot PR #94 | observed-fedizen / implemented-test | P0: consented notification privacy, pagination and category fidelity |
-| Create post / reply (D) | `createPost` | `bonfire_social` source | candidate-upstream | P0: scoped authenticated create and read-after-write |
-| Edit post (D) | `editPost` | `bonfire_social` source | candidate-upstream | P0: author-only edit, old-state invalidation |
-| Delete post (D) | **No confirmed GraphQL mutation here**; inspect actual schema and authorized REST equivalent | Not verified | blocked | P0: do not invent; explicit deletion semantics |
-| Follow / unfollow (D) | `follow`, `unfollow` | `bonfire_social` source | candidate-upstream | P0: pending/accepted/rejected state reconciliation |
-| Follow request approval (D) | `acceptFollowRequest`, `rejectFollowRequest` | `bonfire_social` source | candidate-upstream | P0: owner-only validation |
-| Like / unlike (D) | `like`, `unlike` | `bonfire_social` source | candidate-upstream | P0: no duplicate; consistent counters |
-| Boost / undo boost (D) | `boost` and **inverse to discover** | `bonfire_social` source, inverse unverified | candidate-upstream | P0: no silent unsupported undo |
-| Bookmark / unbookmark (D) | `bookmark`, `unbookmark` | `bonfire_social` source | candidate-upstream | P0: durable server-backed, not local saved flags |
-| Report / flag (E) | `flag` | `bonfire_social` source | candidate-upstream | P1: reason/evidence policy, avoid harmful content in logs |
-| Profile update (D/F) | `updateUser` | `bonfire_me` source | candidate-upstream | P0/P1: per-user auth, avatar media validation |
-| Search users/posts (E/F) | `searchUsers`, `searchActivities` | `bonfire_search` source | candidate-upstream | P1: privacy-safe, limited and paginated |
-| Groups/topics list/detail (F) | `categories`, `category`, `groupJoinRequests` | `bonfire_classify` source and docs | candidate-upstream | P1: installed extension, membership/role/follow distinction |
-| Group membership (F) | `joinGroup`, `leaveGroup`, `addMember`, `removeMember`, `acceptJoinRequest` | `bonfire_classify` source | candidate-upstream | P1: owner/moderator policy and pending requests |
-| Group create/update (F) | `createCategory`, `updateCategory` | `bonfire_classify` source | candidate-upstream | P1: explicit authorized boundary and group type |
-| Messaging/private chat (F) | **Exact GraphQL schema unknown** | Bonfire social flavor bundles messages, public GraphQL surface unconfirmed | blocked | P1: only after endpoint, consent, E2E privacy verified |
-| Realtime subscriptions (F) | `feedActivity` upstream; WS transport must be confirmed | `bonfire_social` source, API transport docs | candidate-upstream | P1: auth, reconnect, replay and fallback polling |
-| Events (F) | `event` from `events_api_graphql.ex` | `bonfire_social` source | candidate-upstream | P2: only if installed/desired |
-| Upload/media (E) | **GraphQL/upload route unknown** | No inspected deployed contract | blocked | P1: source-verified endpoint, type/size/alt, revoke |
-| Instance moderation/boundaries (E/F) | permission grant fields + **boundary lookup to verify** | Bonfire groups docs / social GraphQL source | candidate-upstream | P1: server authoritative choices, deny tests |
-| Polls, lists, tags, labels, settings (F) | **Version-specific operations pending inventory** | Feature references only; no confirmed GraphQL mapping | blocked | P1/P2: per installed extension and value |
-| Optional relay discovery (H) | **Not Bonfire GraphQL:** independent `GET /api/v1/items` / `facets` | `discovery-gateway` + client code | existing-client-code | P2: never represent as Bonfire native feed |
+| Public local feed | GraphQL `feedActivities(feedName:"local")` | same | **in use**, live-accepted 2026-11-09 | Pagination and ordering checks |
+| Articles (Recent articles, Spotlight) | GraphQL `feedActivities(feedName:"articles")` | same | **in use**, live-accepted 2026-11-09 | — |
+| Groups directory, group page, group posts | GraphQL `categories`, `category`, `feedActivities(feedName:"known_groups")`, read signed out | same | **in use** | — |
+| For You: busy discussions in joined groups | GraphQL feed `sortBy: REPLY_COUNT`, `timeLimit: 7` | same | **in use** | — |
+| Create a post (Public / Quiet public, CW, media, quote policy, quotes) | GraphQL `createPost` (`createPostOnFedizen`) | `createPost` (live root) | **in use** | Signed-in acceptance record |
+| Reply | REST `POST /api/v1/statuses` (`in_reply_to_id`, visibility) | `createPost(replyTo:)` (live root) | in schema | Move to `createPost` once boundaries for replies are checked |
+| Home timeline | REST `/api/v1/timelines/home` | `me.myFeed` (live schema) | **flag-gated** | Consented two-account test, then turn the flag on |
+| Notifications / Activity | REST `/api/v2/notifications` (grouped), markers | `me.notifications` (live schema) | **flag-gated** | Same as Home |
+| Post detail and conversation | REST `/api/v1/statuses/:id`, `/context` | `post(filter:{id})` (live schema) flag-gated; `threadContext` in schema | flag-gated / in schema | — |
+| Profiles (others) | ActivityPub actor read directly (`loadFediProfile`) | `user(filter:{id|username})` (live schema) | **flag-gated** | — |
+| Edit own profile on Fedizen | — | `updateUser` | in schema | **missing** in Atlas |
+| Edit post | REST `PUT /api/v1/statuses/:id` + `/source` | `editPost` | in schema | — |
+| Delete post | REST `DELETE /api/v1/statuses/:id` | generic `delete` (any context, `bonfire_api_graphql`) | in schema | — |
+| Like / unlike | REST `favourite` / `unfavourite` | `like`, `unlike` (live root) | in schema | — |
+| Boost / undo boost | REST `reblog` / `unreblog` | `boost` only; **no undo-boost operation** | in schema (half) | Keep REST for undo |
+| Bookmark / unbookmark, Saved | REST `bookmark` / `unbookmark`, `/api/v1/bookmarks` | `bookmark` (live root), `unbookmark` | in schema | — |
+| Liked posts, who liked / boosted | REST `/api/v1/favourites`, `favourited_by` / `reblogged_by` | `likersOf`, `boostersOf`, `me.likeActivities` | in schema | — |
+| Follow / unfollow | REST `accounts/:id/follow` / `unfollow` (+ `accounts/lookup`) | `follow`, `unfollow` (live root) | in schema | — |
+| Follow requests: list | REST `/api/v1/follow_requests` | **no list query** (only `requested` on relationships) | none | **broken**: #193 fixes the list (Bonfire returns every request, ignoring `limit`) |
+| Follow requests: accept / decline | REST `follow_requests/:id/authorize` / `reject` | `acceptFollowRequest`, `rejectFollowRequest` | in schema | — |
+| Group join / leave | REST `/api/v1-bonfire/groups/:id/join` / `leave` | `joinGroup`, `leaveGroup` | in schema | — |
+| Mute / block, lists of them | REST `mutes`, `blocks`, `accounts/:id/mute|block` | read-only `silencing`, `ghosting` on relationships; no mutation | none | — |
+| Report | REST `/api/v1/reports` | `flag` | in schema | — |
+| Circles (Profile → Circles, pinned circle feeds) | REST Lists API (`/api/v1/lists`, `timelines/list/:id`) | not in the extensions checked (`bonfire_boundaries` not checked) | unknown | Check `bonfire_boundaries` |
+| Hashtags: follow, followed list, tag timeline | REST `tags/:name/follow`, `followed_tags`, `timelines/tag/:tag` | `feedActivities(filter:{tags})` reads; no follow operation | partial | — |
+| Search (people, posts, hashtags) | REST `/api/v2/search`, `accounts/search` | `searchUsers`, `searchActivities` | in schema | — |
+| Polls: read, vote | REST `/api/v1/polls/:id`, `votes` | none | none | — |
+| Media upload, alt text | REST `/api/v2/media` | `uploadMedia`, `updateMedia`, `deleteMedia`, `addMediaByUri` (`bonfire_files`) | in schema | — |
+| Messages (direct conversations) | REST `/api/v1/conversations` (read); sent as `direct` posts | **none** in `bonfire_messages` | none | — |
+| Push notifications | REST `/api/v1/push/subscription`, through Atlas's relay | none | none | **blocked** on the VAPID private key (Settings → Notifications) |
+| Live updates | Mastodon streaming (WebSocket), else Bonfire SSE | `feedActivity` subscription (transport unverified on Fedizen) | in schema | — |
+| Translation | Atlas (device / DeepL / AI); Bonfire's own isn't exposed to apps | none | none | — |
+| Collections (Mastodon 4.6) | Atlas tables + Mastodon servers; Bonfire has none | none | none | Move to Fedizen when Bonfire ships FEP-7aa9 |
+| Instance blocks | Opens Fedizen's page | none | none | — |
+| Events | — | removed in v1.1.0 | none | — |
+
+### Before publishing
+
+1. **Follow requests** list (#193).
+2. **Push notifications**: replace both VAPID keys in Lovable Secrets (the private key is rejected as invalid).
+3. **Signed-in GraphQL acceptance** for Home, notifications, posts and profiles (the consented disposable-account workflow below), then decide on `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS`.
+4. **Edit your Fedizen profile** from Atlas (`updateUser`, or REST `update_credentials`).
+5. **Fedizen's version**: it reports rc.1. v1.1.0 changes no GraphQL operation above, but fixes and adds behaviour Atlas relies on through the Mastodon API (notifications, groups, keyword filters, follow and like delivery); upgrading is the operator's choice.
+6. **Schema snapshot**: still no full effective schema export of Fedizen (see the capture record below).
 
 ### Atlas implementation evidence (not Fedizen compatibility evidence)
 

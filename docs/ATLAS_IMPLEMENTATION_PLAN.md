@@ -4,6 +4,8 @@
 >
 > **North star:** Ship Atlas as an excellent, trustworthy, full-featured **Bonfire client**. Fedizen is our current Bonfire instance and will ultimately have its own Bonfire flavor. Use the installed **Bonfire GraphQL API as primary application interface**. Fedify is **optional, independently isolated ActivityPub relay discovery** and must not substitute for Bonfire's accounts, federation, timelines, permissions or moderation.
 
+> **Status, 2026-11-22:** the per-feature state of Atlas's Bonfire API work (what runs on GraphQL, what on the Mastodon-compatible REST API, what is flag-gated, missing or broken) and the list of what remains before publishing are kept in the [capability matrix](BONFIRE_GRAPHQL_CAPABILITY_MATRIX.md#where-atlas-stands-2026-11-22). The phase notes below are the original plan and its Nov 8–9 evidence; they describe what was true then. Since then Atlas has shipped most social features through Fedizen's Mastodon-compatible API (Home, Activity, posting, replies, reactions, follows, groups, circles, hashtags, search, polls, media, moderation, push relay) and posts through GraphQL `createPost`; native GraphQL Home, notifications, post and profile reads remain behind `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS`, which is off.
+
 ## 0. Rules of engagement and evidence
 
 - This is the **single execution-order and acceptance checklist** for Atlas client work. `roadmap.md` records history; `discovery-gateway/` and release issue #23 track the separately deployed discovery service. Keep these aligned without duplicating every checklist.
