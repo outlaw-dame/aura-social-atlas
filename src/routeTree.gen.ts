@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as FedizenAcceptanceRouteImport } from './routes/fedizen-acceptance'
 import { Route as FeedsRouteImport } from './routes/feeds'
 import { Route as FollowingRouteImport } from './routes/following'
 import { Route as GroupsRouteImport } from './routes/groups'
@@ -54,6 +55,11 @@ const AppRoute = AppRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FedizenAcceptanceRoute = FedizenAcceptanceRouteImport.update({
+  id: '/fedizen-acceptance',
+  path: '/fedizen-acceptance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeedsRoute = FeedsRouteImport.update({
@@ -172,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/activity': typeof ActivityRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/feeds': typeof FeedsRoute
   '/following': typeof FollowingRoute
   '/groups': typeof GroupsRoute
@@ -200,6 +207,7 @@ export interface FileRoutesByTo {
   '/activity': typeof ActivityRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/feeds': typeof FeedsRoute
   '/following': typeof FollowingRoute
   '/groups': typeof GroupsRoute
@@ -228,6 +236,7 @@ export interface FileRoutesById {
   '/activity': typeof ActivityRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/feeds': typeof FeedsRoute
   '/following': typeof FollowingRoute
   '/groups': typeof GroupsRoute
@@ -258,6 +267,7 @@ export interface FileRouteTypes {
     | '/activity'
     | '/app'
     | '/auth'
+    | '/fedizen-acceptance'
     | '/feeds'
     | '/following'
     | '/groups'
@@ -286,6 +296,7 @@ export interface FileRouteTypes {
     | '/activity'
     | '/app'
     | '/auth'
+    | '/fedizen-acceptance'
     | '/feeds'
     | '/following'
     | '/groups'
@@ -313,6 +324,7 @@ export interface FileRouteTypes {
     | '/activity'
     | '/app'
     | '/auth'
+    | '/fedizen-acceptance'
     | '/feeds'
     | '/following'
     | '/groups'
@@ -342,6 +354,7 @@ export interface RootRouteChildren {
   ActivityRoute: typeof ActivityRoute
   AppRoute: typeof AppRoute
   AuthRoute: typeof AuthRoute
+  FedizenAcceptanceRoute: typeof FedizenAcceptanceRoute
   FeedsRoute: typeof FeedsRoute
   FollowingRoute: typeof FollowingRoute
   GroupsRoute: typeof GroupsRoute
@@ -388,6 +401,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fedizen-acceptance': {
+      id: '/fedizen-acceptance'
+      path: '/fedizen-acceptance'
+      fullPath: '/fedizen-acceptance'
+      preLoaderRoute: typeof FedizenAcceptanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/feeds': {
@@ -574,6 +594,7 @@ const rootRouteChildren: RootRouteChildren = {
   ActivityRoute: ActivityRoute,
   AppRoute: AppRoute,
   AuthRoute: AuthRoute,
+  FedizenAcceptanceRoute: FedizenAcceptanceRoute,
   FeedsRoute: FeedsRoute,
   FollowingRoute: FollowingRoute,
   GroupsRoute: GroupsRoute,
