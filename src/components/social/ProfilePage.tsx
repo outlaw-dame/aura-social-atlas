@@ -8,6 +8,7 @@ import { avatarPreset } from '@/lib/atlas-avatars';
 import { IdentityAvatar } from './IdentityAvatar';
 import { useFedizenIdentity } from './useFedizenIdentity';
 import { useMyFedizenProfile } from './useMyFedizenProfile';
+import { ProfileImagePicker } from './ProfileImagePicker';
 import { BIO_MAX, isWebsite, LOCATION_MAX, NAME_MAX, WEBSITE_MAX } from '@/lib/fedizen-profile';
 import { creators, fullHandle, posts, type Creator } from '@/lib/social-catalogue';
 import { extractHashtags, hashtagLabel, hashtagUrl, linkifyHashtags, TagText } from '@/lib/hashtags';
@@ -75,6 +76,10 @@ function EditProfileDialog({ onClose, fedizen }: { onClose: () => void; fedizen:
   };
   return <Dialog label="Edit profile" onClose={onClose}>
     {fedizen?.problem && !remote && <p role="status" className="mb-4 text-xs text-muted-foreground">{fedizen.problem}</p>}
+    {remote && fedizen && <div className="mb-4 grid grid-cols-2 gap-3">
+      {(['avatar', 'banner'] as const).map(kind => <ProfileImagePicker key={kind} kind={kind} busy={fedizen.uploading === kind} onPick={file => fedizen.saveImage(kind, file)}
+        button={(open, busy, label) => <Button type="button" variant="outline" size="sm" className="w-full rounded-full" disabled={busy || !!fedizen.uploading} onClick={open}>{label}</Button>} />)}
+    </div>}
     {remote && <>
       <label className="mb-1 block text-xs font-medium" htmlFor="profile-name">Name</label>
       <input id="profile-name" value={name} maxLength={NAME_MAX} onChange={e => setName(e.target.value)} className={`${field} h-10`} />
@@ -124,7 +129,9 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
   const e = empty[section];
 
   return <div className="animate-float-up">
-    <div className="h-36 rounded-3xl sm:h-44" aria-hidden="true" style={{ background: 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 30%, var(--card)), color-mix(in oklab, var(--accent) 8%, var(--card)))' }} />
+    {identity.viewer?.header && !/\/images\/bonfires\.png$/.test(identity.viewer.header)
+      ? <img src={identity.viewer.header} alt="" aria-hidden="true" referrerPolicy="no-referrer" className="h-36 w-full rounded-3xl object-cover sm:h-44" />
+      : <div className="h-36 rounded-3xl sm:h-44" aria-hidden="true" style={{ background: 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 30%, var(--card)), color-mix(in oklab, var(--accent) 8%, var(--card)))' }} />}
     <header className="px-2 sm:px-6">
       <div className="-mt-12 flex items-end justify-between">
         <IdentityAvatar className="size-24 atlas-avatar border-4 border-background object-cover" src={identity.avatar} name={identity.name} alt="Your profile avatar" />

@@ -14,6 +14,8 @@ import { accountKey, forgetAccountReads, noteRateLimited, waitLeft } from './fed
 const ENDPOINT = 'https://fedizen.net/api/graphql';
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 10_000;
+/** Uploads: Bonfire stores and resizes the image before it answers. */
+const UPLOAD_TIMEOUT_MS = 45_000;
 // 429 isn't retried here: Fedizen asked Atlas to wait (fedizen-rate-limit.ts), and asking again only extends it.
 const RETRY_STATUSES = new Set([502, 503, 504]);
 
@@ -48,6 +50,11 @@ export type BonfireGraphQLRequest<T> = {
   fetchImpl?: typeof fetch;
   /** Test seam for deterministic retry assertions. */
   waitImpl?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
+  /**
+   * Files for an `Upload` argument (mutations only), sent as Absinthe.Plug takes them: a multipart form with `query`,
+   * `variables` (JSON) and one part per file, where the variable's value is that part's name.
+   */
+  files?: Record<string, { blob: Blob; name: string }>;
 };
 
 function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {
@@ -114,9 +121,13 @@ async function readBoundedJson(response: Response): Promise<unknown> {
 export async function requestBonfireGraphQL<T>(request: BonfireGraphQLRequest<T>): Promise<T> {
   const {
     document, operation, variables, accessToken, validate, signal,
-    fetchImpl = fetch, waitImpl = wait,
+    fetchImpl = fetch, waitImpl = wait, files,
   } = request;
   if (!document.trim() || (operation !== 'query' && operation !== 'mutation')) {
+    throw new BonfireGraphQLError('invalid-response');
+  }
+  const fileParts = files ? Object.entries(files) : [];
+  if (fileParts.length && (operation !== 'mutation' || fileParts.some(([name]) => !/^[a-z][a-z0-9_]{0,31}$/.test(name) || name === 'query' || name === 'variables'))) {
     throw new BonfireGraphQLError('invalid-response');
   }
   // Signed-out reads share one allowance; each account has its own (fedizen-rate-limit.ts).
@@ -131,18 +142,29 @@ export async function requestBonfireGraphQL<T>(request: BonfireGraphQLRequest<T>
     let response: Response;
     try {
       const headers: Record<string, string> = {
-        'content-type': 'application/json',
         accept: 'application/json',
         'user-agent': FEDIZEN_USER_AGENT,
       };
+      let body: BodyInit;
+      if (fileParts.length) {
+        // The runtime sets the multipart content type and boundary.
+        const form = new FormData();
+        form.set('query', document);
+        form.set('variables', JSON.stringify(variables ?? {}));
+        for (const [name, file] of fileParts) form.set(name, file.blob, file.name);
+        body = form;
+      } else {
+        headers['content-type'] = 'application/json';
+        body = JSON.stringify({ query: document, ...(variables ? { variables } : {}) });
+      }
       if (accessToken) headers.authorization = `Bearer ${accessToken}`;
       response = await fetchImpl(ENDPOINT, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ query: document, ...(variables ? { variables } : {}) }),
+        body,
         signal: signal
-          ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
-          : AbortSignal.timeout(TIMEOUT_MS),
+          ? AbortSignal.any([signal, AbortSignal.timeout(fileParts.length ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS)])
+          : AbortSignal.timeout(fileParts.length ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS),
         redirect: 'manual',
         cache: 'no-store',
       });

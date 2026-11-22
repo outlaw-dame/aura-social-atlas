@@ -109,7 +109,16 @@ export const MY_PROFILE_DOCUMENT = `query AtlasMyProfile {
   me { user { id character { username } profile { name summary website location } } }
 }`;
 
-/** Edits it. `images` (avatar and banner, multipart uploads) isn't sent: Atlas doesn't upload profile images yet. */
+/** Edits it (text fields only; images go through UPDATE_MY_PROFILE_IMAGES_DOCUMENT). */
 export const UPDATE_MY_PROFILE_DOCUMENT = `mutation AtlasUpdateMyProfile($profile: ProfileInput) {
   updateUser(profile: $profile) { user { id character { username } profile { name summary website location } } }
+}`;
+
+/**
+ * Replaces the profile picture (`icon`) or banner (`image`): `updateUser(images: ImagesUpload)`, whose fields are
+ * Absinthe `Upload`s sent as multipart parts (bonfire_files Bonfire.Files.GraphQL.upload at 368bd01: IconUploader
+ * and ImageUploader). The profile's `icon` and `image` come back as their new addresses.
+ */
+export const UPDATE_MY_PROFILE_IMAGES_DOCUMENT = `mutation AtlasUpdateMyProfileImages($images: ImagesUpload) {
+  updateUser(images: $images) { user { id profile { icon image } } }
 }`;
