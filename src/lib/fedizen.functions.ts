@@ -25,6 +25,17 @@ export const getFedizenViewer = createServerFn({ method: 'GET' })
       // identity or fall back to unverified OAuth display metadata.
       return { connected: true as const, viewer: null };
     }
+    if (!viewer.avatar && viewer.profileUrl) {
+      // Bonfire's Mastodon compatibility adapter can send a generic avatar
+      // even when the account's actual ActivityPub actor has a picture.
+      // Use the existing DNS/IP-protected actor fetch; accept only the same
+      // verified Fedizen account's icon, never another person's profile.
+      const { fetchActor } = await import('./article-author.server');
+      const { avatarFromVerifiedFedizenActor } = await import('./fedizen-viewer');
+      const actor = await fetchActor(viewer.profileUrl).catch(() => null);
+      const avatar = avatarFromVerifiedFedizenActor(viewer, actor);
+      if (avatar) return { connected: true as const, viewer: { ...viewer, avatar } };
+    }
     return { connected: true as const, viewer };
   });
 
