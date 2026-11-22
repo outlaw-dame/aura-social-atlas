@@ -8,6 +8,7 @@ import { getFedizenNativeAcceptance } from '@/lib/bonfire-acceptance.functions';
 import { isEmbeddedPreview } from '@/lib/bonfire-auth';
 import { supabase } from '@/integrations/supabase/client';
 import { runSessionReplay, type SessionReplayResult } from '@/lib/session-revocation-check';
+import { auditPrivateReads, type PrivateReadEvidence } from '@/lib/staging-private-read-audit';
 import { acceptanceCooldownRemaining, sanitizeAcceptanceResult, type AcceptanceView } from '@/lib/fedizen-acceptance-view';
 
 const TITLE = 'Fedizen acceptance (staging) — Atlas';
@@ -51,7 +52,8 @@ function FedizenAcceptancePage() {
   const readSaved = useServerFn(getFedizenSaved);
   const readCircles = useServerFn(getFedizenCircles);
   const pending = useRef(false);
-  const [busy, setBusy] = useState<'connect' | 'run' | 'revocation' | null>(null);
+  const [busy, setBusy] = useState<'connect' | 'run' | 'reads' | 'revocation' | null>(null);
+  const [readAudit, setReadAudit] = useState<Owned<PrivateReadEvidence> | null>(null);
   const [revocation, setRevocation] = useState<SessionReplayResult | null>(null);
   const [result, setResult] = useState<Owned<AcceptanceView> | null>(null);
   const [error, setError] = useState<Owned<string> | null>(null);
@@ -71,6 +73,7 @@ function FedizenAcceptancePage() {
 
   // Only show output to the Atlas account that produced it.
   const view = result && result.userId === userId ? result.value : null;
+  const ownerReads = readAudit && readAudit.userId === userId ? readAudit.value : null;
   const message = error && error.userId === userId ? error.value : null;
 
   const connect = async () => {
@@ -95,6 +98,28 @@ function FedizenAcceptancePage() {
       setResult({ userId, value: sanitizeAcceptanceResult(raw) });
     } catch {
       setError({ userId, value: 'Diagnostics could not run. Your session may have changed — sign in again and retry.' });
+    } finally { pending.current = false; setBusy(null); }
+  };
+
+  const runPrivateReadAudit = async () => {
+    if (!userId || pending.current) return;
+    pending.current = true;
+    setBusy('reads'); setReadAudit(null); setError(null);
+    const data = { expectedAtlasUserId: userId };
+    try {
+      const evidence = await auditPrivateReads([
+        { label: 'Fedizen connection', run: () => readStatus() },
+        { label: 'Following / Home', run: () => readHome({ data }) },
+        { label: 'Home refresh', run: () => readHomeLatest({ data }) },
+        { label: 'Direct conversations', run: () => readMessages({ data }) },
+        { label: 'Activity / notifications', run: () => readGrouped({ data: { ...data, filter: 'all' } }) },
+        { label: 'Notification marker', run: () => readMarker({ data }) },
+        { label: 'Saved posts', run: () => readSaved({ data }) },
+        { label: 'Circles', run: () => readCircles({ data }) },
+      ]);
+      setReadAudit({ userId, value: evidence });
+    } catch {
+      setError({ userId, value: 'The protected-read audit could not complete. No privacy conclusion was recorded.' });
     } finally { pending.current = false; setBusy(null); }
   };
 
@@ -189,10 +214,55 @@ function FedizenAcceptancePage() {
               )}
             </section>
 
+            <section className="mt-4 rounded-lg border border-border p-5" aria-labelledby="private-reads-heading">
+              <h2 id="private-reads-heading" className="font-medium">2. Test eight authenticated private reads</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Explicitly call the eight protected Atlas endpoints using your current session and connected Fedizen grant.
+                This reads your authorized data but only displays endpoint outcomes and a count of private/direct posts
+                in the sampled Home page. It never prints messages, posts, identities or tokens.
+              </p>
+              <Button className="mt-4" variant="outline" onClick={runPrivateReadAudit}
+                disabled={busy !== null} aria-busy={busy === 'reads'}>
+                {busy === 'reads' ? 'Checking eight private endpoints…' : 'Test my eight protected reads'}
+              </Button>
+              {ownerReads && (
+                <div className="mt-4" aria-live="polite">
+                  <p className="text-sm font-medium" role="status">
+                    {ownerReads.outcome === 'complete'
+                      ? 'All eight owner-authenticated routes responded.'
+                      : 'Some routes were unavailable or did not confirm authenticated data access.'}
+                  </p>
+                  {ownerReads.checks.length > 0 && (
+                    <ul className="mt-3 space-y-1 text-sm">
+                      {ownerReads.checks.map(check => (
+                        <li key={check.label} className="flex items-center justify-between gap-4 border-b border-border py-1.5 last:border-0">
+                          <span>{check.label}</span>
+                          <span>{check.result === 'readable' ? 'Readable' : 'Inconclusive'}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Home page sampled: {ownerReads.homeSampleCount ?? 'not available'} posts.
+                    Private/direct visibility markers found: {ownerReads.nonPublicHomeCount ?? 'not available'}.
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {ownerReads.nonPublicHomeCount === 0
+                      ? 'No private/direct posts were present in this sampled Home page. Private-content isolation cannot be proven from it.'
+                      : ownerReads.nonPublicHomeCount !== null
+                        ? 'Non-public visibility markers were found, but a second independently authorized account is still required to prove cross-account denial.'
+                        : 'The Home visibility sample was not available, so no private-content conclusion can be drawn.'}
+                    {' '}A successful owner read is not evidence that anonymous users or a different Fedizen account can read the same private content.
+                  </p>
+                </div>
+              )}
+            </section>
+
             <section className="mt-4 rounded-lg border border-border p-5" aria-labelledby="run-heading">
-              <h2 id="run-heading" className="font-medium">2. Run diagnostics</h2>
+              <h2 id="run-heading" className="font-medium">3. Verify owner identity via REST and GraphQL</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Checks the connected account's REST identity and authorized GraphQL Me, profile, Home, notifications and anonymous Me refusal. It does not prove another user cannot access a private post.</p>
               <Button className="mt-4" onClick={run} disabled={busy !== null || cooldown > 0} aria-busy={busy === 'run'} aria-describedby={cooldown > 0 && busy === null ? 'run-cooldown' : undefined}>
-                {busy === 'run' ? 'Running…' : 'Run read-only API diagnostics'}
+                {busy === 'run' ? 'Checking REST and GraphQL…' : 'Test six REST / GraphQL owner and anonymous checks'}
               </Button>
               {cooldown > 0 && busy === null && (
                 <p id="run-cooldown" className="mt-2 text-xs text-muted-foreground">You can run again in {Math.ceil(cooldown / 1000)}s.</p>
@@ -218,7 +288,7 @@ function FedizenAcceptancePage() {
             </section>
 
             <section className="mt-4 rounded-lg border border-border p-5" aria-labelledby="revocation-heading">
-              <h2 id="revocation-heading" className="font-medium">3. Verify sign-out revocation</h2>
+              <h2 id="revocation-heading" className="font-medium">4. Verify sign-out revocation</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 This staging-only check signs you out of Atlas, waits beyond the 15-second server cache window,
                 and retries eight private reads using the former session. It does not disconnect or revoke the
