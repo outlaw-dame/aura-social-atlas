@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { BONFIRE_PROVIDER, BONFIRE_SCOPES, friendlyBonfireError, isEmbeddedPreview, readOAuthError, standaloneAuthUrl } from '@/lib/bonfire-auth';
+import { friendlyBonfireError, isEmbeddedPreview, readOAuthError, standaloneAuthUrl } from '@/lib/bonfire-auth';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable/index';
@@ -89,13 +89,18 @@ function AuthPage() {
   const bonfireSignIn = async () => {
     setError(null);
     setBusy(true);
-    const { error: oidcError } = await supabase.auth.signInWithOAuth({
-      provider: BONFIRE_PROVIDER,
-      options: { redirectTo: window.location.origin, scopes: BONFIRE_SCOPES },
-    });
-    if (oidcError) {
+    try {
+      const { beginBonfireSignIn } = await import('@/lib/bonfire-signin');
+      const failure = await beginBonfireSignIn(
+        window.location.origin,
+        options => supabase.auth.signInWithOAuth(options),
+      );
+      if (failure) setError(failure);
+    } catch {
+      setError('Couldn’t start Bonfire sign-in. Please try again.');
+    } finally {
+      // Some providers reject before starting navigation; never strand the UI.
       setBusy(false);
-      setError(friendlyBonfireError(oidcError.message));
     }
   };
 
