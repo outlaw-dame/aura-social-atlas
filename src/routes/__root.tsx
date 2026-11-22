@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SocialProvider } from "@/components/social/SocialState";
 import { AtlasAuthProvider } from "@/components/social/AuthState";
+import { ContentFilterProvider } from "@/components/social/useIntelligence";
 
 function NotFoundComponent() {
   return (
@@ -153,7 +154,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <AtlasAuthProvider>
-        <SocialProvider><Outlet /></SocialProvider>
+        <SocialProvider><ContentFilterProvider><Outlet /></ContentFilterProvider></SocialProvider>
       </AtlasAuthProvider>
     </QueryClientProvider>
   );

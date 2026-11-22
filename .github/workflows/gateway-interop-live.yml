@@ -2,7 +2,10 @@ name: Controlled external signed federation acceptance
 
 on:
   workflow_dispatch:
+  # Only PRs into main. A stacked PR into a feature branch picks this file up in its diff when main is merged
+  # in, and would otherwise run a one-shot acceptance against a fixture that may no longer exist.
   pull_request:
+    branches: [main]
     paths:
       - '.github/workflows/gateway-interop-live.yml'
 

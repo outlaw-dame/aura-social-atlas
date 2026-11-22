@@ -86,3 +86,56 @@ export const NATIVE_POST_BY_ID_DOCUMENT = `query AtlasNativePostById($id:ID!) {
     }
   }
 }`;
+
+/**
+ * A new Public or Quiet public post through Bonfire's `createPost`, for what Fedizen's Mastodon REST
+ * `POST /api/v1/statuses` can't say (bonfire_posts masto_adapter.ex builds a post from status, spoiler_text,
+ * media_ids, sensitive and in_reply_to_id only):
+ * - `quoteId`: quote a post (FEP-044f; Mastodon 4.5's `quoted_status_id` isn't taken).
+ * - `permissions`: who may quote it (lib/quote-policy; Mastodon's `quote_approval_policy` isn't taken either).
+ * Arguments from bonfire_social social_api_graphql.ex (`create_post`: post_content, boundary, permissions,
+ * uploaded_media, quote_id), in the camelCase Fedizen's live schema shows. `boundary` takes Bonfire's post presets
+ * (bonfire_boundaries runtime_config.ex `preset_acls`, 60fc2e7): "public", "unlisted", or "local" (people signed in
+ * to Fedizen read and reply; REST has no visibility for it, and reads it back as "unlisted").
+ */
+/**
+ * A post one or more of the person's circles may read and reply to. On Fedizen's rc.1, `createPost(toCircles:)` only
+ * reaches the circles' feeds: `Acls.prepare_cast` reads `to_circles` from its opts, while the resolver puts it in the
+ * post attrs, so it grants nothing. Access comes from `boundary: "private"` (no preset grants) and `permissions`
+ * granting each circle see, read and reply (bonfire_social social_api_graphql.ex `create_post`, d64795d →
+ * VerbGrants.transform_to_verb_grants_format/1).
+ */
+export const CREATE_CIRCLE_POST_DOCUMENT = `mutation AtlasCreateCirclePost($postContent: PostContentInput!, $toCircles: [ID], $uploadedMedia: [ID], $permissions: [BoundaryPermissionInput]) {
+  createPost(postContent: $postContent, boundary: "private", toCircles: $toCircles, uploadedMedia: $uploadedMedia, permissions: $permissions) { id activity { canonicalUri } }
+}`;
+
+/** What a post grants, as Fedizen stored it (`Post.permissionGrants`, bonfire_social social_api_graphql.ex). */
+export const POST_GRANTS_DOCUMENT = `query AtlasPostGrants($id: ID) {
+  post(filter: { id: $id }) { id permissionGrants { permission can { id } } }
+}`;
+
+export const CREATE_POST_DOCUMENT = `mutation AtlasCreatePost($postContent: PostContentInput!, $boundary: String, $quoteId: ID, $uploadedMedia: [ID], $permissions: [BoundaryPermissionInput]) {
+  createPost(postContent: $postContent, boundary: $boundary, quoteId: $quoteId, uploadedMedia: $uploadedMedia, permissions: $permissions) { id activity { canonicalUri } }
+}`;
+
+/**
+ * The signed-in person's own Fedizen profile, as `updateUser` edits it (bonfire_me me_api_graphql.ex at the commit
+ * Fedizen's v1.1.0-rc.1 pins, ef9c2a9: `profile_input` is name, summary, website, location).
+ */
+export const MY_PROFILE_DOCUMENT = `query AtlasMyProfile {
+  me { user { id character { username } profile { name summary website location } } }
+}`;
+
+/** Edits it (text fields only; images go through UPDATE_MY_PROFILE_IMAGES_DOCUMENT). */
+export const UPDATE_MY_PROFILE_DOCUMENT = `mutation AtlasUpdateMyProfile($profile: ProfileInput) {
+  updateUser(profile: $profile) { user { id character { username } profile { name summary website location } } }
+}`;
+
+/**
+ * Replaces the profile picture (`icon`) or banner (`image`): `updateUser(images: ImagesUpload)`, whose fields are
+ * Absinthe `Upload`s sent as multipart parts (bonfire_files Bonfire.Files.GraphQL.upload at 368bd01: IconUploader
+ * and ImageUploader). The profile's `icon` and `image` come back as their new addresses.
+ */
+export const UPDATE_MY_PROFILE_IMAGES_DOCUMENT = `mutation AtlasUpdateMyProfileImages($images: ImagesUpload) {
+  updateUser(images: $images) { user { id profile { icon image } } }
+}`;

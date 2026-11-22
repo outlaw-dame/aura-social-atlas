@@ -81,8 +81,8 @@
   --secondary-foreground: oklch(0.97 0 0);
   --muted: oklch(0.27 0.01 260);
   --muted-foreground: oklch(0.7 0.01 260);
-  --accent: #FA243C;
-  --accent-foreground: oklch(0.99 0 0);
+  /* No --accent here: the reader's accent (src/lib/accent.ts, set on <html>) must reach dark mode too. Desktop puts
+     .dark on a wrapper <div>, where redeclaring it would override the reader's choice with Atlas Red. */
   --destructive: oklch(0.7 0.19 22);
   --destructive-foreground: oklch(0.97 0 0);
   --border: oklch(1 0 0 / 10%);
@@ -179,7 +179,7 @@
   --social-avatar: color-mix(in oklab, var(--accent) 12%, var(--secondary));
 }
 .social-selected { background: var(--social-selected); box-shadow: inset 0 0 0 1px var(--border); }
-.social-avatar { display: inline-grid; place-items: center; border-radius: 50%; background: var(--social-avatar); color: var(--foreground); font-weight: 600; }
+.social-avatar { display: inline-grid; place-items: center; border-radius: var(--atlas-avatar-radius, 50%); background: var(--social-avatar); color: var(--foreground); font-weight: 600; }
 .social-topic-dot, .social-status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .social-status-dot { background: var(--social-status); }
 .social-topic-dot { margin-right: 4px; }
@@ -225,8 +225,88 @@
 
 /* Centered social profile; the six section names scroll rather than compress. */
 .atlas-profile-popup .page { background: var(--background); color: var(--foreground); }
+/* Dock: the person's avatar stands in for an icon; the active tab gets a ring in the theme colour. */
+.atlas-dock-avatar { width: 28px; height: 28px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; }
+.atlas-tabbar .tab-link-active .atlas-dock-avatar { box-shadow: 0 0 0 2px var(--f7-tabbar-link-active-color, var(--f7-theme-color)); }
+/* Activity: avatar with a small badge for the kind of notification. */
+.atlas-activity-media { position: relative; display: block; width: 40px; height: 40px; }
+.atlas-activity-media img, .atlas-activity-initial { width: 40px; height: 40px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; }
+.atlas-activity-initial { display: grid; place-items: center; background: var(--secondary); font: 400 18px/1 'Instrument Serif', serif; }
+.atlas-activity-kind { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; background: var(--f7-theme-color); box-shadow: 0 0 0 2px var(--f7-list-strong-bg-color, #fff); }
+.atlas-activity-kind .icon { font-size: 12px; }
+.atlas-activity-favourite { background: #e0245e; }
+.atlas-activity-reblog { background: #17bf63; }
+.atlas-activity-follow, .atlas-activity-follow_request { background: #6364ff; }
+.atlas-activity-added_to_collection, .atlas-activity-collection_update { background: #b8860b; }
+.atlas-activity .item-text { -webkit-line-clamp: 3; }
+/* Activity, Bluesky's shape (MobileActivityList.tsx): tabs, rows that open what they're about, posts in full. */
+.atlas-disconnect { text-align: center; font-size: 14px; }
+.atlas-disconnect .link { color: var(--muted-foreground); }
+/* Discover: Spotlight's featured stories swipe sideways; the rest are rows (f7/Discover.tsx). */
+.atlas-spot-rail { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 16px; padding: 0 16px 8px; scrollbar-width: none; }
+.atlas-spot-rail::-webkit-scrollbar { display: none; }
+.atlas-spot-slide { flex: none; width: 85%; scroll-snap-align: start; }
+.atlas-spot-slide .atlas-article { margin: 6px 0 0; }
+.atlas-spot-meta { display: inline-flex; align-items: center; min-height: 20px; gap: 4px; font-size: 12px; color: var(--muted-foreground); }
+.atlas-spot-meta b { color: var(--accent); font-weight: 600; }
+.atlas-spot-thumb { border-radius: 10px; object-fit: cover; }
+.atlas-spot-list .item-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; font-family: 'Instrument Serif', serif; font-size: 18px; line-height: 1.2; }
+.atlas-voices-blurb { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.atlas-voices-blurb .link { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.atlas-voices-blurb .icon { font-size: 15px; }
+.atlas-voice-meta { display: flex; align-items: center; gap: 4px; font-size: 12px; opacity: .75; }
+.atlas-voice-bio { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-top: 4px; font-size: 13px; }
+.link.atlas-public-tag-author, .atlas-public-tag-author { display: flex; width: 100%; align-items: flex-start; gap: 10px; color: inherit; margin-bottom: 8px; }
+.atlas-public-tag-author img { width: 40px; height: 40px; object-fit: cover; }
+.atlas-public-tag-author span { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.atlas-public-tag-author small { opacity: .6; }
+.atlas-public-tag-author time { margin-left: auto; flex: none; align-self: flex-start; padding-top: 2px; font-size: 12px; opacity: .6; }
+.atlas-destructive .item-title { color: var(--f7-color-red, #ff3b30); }
+.atlas-filter-caution { color: #b45309; }
+.dark .atlas-filter-caution { color: #fbbf24; }
+.atlas-notice-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 12px 16px 4px; scrollbar-width: none; }
+.atlas-notice-tabs::-webkit-scrollbar { display: none; }
+.atlas-notice-tabs button { flex: none; width: auto; margin: 0; min-height: 34px; padding: 0 14px; border: .5px solid var(--border); border-radius: 999px; background: none; font: inherit; font-size: 14px; font-weight: 500; color: var(--muted-foreground); cursor: pointer; }
+.atlas-notice-tabs button.is-on { border-color: transparent; background: color-mix(in oklab, var(--f7-theme-color) 14%, transparent); color: var(--f7-theme-color); font-weight: 600; }
+.atlas-notices { margin: 8px 0; }
+.atlas-notice { position: relative; display: flex; gap: 12px; padding: 12px 16px; border-bottom: .5px solid var(--f7-list-item-border-color, var(--border)); }
+.atlas-notice.is-unread { background: color-mix(in oklab, var(--f7-theme-color) 7%, transparent); }
+.atlas-notice-post { display: block; padding: 10px 0 2px; }
+.atlas-notice-post .atlas-post-card { margin-top: 4px; margin-bottom: 8px; }
+.atlas-notice-label { display: flex; align-items: center; gap: 8px; margin: 0 16px; font-size: 13px; font-weight: 600; color: var(--muted-foreground); }
+.atlas-notice-hit { position: absolute; inset: 0; z-index: 0; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.atlas-notice-hit:active { background: color-mix(in oklab, currentColor 6%, transparent); }
+.atlas-notice-hit:focus-visible { outline: 2px solid var(--f7-theme-color); outline-offset: -2px; }
+.atlas-notice-icon { flex: none; width: 30px; display: flex; justify-content: center; padding-top: 4px; }
+.atlas-notice-kind { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #fff; background: var(--f7-theme-color); }
+.atlas-notice-label .atlas-notice-kind { width: 20px; height: 20px; }
+.atlas-notice-kind .icon { font-size: 14px; }
+.atlas-notice-label .atlas-notice-kind .icon { font-size: 11px; }
+.atlas-notice-main { flex: 1; min-width: 0; pointer-events: none; }
+.atlas-notice-main button, .atlas-notice-main a, .atlas-notice-main .button { pointer-events: auto; position: relative; z-index: 1; }
+.atlas-notice-faces { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+.atlas-notice-faces img, .atlas-notice-faces .atlas-activity-initial, .atlas-notice-person img, .atlas-notice-person .atlas-activity-initial { width: 30px; height: 30px; flex: none; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; font-size: 14px; }
+.atlas-notice-more { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: color-mix(in oklab, currentColor 8%, transparent); color: var(--muted-foreground); cursor: pointer; }
+.atlas-notice-more .icon { font-size: 16px; }
+.atlas-notice-faces .atlas-notice-chev { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: color-mix(in oklab, currentColor 8%, transparent); color: var(--muted-foreground); }
+.atlas-notice-chev .icon { font-size: 16px; }
+.atlas-notice-text { margin: 0; font-size: 15px; line-height: 1.35; }
+.atlas-notice-when { color: var(--muted-foreground); }
+.atlas-notice-preview { margin: 4px 0 0; font-size: 14px; line-height: 1.35; color: var(--muted-foreground); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.atlas-notice-thumb { flex: none; width: 48px; height: 48px; border-radius: 8px; object-fit: cover; position: relative; pointer-events: none; }
+.atlas-notice-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.atlas-notice-actions .button { width: auto; }
+.atlas-notice-error, .atlas-notice-handle { font-size: 13px; color: var(--muted-foreground); }
+.atlas-notice-people { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.atlas-notice-people li { display: flex; align-items: center; gap: 8px; }
+.atlas-notice-people li > .button { width: auto; flex: none; }
+.atlas-notice-person { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 4px 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.atlas-notice-person > span { min-width: 0; display: flex; flex-direction: column; }
+.atlas-notice-person b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-notice-person .atlas-notice-preview { margin: 0; flex: 1; }
+.atlas-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .atlas-profile-header { text-align: center; padding: 32px 24px 24px; }
-.atlas-profile-avatar { display: block; margin: 0 auto 16px; border-radius: 50%; background: var(--secondary); object-fit: cover; }
+.atlas-profile-avatar { display: block; margin: 0 auto 16px; border-radius: var(--atlas-avatar-radius, 50%); background: var(--secondary); object-fit: cover; }
 .atlas-profile-header h1 { margin: 0; font-family: var(--font-sans); font-size: 27px; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
 .atlas-profile-email { margin: 8px 0 18px; font-size: 14px; color: var(--muted-foreground); overflow-wrap: anywhere; }
 .atlas-profile-stats { display: flex; gap: 24px; justify-content: center; font-size: 13px; color: var(--muted-foreground); }
@@ -263,7 +343,34 @@
 .atlas-profile-footer .button { color: var(--muted-foreground); width: max-content; margin: 0 auto; }
 .atlas-profile-bio { margin: 14px auto 0; max-width: 320px; font-size: 14px; line-height: 1.6; color: var(--foreground); overflow-wrap: anywhere; white-space: pre-line; }
 .atlas-profile-bio-empty { color: var(--muted-foreground); }
+/* Own profile, Bluesky-style: banner, avatar overlapping it on the left, Edit profile on the right, then
+   name, handle, counts, bio, and an underlined, scrollable tab strip. */
+.atlas-bsky-banner { height: 132px; background: linear-gradient(135deg, color-mix(in oklab, var(--f7-theme-color) 30%, #fff), color-mix(in oklab, var(--f7-theme-color) 8%, #fff)); }
+.atlas-bsky-head { padding: 0 16px 8px; }
+.atlas-bsky-row { display: flex; align-items: flex-end; justify-content: space-between; margin-top: -44px; }
+.atlas-bsky-avatar { width: 88px; height: 88px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; background: var(--secondary); border: 3px solid var(--f7-page-bg-color, var(--background)); }
+.atlas-bsky-edit { width: auto; padding: 0 16px; margin-bottom: 4px; }
+.atlas-bsky-name { margin: 10px 0 0; font-size: 28px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+.atlas-bsky-handle { margin: 4px 0 0; font-size: 15px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.atlas-bsky-counts { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 0; font-size: 15px; color: var(--muted-foreground); }
+.atlas-bsky-counts strong { color: var(--foreground); font-weight: 600; margin-right: 3px; }
+.atlas-bsky-count-link { color: inherit !important; }
+.atlas-bsky-bio { margin: 12px 0 0; font-size: 15px; line-height: 1.45; }
+.atlas-bsky-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 0; font-size: 13px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
+.atlas-bsky-meta span, .atlas-bsky-meta a { display: inline-flex; align-items: center; gap: 4px; overflow-wrap: anywhere; }
+.atlas-bsky-meta i { font-size: 15px; }
+.atlas-bsky .atlas-profile-tags { justify-content: flex-start; margin-top: 12px; }
+.atlas-bsky-joined { margin: 10px 0 0; font-size: 13px; color: var(--muted-foreground); }
+.atlas-bsky-joined .icon { font-size: 14px; vertical-align: -2px; margin-right: 3px; }
+.atlas-bsky-tabs { position: sticky; top: 0; z-index: 2; display: flex; overflow-x: auto; scrollbar-width: none; margin-top: 12px; border-bottom: .5px solid var(--border); background: var(--f7-page-bg-color, var(--background)); }
+.atlas-bsky-tabs::-webkit-scrollbar { display: none; }
+.atlas-bsky-tabs button { flex: 1 0 auto; width: auto; margin: 0; display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 44px; padding: 0 14px; border: 0; background: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--muted-foreground); cursor: pointer; position: relative; }
+.atlas-bsky-tabs button .icon { font-size: 12px; }
+.atlas-bsky-tabs button.is-active { color: var(--foreground); }
+.atlas-bsky-tabs button.is-active::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: 0; height: 3px; border-radius: 3px; background: var(--f7-theme-color); }
+.atlas-profile-section-title { margin: 8px 16px 12px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-foreground); }
 .atlas-hashtag { color: var(--accent); text-decoration: none; font-weight: 500; }
+.atlas-hashtag-mark { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .atlas-hashtag-btn { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; width: auto; text-align: start; }
 .atlas-blocktitle-icon { display: inline-flex; align-items: center; gap: 6px; }
 .atlas-creator-list { --f7-list-item-text-max-lines: 10; }
@@ -278,7 +385,7 @@
 
 
 
-.atlas-profile-feed-avatar { width: 44px; height: 44px; border-radius: 50%; flex: 0 0 44px; }
+.atlas-profile-feed-avatar { width: 44px; height: 44px; border-radius: var(--atlas-avatar-radius, 50%); flex: 0 0 44px; }
 .atlas-profile-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
 .atlas-profile-sample { text-align: center; font-size: 12px; opacity: 0.55; margin: 4px 16px 12px; }
 
@@ -303,7 +410,7 @@
 /* Compact article attribution, inspired by Mastodon's linked author strip. */
 .atlas-author-tag { display: flex; align-items: center; gap: 6px; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; color: var(--foreground); }
 .atlas-author-tag .atlas-author-profile { display: flex; flex: 1; min-width: 0; height: auto; gap: 10px; padding: 4px 0; justify-content: flex-start; text-align: left; white-space: normal; color: var(--foreground); border-radius: 6px; }
-.atlas-author-profile img { width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; background: var(--social-avatar); }
+.atlas-author-profile img { width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--atlas-avatar-radius, 50%); background: var(--social-avatar); }
 .atlas-author-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; overflow-wrap: anywhere; line-height: 1.35; }
 .atlas-author-name { font-size: 13px; font-weight: 600; }
 .atlas-author-name > small:first-child { font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
@@ -331,7 +438,14 @@
 /* visibility (not display) so the trailing navbar buttons keep their place. */
 html[data-nav="rail"] .atlas-nav-menu, html[data-nav="sidebar"] .atlas-nav-menu { visibility: hidden; pointer-events: none; }
 html.atlas-rail .atlas-panel .atlas-hide-in-rail, html.atlas-rail .atlas-panel .item-after { display: none; }
-html.atlas-rail .atlas-panel .atlas-brand { font-size: 0 !important; padding: 0; margin: 0; }
+/* The rail keeps the app's name, in the corner above it, level with the page title (as iPad apps put their name or
+   logo at the top of a sidebar). Sized to sit inside the rail's width. */
+html.atlas-rail .atlas-panel .page-content { padding-top: var(--atlas-sa-top); }
+html.atlas-rail .atlas-panel .atlas-brand { font-size: 26px !important; line-height: 1; height: var(--f7-navbar-height); margin: 0 !important; padding: 0; display: flex; align-items: center; justify-content: center; }
+html.atlas-rail .atlas-panel .atlas-brand + .list { margin-top: 0; }
+/* The sidebar's name sits level with the page title too. */
+html[data-nav="sidebar"] .atlas-panel .page-content { padding-top: var(--atlas-sa-top); }
+html[data-nav="sidebar"] .atlas-panel .atlas-brand { height: var(--f7-navbar-height); margin-top: 0 !important; margin-bottom: 8px; display: flex; align-items: center; }
 html.atlas-rail .atlas-panel .list { margin-left: 6px; margin-right: 6px; }
 html.atlas-rail .atlas-panel .item-content { flex-direction: column; justify-content: center; padding: 8px 0 !important; min-height: 60px; }
 html.atlas-rail .atlas-panel .item-media { padding: 0 !important; margin: 0 !important; min-width: 0 !important; }
@@ -342,11 +456,20 @@ html.atlas-rail .atlas-panel .item-title { font-size: 10px; font-weight: 600; }
 /* Side tab bar: wide-but-short compact windows (iPhone Duo cover display in landscape, phones in landscape),
    mirroring iOS placing tab bars on the trailing edge on iPhone Duo. */
 html[data-nav="tabbar-side"] .view-main { margin-right: calc(var(--atlas-side-tab) + var(--atlas-sa-right)); --f7-safe-area-right: 0px; }
+/* Landscape iPhone: the camera housing sits in one side inset (Apple HIG, Layout: keep controls inside the safe area). The
+   side tab bar takes the right inset; the main view starts after the left one. */
+html[data-nav="tabbar-side"] .view-main { margin-left: var(--atlas-sa-left); }
+html[data-nav="tabbar-side"] body { background: var(--f7-page-bg-color); }
 html[data-nav="tabbar-side"] .atlas-tabbar { position: fixed; top: 0; bottom: 0; right: 0; left: auto; width: calc(var(--atlas-side-tab) + var(--atlas-sa-right)); height: auto; padding: var(--atlas-sa-top) var(--atlas-sa-right) var(--atlas-sa-bottom) 0; }
 html[data-nav="tabbar-side"] .atlas-tabbar::before { display: none; }
 html[data-nav="tabbar-side"] .atlas-tabbar .toolbar-inner { position: static; flex-direction: column; justify-content: center; gap: 6px; height: 100%; padding: 0; }
 html[data-nav="tabbar-side"] .atlas-tabbar .tab-link { flex: 0 0 auto; width: 100%; min-width: 0; padding: 0 4px; height: 58px; }
 html[data-nav="tabbar-side"] .view-main .page-content { padding-bottom: calc(16px + var(--atlas-sa-bottom)); }
+/* Phones with a bottom tab bar: Compose floats at the bottom right, so the actions in a post's footer move to the
+   left (the date, which nothing taps, takes the right), and every tab ends with room to scroll its last post clear. */
+html[data-nav="tabbar"] .page-content .card .card-footer:not(.atlas-post-footer) { flex-direction: row-reverse; }
+html[data-nav="tabbar"] .page-content .card .card-footer:not(.atlas-post-footer) > :only-child { margin-right: auto; }
+html[data-nav="tabbar"] .tabs > .tab.page-content::after { content: ''; display: block; height: 76px; }
 html[data-nav="tabbar-side"] .atlas-fab, html[data-nav="rail"] .atlas-fab, html[data-nav="sidebar"] .atlas-fab { margin-bottom: var(--atlas-sa-bottom) !important; }
 
 /* Wide windows mirror the desktop Discover page: hero, then the feed with a "Voices to know" column
@@ -394,3 +517,804 @@ html[data-nav="deck"] .atlas-tabbar { top: var(--atlas-bottom-y, auto); bottom: 
 html[data-nav="deck"] .atlas-tabbar .toolbar-inner { padding-top: var(--atlas-crease); align-items: flex-start; }
 html[data-nav="deck"] .atlas-tabbar .tab-link { height: 72px; }
 html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--atlas-crease) + 84px) !important; bottom: auto !important; margin-bottom: 0 !important; }
+
+/* Collections (Mastodon 4.6-style curated sets of accounts). */
+.atlas-coll-mine { display: grid; gap: 10px; }
+.atlas-coll-card { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 14px 14px 12px; border: 0; border-radius: 18px; background: var(--f7-list-strong-bg-color, var(--card)); color: var(--foreground); text-align: left; font: inherit; cursor: pointer; }
+.atlas-coll-card > .icon { font-size: 16px; color: var(--muted-foreground); }
+.atlas-coll-card-body { flex: 1; min-width: 0; }
+.atlas-coll-card-body strong { display: block; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.atlas-coll-card-body small { display: block; margin-top: 3px; font-size: 13px; color: var(--muted-foreground); }
+.atlas-coll-avatars { display: inline-flex; flex: 0 0 auto; }
+.atlas-coll-avatars > * { display: grid; place-items: center; width: 32px; height: 32px; margin-left: -10px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; background: var(--secondary); border: 2px solid var(--f7-list-strong-bg-color, var(--card)); font-size: 14px; color: var(--muted-foreground); }
+.atlas-coll-avatars > *:first-child { margin-left: 0; }
+.atlas-coll-new { justify-self: center; width: auto; padding: 0 18px; margin-top: 6px; gap: 6px; }
+.atlas-coll-new .icon { font-size: 16px; }
+.atlas-coll-head { padding: 20px 20px 4px; text-align: center; }
+.atlas-coll-head .atlas-coll-avatars > * { width: 52px; height: 52px; margin-left: -14px; border-color: var(--f7-page-bg-color, var(--background)); }
+.atlas-coll-head .atlas-coll-avatars > *:first-child { margin-left: 0; }
+.atlas-coll-head h1 { margin: 14px 0 0; font-size: 26px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.atlas-coll-by { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 14px; color: var(--muted-foreground); }
+.atlas-coll-by img { width: 20px; height: 20px; border-radius: var(--atlas-avatar-radius, 50%); }
+.atlas-coll-meta { margin: 6px 0 0; font-size: 13px; color: var(--muted-foreground); }
+.atlas-coll-desc { margin: 12px auto 0; max-width: 34em; font-size: 15px; line-height: 1.45; }
+.atlas-coll-cw { margin: 14px auto 0; padding: 12px 14px; max-width: 30em; border-radius: 14px; background: var(--secondary); font-size: 14px; }
+.atlas-coll-cw p { margin: 0 0 8px; }
+.atlas-coll-cw .button, .atlas-coll-owner-actions .button { width: auto; padding: 0 16px; display: inline-flex; }
+.atlas-coll-owner-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+.atlas-coll-items .item-media img { border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; }
+.atlas-coll-items .button { width: auto; padding: 0 8px; }
+.atlas-coll-editor .sheet-modal-swipe-step { padding-bottom: calc(12px + var(--f7-safe-area-bottom, 0px)); }
+.atlas-coll-editor-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.atlas-coll-editor-actions .button { width: auto; padding: 0 20px; }
+
+/* Groups (Bonfire v1.1.0-rc.1 groups on Fedizen). Groups are rounded squares, people circles. */
+.atlas-group-avatar { display: block; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; background: var(--secondary); flex: none; }
+.atlas-group-initial { display: grid; place-items: center; font-family: 'Instrument Serif', serif; color: var(--foreground); background: color-mix(in oklab, var(--accent) 12%, var(--secondary)); }
+.list.media-list.atlas-group-list .item-subtitle { font-size: 13px; color: var(--muted-foreground); white-space: normal; overflow: visible; text-overflow: clip; }
+.atlas-group-list .item-text { -webkit-line-clamp: 2; }
+.atlas-group-banner { height: 140px; overflow: hidden; background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 26%, #fff), color-mix(in oklab, var(--accent) 6%, #fff)); }
+.atlas-group-banner img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.atlas-group-head { position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 20px 4px; margin-top: -38px; text-align: center; }
+.atlas-group-head .atlas-group-avatar { border: 3px solid var(--f7-page-bg-color, var(--background)); }
+.atlas-group-head h1 { margin: 12px 0 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 30px; line-height: 1.15; overflow-wrap: anywhere; }
+.atlas-group-address { margin: 6px 0 0; padding: 4px 8px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 14px; color: var(--muted-foreground); overflow-wrap: anywhere; cursor: copy; }
+.atlas-group-address:hover { background: var(--secondary); }
+.atlas-group-meta { margin: 4px 0 0; font-size: 13px; color: var(--muted-foreground); }
+.atlas-group-actions { display: flex; gap: 8px; margin-top: 16px; }
+.atlas-group-actions .button { width: auto; padding: 0 20px; }
+.atlas-group-note { margin: 8px 0 0; font-size: 12px; color: var(--muted-foreground); }
+.atlas-group-about p { margin: 0 0 8px; line-height: 1.45; }
+.atlas-group-about p:last-child { margin-bottom: 0; }
+.atlas-group-post-head { display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.atlas-group-post-head img, .atlas-group-post-head .atlas-activity-initial { width: 32px; height: 32px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; }
+.atlas-group-post-head small { display: block; font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.atlas-group-in { color: var(--muted-foreground); font-weight: 400; }
+.atlas-group-post p { line-height: 1.5; overflow-wrap: anywhere; }
+.atlas-group-post-image { width: 100%; border-radius: 12px; }
+.atlas-group-actions-col { display: flex; flex-direction: column; align-items: center; }
+.atlas-group-actions .button { gap: 4px; min-height: 44px; }
+.atlas-group-actions .button .icon { font-size: 18px; }
+.atlas-group-error { margin: 8px 0 0; font-size: 13px; color: var(--destructive); }
+.atlas-group-segment { margin-bottom: 8px; }
+.atlas-group-search { margin-top: 0; }
+.atlas-group-more { display: flex; justify-content: center; }
+.atlas-group-more .button { width: auto; padding: 0 22px; min-height: 44px; }
+
+/* Top-right actions on the phone's main tabs (Search, Messages), Facebook-style round buttons. Compose floats at the bottom. */
+.atlas-top-actions { gap: 8px; }
+.navbar .atlas-top-btn.link.icon-only { width: 36px; height: 36px; min-width: 36px; padding: 0; border-radius: 50%; justify-content: center;
+  background: color-mix(in oklab, currentColor 8%, transparent); }
+.navbar .atlas-top-btn .icon { font-size: 18px; }
+.atlas-msg-unread .item-title { font-weight: 700; }
+.atlas-msg-dot { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--f7-theme-color); box-shadow: 0 0 0 2px var(--f7-list-strong-bg-color, #fff); }
+
+/* Profile Activity filter (Mastodon's Activity menu: replies and boosts on or off) and the Featured tab. */
+.atlas-activity-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 16px 4px; }
+.atlas-activity-filter > span { margin-right: 4px; font-size: 13px; color: var(--muted-foreground); }
+.atlas-activity-filter button { flex: none; width: auto; margin: 0; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 14px; border: .5px solid var(--border); border-radius: 999px; background: none; font: inherit; font-size: 14px; font-weight: 500; color: var(--muted-foreground); cursor: pointer; }
+.atlas-activity-filter button .icon { font-size: 14px; }
+.atlas-activity-filter button.is-on { border-color: transparent; background: color-mix(in oklab, var(--f7-theme-color) 12%, transparent); color: var(--f7-theme-color); }
+.atlas-featured { padding: 8px 16px 16px; }
+.atlas-featured h3 { margin: 16px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted-foreground); }
+.atlas-featured .atlas-profile-tags { justify-content: flex-start; margin-top: 0; }
+.atlas-featured p { margin: 0; font-size: 14px; color: var(--muted-foreground); }
+/* A Mastodon collection linked in a post (Mastodon's tagged_collections): opens in Atlas. */
+.atlas-fedi-header { height: 120px; background: var(--muted) center / cover no-repeat; }
+.atlas-fedi-head { padding: 0 16px; display: flex; flex-direction: column; gap: 6px; }
+.atlas-fedi-head > img, .atlas-fedi-initial { width: 80px; height: 80px; margin-top: -40px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; border: 4px solid var(--f7-page-bg-color, var(--background)); background: var(--muted); }
+.atlas-fedi-initial { display: flex; align-items: center; justify-content: center; font: 32px 'Instrument Serif', serif; }
+.atlas-fedi-head h1 { margin: 4px 0 0; font: 400 30px/1.15 'Instrument Serif', serif; overflow-wrap: anywhere; }
+.atlas-fedi-head h1 small { font: 13px var(--f7-font-family); opacity: .6; }
+.atlas-fedi-head h1 .icon { font-size: 16px; margin-left: 6px; opacity: .6; }
+.atlas-fedi-acct { margin: 0; font-size: 14px; opacity: .7; overflow-wrap: anywhere; }
+.atlas-fedi-acct .icon { font-size: 14px; margin-left: 4px; color: var(--f7-theme-color); }
+.atlas-fedi-stats { display: flex; gap: 16px; font-size: 14px; margin: 4px 0 8px; } .atlas-fedi-stats span { opacity: .75; } .atlas-fedi-stats b { opacity: 1; }
+.atlas-fedi-note { margin: 0; font-size: 12px; opacity: .6; }
+.atlas-fedi-bio p, .atlas-fedi-post p { line-height: 1.5; }
+.atlas-fedi-post h2 { margin: 0 0 4px; font: 400 22px/1.2 'Instrument Serif', serif; }
+.atlas-fedi-post img { width: 100%; border-radius: 12px; margin-top: 8px; }
+.atlas-fedi-post summary { cursor: pointer; opacity: .7; }
+/* Video in posts, and the floating mini player (after Arc's Mini Player). */
+.atlas-video { margin-top: 12px; }
+.atlas-video-frame { position: relative; width: 100%; margin-inline: auto; overflow: hidden; border-radius: 18px; background: #000; }
+.atlas-video-slot, .atlas-video-poster, .atlas-video-iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.atlas-video-slot { display: flex; align-items: center; justify-content: center; }
+.atlas-video-slot .atlas-video-el, .atlas-pip-slot .atlas-video-el { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+.atlas-video-away { display: flex; align-items: center; gap: 8px; margin: 0; color: rgba(255,255,255,.75); font-size: 13px; }
+.atlas-video-away svg { width: 18px; height: 18px; }
+.atlas-video-poster { padding: 0; cursor: pointer; background: #000; }
+.atlas-video-poster img { width: 100%; height: 100%; object-fit: cover; opacity: .92; }
+.atlas-video-play { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: var(--accent-foreground, #fff); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(0,0,0,.35); transition: scale .15s; }
+.atlas-video-play svg { width: 28px; height: 28px; margin-left: 3px; fill: currentColor; }
+.atlas-video-poster:hover .atlas-video-play { scale: 1.06; }
+.atlas-video-badge { position: absolute; right: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 8px; background: rgba(0,0,0,.72); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; }
+.atlas-video-live { background: #E5243B; font-weight: 700; } .atlas-video-badge svg { width: 12px; height: 12px; }
+.atlas-video-meta { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.atlas-video-title { font-size: 15px; font-weight: 600; line-height: 1.3; color: inherit !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.atlas-video-title:hover { text-decoration: underline; }
+.atlas-video-creator { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 0; color: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.atlas-video-creator img, .atlas-video-creator .atlas-episode-initial { width: 28px; height: 28px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; font-size: 14px; }
+.atlas-video-creator span { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.atlas-video-creator b { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-video-creator small, .atlas-video-host { font-size: 11px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.atlas-pip { --pip-gap: 16px; --pip-bottom: calc(var(--pip-gap) + var(--atlas-player-offset, 0px)); position: fixed; z-index: 6000; width: var(--pip-w, min(320px, 56vw, 72vh)); max-width: calc(100vw - 2 * var(--pip-gap)); aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #000; box-shadow: 0 18px 50px rgba(0,0,0,.45), 0 0 0 .5px rgba(255,255,255,.12); touch-action: none; transition: inset .25s ease, width .1s; }
+.atlas-pip[hidden] { display: none; }
+.atlas-pip[data-corner="br"] { right: var(--pip-gap); bottom: var(--pip-bottom); }
+.atlas-pip[data-corner="bl"] { left: var(--pip-gap); bottom: var(--pip-bottom); }
+.atlas-pip[data-corner="tr"] { right: var(--pip-gap); top: calc(var(--pip-gap) + var(--atlas-sa-top) + 56px); }
+.atlas-pip[data-corner="tl"] { left: var(--pip-gap); top: calc(var(--pip-gap) + var(--atlas-sa-top) + 56px); }
+html.atlas-has-tabbar .atlas-pip { --pip-bottom: calc(var(--pip-gap) + var(--f7-toolbar-height, 50px) + var(--f7-safe-area-bottom, 0px) + var(--atlas-player-offset, 0px)); }
+.atlas-pip-slot { position: absolute; inset: 0; }
+.atlas-pip-ui { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; color: #fff; opacity: 0; transition: opacity .2s; background: linear-gradient(rgba(0,0,0,.55), transparent 35%, transparent 60%, rgba(0,0,0,.6)); cursor: grab; }
+.atlas-pip:hover .atlas-pip-ui, .atlas-pip:focus-within .atlas-pip-ui, .atlas-pip-ui:active { opacity: 1; }
+@media (hover: none) { .atlas-pip-ui { opacity: 1; background: linear-gradient(rgba(0,0,0,.45), transparent 30%, transparent 65%, rgba(0,0,0,.5)); } }
+.atlas-pip-ui button { border: 0; background: rgba(0,0,0,.35); color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+.atlas-pip-ui button svg { width: 16px; height: 16px; }
+.atlas-pip-top, .atlas-pip-bottom { display: flex; align-items: center; gap: 6px; padding: 6px; }
+.atlas-pip-title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.atlas-pip-center { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 48px !important; height: 48px !important; background: rgba(0,0,0,.45) !important; }
+.atlas-pip-center svg { width: 22px !important; height: 22px !important; fill: currentColor; }
+.atlas-pip-bottom input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.atlas-pip-resize { position: absolute; top: 0; width: 18px; height: 18px; cursor: nwse-resize; }
+.atlas-pip[data-corner$="r"] .atlas-pip-resize { left: 0; cursor: nwse-resize; }
+.atlas-pip[data-corner$="l"] .atlas-pip-resize { right: 0; cursor: nesw-resize; }
+.atlas-pip[data-corner^="t"] .atlas-pip-resize { top: auto; bottom: 0; }
+
+/* Feeds tabs, after Particle: plain names, the open one in a filled pill, a dot before any with posts you haven't seen. */
+.atlas-feed-tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; padding: 10px 12px 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-padding-inline: 12px; }
+.atlas-feed-tabs::-webkit-scrollbar { display: none; }
+.atlas-feed-tabs button { flex: none; width: auto; display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 18px; background: none; color: var(--f7-text-color, inherit); opacity: .82; font: inherit; font-size: 15px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: background-color .2s, color .2s, opacity .2s; }
+.atlas-feed-tabs button.active { opacity: 1; background: var(--f7-text-color, var(--foreground)); color: var(--f7-page-bg-color, var(--background)); }
+.atlas-feed-tabs button:focus-visible { outline: 2px solid var(--f7-theme-color); outline-offset: 2px; }
+.atlas-new-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--f7-theme-color, var(--accent)); flex: none; }
+.atlas-feed-tab-add { min-width: 36px; justify-content: center; padding: 0 !important; opacity: .55 !important; }
+.atlas-feed-tab-add .icon { font-size: 18px; }
+.atlas-reasons { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.atlas-reasons span { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; background: color-mix(in oklab, var(--muted) 70%, transparent); font-size: 11px; opacity: .8; }
+.atlas-reasons .icon { font-size: 12px; }
+.atlas-mini { position: fixed; z-index: 5500; left: 8px; right: 8px; bottom: calc(var(--f7-toolbar-height, 50px) + var(--f7-safe-area-bottom, 0px) + 8px); height: 56px; display: flex; align-items: center; gap: 2px; padding: 0 6px 0 8px; border-radius: 16px; overflow: hidden; background: color-mix(in oklab, var(--f7-bars-bg-color, var(--card)) 82%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border: .5px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.18); color: var(--f7-text-color, inherit); }
+/* Without a tab bar (rail or sidebar on wide and unfolded screens) the podcast bar sits at the bottom, clear of the rail. */
+html:not(.atlas-has-tabbar) .atlas-mini { bottom: calc(var(--f7-safe-area-bottom, 0px) + 8px); }
+html.atlas-rail .atlas-mini { left: calc(var(--f7-panel-width, 88px) + 8px); }
+.atlas-mini-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; border: 0; background: none; color: inherit; text-align: left; padding: 0; cursor: pointer; }
+.atlas-mini-open img, .atlas-mini-open .atlas-episode-initial { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex: none; font-size: 16px; }
+.atlas-mini-open span { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.atlas-mini-open b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-mini-open small { font-size: 12px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-mini-btn { flex: none; width: 40px; height: 40px; border: 0; background: none; color: inherit; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.atlas-mini-btn .icon { font-size: 24px; }
+.atlas-mini-close .icon { font-size: 18px; opacity: .6; }
+.atlas-mini-progress { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent); transition: width .25s linear; }
+.atlas-has-player .page-content { padding-bottom: calc(var(--f7-toolbar-height, 50px) + var(--f7-safe-area-bottom, 0px) + var(--atlas-player-offset, 0px) + 16px); }
+.atlas-now-art { display: block; width: min(100%, 320px); aspect-ratio: 1; margin: 8px auto 16px; border-radius: 20px; object-fit: cover; box-shadow: 0 12px 32px rgba(0,0,0,.25); }
+.atlas-episode { margin-top: 10px; padding: 12px; border-radius: 22px; background: color-mix(in oklab, var(--muted) 55%, transparent); border: .5px solid var(--border); }
+.atlas-episode.atlas-episode-bare { background: none; border: 0; padding: 0; }
+.atlas-episode .link { margin: 0 !important; justify-content: flex-start !important; }
+.atlas-episode-top { display: flex; align-items: center; gap: 12px; }
+.atlas-episode-art { width: 72px; height: 72px; flex: none; border-radius: 16px; object-fit: cover; }
+.atlas-episode-initial { display: flex; align-items: center; justify-content: center; background: var(--muted); font: 22px 'Instrument Serif', serif; }
+.atlas-episode-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.atlas-episode-title { display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: inherit !important; font-size: 15px; font-weight: 600; line-height: 1.25; }
+.atlas-episode-show { display: flex !important; align-items: center; gap: 8px; color: inherit !important; min-width: 0; }
+.atlas-episode-show img, .atlas-episode-show .atlas-episode-initial { width: 28px; height: 28px; border-radius: var(--atlas-avatar-radius, 50%); flex: none; font-size: 14px; }
+.atlas-episode-show span { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.atlas-episode-show b { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-episode-show small { font-size: 11px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-episode-play { width: 48px; height: 48px; flex: none; border: 0; border-radius: 50%; background: var(--accent); color: var(--accent-foreground, #fff); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px color-mix(in oklab, var(--accent) 35%, transparent); cursor: pointer; }
+.atlas-episode-play .icon { font-size: 22px; }
+.atlas-episode-play:active { transform: scale(.94); }
+.atlas-episode-bar { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.atlas-episode-bar input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.atlas-episode-time { flex: none; width: 46px; font-size: 11px; font-variant-numeric: tabular-nums; opacity: .6; text-align: center; }
+.atlas-episode-skip { flex: none; width: 36px; height: 36px; border: 0; background: none; color: inherit; opacity: .75; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.atlas-episode-skip .icon { font-size: 22px; }
+.atlas-episode-skip:disabled { opacity: .3; cursor: default; }
+.atlas-article { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.atlas-article-link, .atlas-article-author { display: flex !important; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: .5px solid var(--border); border-radius: 14px; color: inherit !important; text-align: left; }
+.atlas-article-link > span, .atlas-article-author > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.atlas-article-link b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; }
+.atlas-article-author b, .atlas-article-author small:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-article small { font-size: 11px; opacity: .6; }
+.atlas-article-author img { width: 36px; height: 36px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; }
+.atlas-article > a > .icon { font-size: 16px; opacity: .5; }
+.atlas-article-note { margin: 0; font-size: 11px; opacity: .6; }
+.atlas-coll-link { display: flex; align-items: center; gap: 10px; width: 100%; margin: 10px 0 0; padding: 10px 12px; border: .5px solid var(--border); border-radius: 14px; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.atlas-coll-link > .icon:first-child { font-size: 20px; color: var(--f7-theme-color); }
+.atlas-coll-link > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.atlas-coll-link b { font-size: 14px; } .atlas-coll-link small { font-size: 12px; color: var(--muted-foreground); }
+.atlas-coll-link > .icon:last-child { font-size: 14px; color: var(--muted-foreground); }
+.atlas-coll-local { margin: 8px 0 0; font-size: 12px; color: var(--muted-foreground); }
+
+/* Profile Saved (Fedizen bookmarks) and Circles (Bonfire circles) on the phone. */
+.atlas-library { padding: 4px 0 16px; }
+.atlas-library-note { margin: 12px 16px; font-size: 13px; color: var(--muted-foreground); }
+.atlas-library-error { margin: 12px 16px; font-size: 13px; color: var(--f7-theme-color); }
+.atlas-library-heading { margin: 20px 16px 8px; font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted-foreground); }
+.atlas-saved-post { margin: 0 16px; padding: 14px 0; border-bottom: .5px solid var(--border); font-size: 15px; line-height: 1.5; }
+.atlas-saved-post p { margin: 8px 0; }
+.atlas-saved-boost { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted-foreground); }
+.atlas-saved-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.atlas-saved-head img { border-radius: 16px; object-fit: cover; }
+.atlas-saved-head span span { color: var(--muted-foreground); }
+.atlas-saved-image { width: 100%; border-radius: 12px; }
+.atlas-saved-actions { display: flex; gap: 16px; font-size: 14px; }
+.atlas-save-link { display: inline-flex; align-items: center; gap: 4px; }
+.atlas-save-link .icon { font-size: 18px; }
+
+/* Post cards in Feeds: author row, text, media or link preview, then the standard actions. */
+.atlas-post-card .card-content { padding-bottom: 4px; }
+/* A post a "warn" filter caught: one quiet line, like Mastodon's "Filtered: …" with "Show anyway". */
+.atlas-post-filtered .card-content { padding-bottom: 16px; }
+/* The hidden post's notice: a centred warning mark, title, reason and Tap to view (as Bluesky clients on iOS do). */
+.atlas-filter-warning { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; margin-top: 12px; padding: 26px 20px; border: 0; border-radius: 16px; font: inherit; text-align: center; color: inherit; cursor: pointer;
+  background: color-mix(in oklab, currentColor 5%, transparent); }
+.atlas-filter-warning svg { margin-bottom: 4px; }
+.atlas-filter-warning b { font-size: 17px; font-weight: 600; }
+.atlas-filter-warning span { font-size: 15px; line-height: 1.35; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
+.atlas-filter-warning em { margin-top: 6px; font-style: normal; font-size: 15px; font-weight: 600; color: var(--f7-theme-color); }
+.atlas-filter-warning:active { opacity: .7; }
+.atlas-filter-warning b { overflow-wrap: anywhere; }
+/* An author's content warning, once opened: the warning stays above what it covered, with Hide. */
+.atlas-cw-open { display: flex; align-items: baseline; gap: 12px; margin: 12px 0 0; font-size: 13px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
+.atlas-cw-open span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.atlas-cw-open button { flex: none; width: auto; border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--f7-theme-color); cursor: pointer; }
+.atlas-reply-cw label { display: block; font-size: 13px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
+.atlas-reply-cw input { display: block; width: 100%; margin-top: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--f7-list-item-border-color, rgba(0,0,0,.15)); font: inherit; font-size: 15px; color: var(--f7-text-color, inherit); background: transparent; }
+/* "blur" filters (Mastodon 4.4): the post shows, its images and video don't, until shown. Avatars stay. */
+/* Media behind a veil (author marked it sensitive, or a filter hides media): blurred, with a centred warning mark,
+   "Sensitive", the reason and View, as Bluesky and Ivory do. Desktop and phone. */
+.atlas-sensitive { position: relative; isolation: isolate; overflow: hidden; min-height: 220px; margin-top: 12px; border-radius: 16px; background: #6b6b70; }
+.atlas-sensitive-media { position: absolute; inset: 0; filter: blur(32px) saturate(.7); transform: scale(1.2); pointer-events: none; }
+.atlas-sensitive-media > *, .atlas-sensitive-media img, .atlas-sensitive-media video { width: 100%; height: 100%; max-height: none; margin: 0 !important; object-fit: cover; border-radius: 0; }
+.atlas-sensitive-media iframe { visibility: hidden; }
+.atlas-sensitive-veil { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; min-height: 220px; padding: 24px 20px;
+  border: 0; font: inherit; text-align: center; color: #fff; cursor: pointer; background: rgba(0,0,0,.28); text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.atlas-sensitive-veil svg { margin-bottom: 4px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.3)); }
+.atlas-sensitive-veil b { font-size: 17px; font-weight: 600; }
+.atlas-sensitive-veil span { max-width: 32ch; font-size: 14px; line-height: 1.35; opacity: .9; }
+.atlas-sensitive-veil em { margin-top: 8px; padding: 6px 14px; border-radius: 999px; font-style: normal; font-size: 14px; font-weight: 600; background: rgba(255,255,255,.22); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); text-shadow: none; }
+.atlas-sensitive-veil:hover em, .atlas-sensitive-veil:focus-visible em { background: rgba(255,255,255,.32); }
+.atlas-sensitive-veil:focus-visible { outline: 2px solid var(--f7-theme-color, #fff); outline-offset: -4px; }
+.atlas-sensitive-veil:active { opacity: .85; }
+.atlas-post-head { display: flex; align-items: center; gap: 10px; }
+.atlas-post-avatar { width: 40px; height: 40px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; background: color-mix(in oklab, currentColor 8%, transparent); }
+span.atlas-post-avatar { display: inline-flex; align-items: center; justify-content: center; font-size: 17px; }
+.atlas-post-who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.atlas-post-who b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-post-who small { font-size: 13px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-post-time { flex: none; align-self: flex-start; font-size: 13px; color: var(--f7-text-color) !important; opacity: .55; padding: 2px 0 8px 8px; }
+.atlas-post-text { font-size: 16px; line-height: 1.45; margin: 10px 0 0; overflow-wrap: anywhere; }
+.atlas-post-image { display: block; width: 100%; height: auto; max-height: 520px; object-fit: cover; margin-top: 10px; border-radius: 14px; background: rgba(127,127,127,.12); }
+.atlas-post-boosted { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 12px; opacity: .6; }
+.atlas-post-boosted .icon { font-size: 13px; }
+.atlas-post-footer { padding-top: 0 !important; padding-bottom: 2px !important; min-height: 0 !important; }
+.atlas-post-footer::before { display: none !important; }
+.atlas-post-footer { justify-content: flex-start !important; }
+.atlas-post-footer .atlas-actbar { flex: 1 1 auto; margin: 0 -8px; }
+.atlas-reply-quote { margin: 6px 0 0; font-size: 14px; opacity: .6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.atlas-reply-audience { display: flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 13px; opacity: .7; }
+.atlas-reply-audience .icon { font-size: 15px; }
+
+/* Link previews, after Particle's story cards: the image runs edge to edge and fades into a panel tinted by itself. */
+.atlas-rich-link { position: relative; isolation: isolate; display: flex; flex-direction: column; margin-top: 12px; overflow: hidden; border-radius: 18px; border: .5px solid var(--border, rgba(127,127,127,.25)); background: color-mix(in oklab, currentColor 5%, transparent); color: inherit; }
+.atlas-rich-link.has-image { border-color: transparent; background: #15151a; color: #fff; }
+.atlas-rich-main { display: flex !important; flex-direction: column; color: inherit !important; text-decoration: none !important; -webkit-tap-highlight-color: transparent; transition: opacity .2s; }
+.atlas-rich-main:active { opacity: .8; }
+.atlas-rich-tint { position: absolute; inset: -25%; z-index: -1; background-size: cover; background-position: center bottom; filter: blur(40px) saturate(1.5) brightness(.5); }
+.atlas-rich-image { display: block; width: 100%; aspect-ratio: 1.91 / 1; max-height: 340px; object-fit: cover; -webkit-mask-image: linear-gradient(#000 58%, transparent); mask-image: linear-gradient(#000 58%, transparent); }
+.atlas-rich-body { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 16px; min-width: 0; }
+.has-image .atlas-rich-body { position: relative; margin-top: -44px; }
+.atlas-rich-meta { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; opacity: .78; }
+.atlas-rich-meta span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-rich-meta img { width: 16px; height: 16px; border-radius: 4px; flex: none; background: #fff; }
+.atlas-rich-title { font-size: 19px; line-height: 1.22; font-weight: 700; letter-spacing: -.01em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: pretty; }
+.atlas-rich-summary { font-size: 14px; line-height: 1.42; opacity: .72; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.atlas-rich-host { font-size: 12px; opacity: .5; margin-top: 2px; }
+.atlas-rich-host::after { content: ' ↗'; }
+/* Creator attribution at the foot of the card: a hairline, each creator as a row that opens their profile in Atlas,
+   then how Atlas verified them. */
+.atlas-rich-credits { display: flex; flex-direction: column; margin: 0 16px; padding: 4px 0 12px; border-top: .5px solid color-mix(in oklab, currentColor 18%, transparent); }
+.atlas-rich-creator { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.atlas-rich-creator:active { opacity: .7; }
+.atlas-rich-creator:focus-visible { outline: 2px solid var(--f7-theme-color, var(--accent)); outline-offset: 2px; border-radius: 10px; }
+.atlas-rich-face { width: 40px; height: 40px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; box-shadow: 0 0 0 .5px color-mix(in oklab, currentColor 25%, transparent); }
+span.atlas-rich-face { display: inline-flex; align-items: center; justify-content: center; background: color-mix(in oklab, currentColor 14%, transparent); font-size: 17px; font-weight: 600; }
+.atlas-rich-creator-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.atlas-rich-creator-text small { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; opacity: .6; }
+.atlas-rich-creator-text b { font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-rich-creator-text span { font-size: 13px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-rich-chevron { width: 18px; height: 18px; flex: none; opacity: .5; }
+.atlas-rich-note { display: flex; align-items: center; gap: 5px; margin: 2px 0 0; font-size: 11px; opacity: .6; }
+.atlas-rich-note svg { width: 13px; height: 13px; flex: none; }
+@media (prefers-reduced-motion: reduce) { .atlas-rich-main, .atlas-feed-tabs button { transition: none; } }
+
+/* Mentions in replies, after iMessage: a picked person's handle is tinted in the accent, and while typing "@…" the people
+   it could be sit in a strip under the box. The tint is a copy of the text drawn behind a transparent-text textarea, so
+   both must share every metric that affects layout. */
+.atlas-mention { display: flex; flex-direction: column; gap: 8px; }
+.atlas-mention-field { position: relative; border-radius: 20px; border: .5px solid var(--border, rgba(127,127,127,.3)); background: color-mix(in oklab, currentColor 5%, transparent); }
+.atlas-mention-mirror, .atlas-mention-field textarea { box-sizing: border-box; margin: 0; padding: 11px 15px; font: inherit; font-size: 16px; line-height: 1.4; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; tab-size: 4; }
+.atlas-mention-mirror { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: inherit; border: 0; }
+.atlas-mention-mirror mark { color: var(--f7-theme-color, var(--accent)); background: color-mix(in oklab, var(--f7-theme-color, var(--accent)) 14%, transparent); border-radius: 5px; box-shadow: 0 0 0 1px color-mix(in oklab, var(--f7-theme-color, var(--accent)) 14%, transparent); }
+.atlas-mention-field textarea { position: relative; display: block; width: 100%; min-height: 104px; max-height: 40vh; resize: none; border: 0; outline: none; background: transparent; color: transparent; caret-color: var(--f7-text-color, currentColor); -webkit-text-fill-color: transparent; }
+.atlas-mention-field textarea::placeholder { color: currentColor; -webkit-text-fill-color: color-mix(in oklab, var(--f7-text-color, CanvasText) 42%, transparent); }
+.atlas-mention-field:focus-within { border-color: color-mix(in oklab, var(--f7-theme-color, var(--accent)) 55%, transparent); }
+.atlas-mention-bar { display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px; min-height: 42px; }
+.atlas-mention-bar::-webkit-scrollbar { display: none; }
+.atlas-mention-bar button { flex: none; width: auto; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 6px; border: 0; border-radius: 20px; background: color-mix(in oklab, currentColor 9%, transparent); color: inherit; font: inherit; font-size: 15px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.atlas-mention-bar button.active { background: color-mix(in oklab, currentColor 17%, transparent); }
+.atlas-mention-bar button img, .atlas-mention-bar button > span[aria-hidden] { width: 28px; height: 28px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in oklab, currentColor 12%, transparent); font-size: 13px; }
+.atlas-mention-bar .atlas-mention-typed { padding: 0 14px; background: none; font-weight: 500; opacity: .7; }
+.atlas-mention-hint { font-size: 13px; opacity: .55; padding: 0 8px; }
+.atlas-reply-field { margin-top: 8px; margin-bottom: 8px; }
+/* "Popular in" names their group with its avatar, and the name opens the group. */
+.atlas-reason-group { gap: 5px !important; white-space: nowrap; }
+.atlas-reason-group button { display: inline-flex; align-items: center; gap: 5px; min-height: 24px; margin: -4px -2px; padding: 0 2px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.atlas-reason-group b { font-weight: 650; color: var(--f7-text-color, inherit); }
+.atlas-reason-face { width: 16px; height: 16px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: color-mix(in oklab, currentColor 18%, transparent); }
+.atlas-reasons span.atlas-reason-face { padding: 0; border-radius: var(--atlas-avatar-radius, 50%); opacity: 1; }
+
+/* Avatar shape (Settings → Appearance: circle, rounded or square) for every avatar, people and groups alike. Tailwind
+   avatars carry .atlas-avatar; the classes above read the same variable. */
+:root { --atlas-avatar-radius: 50%; }
+.atlas-avatar { border-radius: var(--atlas-avatar-radius, 50%) !important; }
+.atlas-shape-picker { display: flex; gap: 12px; flex-wrap: wrap; }
+.atlas-shape-picker button { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 84px; padding: 10px 0 8px; border: 1.5px solid transparent; border-radius: 14px; background: color-mix(in oklab, currentColor 5%, transparent); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.atlas-shape-picker button[aria-checked="true"] { border-color: var(--f7-theme-color, var(--accent)); font-weight: 600; }
+.atlas-shape-picker button:focus-visible { outline: 2px solid var(--f7-theme-color, var(--accent)); outline-offset: 2px; }
+.atlas-shape-picker img { width: 48px; height: 48px; object-fit: cover; background: color-mix(in oklab, currentColor 10%, transparent); transition: border-radius .2s; }
+
+/* Followed hashtags a post uses, at its top left with a tag icon and no accent colour, after Ivory. */
+.atlas-post-tagline { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 6px; }
+.atlas-post-tagline button { display: inline-flex; align-items: center; gap: 4px; width: auto; min-height: 24px; margin: -3px 0; padding: 0; border: 0; background: none; color: var(--f7-text-color, inherit); opacity: .6; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.atlas-post-tagline .icon { font-size: 14px; }
+.atlas-post-text .atlas-hashtag, .atlas-post-text .atlas-hashtag-btn { color: var(--f7-theme-color, var(--accent)); font-weight: 500; }
+.atlas-post-text .atlas-post-mention { color: var(--f7-theme-color, var(--accent)); }
+
+/* People in a post (PostPeople.tsx): mentions and the "boosted" row open profiles in Atlas. */
+/* A mention in a post's text (PostPeople.tsx); not the reply box's .atlas-mention. Inline, like a link. */
+.atlas-post-mention { display: inline; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: var(--accent); font-weight: 500; cursor: pointer; width: auto; text-align: start; }
+.atlas-post-mention:hover { text-decoration: underline; }
+.atlas-post-link { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+.atlas-post-link:hover { text-decoration: underline; }
+/* Polls (PollView.tsx): choices, then results as bars, as Mastodon and Ivory draw them. */
+.atlas-poll { margin-top: 10px; font-size: 14px; }
+.atlas-poll-choices { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+.atlas-poll-choices label { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--border, rgba(127,127,127,.3)); border-radius: 12px; cursor: pointer; }
+.atlas-poll-choices label.picked { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, transparent); }
+.atlas-poll-choices input { accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+.atlas-poll-results { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.atlas-poll-results li { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; padding: 6px 12px; border-radius: 10px; overflow: hidden; background: var(--muted, rgba(127,127,127,.1)); }
+.atlas-poll-bar { position: absolute; inset: 0 auto 0 0; background: color-mix(in oklab, var(--foreground, #000) 10%, transparent); border-radius: 10px; transition: width .4s ease; }
+.atlas-poll-results li.own .atlas-poll-bar { background: color-mix(in oklab, var(--accent) 28%, transparent); }
+.atlas-poll-label, .atlas-poll-share { position: relative; }
+.atlas-poll-label { display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.atlas-poll-share { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+.atlas-poll-check { width: 14px; height: 14px; color: var(--accent); flex: none; }
+.atlas-poll-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0 0; font-size: 12px; opacity: .75; }
+.atlas-poll-vote { padding: 5px 16px; border-radius: 999px; border: 0; background: var(--accent); color: var(--accent-foreground, #fff); font-weight: 600; font-size: 13px; cursor: pointer; opacity: 1; }
+.atlas-poll-vote:disabled { opacity: .45; cursor: default; }
+.atlas-poll-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+.atlas-poll-error { margin: 6px 0 0; font-size: 12px; color: var(--destructive, #c00); }
+.atlas-poll-phone .atlas-poll-choices label, .atlas-poll-phone .atlas-poll-results li { min-height: 44px; }
+.atlas-post-edited { opacity: .6; font-size: 11px; }
+.atlas-request-actions { display: flex; gap: 8px; margin-top: 6px; }
+.atlas-edit-text { width: 100%; font: inherit; font-size: 16px; border: 0; outline: none; background: transparent; resize: vertical; }
+
+/* A reply's parent above it (ReplyParent.tsx), joined to the reply by a thread line under its avatar. */
+.atlas-reply-parent { position: relative; margin-bottom: 10px; padding-left: 0; }
+.atlas-reply-parent::before { content: ""; position: absolute; left: 15px; top: 38px; bottom: -10px; width: 2px; border-radius: 1px; background: var(--border, rgba(127,127,127,.3)); }
+.atlas-reply-parent-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.atlas-reply-parent-avatar { width: 32px; height: 32px; flex: none; object-fit: cover; background: var(--muted, rgba(127,127,127,.15)); }
+.atlas-reply-parent-initial { display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+.atlas-reply-parent-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-reply-parent-who b { font-weight: 600; }
+.atlas-reply-parent-who span { opacity: .6; }
+.atlas-reply-parent-time { flex: none; margin-left: auto; font-size: 12px; opacity: .6; }
+.atlas-reply-parent-body { margin-left: 40px; font-size: 14px; line-height: 1.45; opacity: .85; overflow-wrap: anywhere; }
+.atlas-reply-parent-body p { margin: 2px 0 0; }
+.atlas-reply-parent-cw { font-style: italic; }
+.atlas-reply-parent-image { display: block; margin-top: 6px; max-height: 140px; max-width: 100%; border-radius: 10px; object-fit: cover; }
+/* "View" after posting: the new post, marked briefly where it is in the feed. */
+.atlas-post-flash { animation: atlas-post-flash 2.4s ease-out; border-radius: 12px; outline: none; }
+@keyframes atlas-post-flash { 0%, 40% { background: color-mix(in oklab, var(--accent) 12%, transparent); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .atlas-post-flash { animation: none; background: color-mix(in oklab, var(--accent) 10%, transparent); } }
+.atlas-post-text .atlas-post-link { color: var(--f7-theme-color, var(--accent)); }
+.atlas-boost-icon { width: 12px; height: 12px; flex: none; }
+.atlas-boost-who { display: inline-flex; align-items: center; gap: 5px; min-width: 0; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; width: auto; }
+.atlas-boost-who b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.atlas-boost-who { cursor: pointer; }
+button.atlas-boost-who:hover b { text-decoration: underline; }
+.atlas-boost-face { width: 16px; height: 16px; flex: none; object-fit: cover; border-radius: var(--atlas-avatar-radius, 50%) !important; background: var(--muted, rgba(127,127,127,.15)); }
+.atlas-boost-initial { display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; }
+.atlas-author-button { display: flex; align-items: center; gap: inherit; min-width: 0; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-align: start; cursor: pointer; width: auto; }
+.atlas-author-fill { flex: 1 1 auto; }
+.atlas-author-button:hover b, .atlas-author-button:hover .atlas-author-name { text-decoration: underline; }
+
+/* Phone: the stack of pushed pages (a hashtag's feed) laid over the tabs, under the tab bar (z-index 600). Its root
+   page is empty and transparent; until something is pushed the whole view lets touches through to the tabs. */
+.view.atlas-stack { position: absolute; inset: 0; z-index: 500; background: transparent; pointer-events: none; }
+html.atlas-stack-open .view.atlas-stack { pointer-events: auto; }
+.atlas-stack > .atlas-stack-root { background: transparent; pointer-events: none; }
+.atlas-stack > .atlas-stack-root.page-current { visibility: hidden; }
+/* Follow / Following on a hashtag's page and Unfollow in Followed hashtags: sized to their label (Framework7 buttons
+   are full width by default). */
+.atlas-follow-tag, .atlas-unfollow-tag { width: auto; flex: none; padding: 0 14px; }
+
+/* A GIF Mastodon transcoded to video ("gifv"): inline, muted, looping; the label sits where a video's duration does. */
+.atlas-gif-toggle { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: #000; cursor: pointer; }
+.atlas-gif-video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.atlas-gif .atlas-video-play { pointer-events: none; }
+.atlas-gif-badge { font-weight: 700; letter-spacing: .04em; }
+
+/* Phone composer (f7/ComposeSheet). */
+.atlas-compose-post { min-width: 64px; }
+.atlas-compose-media { display: grid; gap: 8px; margin: 0 16px 16px; }
+.atlas-compose-media.is-grid { grid-template-columns: 1fr 1fr; }
+.atlas-compose-media figure { margin: 0; }
+.atlas-compose-thumb { position: relative; overflow: hidden; border-radius: 14px; background: rgba(127,127,127,.15); }
+.atlas-compose-thumb img, .atlas-compose-thumb video { display: block; width: 100%; max-height: 260px; object-fit: cover; }
+.atlas-compose-media.is-grid .atlas-compose-thumb img, .atlas-compose-media.is-grid .atlas-compose-thumb video { aspect-ratio: 1; }
+.atlas-compose-thumb button { position: absolute; top: 6px; right: 6px; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; }
+.atlas-compose-thumb button i { font-size: 15px; }
+.atlas-compose-busy { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.4); color: #fff; font-size: 13px; font-weight: 600; }
+.atlas-compose-media figcaption { margin-top: 6px; }
+.atlas-compose-alt { display: flex; align-items: flex-start; gap: 6px; }
+.atlas-compose-alt button { flex: none; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--f7-theme-color); cursor: pointer; }
+.atlas-compose-alt button:disabled { opacity: .5; }
+.atlas-compose-alt button i { font-size: 20px; }
+.atlas-compose-media figcaption textarea { flex: 1; min-width: 0; resize: vertical; width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--f7-list-item-border-color, rgba(0,0,0,.15)); font: inherit; font-size: 14px; color: var(--f7-text-color, inherit); background: var(--f7-list-strong-bg-color, transparent); }
+.atlas-compose-error { display: block; margin: 4px 0 0; font-size: 13px; color: var(--f7-color-red, #ff3b30); }
+.atlas-compose-foot { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 13px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
+.atlas-compose-cw .item-input-wrap input { color: inherit; }
+
+/* Home: new posts wait behind a pill (Bonfire's "Show N new activities"), and older posts load ahead (phone). */
+.atlas-new-posts { position: sticky; top: 8px; /* sticks below the navbar: the page's top padding already clears it */ z-index: 20; display: flex; justify-content: center; height: 0; overflow: visible; }
+.atlas-new-posts button { flex: none; width: auto; display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 18px; background: var(--f7-theme-color); color: #fff; font: inherit; font-size: 15px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.18); cursor: pointer; }
+.atlas-new-posts button i { font-size: 16px; }
+.atlas-new-posts button { --atlas-pill-bg: var(--f7-theme-color); padding: 0 6px 0 14px; gap: 8px; }
+/* Faces of the people whose new posts are waiting (NewPostFaces), shared with desktop. Each overlaps the one before,
+   with a ring in the pill's colour so they read as separate faces. */
+.atlas-new-faces { display: inline-flex; align-items: center; padding-left: 6px; }
+.atlas-new-face { width: 26px; height: 26px; margin-left: -6px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover;
+  box-shadow: 0 0 0 2px var(--atlas-pill-bg, currentColor); background: color-mix(in srgb, currentColor 25%, transparent); flex: none; }
+.atlas-new-face-initial { display: inline-grid; place-items: center; font-size: 12px; font-weight: 600; line-height: 1; }
+.atlas-new-posts button:active { opacity: .85; }
+.atlas-older { display: flex; justify-content: center; padding: 12px 16px 24px; font-size: 14px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
+.atlas-older span { display: flex; align-items: center; gap: 8px; }
+
+/* Post actions (PostActionBar), desktop and phone alike: spread across the card, counts beside the icons, and a colour
+   and a short animation to confirm each one (after Phanpy's status.css). */
+:root { --atlas-boost: #16a34a; --atlas-like: #e11d48; --atlas-save: #2563eb; --atlas-act-muted: color-mix(in srgb, currentColor 62%, transparent); }
+:root.dark, [data-theme="dark"], .dark { --atlas-boost: #4ade80; --atlas-like: #fb7185; --atlas-save: #60a5fa; }
+.atlas-actbar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: center; justify-items: start; margin: 10px -10px 0; }
+/* Fixed columns, so each action stays in the same place whatever its count (Bluesky and Ivory do the same). */
+.atlas-act, .atlas-actbar .atlas-act-more { flex: none; width: auto; display: inline-flex; align-items: center; gap: 6px; min-width: 44px; height: 40px; padding: 0 10px;
+  border: 0; border-radius: 999px; background: transparent; color: var(--atlas-act-muted); font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: color .2s, background-color .2s; -webkit-tap-highlight-color: transparent; }
+.atlas-act svg, .atlas-actbar .atlas-act-more svg { width: 20px; height: 20px; stroke-width: 1.8; flex: none; }
+.atlas-act span:empty { display: none; }
+.atlas-act-gap { min-width: 44px; }
+.atlas-act:disabled { opacity: .4; cursor: default; }
+@media (hover: hover) {
+  .atlas-act:not(:disabled):hover, .atlas-actbar .atlas-act-more:hover { background: color-mix(in srgb, currentColor 8%, transparent); color: inherit; }
+  .atlas-act[data-kind="boost"]:not(:disabled):hover { color: var(--atlas-boost); }
+  .atlas-act[data-kind="like"]:not(:disabled):hover { color: var(--atlas-like); }
+  .atlas-act[data-kind="save"]:not(:disabled):hover { color: var(--atlas-save); }
+}
+.atlas-act:focus-visible, .atlas-actbar .atlas-act-more:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+.atlas-act[data-kind="boost"][aria-pressed="true"] { color: var(--atlas-boost); }
+.atlas-act[data-kind="like"][aria-pressed="true"] { color: var(--atlas-like); }
+.atlas-act[data-kind="like"][aria-pressed="true"] svg { fill: currentColor; }
+.atlas-act[data-kind="save"][aria-pressed="true"] { color: var(--atlas-save); }
+.atlas-act[data-kind="save"][aria-pressed="true"] svg { fill: currentColor; }
+@keyframes atlas-hearted { 0% { transform: scale(1); } 8% { transform: scale(.78); } 20% { transform: scale(1.3) rotate(-8deg); } 30% { transform: scale(.96) rotate(3deg); } 40% { transform: scale(1.14) rotate(-4deg); } 52% { transform: scale(.99) rotate(1deg); } 64% { transform: scale(1.05) rotate(-1deg); } 100% { transform: scale(1); } }
+@keyframes atlas-boosted { 0% { transform: rotate(0); } 70% { transform: rotate(200deg); } 100% { transform: rotate(180deg); } }
+@keyframes atlas-saved { 0% { transform: translateY(0); } 16% { transform: translateY(-42%) rotate(-8deg); } 44% { transform: translateY(-38%) rotate(-5deg); } 62% { transform: translateY(3%) rotate(2deg); } 100% { transform: translateY(0); } }
+@media (prefers-reduced-motion: no-preference) {
+  .atlas-act.pop[data-kind="like"] svg { animation: atlas-hearted 1.1s cubic-bezier(.34, 1.56, .64, 1); }
+  .atlas-act.pop[data-kind="boost"] svg { animation: atlas-boosted .7s cubic-bezier(.3, .8, .3, 1); }
+  .atlas-act.pop[data-kind="save"] svg { animation: atlas-saved .8s cubic-bezier(.3, .8, .3, 1); }
+}
+
+/* A quoted post in the composer (QuotedPost), desktop and phone. */
+.atlas-quoted { position: relative; margin: 12px 0 0; overflow: hidden; border: 1px solid color-mix(in srgb, currentColor 16%, transparent); border-radius: 16px; background: color-mix(in srgb, currentColor 3%, transparent); }
+.atlas-quoted-body { display: flex; gap: 10px; padding: 12px 14px; }
+.atlas-quoted-avatar { flex: none; width: 36px; height: 36px; object-fit: cover; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, currentColor 10%, transparent); font-weight: 600; }
+.atlas-quoted-main { min-width: 0; flex: 1; }
+.atlas-quoted-who { margin: 0; display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 14px; white-space: nowrap; }
+.atlas-quoted-who b { flex: none; max-width: 65%; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.atlas-quoted-who span { opacity: .6; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.atlas-quoted-who time { margin-left: auto; padding-left: 6px; opacity: .6; flex: none; }
+.atlas-quoted-text { margin: 4px 0 0; font-size: 14px; line-height: 1.4; white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; opacity: .9; }
+.atlas-quoted-image { display: block; width: 100%; height: 96px; object-fit: cover; }
+.atlas-quoted-remove { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; font-size: 17px; line-height: 26px; cursor: pointer; }
+.atlas-quoted-remove { flex: none; }
+/* The Boost menu: Quote, and Boost or Undo boost (BoostMenu). */
+.atlas-boost-menu { position: fixed; z-index: 13000; min-width: 200px; padding: 6px; border-radius: 16px; background: color-mix(in srgb, var(--atlas-menu-bg, #fff) 88%, transparent); color: var(--atlas-menu-fg, #111);
+  box-shadow: 0 12px 40px rgba(0,0,0,.22), 0 0 0 .5px rgba(0,0,0,.08); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); }
+.dark .atlas-boost-menu, .theme-dark .atlas-boost-menu { --atlas-menu-bg: #2a2a2e; --atlas-menu-fg: #f2f2f5; box-shadow: 0 12px 40px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08); }
+.atlas-boost-menu button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 14px; border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; font-size: 16px; text-align: left; cursor: pointer; }
+.atlas-boost-menu button svg { width: 20px; height: 20px; stroke-width: 1.8; flex: none; }
+.atlas-boost-menu button:hover, .atlas-boost-menu button:focus-visible { background: color-mix(in srgb, currentColor 9%, transparent); outline: none; }
+.atlas-boost-menu button:disabled { opacity: .4; cursor: default; }
+.atlas-boost-menu small { display: block; font-size: 12px; opacity: .6; }
+.atlas-compose-quote { margin: -8px 16px 16px; }
+.atlas-compose-quote .atlas-quoted { margin-top: 0; background: var(--f7-list-strong-bg-color, transparent); }
+.atlas-quoted:has(.atlas-quoted-remove) .atlas-quoted-who { padding-right: 28px; }
+
+/* GIF picker (components/social/GifPicker): KLIPY search, two columns at the GIFs' own shapes. Desktop popover and phone sheet. */
+.atlas-gif-glyph { display: inline-flex; align-items: center; justify-content: center; height: 18px; padding: 0 3px; border: 1.75px solid currentColor; border-radius: 4px; font-size: 9.5px; font-weight: 800; letter-spacing: .02em; line-height: 1; }
+.atlas-gifs { display: flex; flex-direction: column; height: min(26rem, 70vh); }
+.atlas-gif-sheet .atlas-gifs { height: 100%; }
+.atlas-gifs-head { display: flex; align-items: center; gap: 10px; padding: 10px 10px 8px; }
+.atlas-gifs-head input { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border: 0; border-radius: 10px; background: color-mix(in srgb, currentColor 8%, transparent); color: inherit; font: inherit; font-size: 15px; outline: none; }
+.atlas-gifs-head input:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 35%, transparent); }
+.atlas-gifs-credit { flex: none; font-size: 10px; line-height: 1.1; text-transform: uppercase; letter-spacing: .04em; opacity: .65; text-align: right; }
+.atlas-gifs-credit b { display: block; font-size: 13px; letter-spacing: .02em; }
+.atlas-gifs-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 10px 10px; }
+.atlas-gifs-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: start; }
+.atlas-gifs-cols > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.atlas-gifs-cols button { display: block; width: 100%; padding: 0; border: 0; border-radius: 8px; overflow: hidden; background: color-mix(in srgb, currentColor 8%, transparent); cursor: pointer; }
+.atlas-gifs-cols button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.atlas-gifs-cols img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.atlas-gifs-note { margin: 16px 4px; font-size: 14px; opacity: .7; text-align: center; }
+.atlas-gifs-note button { width: auto; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+.atlas-gif-sheet { border-radius: 14px 14px 0 0; overflow: hidden; }
+
+/* Phone: who liked or boosted a post. */
+.atlas-reactors { list-style: none; margin: 0; padding: 0 0 calc(12px + var(--atlas-sa-bottom)); overflow-y: auto; max-height: 60vh; }
+.atlas-reactors button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 16px; min-height: 52px; background: none; border: 0; color: inherit; text-align: left; font: inherit; }
+.atlas-reactors button span { min-width: 0; display: flex; flex-direction: column; }
+.atlas-reactors b, .atlas-reactors small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-reactors small { opacity: .65; }
+.atlas-reactor-face { width: 40px; height: 40px; flex: none; object-fit: cover; border-radius: var(--atlas-avatar-radius, 50%); display: inline-flex; align-items: center; justify-content: center; }
+.atlas-mention-bar.atlas-tag-bar button { padding: 0 14px; font-weight: 500; }
+.atlas-compose-tags { margin: -8px calc(16px + var(--atlas-sa-right)) 8px calc(16px + var(--atlas-sa-left)); }
+.atlas-compose-tags:empty { display: none; }
+
+/* Phone Activity, grouped: up to three faces overlapping in the 40px slot, and the All / Mentions control. */
+.atlas-activity-stack { position: relative; display: block; width: 40px; height: 40px; }
+.atlas-activity-stack > img, .atlas-activity-stack > .atlas-activity-initial { position: absolute; width: 26px; height: 26px; font-size: 13px; box-shadow: 0 0 0 2px var(--f7-list-strong-bg-color, var(--background)); }
+.atlas-activity-stack > :nth-child(1) { left: 0; top: 0; z-index: 3; }
+.atlas-activity-stack > :nth-child(2) { left: 14px; top: 7px; z-index: 2; }
+.atlas-activity-stack > :nth-child(3) { left: 7px; top: 14px; z-index: 1; }
+.atlas-activity-tabs { margin-bottom: 8px; }
+
+/* Opening a post (open-post.ts) and its conversation (ThreadView.tsx, f7/Thread.tsx; arranged by thread.ts). */
+.atlas-post-hit { display: contents; }
+@media (hover: hover) { .atlas-post-opens { cursor: pointer; } .atlas-post-hit .atlas-post-card { cursor: pointer; } .atlas-post-hit .atlas-thread-focus { cursor: auto; } }
+button.atlas-post-time { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; width: auto; }
+.atlas-thread-focus .atlas-post-text { font-size: 18px; line-height: 1.45; }
+.atlas-thread-details { margin-top: 12px; padding-top: 10px; border-top: 1px solid color-mix(in oklab, currentColor 12%, transparent); font-size: 13px; opacity: .75; }
+.atlas-thread-details p { margin: 2px 0; }
+/* Post formatting (PostBody.tsx, rich-text.ts): code, quotes, lists, ruby, custom emoji. */
+.atlas-rt-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; padding: .1em .35em; border-radius: 6px; background: color-mix(in oklab, currentColor 10%, transparent); overflow-wrap: anywhere; }
+.atlas-rt-pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 12px; background: color-mix(in oklab, currentColor 8%, transparent); overflow-x: auto; white-space: pre; max-height: 480px; }
+.atlas-rt-pre:focus-visible { outline: 2px solid var(--f7-theme-color, var(--accent)); outline-offset: 2px; }
+.atlas-rt-quote { margin-inline: 0; padding-inline-start: 12px; border-inline-start: 3px solid color-mix(in oklab, currentColor 25%, transparent); opacity: .9; }
+.atlas-rt-quote > * + *, .atlas-rt-center > * + *, .atlas-rt-list li > * + * { margin-top: .5em; }
+.atlas-rt-center { text-align: center; }
+.atlas-rt-list { padding-inline-start: 1.4em; }
+ul.atlas-rt-list { list-style: disc; } ol.atlas-rt-list { list-style: decimal; }
+.atlas-rt-small { font-size: .8em; opacity: .7; }
+.atlas-rt-time { display: inline-block; font-size: .9em; padding: 0 .5em; border: 1px solid color-mix(in oklab, currentColor 25%, transparent); border-radius: 999px; }
+.atlas-emoji { display: inline-block; height: 1.25em; width: auto; max-width: 4em; vertical-align: -.25em; object-fit: contain; }
+ruby rt { font-size: .6em; }
+
+/* Misskey's MFM functions. Effects stay inside their paragraph (.atlas-mfm-fx clips), and animations run only
+   when the system allows motion. Keyframes are Atlas's own, matching what each Misskey function does. */
+.atlas-mfm-fx { overflow: clip; overflow-clip-margin: .5em; }
+.atlas-mfm { display: inline-block; max-width: 100%; }
+.atlas-mfm-color { display: inline; overflow-wrap: anywhere; }
+.atlas-mfm-tada { font-size: 150%; }
+.atlas-mfm-x2 { font-size: 200%; } .atlas-mfm-x3 { font-size: 400%; } .atlas-mfm-x4 { font-size: 600%; }
+:is(.atlas-mfm-x2, .atlas-mfm-x3, .atlas-mfm-x4) :is(.atlas-mfm-x2, .atlas-mfm-x3, .atlas-mfm-x4) { font-size: 150%; }
+:is(.atlas-mfm-x2, .atlas-mfm-x3, .atlas-mfm-x4) :is(.atlas-mfm-x2, .atlas-mfm-x3, .atlas-mfm-x4) :is(.atlas-mfm-x2, .atlas-mfm-x3, .atlas-mfm-x4) { font-size: 100%; }
+.atlas-mfm-x2, .atlas-mfm-x3, .atlas-mfm-x4 { display: inline; line-height: 1.15; }
+.atlas-mfm-blur { filter: blur(6px); transition: filter .3s; cursor: pointer; }
+.atlas-mfm-blur:hover, .atlas-mfm-blur:focus-visible { filter: none; }
+.atlas-mfm-rainbow { background-image: linear-gradient(to right, #e40303, #ff8c00, #ffed00, #008026, #24408e, #732982); -webkit-background-clip: text; background-clip: text; color: transparent; }
+@media (prefers-reduced-motion: no-preference) {
+  .atlas-mfm-tada, .atlas-mfm-jelly, .atlas-mfm-twitch, .atlas-mfm-shake, .atlas-mfm-jump, .atlas-mfm-bounce, .atlas-mfm-spin, .atlas-mfm-spin-x, .atlas-mfm-spin-y, .atlas-mfm-sparkle, .atlas-mfm-fade {
+    animation-duration: var(--mfm-speed, 1s); animation-delay: var(--mfm-delay, 0s); animation-iteration-count: infinite; animation-timing-function: linear;
+  }
+  .atlas-mfm-tada { animation-name: atlas-mfm-tada; animation-fill-mode: both; }
+  .atlas-mfm-jelly { animation-name: atlas-mfm-jelly; animation-fill-mode: both; }
+  .atlas-mfm-twitch { animation-name: atlas-mfm-twitch; animation-timing-function: steps(10, end); }
+  .atlas-mfm-shake { animation-name: atlas-mfm-shake; animation-timing-function: steps(12, end); }
+  .atlas-mfm-jump { animation-name: atlas-mfm-jump; }
+  .atlas-mfm-bounce { animation-name: atlas-mfm-bounce; transform-origin: center bottom; }
+  .atlas-mfm-spin, .atlas-mfm-spin-x, .atlas-mfm-spin-y { animation-direction: var(--mfm-direction, normal); }
+  .atlas-mfm-spin { animation-name: atlas-mfm-spin; }
+  .atlas-mfm-spin-x { animation-name: atlas-mfm-spin-x; }
+  .atlas-mfm-spin-y { animation-name: atlas-mfm-spin-y; }
+  .atlas-mfm-rainbow { background-image: none; color: inherit; -webkit-background-clip: border-box; background-clip: border-box; animation: atlas-mfm-hue var(--mfm-speed, 1s) linear var(--mfm-delay, 0s) infinite; }
+  .atlas-mfm-sparkle { animation-name: atlas-mfm-sparkle; animation-timing-function: ease-in-out; }
+  .atlas-mfm-fade { animation-name: atlas-mfm-fade; animation-iteration-count: var(--mfm-loop, infinite); animation-timing-function: ease-in-out; animation-direction: alternate; }
+  .atlas-mfm-fade-out { animation-direction: alternate-reverse; }
+}
+@keyframes atlas-mfm-tada { 0%, 100% { transform: none; } 15% { transform: scale(.92) rotate(-3deg); } 35%, 75% { transform: scale(1.08) rotate(3deg); } 55%, 90% { transform: scale(1.08) rotate(-3deg); } }
+@keyframes atlas-mfm-jelly { 0%, 100% { transform: none; } 30% { transform: scale(1.22, .8); } 42% { transform: scale(.82, 1.2); } 54% { transform: scale(1.12, .9); } 68% { transform: scale(.96, 1.04); } 80% { transform: scale(1.03, .97); } }
+@keyframes atlas-mfm-twitch { 0% { transform: translate(5px, -3px); } 20% { transform: translate(-6px, 2px); } 40% { transform: translate(3px, 6px); } 60% { transform: translate(-4px, -6px); } 80% { transform: translate(6px, 3px); } 100% { transform: translate(-2px, -4px); } }
+@keyframes atlas-mfm-shake { 0% { transform: translate(-2px, 0) rotate(-7deg); } 25% { transform: translate(1px, -2px) rotate(9deg); } 50% { transform: translate(2px, 1px) rotate(-10deg); } 75% { transform: translate(-1px, -1px) rotate(6deg); } 100% { transform: translate(1px, 2px) rotate(-3deg); } }
+@keyframes atlas-mfm-jump { 0%, 50%, 100% { transform: translateY(0); } 25% { transform: translateY(-.8em); } 75% { transform: translateY(-.4em); } }
+@keyframes atlas-mfm-bounce { 0%, 50%, 100% { transform: translateY(0) scale(1); } 25% { transform: translateY(-.8em) scale(1); } 75% { transform: translateY(0) scale(1.4, .78); } }
+@keyframes atlas-mfm-spin { to { transform: rotate(360deg); } }
+@keyframes atlas-mfm-spin-x { from { transform: perspective(8em) rotateX(0); } to { transform: perspective(8em) rotateX(360deg); } }
+@keyframes atlas-mfm-spin-y { from { transform: perspective(8em) rotateY(0); } to { transform: perspective(8em) rotateY(360deg); } }
+@keyframes atlas-mfm-hue { from { color: hsl(0 85% 55%); } 17% { color: hsl(60 85% 50%); } 33% { color: hsl(120 70% 42%); } 50% { color: hsl(180 80% 42%); } 67% { color: hsl(240 80% 62%); } 83% { color: hsl(300 75% 55%); } to { color: hsl(360 85% 55%); } }
+@keyframes atlas-mfm-sparkle { 0%, 100% { text-shadow: 0 0 0 transparent; } 50% { text-shadow: 0 0 .35em color-mix(in oklab, gold 80%, transparent), 0 0 .1em #fff; } }
+@keyframes atlas-mfm-fade { from { opacity: 1; } to { opacity: 0; } }
+
+/* A conversation (ConversationThread.tsx, ConversationParts.tsx; model in src/lib/conversation.ts). */
+.atlas-proto-wrap { padding-inline: var(--f7-card-margin-horizontal, 16px); }
+.atlas-proto-switch { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: 999px; background: color-mix(in oklab, currentColor 8%, transparent); }
+.atlas-proto-switch > button { border: 0; background: none; color: inherit; font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; opacity: .7; cursor: pointer; width: auto; }
+.atlas-proto-switch > button.is-on { opacity: 1; font-weight: 600; background: var(--background, var(--f7-page-bg-color, #fff)); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+.atlas-proto-switch > button:focus-visible { outline: 2px solid var(--f7-theme-color, var(--accent)); outline-offset: 1px; }
+.atlas-proto-small > button { font-size: 12px; padding: 4px 10px; }
+.atlas-thread-head-sub { padding-top: 0; }
+.atlas-thread-head-sub:empty { display: none; }
+.atlas-conv-face { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; background: color-mix(in oklab, currentColor 12%, transparent); }
+.atlas-conv-faces { display: inline-flex; }
+.atlas-conv-faces > * { margin-inline-start: -6px; box-shadow: 0 0 0 2px var(--background, var(--f7-page-bg-color, #fff)); }
+.atlas-conv-faces > :first-child { margin-inline-start: 0; }
+.atlas-conv-people { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 13px; opacity: .8; }
+
+/* A conversation (ConversationThread.tsx), drawn as Phanpy's `.timeline.contextual`: one column, avatar on the
+   left, a 3px line through the avatars above the opened post, replies curving off it. Phanpy's colours for kinds of
+   post (status.css, index.css): orange for replying-to and Thread, purple for boosts. Atlas adds a colour per branch
+   for the reply lines (conversation.ts branchesOf), so a sub-conversation is easy to follow. */
+:root {
+  --atlas-reply-color: #ff8c00; --atlas-reply-text: #b36200; --atlas-reply-faded: #ffa60024;
+  --atlas-boost-color: #8a2be2; --atlas-boost-faded: #892be21f;
+  --atlas-line: #e3e3e6; --atlas-line-width: 3px;
+  --atlas-branch-0: oklch(0.66 0.15 250); --atlas-branch-1: oklch(0.68 0.15 160); --atlas-branch-2: oklch(0.72 0.15 75);
+  --atlas-branch-3: oklch(0.64 0.18 350); --atlas-branch-4: oklch(0.62 0.16 295); --atlas-branch-5: oklch(0.68 0.12 200);
+}
+.dark, .theme-dark {
+  --atlas-reply-text: #ffad4d; --atlas-reply-faded: #ffa60030; --atlas-boost-faded: #a855f72a; --atlas-line: #4a4a50;
+  --atlas-branch-0: oklch(0.74 0.13 250); --atlas-branch-1: oklch(0.76 0.13 160); --atlas-branch-2: oklch(0.8 0.13 75);
+  --atlas-branch-3: oklch(0.74 0.15 350); --atlas-branch-4: oklch(0.72 0.14 295); --atlas-branch-5: oklch(0.76 0.1 200);
+}
+.atlas-ph { --av: 40px; --av-gap: 12px; --step: 18px; --line: var(--atlas-line); }
+.atlas-ph ol { list-style: none; margin: 0; padding: 0; }
+.atlas-ph-context { position: relative; }
+.atlas-ph-li { position: relative; }
+/* The line joining the posts above to the opened one: from below each picture down into the next. */
+.atlas-ph-context > .atlas-ph-li:not(:last-child)::before { content: ''; position: absolute; z-index: 0; inset-inline-start: calc(var(--av) / 2 - var(--atlas-line-width) / 2); top: calc(14px + var(--av) + 4px); bottom: -12px; width: var(--atlas-line-width); border-radius: 2px; background: var(--line); }
+.atlas-ph-context > .is-thread::before, .atlas-ph-context > .is-hero:has(+ .is-thread)::before { background: var(--atlas-reply-color) !important; opacity: .55; }
+.atlas-ph-gap { font-size: 12px; opacity: .65; padding: 8px 0 8px calc(var(--av) + var(--av-gap)); }
+/* A post */
+.atlas-ph-row { position: relative; z-index: 1; display: flex; gap: var(--av-gap); padding: 14px 8px 6px 0; margin-inline: -8px 0; padding-inline-start: 8px; border-radius: 14px; cursor: pointer; transition: background-color .1s ease-out; }
+@media (hover: hover) { .atlas-ph-row:not(.is-hero):hover { background: color-mix(in oklab, currentColor 4%, transparent); } }
+.atlas-ph-row.is-active { background: color-mix(in oklab, currentColor 5%, transparent); }
+.atlas-ph-row.is-boost { background-image: linear-gradient(160deg, var(--atlas-boost-faded), transparent min(120px, 50%)); }
+.atlas-ph-av { flex-shrink: 0; width: var(--av); }
+.atlas-ph-av > button { padding: 0; border: 0; background: none; cursor: pointer; border-radius: var(--atlas-avatar-radius, 50%); }
+.atlas-ph-av .atlas-conv-face { box-shadow: 0 0 0 3px var(--background, var(--f7-page-bg-color, #fff)); position: relative; }
+.atlas-ph-main { min-width: 0; flex: 1; }
+.atlas-ph-meta { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 14px; line-height: 1.3; }
+.atlas-ph-name { font-weight: 650; border: 0; background: none; padding: 0; color: inherit; font: inherit; font-weight: 650; cursor: pointer; width: auto; }
+.atlas-ph-handle { font-size: 13px; opacity: .55; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 16em; }
+.atlas-ph-time { margin-inline-start: auto; border: 0; background: none; padding: 0; color: inherit; font: inherit; font-size: 12px; opacity: .55; cursor: pointer; width: auto; }
+.atlas-ph-time:hover { text-decoration: underline; opacity: .9; }
+.atlas-ph-badge { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px; border-radius: 5px; font-size: 10px; line-height: 1; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.atlas-ph-badge.is-thread { color: var(--atlas-reply-text); background: var(--atlas-reply-faded); }
+.atlas-ph-boost, .atlas-ph-replyto, .atlas-ph-part { display: flex; align-items: center; gap: 5px; margin: 3px 0 0; font-size: 12px; }
+.atlas-ph-boost { color: var(--atlas-boost-color); }
+.atlas-ph-replyto { color: var(--atlas-reply-text); }
+.atlas-ph-replyto b { font-weight: 600; }
+.atlas-ph-part { color: var(--atlas-reply-text); padding-inline-start: calc(var(--av) + var(--av-gap)); margin-top: 8px; }
+:is(.atlas-ph-boost, .atlas-ph-replyto, .atlas-ph-part) svg { width: 14px; height: 14px; }
+.atlas-ph-replyto svg { color: var(--atlas-reply-color); }
+.atlas-ph-content { font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.atlas-ph-content > .atlas-post-content > .mt-3:first-child, .atlas-ph-content .atlas-post-text:first-child { margin-top: 4px; }
+.atlas-ph-content.is-large { font-size: 18px; line-height: 1.4; }
+.atlas-ph-content.is-large .atlas-post-text { font-size: 18px; }
+/* Actions: always on the opened post; on others on hover, keyboard focus or a first tap (Phanpy keeps them off context posts). */
+.atlas-ph-actions { display: none; margin: 2px 0 0 -8px; }
+.atlas-ph-row.is-hero .atlas-ph-actions, .atlas-ph-row.is-active .atlas-ph-actions, .atlas-ph-row:focus-within .atlas-ph-actions { display: block; }
+@media (hover: hover) { .atlas-ph-row:hover .atlas-ph-actions { display: block; } }
+/* The opened post: larger, on a faint band, its date and counts beneath (Phanpy's .status.large in .hero). */
+.atlas-ph-row.is-hero { cursor: auto; padding-block: 16px 8px; background: linear-gradient(to bottom, transparent, color-mix(in oklab, var(--accent, var(--f7-theme-color)) 6%, transparent) 40px, color-mix(in oklab, var(--accent, var(--f7-theme-color)) 6%, transparent) calc(100% - 24px), transparent); }
+.atlas-ph-row.is-hero .atlas-ph-meta { font-size: 15px; }
+.atlas-ph-hero-meta { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid color-mix(in oklab, currentColor 12%, transparent); font-size: 13px; opacity: .7; }
+.atlas-ph-people { margin: 6px 0 0 calc(var(--av) + var(--av-gap)); }
+.atlas-ph-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 18px 0 4px; padding-top: 14px; border-top: 1px solid color-mix(in oklab, currentColor 10%, transparent); }
+.atlas-ph-bar h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 650; min-width: 8em; }
+.atlas-ph-note { font-size: 13px; opacity: .7; margin: 12px 0; }
+.atlas-ph-link { color: inherit; text-decoration: underline; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; width: auto; }
+.atlas-ph-link svg { width: 12px; height: 12px; }
+.atlas-ph-more { display: inline-flex; align-items: center; gap: 4px; margin: 10px 0; padding: 7px 14px; border-radius: 999px; border: 1px solid color-mix(in oklab, currentColor 16%, transparent); background: none; color: inherit; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; width: auto; }
+.atlas-ph-more svg { width: 15px; height: 15px; }
+/* Replies: each level indented one step, its line in the branch colour, and an elbow curving into each avatar. */
+.atlas-ph-replies > .atlas-ph-li.is-reply > .atlas-ph-row, .atlas-ph-flat > .atlas-ph-li > .atlas-ph-row { padding-inline-start: calc(8px + var(--step)); }
+.atlas-ph-replies .atlas-ph-li.is-reply::after, .atlas-ph-flat > .atlas-ph-li::after { content: ''; position: absolute; z-index: 2; inset-inline-start: 2px; top: 6px; width: calc(var(--step) - 2px); height: 30px; border: solid var(--branch, var(--line)); border-width: 0 0 var(--atlas-line-width) var(--atlas-line-width); border-end-start-radius: 12px; pointer-events: none; }
+.atlas-ph-nested { margin-inline-start: calc(var(--av) / 2 + var(--step) - 1px); padding-inline-start: 0; border-inline-start: var(--atlas-line-width) solid color-mix(in oklab, var(--branch, var(--line)) 70%, transparent); }
+.atlas-ph-nested .atlas-ph-li.is-reply::after { inset-inline-start: calc(-1 * var(--atlas-line-width)); }
+/* A top-level reply with replies under it: its own line runs from its avatar down to them. */
+.atlas-ph-replies > .atlas-ph-li.is-reply:has(> .atlas-ph-nested, > .atlas-at-summary, > .atlas-at-fold:not([hidden]))::before { content: ''; position: absolute; inset-inline-start: calc(var(--step) + var(--av) / 2 + 8px - 1px - var(--atlas-line-width) / 2); top: calc(14px + var(--av)); height: 18px; width: var(--atlas-line-width); background: color-mix(in oklab, var(--branch, var(--line)) 70%, transparent); }
+/* Folded replies: Phanpy's pill — faces (tilted when open), the count, a chevron. */
+.atlas-ph-faces { display: inline-flex; }
+.atlas-ph-faces > * { margin-inline-start: -4px; box-shadow: 0 0 0 2px var(--background, var(--f7-page-bg-color, #fff)); transition: transform .3s ease; }
+.atlas-ph-faces > :first-child { margin-inline-start: 0; }
+.atlas-ph-chevron { width: 14px; height: 14px; transition: transform .3s ease; }
+@media (prefers-reduced-motion: reduce) { .atlas-ph-faces > *, .atlas-ph-chevron, .atlas-ph-row { transition: none; } }
+/* Phanpy: "»" opens the post above a closed set as its own conversation, a tab on the pill's end. */
+.atlas-ph-parent { position: absolute; inset-inline-end: 0; top: 0; bottom: 0; transform: translateX(100%); display: flex; align-items: center; padding: 0 14px; border: 0; border-radius: 8px; font: inherit; font-size: 16px; font-weight: 700; color: var(--accent, var(--f7-theme-color)); background: color-mix(in oklab, var(--accent, var(--f7-theme-color)) 12%, transparent); cursor: pointer; width: auto; }
+.atlas-ph-parent:dir(rtl) { transform: translateX(-100%); }
+.atlas-ph-parent:focus-visible { outline: 2px solid var(--accent, var(--f7-theme-color)); outline-offset: 2px; }
+/* Phanpy: a reply whose replies aren't loaded here shows how many it has. */
+.atlas-ph-unloaded { display: block; margin: -2px 0 8px calc(var(--step) + var(--av) + var(--av-gap)); font-size: 12px; opacity: .6; }
+.atlas-ph-unloaded svg { width: 14px; height: 14px; display: inline; vertical-align: -2px; margin-inline-end: 4px; }
+.atlas-at-line1 .nw { white-space: nowrap; }
+/* Phanpy: no depth limit; replies under a 4th-level post scroll sideways, fading at the start once they nest further. */
+/* Bonfire: indentation stops at the 3rd level; deeper replies line up under it. */
+.atlas-ph-nested.is-capped { margin-inline-start: 0; border-inline-start: 0; }
+.atlas-ph-nested.is-capped > .atlas-ph-li.is-reply::after { display: none; }
+/* Bonfire: − / + where a reply's line meets its replies, to fold them by hand. */
+.atlas-bf-toggle { position: absolute; z-index: 3; inset-inline-start: calc(var(--step) + var(--av) / 2); top: calc(14px + var(--av) + 6px); transform: translateX(-50%); display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid color-mix(in oklab, var(--branch, currentColor) 45%, transparent); background: var(--background, var(--f7-page-bg-color, #fff)); color: var(--branch, inherit); font: inherit; font-size: 13px; font-weight: 700; line-height: 1; cursor: pointer; }
+.atlas-bf-toggle::before { content: ''; position: absolute; inset: -6px; }
+.atlas-bf-toggle:hover { border-color: var(--branch, currentColor); }
+.atlas-bf-toggle:focus-visible { outline: 2px solid var(--branch, var(--accent)); outline-offset: 2px; }
+.atlas-ph-li:has(> .atlas-bf-toggle) > .atlas-ph-row { padding-bottom: 24px; }
+/* Bonfire: the summary row of a reply it folded, a rounded pill of faces, the count and a chevron (no capitals). */
+/* Atlas: the 20px − / + gets a 44pt target (Apple HIG), and the reply line itself folds its replies when tapped. */
+.atlas-ph-replies.is-atlas .atlas-bf-toggle { top: calc(14px + var(--av) + 12px); }
+.atlas-ph-replies.is-atlas .atlas-bf-toggle::before { inset: -12px; }
+.atlas-ph-replies.is-atlas .atlas-ph-li:has(> .atlas-bf-toggle) > .atlas-ph-row { padding-bottom: 6px; min-height: calc(var(--av) + 62px); }
+.atlas-at-line { position: absolute; z-index: 2; inset-inline-start: calc(var(--step) + var(--av) / 2 - 12px); top: calc(14px + var(--av) + 36px); bottom: 0; width: 24px; padding: 0; border: 0; background: none; cursor: pointer; }
+.atlas-at-line:hover + .atlas-at-fold > .atlas-ph-nested { border-inline-start-color: var(--branch, currentColor); }
+/* Atlas: collapse to the top-level replies, or open everything (Tildes). */
+.atlas-at-all { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 2px; }
+.atlas-at-all > button { padding: 5px 12px; min-height: 32px; border-radius: 999px; border: 1px solid color-mix(in oklab, currentColor 16%, transparent); background: none; color: inherit; font: inherit; font-size: 13px; cursor: pointer; width: auto; }
+.atlas-at-all > button:hover { background: color-mix(in oklab, currentColor 6%, transparent); }
+/* Atlas: a folded set's summary — who, how many, how recent, why it may matter, and how it starts. */
+.atlas-at-summary { position: relative; display: flex; align-items: stretch; gap: 0; margin: 0 52px 10px calc(var(--av) / 2 + var(--step) + 14px); max-width: 34em; }
+.atlas-at-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px 12px 8px 8px; border: 0; border-radius: 12px; background: color-mix(in oklab, var(--branch, currentColor) 10%, transparent); color: inherit; font: inherit; font-size: 13px; text-align: start; cursor: pointer; }
+.atlas-at-open:hover { background: color-mix(in oklab, var(--branch, currentColor) 16%, transparent); }
+.atlas-at-open:focus-visible { outline: 2px solid var(--branch, var(--accent)); outline-offset: 2px; }
+.atlas-at-line1 { display: flex; align-items: center; gap: 8px; width: 100%; }
+.atlas-at-line1 > span:nth-child(2) { flex: 1; min-width: 0; }
+.atlas-at-line1 > .atlas-ph-chevron { flex-shrink: 0; }
+.atlas-at-line1 b { font-weight: 650; }
+.atlas-at-reasons { font-size: 12px; font-weight: 600; color: var(--atlas-reply-text); }
+.atlas-at-preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; opacity: .75; }
+.atlas-at-preview b { font-weight: 600; }
+.atlas-at-parent { border-radius: 12px; color: var(--branch, currentColor); background: color-mix(in oklab, var(--branch, currentColor) 16%, transparent); }
+.atlas-at-parent:hover { background: color-mix(in oklab, var(--branch, currentColor) 24%, transparent); }
+.atlas-at-parent:focus-visible { outline-color: var(--branch, var(--accent)); }
+.atlas-at-note { align-self: center; font-size: 12px; opacity: .6; }
+/* Phone: a little tighter. */
+.atlas-thread-page .atlas-ph { --av: 36px; --av-gap: 10px; --step: 14px; }
+/* The trunk: a grey line down the left of the top-level replies, ending at the last one's elbow, with each reply
+   branching off it in its colour — Phanpy draws its descendants' line the same way (a background on each li). */
+.atlas-ph > .atlas-ph-replies > .atlas-ph-li { background: linear-gradient(var(--line), var(--line)) no-repeat 2px 0 / var(--atlas-line-width) 100%; }
+.atlas-ph > .atlas-ph-replies > .atlas-ph-li:last-child { background-size: var(--atlas-line-width) 24px; }
+.atlas-ph > .atlas-ph-replies > .atlas-ph-li:first-child { background-position: 2px 6px; }
+/* Posts new to the reader — arrived while the conversation is open, or since their last visit — show in place,
+   marked "New" in their branch's colour; ones that just arrived also glow briefly. Nothing moves to show them. */
+.atlas-new-badge { align-self: center; display: inline-flex; align-items: center; padding: 3px 6px; border-radius: 5px; font-size: 10px; line-height: 1; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: color-mix(in oklab, var(--branch, var(--accent, #2563eb)) 80%, currentColor); background: color-mix(in oklab, var(--branch, var(--accent, #2563eb)) 16%, transparent); }
+.is-arrived.atlas-ph-row { animation: atlas-arrived 3s ease-out; }
+@keyframes atlas-arrived { from, 30% { background-color: color-mix(in oklab, var(--branch, var(--accent, #2563eb)) 18%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .is-arrived.atlas-ph-row { animation: none; } }
+/* A post deleted while the conversation is open keeps its place. */
+.atlas-ph-row.is-tombstone { cursor: auto; padding-block: 12px 10px; }
+.atlas-ph-ghost { display: block; width: var(--av); height: var(--av); border-radius: var(--atlas-avatar-radius, 50%); border: 1.5px dashed color-mix(in oklab, currentColor 25%, transparent); }
+.atlas-ph-gone { margin: 8px 0 0; font-size: 14px; font-style: italic; opacity: .6; }
+
+/* Translation (useTranslation.tsx): one quiet line under a post's text — Translate, or where the translation came
+   from and Show original. Same on desktop and the phone. */
+.atlas-tr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 8px 0 2px; font-size: 13px; line-height: 1.4; }
+.atlas-tr.is-phone { margin-inline: var(--f7-card-content-padding-horizontal, 0); font-size: 14px; }
+.atlas-tr svg { width: 15px; height: 15px; flex-shrink: 0; }
+.atlas-tr-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 10px 4px 8px; border-radius: 999px; border: 1px solid color-mix(in oklab, currentColor 18%, transparent); background: none; color: inherit; font: inherit; cursor: pointer; width: auto; opacity: .85; }
+.atlas-tr-btn:hover { opacity: 1; background: color-mix(in oklab, currentColor 5%, transparent); }
+.atlas-tr-btn:focus-visible, .atlas-tr-link:focus-visible, .atlas-tr-source select:focus-visible { outline: 2px solid var(--accent, var(--f7-theme-color)); outline-offset: 2px; }
+.atlas-tr-note { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; opacity: .65; }
+.atlas-tr-link { border: 0; background: none; padding: 4px 0; color: var(--accent, var(--f7-theme-color)); font: inherit; font-weight: 600; cursor: pointer; width: auto; }
+.atlas-tr-source select { appearance: none; -webkit-appearance: none; border: 0; padding: 0 2px; margin: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; field-sizing: content; max-width: 12em; }

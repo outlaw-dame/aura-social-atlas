@@ -1,4 +1,5 @@
 /** Browser-safe Spotlight types and normalizers (Mastodon trending links + Bonfire articles). */
+import { htmlToRich, type RichBlock } from './rich-text';
 import type { FediAuthor } from './article-author';
 
 export type SpotlightItem = {
@@ -94,10 +95,14 @@ export type BonfireActivityNode = {
 
 const decode = (s: string) => s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&[a-z#0-9]+;/gi, ' ');
 
+const INLINE_TAG = /<\/?(?:a|span|b|strong|i|em|u|s|del|ins|code|small|sub|sup|mark|abbr|bdi|bdo|cite|data|dfn|kbd|q|samp|time|var)(?:\s[^>]*)?>/gi;
+
 /** Converts remote HTML to plain paragraphs so nothing from the remote server is rendered as markup. */
 export function htmlToParagraphs(html = ''): string[] {
   return html.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '').split(/<\/(?:p|h[1-6]|li|blockquote)>|<br\s*\/?>/i)
-    .map(chunk => decode(chunk.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim())
+    // Inline tags join their text as written ("@<span>nedley</span>" → "@nedley", and a Mastodon link's
+    // invisible "https://" parts back into one URL); any other tag is a word break.
+    .map(chunk => decode(chunk.replace(INLINE_TAG, '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 }
 
@@ -138,10 +143,12 @@ export function fromBonfirePosts(nodes: BonfireActivityNode[]) {
     const pc = n.objectPostContent;
     const paragraphs = [pc?.name?.trim(), ...htmlToParagraphs(pc?.htmlBody ?? '')].filter((t): t is string => !!t);
     if (!paragraphs.length) return [];
+    const body = htmlToRich(pc?.htmlBody);
+    const rich: RichBlock[] | undefined = body && (pc?.name?.trim() ? [{ t: 'p', c: [{ t: 'b', c: [{ t: 'text', v: pc.name.trim() }] }] }, ...body] : body);
     const user = n.subject?.character?.username?.replace(/^@/, '');
     const avatar = n.subject?.profile?.icon;
     return [{
-      id: n.id, paragraphs, date: n.date,
+      id: n.id, paragraphs, ...(rich ? { rich } : {}), date: n.date,
       url: isHttp(n.canonicalUri) ? n.canonicalUri! : `https://fedizen.net/post/${encodeURIComponent(n.id)}`,
       author: n.subject?.profile?.name || user || 'Fedizen member',
       handle: user ? `@${user.includes('@') ? user : `${user}@fedizen.net`}` : '',

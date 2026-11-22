@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { BONFIRE_PROVIDER, BONFIRE_SCOPES, friendlyBonfireError, isEmbeddedPreview, readOAuthError, standaloneAuthUrl } from '@/lib/bonfire-auth';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { friendlyBonfireError, isEmbeddedPreview, readOAuthError, standaloneAuthUrl } from '@/lib/bonfire-auth';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable/index';
@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 import { AVATAR_PRESETS } from '@/lib/atlas-avatars';
 import { cn } from '@/lib/utils';
 import { Compass } from 'lucide-react';
+import { authUiCapabilities } from '@/lib/auth-runtime';
+import { runAccountAuth } from '@/lib/account-auth';
 
 export const Route = createFileRoute('/auth')({
   head: () => ({
@@ -27,6 +29,10 @@ export const Route = createFileRoute('/auth')({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const authUi = authUiCapabilities(
+    import.meta.env.VITE_ATLAS_AUTH_RUNTIME,
+    import.meta.env.VITE_ATLAS_GOOGLE_OAUTH_ENABLED,
+  );
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,13 +42,33 @@ function AuthPage() {
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [embeddedHref, setEmbeddedHref] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
 
   const socialSignIn = async (provider: 'google' | 'lovable') => {
     setError(null);
-    const result = await lovable.auth.signInWithOAuth(provider, {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) setError(result.error.message);
+    setBusy(true);
+    try {
+      if (authUi.runtime === 'supabase') {
+        // Independent Atlas deployments must never call Lovable Cloud auth.
+        // The UI exposes Google only when that provider was explicitly enabled
+        // for the selected Supabase project.
+        if (provider !== 'google' || !authUi.google) return;
+        const { error: oauthError } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin },
+        });
+        if (oauthError) setError(oauthError.message);
+        return;
+      }
+      const result = await lovable.auth.signInWithOAuth(provider, {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) setError(result.error.message);
+    } catch {
+      setError('Could not start sign-in. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   // Show an error the auth server sent back after a failed Bonfire round trip.
@@ -65,50 +91,59 @@ function AuthPage() {
   const bonfireSignIn = async () => {
     setError(null);
     setBusy(true);
-    const { error: oidcError } = await supabase.auth.signInWithOAuth({
-      provider: BONFIRE_PROVIDER,
-      options: { redirectTo: window.location.origin, scopes: BONFIRE_SCOPES },
-    });
-    if (oidcError) {
+    try {
+      const { beginBonfireSignIn } = await import('@/lib/bonfire-signin');
+      const failure = await beginBonfireSignIn(
+        window.location.origin,
+        options => supabase.auth.signInWithOAuth(options),
+      );
+      if (failure) setError(failure);
+    } catch {
+      setError('Couldn’t start Bonfire sign-in. Please try again.');
+    } finally {
+      // Some providers reject before starting navigation; never strand the UI.
       setBusy(false);
-      setError(friendlyBonfireError(oidcError.message));
     }
   };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
     setBusy(true);
     setError(null);
 
-    if (mode === 'signup') {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: window.location.origin,
-          data: { display_name: displayName || null, avatar_key: avatarKey },
-        },
-      });
-      setBusy(false);
-      if (signUpError) {
-        setError(signUpError.message);
-        return;
-      }
-      if (!data.session) {
-        setNeedsConfirmation(true);
-        return;
+    try {
+      if (mode === 'signup') {
+        const result = await runAccountAuth(() => supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: { display_name: displayName || null, avatar_key: avatarKey },
+          },
+        }));
+        if (result.kind === 'error') {
+          setError(result.message);
+          return;
+        }
+        if (!result.data.session) {
+          setNeedsConfirmation(true);
+          return;
+        }
+      } else {
+        const result = await runAccountAuth(() => supabase.auth.signInWithPassword({ email, password }));
+        if (result.kind === 'error') {
+          setError(result.message);
+          return;
+        }
       }
       void navigate({ to: '/' });
-      return;
+    } finally {
+      // A rejected SDK request must never strand the form in a busy state.
+      submitting.current = false;
+      setBusy(false);
     }
-
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    setBusy(false);
-    if (signInError) {
-      setError(signInError.message);
-      return;
-    }
-    void navigate({ to: '/' });
   };
 
   return (
@@ -199,17 +234,22 @@ function AuthPage() {
             <div className="flex items-center gap-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               <span className="h-px flex-1 bg-border" />or<span className="h-px flex-1 bg-border" />
             </div>
-            <Button type="button" variant="outline" className="w-full rounded-full" onClick={() => void socialSignIn('google')}>
-              Continue with Google
-            </Button>
-            <button
-              type="button"
-              className="lovable-auth-button"
-              style={{ width: '100%' }}
-              onClick={() => void socialSignIn('lovable')}
-            >
-              Continue with Lovable
-            </button>
+            {authUi.google && (
+              <Button type="button" variant="outline" className="w-full rounded-full" disabled={busy} onClick={() => void socialSignIn('google')}>
+                Continue with Google
+              </Button>
+            )}
+            {authUi.lovable && (
+              <button
+                type="button"
+                className="lovable-auth-button"
+                style={{ width: '100%' }}
+                disabled={busy}
+                onClick={() => void socialSignIn('lovable')}
+              >
+                Continue with Lovable
+              </button>
+            )}
             {embeddedHref ? (
               <div className="space-y-2">
                 <Button asChild variant="outline" className="w-full rounded-full">

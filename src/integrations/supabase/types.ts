@@ -14,10 +14,271 @@ export type Database = {
   }
   public: {
     Tables: {
+      atlas_ai_keys: {
+        Row: {
+          ciphertext: string
+          created_at: string
+          hint: string
+          iv: string
+          key_id: string
+          models: Json
+          provider: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ciphertext: string
+          created_at?: string
+          hint: string
+          iv: string
+          key_id: string
+          models?: Json
+          provider: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ciphertext?: string
+          created_at?: string
+          hint?: string
+          iv?: string
+          key_id?: string
+          models?: Json
+          provider?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      atlas_ai_settings: {
+        Row: {
+          deep_matching: boolean
+          enabled: boolean
+          model: string | null
+          provider: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          deep_matching?: boolean
+          enabled?: boolean
+          model?: string | null
+          provider?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          deep_matching?: boolean
+          enabled?: boolean
+          model?: string | null
+          provider?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      atlas_collection_items: {
+        Row: {
+          acct: string
+          actor_uri: string
+          avatar_url: string | null
+          collection_id: string
+          created_at: string
+          display_name: string | null
+          id: string
+          position: number
+          profile_url: string | null
+          state: string
+        }
+        Insert: {
+          acct: string
+          actor_uri: string
+          avatar_url?: string | null
+          collection_id: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          position?: number
+          profile_url?: string | null
+          state?: string
+        }
+        Update: {
+          acct?: string
+          actor_uri?: string
+          avatar_url?: string | null
+          collection_id?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          position?: number
+          profile_url?: string | null
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "atlas_collection_items_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "atlas_collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      atlas_collections: {
+        Row: {
+          created_at: string
+          description: string | null
+          discoverable: boolean
+          id: string
+          language: string | null
+          name: string
+          owner_id: string
+          sensitive: boolean
+          tag_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          discoverable?: boolean
+          id?: string
+          language?: string | null
+          name: string
+          owner_id: string
+          sensitive?: boolean
+          tag_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          discoverable?: boolean
+          id?: string
+          language?: string | null
+          name?: string
+          owner_id?: string
+          sensitive?: boolean
+          tag_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      atlas_content_filters: {
+        Row: {
+          action: string
+          created_at: string
+          except_following: boolean
+          expansions: Json
+          expires_at: string | null
+          id: string
+          kind: string
+          places: string[]
+          semantic: boolean
+          text: string
+          user_id: string
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          except_following?: boolean
+          expansions?: Json
+          expires_at?: string | null
+          id?: string
+          kind: string
+          places?: string[]
+          semantic?: boolean
+          text: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          except_following?: boolean
+          expansions?: Json
+          expires_at?: string | null
+          id?: string
+          kind?: string
+          places?: string[]
+          semantic?: boolean
+          text?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      atlas_push_devices: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          last_ok_at: string | null
+          p256dh: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          last_ok_at?: string | null
+          p256dh: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          last_ok_at?: string | null
+          p256dh?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      atlas_push_relays: {
+        Row: {
+          alerts: Json
+          auth_secret: string
+          created_at: string
+          iv: string
+          policy: string
+          public_key: string
+          relay_id: string
+          sealed_private: string
+          server_key: string | null
+          user_id: string
+        }
+        Insert: {
+          alerts?: Json
+          auth_secret: string
+          created_at?: string
+          iv: string
+          policy?: string
+          public_key: string
+          relay_id: string
+          sealed_private: string
+          server_key?: string | null
+          user_id: string
+        }
+        Update: {
+          alerts?: Json
+          auth_secret?: string
+          created_at?: string
+          iv?: string
+          policy?: string
+          public_key?: string
+          relay_id?: string
+          sealed_private?: string
+          server_key?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       fedizen_connections: {
         Row: {
           access_token: string
           account_handle: string | null
+          client_id: string | null
           created_at: string
           scope: string
           user_id: string
@@ -25,6 +286,7 @@ export type Database = {
         Insert: {
           access_token: string
           account_handle?: string | null
+          client_id?: string | null
           created_at?: string
           scope: string
           user_id: string
@@ -32,6 +294,7 @@ export type Database = {
         Update: {
           access_token?: string
           account_handle?: string | null
+          client_id?: string | null
           created_at?: string
           scope?: string
           user_id?: string
@@ -44,18 +307,21 @@ export type Database = {
           client_secret: string
           created_at: string
           redirect_uri: string
+          scopes: string
         }
         Insert: {
           client_id: string
           client_secret: string
           created_at?: string
           redirect_uri: string
+          scopes?: string
         }
         Update: {
           client_id?: string
           client_secret?: string
           created_at?: string
           redirect_uri?: string
+          scopes?: string
         }
         Relationships: []
       }

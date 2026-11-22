@@ -2,11 +2,14 @@ import { describe, expect, test, mock } from 'bun:test';
 import { connectionFor, parseFedizenAccount, parseFedizenReadGrant, verifyFedizenReadGrant } from '../src/lib/fedizen.server';
 
 describe('Fedizen delegated OAuth grant acceptance', () => {
-  test('accepts a valid requested read scope and token without exposing it', () => {
+  test('accepts a grant that includes read, keeping the scopes Fedizen actually granted', () => {
     expect(parseFedizenReadGrant({ access_token: 'opaque-secret', scope: 'read' }))
       .toEqual({ access_token: 'opaque-secret', scope: 'read' });
+    expect(parseFedizenReadGrant({ access_token: 'opaque-secret', scope: 'read write follow' }))
+      .toEqual({ access_token: 'opaque-secret', scope: 'read write follow' });
+    // RFC 6749 §5.1: an omitted scope means the requested scope was granted.
     expect(parseFedizenReadGrant({ access_token: 'opaque-secret' }))
-      .toEqual({ access_token: 'opaque-secret', scope: 'read' });
+      .toEqual({ access_token: 'opaque-secret', scope: 'read write follow' });
   });
   test('rejects malformed or insufficient token grants', () => {
     const cases: unknown[] = [
@@ -29,7 +32,7 @@ describe('Fedizen delegated OAuth grant acceptance', () => {
     const fetcher = mock(async (url: RequestInfo | URL, init?: RequestInit) => {
       expect(String(url)).toBe('https://fedizen.net/api/v1/accounts/verify_credentials');
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer secret');
-      expect(init?.redirect).toBe('error');
+      expect(init?.redirect).toBe('manual');
       expect(init?.cache).toBe('no-store');
       return new Response(JSON.stringify({ id: '123', acct: 'alice' }), { status: 200 });
     }) as typeof fetch;
@@ -70,7 +73,7 @@ describe('Fedizen per-account connection DB read failures', () => {
       select(columns: string) { selected = columns; return builder; },
       eq(key: string, value: string) { conditions.set(key, value); return builder; },
       async maybeSingle() {
-        expect(selected).toBe('access_token, account_handle');
+        expect(selected).toBe('access_token, account_handle, scope');
         expect(conditions.get('user_id')).toBeDefined();
         return dbError ? { data: null, error: { code: 'DB_DOWN' } } :
           { data: records[conditions.get('user_id')! ] ?? null, error: null };

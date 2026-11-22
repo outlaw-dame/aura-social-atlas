@@ -3,8 +3,7 @@ import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent } from './fedizen-feed';
 import type { NativeBonfireIdentity, NativeBonfireNotice } from './bonfire-private.server';
-import type { fromBonfirePosts } from './spotlight';
-type NativeBonfirePost = ReturnType<typeof fromBonfirePosts>[number];
+import type { FedizenPost } from './fedizen-feed';
 
 export function nativeBonfireReadEnabled(value: string | undefined): boolean {
   return value === 'verified';
@@ -15,13 +14,30 @@ export type NativeBonfireSnapshot = {
   identity: NativeBonfireIdentity;
   /** Native IDs and account fields are not assumed to equal REST or OIDC IDs. */
   restAccountHandle: string | null;
-  posts: NativeBonfirePost[];
+  /** Home posts as the REST feed shows them (hydrateNativeBonfireHome); GraphQL-only cards where a read failed. */
+  posts: FedizenPost[];
   notices: NativeBonfireNotice[];
   homeEndCursor: string | null;
   homeHasNextPage: boolean;
   notificationEndCursor: string | null;
   notificationHasNextPage: boolean;
 };
+
+/** Native Home posts with REST details and the same enrichment as the REST feeds; server only. */
+async function hydratedHome(
+  native: typeof import('./bonfire-private.server'),
+  page: Parameters<typeof import('./bonfire-private.server').hydrateNativeBonfireHome>[0],
+  accessToken: string,
+): Promise<FedizenPost[]> {
+  const [{ fedizenGet }, { fromStatuses }, { withArticleAuthors }] = await Promise.all([
+    import('./fedizen.server'), import('./fedizen-feed'), import('./feed-enrich.server'),
+  ]);
+  const posts = await native.hydrateNativeBonfireHome(page, async statusId => {
+    const r = await fedizenGet(accessToken, `/api/v1/statuses/${statusId}`).catch(() => null);
+    return r?.status === 200 ? fromStatuses(r.data as never)[0] : undefined;
+  });
+  return withArticleAuthors(posts, 2000, accessToken);
+}
 
 /**
  * Operator gated until a real, consented OAuth test proves that Fedizen's
@@ -64,16 +80,15 @@ export const getNativeBonfireSnapshot = createServerFn({ method: 'GET' })
         native.readNativeBonfirePage(connection.accessToken, 'notifications', data.notificationsAfter ?? null),
       ]);
       if (!home || !notifications) return { ...base, status: 'authorization-required' };
-      const normalizedHome = native.normalizeNativeBonfireHome(home);
       const normalizedNotifications = native.normalizeNativeBonfireNotifications(notifications);
       return {
         status: 'available',
         identity: connection.identity,
         restAccountHandle: connection.accountHandle,
-        posts: normalizedHome.posts,
+        posts: await hydratedHome(native, home, connection.accessToken),
         notices: normalizedNotifications.notices,
-        homeEndCursor: normalizedHome.pageInfo.endCursor ?? null,
-        homeHasNextPage: normalizedHome.pageInfo.hasNextPage,
+        homeEndCursor: home.pageInfo.endCursor ?? null,
+        homeHasNextPage: home.pageInfo.hasNextPage,
         notificationEndCursor: normalizedNotifications.pageInfo.endCursor ?? null,
         notificationHasNextPage: normalizedNotifications.pageInfo.hasNextPage,
       };
@@ -125,17 +140,72 @@ export const getNativeBonfireHomeContinuation = createServerFn({ method: 'GET' }
         (!home.pageInfo.endCursor || home.pageInfo.endCursor === data.after)) {
         return { ...base, status: 'unavailable' };
       }
-      const result = native.normalizeNativeBonfireHome(home);
       return {
         ...base,
         status: 'available',
         identity: connection.identity,
         restAccountHandle: connection.accountHandle,
-        posts: result.posts,
-        homeEndCursor: result.pageInfo.endCursor ?? null,
-        homeHasNextPage: result.pageInfo.hasNextPage,
+        posts: await hydratedHome(native, home, connection.accessToken),
+        homeEndCursor: home.pageInfo.endCursor ?? null,
+        homeHasNextPage: home.pageInfo.hasNextPage,
       };
     } catch {
       return { ...base, status: 'unavailable' };
+    }
+  });
+
+const STATUS_IDS = z.array(z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)).min(1).max(20);
+
+/**
+ * Details for native Home cards that weren't read in time on the first load (their statusRef): read with a longer
+ * allowance, after the page is already on screen, and enriched as every feed is. Same gate, session and identity
+ * checks as the snapshot; the reader's own connection decides what Fedizen will show.
+ */
+export const getNativeHomeDetails = createServerFn({ method: 'POST' })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(input => z.object({ expectedAtlasUserId: z.string().uuid(), statusIds: STATUS_IDS }).strict().parse(input))
+  .handler(async ({ data, context }): Promise<{ status: NativeBonfireSnapshot['status']; posts: Record<string, FedizenPost> }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    if (!nativeBonfireReadEnabled(process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'])) return { status: 'disabled', posts: {} };
+    try {
+      const [{ verifiedNativeBonfireConnection }, native, { fedizenGet }, { fromStatuses }, { withArticleAuthors }] = await Promise.all([
+        import('./bonfire-verified-connection.server'), import('./bonfire-private.server'), import('./fedizen.server'),
+        import('./fedizen-feed'), import('./feed-enrich.server'),
+      ]);
+      const connection = await verifiedNativeBonfireConnection(data.expectedAtlasUserId, context.userId);
+      if (connection.status !== 'available') return { status: connection.status, posts: {} };
+      const found = await native.readStatuses(data.statusIds, async id => {
+        const r = await fedizenGet(connection.accessToken, `/api/v1/statuses/${id}`).catch(() => null);
+        return r?.status === 200 ? fromStatuses(r.data as never)[0] : undefined;
+      }, 8000);
+      const ids = [...found.keys()];
+      const enriched = await withArticleAuthors(ids.map(id => found.get(id)!), 2000, connection.accessToken);
+      return { status: 'available', posts: Object.fromEntries(ids.map((id, i) => [id, enriched[i]])) };
+    } catch {
+      return { status: 'unavailable', posts: {} };
+    }
+  });
+
+/**
+ * The newest native Home page as GraphQL-only cards, to tell which posts are new (the new-posts pill) without reading
+ * each one: those are read when the reader asks to see them.
+ */
+export const getNativeBonfireHomeLatest = createServerFn({ method: 'GET' })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(input => z.object({ expectedAtlasUserId: z.string().uuid() }).strict().parse(input))
+  .handler(async ({ data, context }): Promise<{ status: NativeBonfireSnapshot['status']; posts: FedizenPost[] }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    if (!nativeBonfireReadEnabled(process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'])) return { status: 'disabled', posts: [] };
+    try {
+      const [{ verifiedNativeBonfireConnection }, native] = await Promise.all([
+        import('./bonfire-verified-connection.server'), import('./bonfire-private.server'),
+      ]);
+      const connection = await verifiedNativeBonfireConnection(data.expectedAtlasUserId, context.userId);
+      if (connection.status !== 'available') return { status: connection.status, posts: [] };
+      const home = await native.readNativeBonfirePage(connection.accessToken, 'myFeed', null);
+      if (!home) return { status: 'authorization-required', posts: [] };
+      return { status: 'available', posts: native.nativeLatestPreview(home) };
+    } catch {
+      return { status: 'unavailable', posts: [] };
     }
   });

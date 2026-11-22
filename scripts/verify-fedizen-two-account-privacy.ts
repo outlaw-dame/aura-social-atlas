@@ -53,6 +53,9 @@ async function resolveOwner(token: string, expectedHandle: string) {
   return { id: me.user.id, restHandle };
 }
 
+// Fixed diagnostic labels only: never include account values, post IDs or errors.
+let activeCheck = 'configuration';
+
 async function live() {
   const missing = missingFedizenTestKeys(process.env, ["FEDIZEN_TEST_READ_TOKEN","FEDIZEN_TEST_EXPECTED_HANDLE","FEDIZEN_TEST_SECOND_READ_TOKEN","FEDIZEN_TEST_SECOND_EXPECTED_HANDLE","FEDIZEN_TEST_PRIVATE_POST_ID"]);
   if (missing.length) {
@@ -74,21 +77,25 @@ async function live() {
     throw new Error('Test requires two distinct consenting accounts');
   }
 
+  activeCheck = 'resolve-both-consented-owners';
   const [a, b] = await Promise.all([
     resolveOwner(aToken, aExpected),
     resolveOwner(bToken, bExpected),
   ]);
+  activeCheck = 'distinct-verified-owner-identities';
   const distinctOwners = a.id !== b.id &&
     !matchesLinkedFedizenHandle(a.restHandle, b.restHandle);
   report('distinct-verified-owner-identities', distinctOwners);
   if (!distinctOwners) throw new Error('Test accounts resolved to the same Bonfire user');
 
   // Prove the object exists for its authorized owner before any denial check.
+  activeCheck = 'private-fixture-owner-readable';
   const aPost = await readNativeBonfirePost(aToken, privatePostId);
   const ownerCanRead = !!aPost && aPost.id === privatePostId;
   report('private-fixture-owner-readable', ownerCanRead);
   if (!ownerCanRead) throw new Error('Owner could not read the explicit private fixture');
 
+  activeCheck = 'private-fixture-other-owner-denied';
   let denied = false;
   try {
     const otherResult = await readNativeBonfirePost(bToken, privatePostId);
@@ -99,7 +106,21 @@ async function live() {
   report('private-fixture-other-owner-denied', denied);
   if (!denied) throw new Error('Second owner access was exposed or inconclusive');
 
-  console.log('PASS: consented A/B private post read boundary');
+  // A non-public fixture must not resolve anonymously either. A generic
+  // GraphQL error, timeout, rate-limit or transport failure is inconclusive:
+  // only a validated null object or explicit HTTP 403/404 is accepted.
+  activeCheck = 'private-fixture-anonymous-denied';
+  let anonymousDenied = false;
+  try {
+    const anonymousResult = await readNativeBonfirePost('', privatePostId);
+    anonymousDenied = conclusiveOtherAccountDenial(anonymousResult);
+  } catch (error) {
+    anonymousDenied = conclusiveOtherAccountDenial(undefined, error);
+  }
+  report('private-fixture-anonymous-denied', anonymousDenied);
+  if (!anonymousDenied) throw new Error('Anonymous access was exposed or inconclusive');
+
+  console.log('PASS: consented A/B and anonymous private post read boundary');
 }
 
 function selfTest() {
@@ -129,7 +150,7 @@ else {
   try { await live(); }
   catch {
     // Never print private upstream errors, accounts or test identifiers.
-    console.error('FAIL: protected Fedizen A/B privacy acceptance');
+    console.error(`FAIL: protected Fedizen A/B privacy acceptance at ${activeCheck}`);
     process.exitCode = 1;
   }
 }

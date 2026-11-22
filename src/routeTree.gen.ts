@@ -10,24 +10,41 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as FedizenAcceptanceRouteImport } from './routes/fedizen-acceptance'
+import { Route as FeedsRouteImport } from './routes/feeds'
 import { Route as FollowingRouteImport } from './routes/following'
+import { Route as GroupsRouteImport } from './routes/groups'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
+import { Route as MessagesRouteImport } from './routes/messages'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SavedRouteImport } from './routes/saved'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiLiveRouteImport } from './routes/api/live'
 import { Route as FedizenCallbackRouteImport } from './routes/fedizen.callback'
+import { Route as PostIdRouteImport } from './routes/post.$id'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
+import { Route as SettingsHashtagsRouteImport } from './routes/settings.hashtags'
 import { Route as SettingsIntelligenceRouteImport } from './routes/settings.intelligence'
+import { Route as SettingsModerationRouteImport } from './routes/settings.moderation'
+import { Route as SettingsNotificationsRouteImport } from './routes/settings.notifications'
 import { Route as TagsTagRouteImport } from './routes/tags.$tag'
+import { Route as ApiPushRelayIdRouteImport } from './routes/api/push/relay.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivityRoute = ActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -40,14 +57,39 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FedizenAcceptanceRoute = FedizenAcceptanceRouteImport.update({
+  id: '/fedizen-acceptance',
+  path: '/fedizen-acceptance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeedsRoute = FeedsRouteImport.update({
+  id: '/feeds',
+  path: '/feeds',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FollowingRoute = FollowingRouteImport.update({
   id: '/following',
   path: '/following',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GroupsRoute = GroupsRouteImport.update({
+  id: '/groups',
+  path: '/groups',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IntelligenceRoute = IntelligenceRouteImport.update({
   id: '/intelligence',
   path: '/intelligence',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MessagesRoute = MessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -75,9 +117,19 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiLiveRoute = ApiLiveRouteImport.update({
+  id: '/api/live',
+  path: '/api/live',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FedizenCallbackRoute = FedizenCallbackRouteImport.update({
   id: '/fedizen/callback',
   path: '/fedizen/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PostIdRoute = PostIdRouteImport.update({
+  id: '/post/$id',
+  path: '/post/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
@@ -90,9 +142,24 @@ const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
   path: '/appearance',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsHashtagsRoute = SettingsHashtagsRouteImport.update({
+  id: '/hashtags',
+  path: '/hashtags',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsIntelligenceRoute = SettingsIntelligenceRouteImport.update({
   id: '/intelligence',
   path: '/intelligence',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsModerationRoute = SettingsModerationRouteImport.update({
+  id: '/moderation',
+  path: '/moderation',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
   getParentRoute: () => SettingsRoute,
 } as any)
 const TagsTagRoute = TagsTagRouteImport.update({
@@ -100,124 +167,210 @@ const TagsTagRoute = TagsTagRouteImport.update({
   path: '/tags/$tag',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPushRelayIdRoute = ApiPushRelayIdRouteImport.update({
+  id: '/api/push/relay/$id',
+  path: '/api/push/relay/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
+  '/feeds': typeof FeedsRoute
   '/following': typeof FollowingRoute
+  '/groups': typeof GroupsRoute
   '/intelligence': typeof IntelligenceRoute
+  '/messages': typeof MessagesRoute
+  '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/saved': typeof SavedRoute
   '/settings': typeof SettingsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
+  '/post/$id': typeof PostIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
+  '/settings/moderation': typeof SettingsModerationRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/tags/$tag': typeof TagsTagRoute
   '/settings/': typeof SettingsIndexRoute
+  '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
+  '/feeds': typeof FeedsRoute
   '/following': typeof FollowingRoute
+  '/groups': typeof GroupsRoute
   '/intelligence': typeof IntelligenceRoute
+  '/messages': typeof MessagesRoute
+  '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/saved': typeof SavedRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
+  '/post/$id': typeof PostIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
+  '/settings/moderation': typeof SettingsModerationRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/tags/$tag': typeof TagsTagRoute
   '/settings': typeof SettingsIndexRoute
+  '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
+  '/feeds': typeof FeedsRoute
   '/following': typeof FollowingRoute
+  '/groups': typeof GroupsRoute
   '/intelligence': typeof IntelligenceRoute
+  '/messages': typeof MessagesRoute
+  '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/saved': typeof SavedRoute
   '/settings': typeof SettingsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
+  '/post/$id': typeof PostIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/hashtags': typeof SettingsHashtagsRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
+  '/settings/moderation': typeof SettingsModerationRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/tags/$tag': typeof TagsTagRoute
   '/settings/': typeof SettingsIndexRoute
+  '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/activity'
     | '/app'
     | '/auth'
+    | '/fedizen-acceptance'
+    | '/feeds'
     | '/following'
+    | '/groups'
     | '/intelligence'
+    | '/messages'
+    | '/profile'
     | '/reset-password'
     | '/saved'
     | '/settings'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/live'
     | '/fedizen/callback'
+    | '/post/$id'
     | '/settings/appearance'
+    | '/settings/hashtags'
     | '/settings/intelligence'
+    | '/settings/moderation'
+    | '/settings/notifications'
     | '/tags/$tag'
     | '/settings/'
+    | '/api/push/relay/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/activity'
     | '/app'
     | '/auth'
+    | '/fedizen-acceptance'
+    | '/feeds'
     | '/following'
+    | '/groups'
     | '/intelligence'
+    | '/messages'
+    | '/profile'
     | '/reset-password'
     | '/saved'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/live'
     | '/fedizen/callback'
+    | '/post/$id'
     | '/settings/appearance'
+    | '/settings/hashtags'
     | '/settings/intelligence'
+    | '/settings/moderation'
+    | '/settings/notifications'
     | '/tags/$tag'
     | '/settings'
+    | '/api/push/relay/$id'
   id:
     | '__root__'
     | '/'
+    | '/activity'
     | '/app'
     | '/auth'
+    | '/fedizen-acceptance'
+    | '/feeds'
     | '/following'
+    | '/groups'
     | '/intelligence'
+    | '/messages'
+    | '/profile'
     | '/reset-password'
     | '/saved'
     | '/settings'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/live'
     | '/fedizen/callback'
+    | '/post/$id'
     | '/settings/appearance'
+    | '/settings/hashtags'
     | '/settings/intelligence'
+    | '/settings/moderation'
+    | '/settings/notifications'
     | '/tags/$tag'
     | '/settings/'
+    | '/api/push/relay/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ActivityRoute: typeof ActivityRoute
   AppRoute: typeof AppRoute
   AuthRoute: typeof AuthRoute
+  FedizenAcceptanceRoute: typeof FedizenAcceptanceRoute
+  FeedsRoute: typeof FeedsRoute
   FollowingRoute: typeof FollowingRoute
+  GroupsRoute: typeof GroupsRoute
   IntelligenceRoute: typeof IntelligenceRoute
+  MessagesRoute: typeof MessagesRoute
+  ProfileRoute: typeof ProfileRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SavedRoute: typeof SavedRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiLiveRoute: typeof ApiLiveRoute
   FedizenCallbackRoute: typeof FedizenCallbackRoute
+  PostIdRoute: typeof PostIdRoute
   TagsTagRoute: typeof TagsTagRoute
+  ApiPushRelayIdRoute: typeof ApiPushRelayIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -227,6 +380,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activity': {
+      id: '/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof ActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -243,6 +403,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/fedizen-acceptance': {
+      id: '/fedizen-acceptance'
+      path: '/fedizen-acceptance'
+      fullPath: '/fedizen-acceptance'
+      preLoaderRoute: typeof FedizenAcceptanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/feeds': {
+      id: '/feeds'
+      path: '/feeds'
+      fullPath: '/feeds'
+      preLoaderRoute: typeof FeedsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/following': {
       id: '/following'
       path: '/following'
@@ -250,11 +424,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FollowingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/groups': {
+      id: '/groups'
+      path: '/groups'
+      fullPath: '/groups'
+      preLoaderRoute: typeof GroupsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/intelligence': {
       id: '/intelligence'
       path: '/intelligence'
       fullPath: '/intelligence'
       preLoaderRoute: typeof IntelligenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/messages': {
+      id: '/messages'
+      path: '/messages'
+      fullPath: '/messages'
+      preLoaderRoute: typeof MessagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -292,11 +487,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/live': {
+      id: '/api/live'
+      path: '/api/live'
+      fullPath: '/api/live'
+      preLoaderRoute: typeof ApiLiveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/fedizen/callback': {
       id: '/fedizen/callback'
       path: '/fedizen/callback'
       fullPath: '/fedizen/callback'
       preLoaderRoute: typeof FedizenCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/post/$id': {
+      id: '/post/$id'
+      path: '/post/$id'
+      fullPath: '/post/$id'
+      preLoaderRoute: typeof PostIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings/': {
@@ -313,11 +522,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsAppearanceRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/hashtags': {
+      id: '/settings/hashtags'
+      path: '/hashtags'
+      fullPath: '/settings/hashtags'
+      preLoaderRoute: typeof SettingsHashtagsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/intelligence': {
       id: '/settings/intelligence'
       path: '/intelligence'
       fullPath: '/settings/intelligence'
       preLoaderRoute: typeof SettingsIntelligenceRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/moderation': {
+      id: '/settings/moderation'
+      path: '/moderation'
+      fullPath: '/settings/moderation'
+      preLoaderRoute: typeof SettingsModerationRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/notifications': {
+      id: '/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof SettingsNotificationsRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/tags/$tag': {
@@ -327,18 +557,31 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TagsTagRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/push/relay/$id': {
+      id: '/api/push/relay/$id'
+      path: '/api/push/relay/$id'
+      fullPath: '/api/push/relay/$id'
+      preLoaderRoute: typeof ApiPushRelayIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface SettingsRouteChildren {
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
+  SettingsHashtagsRoute: typeof SettingsHashtagsRoute
   SettingsIntelligenceRoute: typeof SettingsIntelligenceRoute
+  SettingsModerationRoute: typeof SettingsModerationRoute
+  SettingsNotificationsRoute: typeof SettingsNotificationsRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsAppearanceRoute: SettingsAppearanceRoute,
+  SettingsHashtagsRoute: SettingsHashtagsRoute,
   SettingsIntelligenceRoute: SettingsIntelligenceRoute,
+  SettingsModerationRoute: SettingsModerationRoute,
+  SettingsNotificationsRoute: SettingsNotificationsRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }
 
@@ -348,17 +591,26 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ActivityRoute: ActivityRoute,
   AppRoute: AppRoute,
   AuthRoute: AuthRoute,
+  FedizenAcceptanceRoute: FedizenAcceptanceRoute,
+  FeedsRoute: FeedsRoute,
   FollowingRoute: FollowingRoute,
+  GroupsRoute: GroupsRoute,
   IntelligenceRoute: IntelligenceRoute,
+  MessagesRoute: MessagesRoute,
+  ProfileRoute: ProfileRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SavedRoute: SavedRoute,
   SettingsRoute: SettingsRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiLiveRoute: ApiLiveRoute,
   FedizenCallbackRoute: FedizenCallbackRoute,
+  PostIdRoute: PostIdRoute,
   TagsTagRoute: TagsTagRoute,
+  ApiPushRelayIdRoute: ApiPushRelayIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

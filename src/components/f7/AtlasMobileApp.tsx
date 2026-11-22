@@ -1,30 +1,60 @@
-import { useEffect, useMemo, useState } from 'react';
+import { MobilePostSearch } from './MobilePostSearch';
+import { NotificationSettingsPage } from './NotificationSettings';
+import { useOpenActivityFromPush } from '@/components/social/usePush';
+import { LiveUpdates } from '@/components/social/LiveUpdates';
+import { SemanticIndexer } from '@/components/social/useSemanticIndex';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Framework7 from 'framework7/lite-bundle';
 import Framework7React, {
   App, View, Page, Navbar, Link, Toolbar, Tabs, Tab, PageContent,
-  Searchbar, List, ListItem, Block, BlockTitle, Card, CardContent, CardFooter, Button, Chip, Toggle, Segmented,
+  Searchbar, List, ListItem, Block, BlockFooter, BlockTitle, Card, CardContent, CardFooter, Button, Chip, Toggle, Segmented,
 } from 'framework7-react';
-import 'framework7/css/bundle';
-import 'framework7-icons/css/framework7-icons.css';
-import 'material-icons/iconfont/material-icons.css';
+import { holdF7Styles } from './f7-styles';
 import { ComposeSheet, AssistantPopup, Icon } from './F7Extras';
-import { Fab, NavRight, NavLeft, Panel, Popup, f7, f7ready } from 'framework7-react';
-import { creators, posts, networks, matchesCreator, fullHandle, postsByTag, type Creator } from '@/lib/social-catalogue';
+import { promptSignInToSave } from './save-prompt';
+import { Fab, NavRight, NavLeft, Panel, Popup, f7, f7ready, Badge } from 'framework7-react';
+import { creators, posts, networks, topics, matchesCreator, fullHandle, postsByTag, type Creator } from '@/lib/social-catalogue';
 import { NetworkBadge } from '@/lib/networks';
-import { linkifyHashtagsWith } from '@/lib/hashtags';
+import { OPEN_TAG_EVENT, linkifyHashtagsWith, hashtagLabel, TagText } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
+import { useFedizenIdentity } from '@/components/social/useFedizenIdentity';
 import { avatarPreset } from '@/lib/atlas-avatars';
-import { ProfilePopup, EditProfileSheet } from './ProfilePopup';
+import { ProfileView, EditProfileSheet } from './ProfileView';
+import { CollectionPopup } from './Collections';
+import { AccentPicker } from '@/components/social/AccentPicker';
+import { AvatarShapePicker } from '@/components/social/AvatarShapePicker';
+import { useAvatarShape } from '@/lib/avatar-shape';
+import { accentHex, useAccent } from '@/lib/accent';
+import { FediProfilePopup } from './FediProfile';
+import { MiniPlayer } from './MiniPlayer';
+import { useFediProfileOpener } from '@/components/social/useFediProfile';
+import { GroupPopup, MobileGroups } from './Groups';
+import { OPEN_GROUP_EVENT, groupStub, type Group, type GroupTarget } from '@/lib/groups';
+import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
-import { MobileRecentArticles, MobileFedizenFeed, useActivitySummary } from './FedizenMobile';
+import { MobileRecentArticles, MobileActivity, MessagesPopup } from './FedizenMobile';
+import { badgeText, useUnreadActivity } from '@/components/social/useNotificationGroups';
+import { MobileFeeds } from './MobileFeeds';
+import { FollowedTagsPage, TagFeedPage } from './TagFeed';
+import { bindStack, popToRoot, postPageUrl, pushPage, showTab, tagPageUrl } from './navigation';
+import { setThemeMode, useThemeMode } from './theme-mode';
+import { ModerationPage } from './Moderation';
+import { AppearancePage, MobileSettingsList } from './SettingsPages';
+import { MobileSpotlight, MobileVoicesToKnow } from './Discover';
+import { IntelligencePage, KeywordFilterPage, KeywordFiltersPage } from './Intelligence';
+import { intelligenceReady, useIntelligence } from '@/components/social/useIntelligence';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { CreatorTag } from '@/components/social/CreatorTag';
 import { Spotlight } from '@/components/social/Spotlight';
 import { VoicesToKnow } from '@/components/social/VoicesToKnow';
 import { describeProfile, type DeviceProfile } from '@/lib/device-profile';
 import { useDeviceProfile } from '@/lib/use-device-profile';
+import { VideoDock } from '@/components/social/VideoDock';
 import { registerAppServiceWorker } from '@/lib/register-sw';
+import { useComposeIntent } from '@/lib/compose-intent';
+import { ThreadPage } from './Thread';
+import { OPEN_POST_EVENT, type OpenPostDetail } from '@/lib/open-post';
 
 Framework7.use(Framework7React);
 
@@ -45,6 +75,21 @@ const LAYOUT_VARS = ['--atlas-main-w', '--atlas-rail-w', '--atlas-hinge', '--atl
 /** Applies the device profile to Framework7: navigation (tab bar, side tab bar, rail, sidebar, tabletop deck),
  *  panes (single column, or the desktop-style feed + voices column, split at the fold when folded). Layout comes from window size and the fold only. */
 function useAdaptiveLayout(profile: DeviceProfile) {
+  const hasTabbar = (p: DeviceProfile) => p.nav === 'tabbar' || p.nav === 'tabbar-side' || p.nav === 'deck';
+  const tabbarNow = useRef(hasTabbar(profile));
+  // Framework7 shows the tab bar again on every page that comes in unless the page carries "no-toolbar"
+  // (components/toolbar, pageBeforeIn), so with a rail or sidebar a pushed page (a conversation, a tag) brought the
+  // tab bar back beside it. React owns the pages' class names, so instead the bar is hidden again right after
+  // Framework7's own handler, in the same event, before anything is painted.
+  useEffect(() => {
+    let off = () => {};
+    f7ready(() => {
+      const keep = () => { if (!tabbarNow.current) f7.toolbar.hide('.atlas-tabbar', false); };
+      f7.on('pageBeforeIn', keep);
+      off = () => f7.off('pageBeforeIn', keep);
+    });
+    return () => off();
+  }, []);
   useEffect(() => {
     const html = document.documentElement;
     for (const k of LAYOUT_KEYS) html.dataset[k] = String(profile[k]);
@@ -78,8 +123,11 @@ function useAdaptiveLayout(profile: DeviceProfile) {
           panel.enableVisibleBreakpoint();
         }
       }
-      const tabbar = profile.nav === 'tabbar' || profile.nav === 'tabbar-side' || profile.nav === 'deck';
+      const tabbar = hasTabbar(profile);
+      tabbarNow.current = tabbar;
       if (tabbar) f7.toolbar.show('.atlas-tabbar', false); else f7.toolbar.hide('.atlas-tabbar', false);
+      // Floating players (video, podcast) sit above the tab bar only when there is one (not with a rail or sidebar).
+      html.classList.toggle('atlas-has-tabbar', tabbar);
     });
   }, [profile]);
   // The <html> element is shared with the classic site: clear everything when /app unmounts.
@@ -87,29 +135,94 @@ function useAdaptiveLayout(profile: DeviceProfile) {
     const html = document.documentElement;
     for (const k of LAYOUT_KEYS) delete html.dataset[k];
     for (const v of LAYOUT_VARS) html.style.removeProperty(v);
-    html.classList.remove('atlas-rail');
+    html.classList.remove('atlas-rail', 'atlas-has-tabbar');
   }, []);
 }
 
 export default function AtlasMobileApp() {
+  // Framework7's styles only while the phone app is on screen (f7-styles.ts).
+  useLayoutEffect(() => holdF7Styles(), []);
   const profile = useDeviceProfile();
   const theme = useMemo(() => pickTheme(profile), []); // eslint-disable-line react-hooks/exhaustive-deps
   // Hold the panel open from the first frame only when the first layout wants a rail or sidebar.
   const panelHeldAtStart = useMemo(() => profile.nav === 'rail' || profile.nav === 'sidebar', []); // eslint-disable-line react-hooks/exhaustive-deps
   useAdaptiveLayout(profile);
   useEffect(registerAppServiceWorker, []);
-  const { followed, saved, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled, setAssistantEnabled } = useSocial();
+  // A tapped notification opens Activity (public/sw.js posts this to the open app).
+  useOpenActivityFromPush(useCallback(() => { try { showTab('tab-activity'); } catch { /* not ready */ } }, []));
+  const { followed, saved, canSave, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled: assistantWanted } = useSocial();
+  // The assistant answers with the person's own key: only there once Intelligence is on with a key.
+  const intelligence = useIntelligence();
+  const assistantEnabled = assistantWanted && intelligenceReady(intelligence.data) && intelligence.data?.active?.where === 'server';
   const auth = useAtlasAuth() as { user?: { email?: string } | null; profile?: { display_name: string | null; avatar_key: string | null } | null; signOut?: () => Promise<void> };
+  const identity = useFedizenIdentity();
   const [query, setQuery] = useState('');
   const [composeOpen, setComposeOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
+  // Boost → Quote on any post opens the composer (ComposeSheet attaches the post).
+  const composeIntent = useComposeIntent();
+  useEffect(() => { if (composeIntent) setComposeOpen(true); }, [composeIntent]);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [collectionOpen, setCollectionOpen] = useState<{ collection?: Collection; id?: string; link?: string } | null>(null);
+  const [groupOpen, setGroupOpen] = useState<Group | null>(null);
+  // Pushed pages (a hashtag's feed) live in the stack view laid over the tabs; see navigation.ts.
+  useEffect(() => {
+    let off = () => {};
+    f7ready(() => { off = bindStack(); });
+    return () => off();
+  }, []);
+  // A hashtag in a post (or a followed-tag line) pushes its feed onto the main view, like any feed.
+  useEffect(() => {
+    const on = (e: Event) => { const t = (e as CustomEvent<{ tag?: string }>).detail?.tag; if (t) pushPage(tagPageUrl(t)); };
+    window.addEventListener(OPEN_TAG_EVENT, on);
+    return () => window.removeEventListener(OPEN_TAG_EVENT, on);
+  }, []);
+  // A tapped post pushes its conversation onto the main view, as a hashtag's feed is.
+  useEffect(() => {
+    const on = (e: Event) => { const d = (e as CustomEvent<OpenPostDetail>).detail; if (d?.statusId) pushPage(postPageUrl(d.statusId), { seed: d.seed }); };
+    window.addEventListener(OPEN_POST_EVENT, on);
+    return () => window.removeEventListener(OPEN_POST_EVENT, on);
+  }, []);
+  // A "Popular in" chip in For You opens its group here.
+  useEffect(() => {
+    const on = (e: Event) => { const t = (e as CustomEvent<GroupTarget>).detail; if (t?.id) setGroupOpen(groupStub(t)); };
+    window.addEventListener(OPEN_GROUP_EVENT, on);
+    return () => window.removeEventListener(OPEN_GROUP_EVENT, on);
+  }, []);
+  // Collection links in posts open here, as on Mastodon (tagged_collections).
+  useEffect(() => {
+    const on = (e: Event) => { const link = (e as CustomEvent<{ link?: string }>).detail?.link; if (link) setCollectionOpen({ link }); };
+    window.addEventListener(OPEN_COLLECTION_EVENT, on);
+    return () => window.removeEventListener(OPEN_COLLECTION_EVENT, on);
+  }, []);
+  // Shared links open the collection in the app: /app?collection=<Atlas id> or ?collection=<Mastodon collection URL>.
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('collection');
+    if (!v) return;
+    if (/^[0-9a-f-]{36}$/i.test(v)) setCollectionOpen({ id: v });
+    else if (/^https:\/\/[^/]+\/collections\/[A-Za-z0-9_-]+\/?$/.test(v)) setCollectionOpen({ link: v });
+  }, []);
   const [chatOpen, setChatOpen] = useState(false);
   const [creatorOpen, setCreatorOpen] = useState<Creator | null>(null);
-  const [tagFeed, setTagFeed] = useState<{ creatorId: string; tag: string } | null>(null);
   const [fabHidden, setFabHidden] = useState(false);
-  const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const accent = useAccent();
+  useAvatarShape();
+  // Framework7 derives its theme palette from the primary color; recompute it when the reader picks another accent.
+  useEffect(() => { f7ready(() => f7.setColorTheme(accentHex(accent))); }, [accent]);
+  const fediProfile = useFediProfileOpener();
+  /* Search lives on Discover: go there and put the cursor in the field. */
+  const openSearch = () => {
+    showTab('tab-discover');
+    window.setTimeout(() => { const el = document.querySelector<HTMLInputElement>('#tab-discover .searchbar input'); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus(); }, 80);
+  };
+  const mode = useThemeMode();
+  const setMode = setThemeMode;
   const [title, setTitle] = useState('Discover');
+  // Feeds stays mounted under the other dock tabs; it counts posts as seen only while its tab is on screen.
+  const [feedsShown, setFeedsShown] = useState(false);
+  const [activityShown, setActivityShown] = useState(false);
+  // Unread notifications, on the Activity tab as Bluesky and Mastodon's apps badge it (Fedizen's notifications marker).
+  const unread = badgeText(useUnreadActivity());
   const [network, setNetwork] = useState<string>('All networks');
 
   useEffect(() => { setMode(dark ? 'dark' : 'light'); }, []);
@@ -134,13 +247,29 @@ export default function AtlasMobileApp() {
     return () => { document.removeEventListener('scroll', on, true); clearTimeout(t); };
   }, []);
 
-  const results = creators.filter(c => matchesCreator(c, query, network, 'All topics'));
+  const [topic, setTopic] = useState<string>('All topics');
+  const results = creators.filter(c => matchesCreator(c, query, network, topic));
+  // Stories follow the same search, network and topic, as on desktop's Discover.
+  const filtering = !!query.trim() || network !== 'All networks' || topic !== 'All topics';
+  const stories = posts.filter(p => results.some(c => c.id === p.creatorId));
   const creatorOf = (id: string) => creators.find(c => c.id === id);
-  const tagFeedCreator = tagFeed ? creatorOf(tagFeed.creatorId) : null;
-  const tagFeedPosts = tagFeed ? postsByTag(tagFeed.creatorId, tagFeed.tag) : [];
+  // A sample creator's stories under one of their tags: pushed like any feed, titled by the tag.
+  const openCreatorTag = (creatorId: string, tag: string) => {
+    const c = creatorOf(creatorId);
+    if (!c) return;
+    pushPage(`/creator-tag/${encodeURIComponent(creatorId)}/${encodeURIComponent(tag)}/`);
+  };
   const followingPosts = posts.filter(p => followed.includes(p.creatorId));
-  const activityText = useActivitySummary();
-  const savedPosts = posts.filter(p => saved.includes(p.id));
+
+  /* The dock (tab bar, side tab bar, rail and sidebar all share it): Feeds, Discover, Groups, Activity, and the
+     person's avatar for their profile. */
+  const dock: { id: string; label: string; ios: string; md: string; avatar?: string }[] = [
+    { id: 'tab-feeds', label: 'Feeds', ios: 'f7:rectangle_stack', md: 'material:dynamic_feed' },
+    { id: 'tab-discover', label: 'Discover', ios: 'f7:compass', md: 'material:explore' },
+    { id: 'tab-groups', label: 'Groups', ios: 'f7:person_3', md: 'material:groups' },
+    { id: 'tab-activity', label: 'Activity', ios: 'f7:bell', md: 'material:notifications_none' },
+    { id: 'tab-profile', label: 'Profile', ios: 'f7:person_crop_circle', md: 'material:account_circle', avatar: auth.user ? (identity.avatar ?? undefined) : undefined },
+  ];
 
   // Wide windows (and folded spans) mirror the desktop Discover page.
   const wide = profile.panes !== 'single';
@@ -151,11 +280,11 @@ export default function AtlasMobileApp() {
         {results.map(c => (
           <ListItem key={c.id} title={c.name}
             onClick={() => setCreatorOpen(c)} style={{ cursor: 'pointer' }}>
-            <span slot="text">{linkifyHashtagsWith(c.bio, tag => setTagFeed({ creatorId: c.id, tag }))}</span>
+            <span slot="text">{linkifyHashtagsWith(c.bio, tag => openCreatorTag(c.id, tag))}</span>
             <span slot="subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               {c.handle} · <NetworkBadge network={c.network} />
             </span>
-            <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={44} height={44} style={{ borderRadius: 22 }} />
+            <img slot="media" src={avatarPreset(c.avatar_key).src} alt="" width={44} height={44} className="atlas-avatar" style={{ objectFit: 'cover' }} />
             <Button slot="after" small round fill={!followed.includes(c.id)} tonal={followed.includes(c.id)}
               onClick={(e: any) => { e.stopPropagation(); toggleFollow(c.id); }}>
               {followed.includes(c.id) ? 'Following' : 'Follow'}
@@ -176,76 +305,83 @@ export default function AtlasMobileApp() {
         <CardContent>
           <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 24, lineHeight: 1.15, margin: '6px 0' }}>{p.title}</div>
           <div style={{ opacity: 0.75 }}>{p.excerpt}</div>
-          <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => setTagFeed({ creatorId: c.id, tag })}>#{tag}</Link>)}</div>
+          <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => openCreatorTag(c.id, tag)} aria-label={hashtagLabel(tag)}><TagText tag={tag} /></Link>)}</div>
           <CreatorTag creator={c} onOpen={() => setCreatorOpen(c)} />
         </CardContent>
         <CardFooter>
           <Link external target="_blank" href={p.url}>Open</Link>
-          <Link onClick={() => toggleSave(p.id)}>{saved.includes(p.id) ? 'Saved' : 'Save'}</Link>
+          <Link onClick={() => (canSave ? toggleSave(p.id) : promptSignInToSave())}>{saved.includes(p.id) ? 'Saved' : 'Save'}</Link>
         </CardFooter>
       </Card>
     );
   };
 
   return (
-    <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: '#FA243C' }}>
+    // Routed pages render inside <App>, so this context hands them the current card renderer (with today's saved
+    // state, follows and so on) on every render, rather than a closure from the moment they were pushed.
+    <SampleCards.Provider value={postCard}>
+    <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: accentHex(accent) }}>
       <Panel left cover swipe resizable={false} visibleBreakpoint={panelHeldAtStart ? 1 : undefined} className="atlas-panel">
         <Page>
           <Block className="atlas-brand" style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', fontSize: 32, marginTop: 24 }}>Atlas</Block>
           <List strong inset dividers>
-            <ListItem link="#" panelClose title="Discover" selected={title === 'Discover'} onClick={() => f7.tab.show('#tab-discover')}>
-              <Icon slot="media" ios="f7:compass" md="material:explore" />
-            </ListItem>
-            <ListItem link="#" panelClose title="Following" selected={title === 'Following'} onClick={() => f7.tab.show('#tab-following')} after={String(followed.length)}>
-              <Icon slot="media" ios="f7:person_2" md="material:group" />
-            </ListItem>
-            <ListItem link="#" panelClose title="Saved" selected={title === 'Saved'} onClick={() => f7.tab.show('#tab-saved')} after={String(saved.length)}>
-              <Icon slot="media" ios="f7:bookmark" md="material:bookmark" />
-            </ListItem>
-            <ListItem link="#" panelClose title="Settings" selected={title === 'Settings'} onClick={() => f7.tab.show('#tab-settings')}>
+            {dock.map(d => (
+              <ListItem key={d.id} link="#" panelClose title={d.label} selected={title === d.label} onClick={() => showTab(d.id)} {...(d.id === 'tab-activity' && unread ? { badge: unread, badgeColor: 'red' } : {})}>
+                {d.avatar ? <img slot="media" className="atlas-dock-avatar" src={d.avatar} alt="" width={28} height={28} /> : <Icon slot="media" ios={d.ios} md={d.md} />}
+              </ListItem>
+            ))}
+          </List>
+          <List strong inset dividers>
+            <ListItem link="#" panelClose title="Settings" selected={title === 'Settings'} onClick={() => showTab('tab-settings')}>
               <Icon slot="media" ios="f7:gear_alt" md="material:settings" />
             </ListItem>
           </List>
           <Block className="atlas-hide-in-rail" style={{ fontSize: 12, opacity: 0.6 }}>Sample profiles, not live accounts.</Block>
         </Page>
       </Panel>
+      {/* The tab bar sits at view level so it stays on screen over pushed pages, as in other social apps. Pushed pages
+          (a hashtag's feed) go in the stack view laid over the tabs: back with the chevron or a swipe from the left
+          edge, on both themes (navigation.ts explains why it is a view of its own). */}
       <View main>
+        <Toolbar tabbar icons bottom className="atlas-tabbar">
+          {dock.map(d => (
+            <Link key={d.id} tabLink={`#${d.id}`} tabLinkActive={d.id === 'tab-discover'} onClick={popToRoot} aria-label={d.avatar ? 'Your profile' : d.id === 'tab-activity' && unread ? `Activity, ${unread} unread` : undefined}>
+              {d.avatar ? <img className="icon atlas-dock-avatar" src={d.avatar} alt="" width={28} height={28} /> : <Icon ios={d.ios} md={d.md}>{d.id === 'tab-activity' && unread && <Badge color="red" aria-hidden="true">{unread}</Badge>}</Icon>}
+              <span className="tabbar-label">{d.label}</span>
+            </Link>
+          ))}
+        </Toolbar>
+        <View className="atlas-stack" url="/" routes={STACK_ROUTES} iosSwipeBack mdSwipeBack />
         <Page pageContent={false}>
           <Navbar title={title}>
             <NavLeft className="atlas-nav-menu">
               <Link iconOnly panelOpen="left" aria-label="Open menu"><Icon ios="f7:sidebar_left" md="material:menu" /></Link>
             </NavLeft>
-            <NavRight>
-              <Link iconOnly aria-label="Activity" onClick={() => f7.toast.show({ text: activityText, closeTimeout: 3000 })}>
-                <Icon ios="f7:bell" md="material:notifications_none" />
-              </Link>
-              {auth.user ? (
-                <Link iconOnly aria-label="Your profile" onClick={() => setProfileOpen(true)}>
-                  <img src={avatarPreset(auth.profile?.avatar_key).src} alt="" width={30} height={30} style={{ borderRadius: 15 }} />
+            {['Discover', 'Feeds', 'Groups', 'Activity'].includes(title) && (
+              <NavRight className="atlas-top-actions">
+                {/* Facebook-style: Search and Messages at the top right; Compose floats at the bottom. */}
+                <Link iconOnly className="atlas-top-btn" aria-label="Search" onClick={openSearch}><Icon ios="f7:search" md="material:search" /></Link>
+                <Link iconOnly className="atlas-top-btn" aria-label="Messages" onClick={() => setMessagesOpen(true)}><Icon ios="f7:bubble_left_bubble_right" md="material:forum" /></Link>
+              </NavRight>
+            )}
+            {title === 'Profile' && (
+              <NavRight>
+                <Link iconOnly aria-label="Settings" onClick={() => showTab('tab-settings')}>
+                  <Icon ios="f7:gear_alt" md="material:settings" />
                 </Link>
-              ) : (
-                <Link iconOnly external href="/auth" aria-label="Sign in">
-                  <Icon ios="f7:person_crop_circle" md="material:account_circle" />
-                </Link>
-              )}
-            </NavRight>
+              </NavRight>
+            )}
           </Navbar>
           <Fab position="right-bottom" slot="fixed" className="atlas-fab" aria-label="Compose" onClick={() => setComposeOpen(true)}
-            style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
+            style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom) + var(--atlas-player-offset, 0px))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
             <Icon ios="f7:square_pencil" md="material:edit" />
           </Fab>
           {assistantEnabled && (
             <Fab position="left-bottom" slot="fixed" color="white" className="atlas-fab" aria-label="Open assistant" onClick={() => setChatOpen(true)}
-              style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
+              style={{ marginBottom: 'calc(var(--f7-toolbar-height) + var(--f7-safe-area-bottom) + var(--atlas-player-offset, 0px))', transition: 'transform .25s, opacity .25s', transform: fabHidden ? 'translateY(120px)' : 'none', opacity: fabHidden ? 0 : 1 }}>
               <Icon ios="f7:sparkles" md="material:auto_awesome" />
             </Fab>
           )}
-          <Toolbar tabbar icons bottom className="atlas-tabbar">
-            <Link tabLink="#tab-discover" tabLinkActive><Icon ios="f7:compass" md="material:explore" /><span className="tabbar-label">Discover</span></Link>
-            <Link tabLink="#tab-following"><Icon ios="f7:person_2" md="material:group" /><span className="tabbar-label">Following</span></Link>
-            <Link tabLink="#tab-saved"><Icon ios="f7:bookmark" md="material:bookmark" /><span className="tabbar-label">Saved</span></Link>
-            <Link tabLink="#tab-settings"><Icon ios="f7:gear_alt" md="material:settings" /><span className="tabbar-label">Settings</span></Link>
-          </Toolbar>
           <Tabs>
             <Tab id="tab-discover" className="page-content atlas-discover" onTabShow={() => setTitle('Discover')} tabActive>
               {/* Phones: one column. Wide windows mirror the desktop Discover page (main feed + "Voices to know"
@@ -258,18 +394,27 @@ export default function AtlasMobileApp() {
                 </div>
               )}
               <div className="atlas-d-main">
-                <Searchbar placeholder="Search creators" disableButton={false} onInput={(e: any) => setQuery(e.target.value)} onClickClear={() => setQuery('')} />
+                <Searchbar placeholder="Search creators and posts" disableButton={false} onInput={(e: any) => setQuery(e.target.value)} onClickClear={() => setQuery('')} />
+                <MobilePostSearch q={query} />
                 <Block>
                   <Segmented strong round>
                     {networks.map(n => <Button key={n} small active={network === n} onClick={() => setNetwork(n)}>{n.replace(' networks', '')}</Button>)}
                   </Segmented>
                 </Block>
+                <div className="atlas-notice-tabs" role="tablist" aria-label="Filter by topic">
+                  {topics.map(t => <button key={t} type="button" role="tab" aria-selected={topic === t} className={topic === t ? 'is-on' : undefined} onClick={() => setTopic(t)}>{t === 'All topics' ? 'All topics' : t}</button>)}
+                </div>
+                {filtering && <BlockFooter><span role="status">{stories.length} {stories.length === 1 ? 'story' : 'stories'}{query.trim() ? ` for “${query.trim()}”` : ''}</span> · <Link onClick={() => { setQuery(''); f7.searchbar.clear('#tab-discover .searchbar'); setNetwork('All networks'); setTopic('All topics'); }}>Reset filters</Link></BlockFooter>}
                 {!wide && creatorList}
-                <Block className="px-3"><GatewayDiscovery /></Block>
-                {wide && <Block className="atlas-d-spotlight"><div className="atlas-desktop-embed"><Spotlight /></div></Block>}
-                <MobileRecentArticles />
-                <BlockTitle>Stories</BlockTitle>
-                <div className="atlas-story-grid">{posts.map(postCard)}</div>
+                {!filtering && <>
+                  <Block className="px-3"><GatewayDiscovery /></Block>
+                  {wide ? <Block className="atlas-d-spotlight"><div className="atlas-desktop-embed"><Spotlight /></div></Block> : <MobileSpotlight />}
+                  <MobileRecentArticles />
+                </>}
+                <BlockTitle>{filtering ? 'From the community' : 'From our creators'}</BlockTitle>
+                {stories.length ? <div className="atlas-story-grid">{stories.map(postCard)}</div>
+                  : <Block strong inset><b>No matches this time.</b> Try another topic, network, or search.</Block>}
+                {!wide && <MobileVoicesToKnow />}
               </div>
               {wide && (
                 <aside className="atlas-d-rail" aria-label="Creator discovery">
@@ -280,31 +425,29 @@ export default function AtlasMobileApp() {
               )}
             </Tab>
 
-            <Tab id="tab-following" className="page-content" onTabShow={() => setTitle('Following')}>
-              <MobileFedizenFeed />
-              <BlockTitle>Atlas creators you follow</BlockTitle>
-              {followingPosts.length ? followingPosts.map(postCard) : (
-                <Block strong inset>Follow creators in Discover and their stories will show up here.</Block>
-              )}
+            <Tab id="tab-feeds" className="page-content" onTabShow={() => { setTitle('Feeds'); setFeedsShown(true); }} onTabHide={() => setFeedsShown(false)}>
+              <MobileFeeds visible={feedsShown} following={<>
+                <BlockTitle>Atlas creators you follow</BlockTitle>
+                {followingPosts.length ? followingPosts.map(postCard) : (
+                  <Block strong inset>Follow creators in Discover and their stories will show up here.</Block>
+                )}
+              </>} />
             </Tab>
 
-            <Tab id="tab-saved" className="page-content" onTabShow={() => setTitle('Saved')}>
-              {savedPosts.length ? savedPosts.map(postCard) : <Block strong inset>Stories you save appear here.</Block>}
+            <Tab id="tab-groups" className="page-content" onTabShow={() => setTitle('Groups')}>
+              <MobileGroups onOpen={setGroupOpen} />
+            </Tab>
+
+            <Tab id="tab-activity" className="page-content" onTabShow={() => { setTitle('Activity'); setActivityShown(true); }} onTabHide={() => setActivityShown(false)}>
+              <MobileActivity visible={activityShown} />
+            </Tab>
+
+            <Tab id="tab-profile" className="page-content" onTabShow={() => setTitle('Profile')}>
+              <ProfileView onEditProfile={() => setEditProfileOpen(true)} onOpenCreator={setCreatorOpen} onOpenCollection={c => setCollectionOpen({ collection: c })} />
             </Tab>
 
             <Tab id="tab-settings" className="page-content" onTabShow={() => setTitle('Settings')}>
-              <BlockTitle>Appearance</BlockTitle>
-              <List strong inset dividers>
-                <ListItem title="Light" radio radioIcon="end" name="mode" checked={mode === 'light'} onChange={() => setMode('light')} />
-                <ListItem title="Dark" radio radioIcon="end" name="mode" checked={mode === 'dark'} onChange={() => setMode('dark')} />
-                <ListItem title="Match device" radio radioIcon="end" name="mode" checked={mode === 'system'} onChange={() => setMode('system')} />
-              </List>
-              <BlockTitle>Intelligence</BlockTitle>
-              <List strong inset dividers>
-                <ListItem title="AI assistant" footer="Off by default. When on, a sparkle button opens chat.">
-                  <Toggle slot="after" checked={assistantEnabled} onToggleChange={() => setAssistantEnabled(!assistantEnabled)} />
-                </ListItem>
-              </List>
+              <MobileSettingsList />
               <Block>
                 <Chip text={theme === 'ios' ? 'iOS design' : 'Material 3 design'} />
                 <p style={{ opacity: 0.6, fontSize: 13 }}>
@@ -318,30 +461,55 @@ export default function AtlasMobileApp() {
           </Tabs>
         </Page>
       </View>
-      <ProfilePopup opened={profileOpen} onClose={() => setProfileOpen(false)} onEditProfile={() => setEditProfileOpen(true)} onOpenCreator={setCreatorOpen} />
-      <CreatorPopup creator={creatorOpen} onClose={() => setCreatorOpen(null)} onOpenTag={(c, tag) => { setCreatorOpen(null); setTagFeed({ creatorId: c.id, tag }); }} />
-      <Popup opened={!!tagFeed} onPopupClosed={() => setTagFeed(null)}>
-        {tagFeed && tagFeedCreator && (
-          <Page>
-            <Navbar title={`#${tagFeed.tag}`} subtitle={tagFeedCreator.name}>
-              <NavRight>
-                <Link iconOnly popupClose aria-label="Close tag feed">
-                  <Icon ios="f7:xmark" md="material:close" />
-                </Link>
-              </NavRight>
-            </Navbar>
-            <Block strong inset style={{ fontSize: 13 }}>
-              Stories by {tagFeedCreator.name} tagged <span className="atlas-hashtag">#{tagFeed.tag}</span>
-            </Block>
-            {tagFeedPosts.length ? tagFeedPosts.map(postCard) : (
-              <Block strong inset>No stories with this tag yet.</Block>
-            )}
-          </Page>
-        )}
-      </Popup>
+      <CreatorPopup creator={creatorOpen} onClose={() => setCreatorOpen(null)} onOpenTag={(c, tag) => openCreatorTag(c.id, tag)} />
       <EditProfileSheet opened={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
+      <GroupPopup group={groupOpen} onClose={() => setGroupOpen(null)} onOpen={setGroupOpen} />
+      <CollectionPopup opened={!!collectionOpen} onClose={() => setCollectionOpen(null)} collection={collectionOpen?.collection} id={collectionOpen?.id} link={collectionOpen?.link} />
       <ComposeSheet opened={composeOpen} onClose={() => setComposeOpen(false)} />
+      <MessagesPopup opened={messagesOpen} onClose={() => setMessagesOpen(false)} />
+      <FediProfilePopup target={fediProfile.target} onClose={fediProfile.close} />
+      <MiniPlayer />
+      <VideoDock />
+      <SemanticIndexer />
+      <LiveUpdates />
       {assistantEnabled && <AssistantPopup opened={chatOpen} onClose={() => setChatOpen(false)} />}
     </App>
+    </SampleCards.Provider>
   );
 }
+
+/** The current sample story card renderer, for routed pages (see the provider in AtlasMobileApp). */
+const SampleCards = createContext<((p: (typeof posts)[number]) => React.ReactNode) | null>(null);
+
+/** A sample creator's stories under one tag, pushed onto the stack. It reads the creator and tag from its route and the
+ *  card renderer from context, so Save, Follow and the rest show their current state. */
+function SampleTagPage({ f7route }: { f7route?: { params: { creator?: string; tag?: string } } }) {
+  const postCard = useContext(SampleCards);
+  const creatorId = decodeURIComponent(f7route?.params.creator ?? '');
+  const tag = decodeURIComponent(f7route?.params.tag ?? '');
+  const creator = creators.find(c => c.id === creatorId);
+  const list = creator ? postsByTag(creatorId, tag) : [];
+  return <Page>
+    <Navbar title={tag} subtitle={creator?.name} backLink backLinkShowText={false} />
+    {list.length && postCard ? list.map(postCard) : <Block strong inset>No stories with this tag yet.</Block>}
+  </Page>;
+}
+
+/** The stack's empty root: transparent, so the tabs show through when nothing is pushed. */
+function StackRoot() {
+  return <Page className="atlas-stack-root" />;
+}
+
+const STACK_ROUTES = [
+  { path: '/', component: StackRoot },
+  { path: '/tag/:tag/', component: TagFeedPage },
+  { path: '/post/:id/', component: ThreadPage },
+  { path: '/followed-tags/', component: FollowedTagsPage },
+  { path: '/intelligence/', component: IntelligencePage },
+  { path: '/notifications-settings/', component: NotificationSettingsPage },
+  { path: '/keyword-filters/', component: KeywordFiltersPage },
+  { path: '/keyword-filters/:id/', component: KeywordFilterPage },
+  { path: '/appearance/', component: AppearancePage },
+  { path: '/moderation/', component: ModerationPage },
+  { path: '/creator-tag/:creator/:tag/', component: SampleTagPage },
+];

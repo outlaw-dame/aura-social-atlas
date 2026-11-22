@@ -1,6 +1,7 @@
 // Session state for Atlas accounts. One subscription, shared through context.
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { clearHomeCache } from '@/lib/home-timeline';
 import { supabase } from '@/integrations/supabase/client';
 import { readOAuthError } from '@/lib/bonfire-auth';
 import { observeSession } from '@/lib/auth-session';
@@ -24,6 +25,16 @@ type AuthState = {
 };
 
 const AuthContext = createContext<AuthState | null>(null);
+
+/**
+ * Everything cached for an account that signed out (or was switched away from): every query whose key carries its
+ * id — Home, notifications, messages, saved posts, circles, filters, AI settings, compose limits and the rest — is
+ * cancelled and dropped, so nothing private stays in memory for whoever uses the device next.
+ */
+function forgetAccount(queryClient: ReturnType<typeof useQueryClient>, userId: string) {
+  const mine = { predicate: (q: { queryKey: readonly unknown[] }) => q.queryKey.includes(userId) };
+  void queryClient.cancelQueries(mine).then(() => queryClient.removeQueries(mine));
+}
 
 export function AtlasAuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -60,14 +71,9 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
     const priorId = previousUser.current;
     previousUser.current = userId ?? null;
     if (priorId && priorId !== userId) {
-      // Both REST and native GraphQL results can contain private data. Drop
-      // only the prior account's keys so switching accounts never reuses them.
-      for (const prefix of ['fedizen-home', 'bonfire-native-home']) {
-        const oldKey = [prefix, priorId];
-        void queryClient.cancelQueries({ queryKey: oldKey, exact: true }).then(() => {
-          queryClient.removeQueries({ queryKey: oldKey, exact: true });
-        });
-      }
+      // Home kept on this device for the prior account goes too (signing out, or switching account).
+      clearHomeCache(priorId);
+      forgetAccount(queryClient, priorId);
     }
   }, [userId, queryClient]);
 
@@ -91,6 +97,12 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const signOut = async () => {
+    if (session?.user.id) {
+      clearHomeCache(session.user.id); forgetAccount(queryClient, session.user.id);
+      // The semantic index holds posts this account was shown: it goes with the account (the downloaded model stays).
+      const uid = session.user.id;
+      void import('@/lib/semantic/index-store').then(m => m.clearIndex(uid)).catch(() => {});
+    }
     await supabase.auth.signOut();
     setSession(null);
     setProfileRecord(null);

@@ -5,6 +5,11 @@
  * internal names) that resolve only to public addresses (checked over DNS-over-HTTPS on every hop), every redirect hop re-validated (max 3), short timeouts, a response-size cap, no
  * credentials or cookies, and only the expected content types are parsed. Results are cached per isolate.
  */
+import { episodeFromObject, type FediEpisode } from "./podcast-episode";
+import { episodeVideo, videoFromObject, type FediVideo } from "./fedi-video";
+
+/** Something playable found while resolving a link: a podcast episode or a video. */
+export type FoundMedia = { episode?: FediEpisode; video?: FediVideo; /** The page's own link preview, for a link Fedizen made no card for. */ preview?: PagePreview };
 import {
   MAX_AUTHORS,
   actorFromWebfinger,
@@ -13,12 +18,15 @@ import {
   attributedActors,
   isActor,
   isArticleObject,
+  isPodcastEpisode,
   isPublicHttpsUrl,
   isPublicIp,
   normalizeHost,
   parseArticleHead,
   parseHandle,
+  parsePagePreview,
   type FediAuthor,
+  type PagePreview,
 } from "./article-author";
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -28,6 +36,8 @@ export type Lookup = (host: string) => Promise<string[] | null>;
 const AP_ACCEPT =
   'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
 const PAGE_ACCEPT = `${AP_ACCEPT};q=0.9, text/html;q=0.8`;
+/** Castopod (Podcast Index ActivityPub draft): the podcast actor, typed "Podcast", with its RSS feed. */
+export const PODCAST_ACCEPT = "application/podcast-activity+json";
 const MAX_BYTES = 512 * 1024;
 const TIMEOUT_MS = 3500;
 const MAX_REDIRECTS = 3;
@@ -153,7 +163,7 @@ const parseJson = (s: string): unknown => {
   }
 };
 
-async function fetchActor(id: string, fetchImpl: FetchLike, lookup: Lookup) {
+export async function fetchActor(id: string, fetchImpl: FetchLike = fetch, lookup: Lookup = dohLookup) {
   const res = await safeFetch(id, AP_ACCEPT, fetchImpl, lookup);
   if (!res || !isJsonType(res.type)) return null;
   const actor = parseJson(res.text);
@@ -170,16 +180,63 @@ async function fromActivityPubObject(
   articleUrl: string,
   fetchImpl: FetchLike,
   lookup: Lookup,
+  onMedia?: (m: FoundMedia) => void,
 ): Promise<FediAuthor[]> {
+  if (isActor(obj)) return fromOwnPage(obj, articleUrl, fetchImpl, lookup);
   if (!isArticleObject(obj)) return [];
+  const work = isPodcastEpisode(obj) ? ("episode" as const) : undefined;
   // Always the actor's own document, never the publisher's embedded copy (which could forge consent).
   const actors = await Promise.all(
     attributedActors(obj).map((id) => fetchActor(id, fetchImpl, lookup)),
   );
-  return actors
-    .filter((a): a is NonNullable<typeof a> => !!a && actorMayClaim(a, articleUrl))
+  const verified = actors.filter(
+    (a): a is NonNullable<typeof a> => !!a && actorMayClaim(a, articleUrl),
+  );
+  const authors = verified
     .map((a) => actorToAuthor(a, "activitypub"))
-    .filter((a): a is FediAuthor => !!a);
+    .filter((a): a is FediAuthor => !!a)
+    .map((a) => (work ? { ...a, work } : a));
+  // Something playable only with a verified creator behind it.
+  if (onMedia && authors[0]) {
+    if (work) {
+      const episode = episodeFromObject(obj, authors[0]);
+      const video = episode ? undefined : episodeVideo(obj, authors[0]);
+      if (episode || video) onMedia({ episode: episode ?? undefined, video: video ?? undefined });
+    } else {
+      // PeerTube credits the account and its channel; the channel is what people follow and watch.
+      const channel = verified.findIndex((a) => [a.type].flat().includes("Group"));
+      const video = videoFromObject(obj, authors[channel >= 0 ? channel : 0] ?? authors[0]);
+      if (video) onMedia({ video });
+    }
+  }
+  return authors;
+}
+
+/**
+ * A link to an account's own page (a podcast's page on Castopod, a profile): the account is what was linked.
+ * Credited only when the actor really lives at that address (re-fetched, same host). Castopod answers
+ * application/podcast-activity+json with the same actor typed "Podcast", which tells a podcast from a person.
+ */
+async function fromOwnPage(
+  embedded: Record<string, unknown>,
+  pageUrl: string,
+  fetchImpl: FetchLike,
+  lookup: Lookup,
+): Promise<FediAuthor[]> {
+  const id = String(embedded.id);
+  if (normalizeHost(new URL(id).hostname) !== normalizeHost(new URL(pageUrl).hostname)) return [];
+  const actor = await fetchActor(id, fetchImpl, lookup);
+  // The fetched actor must be the one the page named (a redirect can't swap in someone else) and may claim the page.
+  if (!actor || actor.id !== id || !actorMayClaim(actor, pageUrl)) return [];
+  const pod = await safeFetch(id, PODCAST_ACCEPT, fetchImpl, lookup);
+  const asPodcast = pod && isJsonType(pod.type) ? parseJson(pod.text) : null;
+  const isPodcast =
+    !!asPodcast &&
+    typeof asPodcast === "object" &&
+    (asPodcast as { id?: unknown }).id === actor.id &&
+    [(asPodcast as { type?: unknown }).type].flat().includes("Podcast");
+  const a = actorToAuthor(actor, "activitypub");
+  return a ? [{ ...a, work: isPodcast ? "podcast" : "account" }] : [];
 }
 
 /** Path 2: fediverse:creator → WebFinger → actor, credited only if the actor allows the article's domain. */
@@ -206,24 +263,53 @@ async function fromCreatorHandle(
     : null;
 }
 
+/**
+ * Path 3 (Atlas): an author page that is itself an ActivityPub actor — the page's rel="author" links, or the author
+ * link a server's link preview carries. Same trust rule: the actor must be on the article's host or allow its domain.
+ */
+async function fromAuthorLinks(
+  links: string[],
+  articleUrl: string,
+  fetchImpl: FetchLike,
+  lookup: Lookup,
+): Promise<FediAuthor[]> {
+  const actors = await Promise.all(
+    [...new Set(links)].slice(0, MAX_AUTHORS).map((l) => fetchActor(l, fetchImpl, lookup)),
+  );
+  const seen = new Set<string>();
+  return actors
+    .filter((a): a is NonNullable<typeof a> => !!a && actorMayClaim(a, articleUrl))
+    .filter((a) => !seen.has(String(a.id)) && !!seen.add(String(a.id)))
+    .map((a) => actorToAuthor(a, "author-link"))
+    .filter((a): a is FediAuthor => !!a);
+}
+
+/** Hints from whoever showed the link, e.g. the author URL in a server's link preview. */
+export type ArticleHints = { authorUrl?: string };
+
 /** Who wrote the article at `url`, best evidence first. Empty when nothing verifiable is found. */
 export async function resolveArticleAuthors(
   url: string,
   fetchImpl: FetchLike = fetch,
   lookup: Lookup = dohLookup,
+  hints: ArticleHints = {},
+  onMedia?: (m: FoundMedia) => void,
 ): Promise<FediAuthor[]> {
   if (!isPublicHttpsUrl(url)) return [];
   const page = await safeFetch(url, PAGE_ACCEPT, fetchImpl, lookup);
   if (!page) return [];
   // The article lives where the redirects ended; trust is judged against that host.
   const articleUrl = page.url;
-  if (isJsonType(page.type))
-    return (await fromActivityPubObject(parseJson(page.text), articleUrl, fetchImpl, lookup)).slice(
-      0,
-      MAX_AUTHORS,
-    );
-  if (!page.type.includes("html")) return [];
+  const hinted = isPublicHttpsUrl(hints.authorUrl) ? [hints.authorUrl] : [];
+  if (isJsonType(page.type)) {
+    const authors = await fromActivityPubObject(parseJson(page.text), articleUrl, fetchImpl, lookup, onMedia);
+    return (authors.length ? authors : await fromAuthorLinks(hinted, articleUrl, fetchImpl, lookup)).slice(0, MAX_AUTHORS);
+  }
+  if (!page.type.includes("html"))
+    return (await fromAuthorLinks(hinted, articleUrl, fetchImpl, lookup)).slice(0, MAX_AUTHORS);
   const head = parseArticleHead(page.text, articleUrl);
+  const preview = parsePagePreview(page.text, articleUrl);
+  if (preview && onMedia) onMedia({ preview });
   if (head.apAlternate) {
     const ap = await safeFetch(head.apAlternate, AP_ACCEPT, fetchImpl, lookup);
     if (ap && isJsonType(ap.type)) {
@@ -232,6 +318,7 @@ export async function resolveArticleAuthors(
         articleUrl,
         fetchImpl,
         lookup,
+        onMedia,
       );
       if (authors.length) return authors.slice(0, MAX_AUTHORS);
     }
@@ -239,7 +326,9 @@ export async function resolveArticleAuthors(
   const creators = await Promise.all(
     head.creators.map((h) => fromCreatorHandle(h, articleUrl, fetchImpl, lookup)),
   );
-  return creators.filter((a): a is FediAuthor => !!a).slice(0, MAX_AUTHORS);
+  const found = creators.filter((a): a is FediAuthor => !!a);
+  if (found.length) return found.slice(0, MAX_AUTHORS);
+  return (await fromAuthorLinks([...head.authorLinks, ...hinted], articleUrl, fetchImpl, lookup)).slice(0, MAX_AUTHORS);
 }
 
 /* ── Cache (per isolate) and batch resolution with a shared deadline ─────────────────────────── */
@@ -270,6 +359,7 @@ export async function resolveAuthorsFor(
   budgetMs = 3000,
   fetchImpl: FetchLike = fetch,
   lookup: Lookup = dohLookup,
+  hints: Record<string, ArticleHints> = {},
 ): Promise<Map<string, FediAuthor[]>> {
   const out = new Map<string, FediAuthor[]>();
   const pending: Promise<void>[] = [];
@@ -280,7 +370,7 @@ export async function resolveAuthorsFor(
       continue;
     }
     pending.push(
-      resolveArticleAuthors(url, fetchImpl, lookup)
+      resolveArticleAuthors(url, fetchImpl, lookup, hints[url], (m) => rememberMedia(url, m))
         .catch(() => [])
         .then((a) => {
           remember(url, a);
@@ -293,7 +383,24 @@ export async function resolveAuthorsFor(
 }
 
 /** For tests. */
+/** Episodes and videos found while resolving authors, keyed by the link that was resolved (same lifetime as credits). */
+const media = new Map<string, { at: number; found: FoundMedia }>();
+function rememberMedia(url: string, found: FoundMedia) {
+  // One link can yield a preview and then a playable episode or video: keep both.
+  const prev = media.get(url)?.found;
+  if (!prev && media.size >= MAX_ENTRIES) media.delete(media.keys().next().value as string);
+  media.set(url, { at: Date.now(), found: { ...prev, ...found } });
+}
+export function mediaFor(url: string): FoundMedia | undefined {
+  const e = media.get(url);
+  if (!e) return undefined;
+  if (Date.now() - e.at > POSITIVE_TTL) { media.delete(url); return undefined; }
+  return e.found;
+}
+export const episodeFor = (url: string): FediEpisode | undefined => mediaFor(url)?.episode;
+
 export function clearAuthorCache() {
+  media.clear();
   cache.clear();
   dnsCache.clear();
 }

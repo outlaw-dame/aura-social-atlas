@@ -27,9 +27,24 @@ The [Fedify-based discovery gateway](discovery-gateway/) is a separately deploye
 
 See [architecture rules](AGENTS.md), [project roadmap](roadmap.md), [discovery gateway scope](discovery-gateway/README.md) and [disabled Phase 2 ingestion contract](discovery-gateway/PHASE2_BONFIRE_BRIDGE.md).
 
+## Backend, hosting and source of truth
+
+**GitHub owns Atlas's application code; Lovable is one existing hosting environment, not Atlas's sole backend.** Read the [runtime/backend ownership contract](docs/ATLAS_RUNTIME_OWNERSHIP.md) before configuring deployment, running migrations, or asking an agent to work on Atlas.
+
+| Layer | Current owner |
+| --- | --- |
+| Bonfire social data, identity, permissions, posts, moderation and native federation | [Fedizen](https://fedizen.net) / Bonfire; Atlas is its client |
+| Atlas server-side application logic | TanStack Start SSR/functions in **this repo** |
+| Current Lovable preview and existing Atlas users | Lovable-hosted Workers app + **its own** managed Supabase/Auth |
+| Independent Atlas staging | Railway Node/Nitro + **separate** Supabase project `nprmdytcoqiribpwedjc`; exposed through private Cloudflare Tunnel at [atlas-staging.damonoutlaw.xyz](https://atlas-staging.damonoutlaw.xyz) |
+| Optional public relay discovery | `discovery-gateway/`: separate Fedify gateway, Railway and PostgreSQL, not a replacement for Bonfire |
+| Intended product domain | `atlas-social.space`; **not yet a verified independent production cutover** |
+
+**Important:** Staging currently uses a **pinned staging GitHub revision** and lacks the complete production-equivalent Supabase admin credential and Fedizen custom OIDC setup. The Lovable-backed application's user records and grants have **not** been migrated to the independent staging database. A successful GitHub merge does not automatically deploy to Railway; independently verify deployed SHA, secret presence, migrations and private API acceptance. Do not assume `.env`, `LOVABLE_DB_MIGRATION_URL`, or Lovable-generated clients identify the target for every environment.
+
 ## Local development
 
-Built with [Lovable](https://lovable.dev/projects/d3fdefe8-1c72-40dc-8fa6-0b966befbe5b), React/TanStack Start, TypeScript and Framework7.
+The existing Lovable preview was built with [Lovable](https://lovable.dev/projects/d3fdefe8-1c72-40dc-8fa6-0b966befbe5b); the **repository** contains the React/TanStack Start, TypeScript and Framework7 application, server handlers, schemas, tests and gateway. Lovable-specific build/auth integrations remain necessary **for that preview** until a separate migration is verified.
 
 ```sh
 git clone https://github.com/outlaw-dame/aura-social-atlas.git

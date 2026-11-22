@@ -194,3 +194,14 @@ jobs:
         run: bun test tests
       - name: Build Atlas client
         run: bun run build
+      - name: Device Lab sample data still matches the app's server functions
+        run: bun run lab:check
+      - name: Build the Device Lab (the phone app on sample data)
+        run: bun run lab:build
+      - name: Keep the built Device Lab for download (bench + app, open index.html from a local server)
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-lab
+          path: device-lab/dist
+          if-no-files-found: error
+          retention-days: 14

@@ -31,7 +31,7 @@ describe('Bonfire anonymous public GraphQL reads', () => {
     expect(calls[0]?.url).toBe('https://fedizen.net/api/graphql');
     const init = calls[0]?.init;
     expect(init?.method).toBe('POST');
-    expect(init?.redirect).toBe('error');
+    expect(init?.redirect).toBe('manual');
     expect(init?.cache).toBe('no-store');
     expect(JSON.parse(String(init?.body)).query).toContain('feedName:"local"');
     expect(init?.headers).not.toHaveProperty('authorization');

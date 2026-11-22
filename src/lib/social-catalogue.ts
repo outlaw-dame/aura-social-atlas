@@ -1,7 +1,15 @@
-import architecture from '@/assets/news-architecture.jpg';
+// Sample photos: AVIF where it pays (scripts/encode-photos.py: SSIM ≥ 0.985 against the JPEG, ≥ 20 % smaller), with
+// the JPEG as the fallback for browsers that can't decode AVIF. The star field stays JPEG: no AVIF reached that bar.
+import architecture from '@/assets/news-architecture.avif';
+import design from '@/assets/news-design.avif';
+import travel from '@/assets/news-travel.avif';
 import space from '@/assets/news-space.jpg';
-import design from '@/assets/news-design.jpg';
-import travel from '@/assets/news-travel.jpg';
+import architectureJpg from '@/assets/news-architecture.jpg';
+import designJpg from '@/assets/news-design.jpg';
+import travelJpg from '@/assets/news-travel.jpg';
+import { registerImageFallbacks } from './image-fallback';
+
+registerImageFallbacks([[architecture, architectureJpg], [design, designJpg], [travel, travelJpg]]);
 
 export const networks = ['All networks', 'Bluesky', 'Mastodon', 'RSS', 'Podcasts'] as const;
 export const topics = ['All topics', 'Design', 'Science', 'Culture', 'Travel'] as const;
@@ -108,9 +116,12 @@ export const posts = [
 ];
 
 /** Full fediverse address, e.g. @notesfromorbit@mastodon.social. */
+/** The handle as each network writes it: fediverse `@user@server`, Bluesky a domain (`@user.bsky.social`), RSS the feed. */
 export function fullHandle(creator: Creator): string {
+  if (creator.domain === 'rss') return creator.handle;
   const name = creator.handle.startsWith('@') ? creator.handle : `@${creator.handle}`;
-  return creator.domain === 'rss' ? creator.handle : `${name}@${creator.domain}`;
+  if (name.indexOf('@', 1) > 0) return name;
+  return creator.network === 'Bluesky' ? `${name}.${creator.domain}` : `${name}@${creator.domain}`;
 }
 
 /** Posts by one creator tagged with a given hashtag (normalized, no #). */

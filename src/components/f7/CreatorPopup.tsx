@@ -1,14 +1,15 @@
 import { Popup, Page, Navbar, NavRight, Link, Icon, Button, Card, CardContent, CardFooter } from 'framework7-react';
+import { promptSignInToSave } from './save-prompt';
 import { posts, fullHandle, podcastFeatureLabels, type Creator } from '@/lib/social-catalogue';
 import { avatarPreset } from '@/lib/atlas-avatars';
-import { linkifyHashtags, linkifyHashtagsWith, hashtagUrl } from '@/lib/hashtags';
+import { linkifyHashtags, linkifyHashtagsWith, hashtagUrl, hashtagLabel, TagText } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
 import { NetworkBadge, networkBrands } from '@/lib/networks';
 import { CreatorTag } from '@/components/social/CreatorTag';
 
 /** Mastodon-style creator profile: full fediverse handle, verified fields, featured tags, pinned story. */
 export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator | null; onClose: () => void; onOpenTag?: (creator: Creator, tag: string) => void }) {
-  const { followed, toggleFollow, saved, toggleSave } = useSocial();
+  const { followed, toggleFollow, saved, canSave, toggleSave } = useSocial();
   const theirPosts = creator ? posts.filter(p => p.creatorId === creator.id) : [];
   const pinned = theirPosts.filter(p => p.pinned);
   const rest = theirPosts.filter(p => !p.pinned);
@@ -59,8 +60,8 @@ export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator
             {creator.featured_hashtags.length > 0 && (
               <div className="atlas-profile-tags" aria-label="Featured hashtags">
                 {creator.featured_hashtags.map(tag => (
-                  <Link key={tag.name} className="atlas-profile-tag" href={onOpenTag ? undefined : hashtagUrl(tag.name)} external={!onOpenTag} onClick={() => onOpenTag?.(creator, tag.name)}>
-                    #{tag.name} <small>{tag.count} posts</small>
+                  <Link key={tag.name} className="atlas-profile-tag" href={onOpenTag ? undefined : hashtagUrl(tag.name)} external={!onOpenTag} onClick={() => onOpenTag?.(creator, tag.name)} aria-label={`${hashtagLabel(tag.name)}, ${tag.count} posts`}>
+                    <TagText tag={tag.name} /> <small>{tag.count} posts</small>
                   </Link>
                 ))}
               </div>
@@ -99,12 +100,12 @@ export function CreatorPopup({ creator, onClose, onOpenTag }: { creator: Creator
                 </div>
                 <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22, lineHeight: 1.15, margin: '6px 0' }}>{p.title}</div>
                 <div style={{ opacity: 0.75 }}>{p.excerpt}</div>
-                <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => onOpenTag?.(creator, tag)}>#{tag}</Link>)}</div>
+                <div className="atlas-story-tags">{p.tags.map(tag => <Link key={tag} className="atlas-hashtag" onClick={() => onOpenTag?.(creator, tag)} aria-label={hashtagLabel(tag)}><TagText tag={tag} /></Link>)}</div>
                 <CreatorTag creator={creator} onOpen={() => document.querySelector('.atlas-creator-popup .page-content')?.scrollTo({ top: 0, behavior: 'smooth' })} />
               </CardContent>
               <CardFooter>
                 <Link external target="_blank" href={p.url}>Open</Link>
-                <Link onClick={() => toggleSave(p.id)}>{saved.includes(p.id) ? 'Saved' : 'Save'}</Link>
+                <Link onClick={() => (canSave ? toggleSave(p.id) : promptSignInToSave())}>{saved.includes(p.id) ? 'Saved' : 'Save'}</Link>
               </CardFooter>
             </Card>
           ))}

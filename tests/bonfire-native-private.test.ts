@@ -78,7 +78,7 @@ describe('deployed schema-verified Bonfire native read operations', () => {
       calls++;
       expect(String(url)).toBe('https://fedizen.net/api/graphql');
       expect(init?.method).toBe('POST');
-      expect(init?.redirect).toBe('error');
+      expect(init?.redirect).toBe('manual');
       expect(init?.cache).toBe('no-store');
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer consented-fixture-token');
       const body = JSON.parse(String(init?.body));

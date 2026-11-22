@@ -17,18 +17,53 @@
  * The network side (safe fetching, caching) is in article-author.server.ts.
  */
 
-export type AttributionSource = "mastodon" | "activitypub" | "fediverse-creator" | "fedizen";
+export type AttributionSource =
+  | "mastodon"
+  | "activitypub"
+  | "fediverse-creator"
+  | "author-link"
+  | "fedizen";
+/** How each author was verified, in plain words for the reader. */
+export const ATTRIBUTION_NOTE: Record<AttributionSource, string> = {
+  mastodon: "Credited by Mastodon from the publisher’s page",
+  activitypub: "From the article’s own ActivityPub record",
+  "fediverse-creator": "Confirmed by the author’s fediverse profile",
+  "author-link": "The publisher’s author page is their fediverse account",
+  fedizen: "Published on Fedizen",
+};
 
 export type FediAuthor = {
   name: string;
   /** Full handle, e.g. "@jane@example.social". */
   acct: string;
-  /** Profile page to open (the actor's `url`, else its id). */
+  /** Profile page on their own server (the actor's `url`, else its id). */
   url: string;
+  /** The ActivityPub actor id, so Atlas can open the account itself. Older cached entries may lack it. */
+  actor?: string;
   avatar?: string;
   /** How the authorship was established — shown to readers. */
   verifiedBy: AttributionSource;
+  /** What was linked, when it isn't an ordinary article: a podcast episode (credited to its podcast), a podcast
+   *  itself, or an account's own page. */
+  work?: CreditedWork;
 };
+export type CreditedWork = "episode" | "podcast" | "account";
+
+/** The eyebrow on a creator tag. */
+export const CREDIT_LABEL: Record<CreditedWork | "article", string> = {
+  article: "More from",
+  episode: "More from the podcast",
+  podcast: "Podcast",
+  account: "Account",
+};
+
+/** How a credit was verified, worded for what was linked. */
+export function attributionNote(a: Pick<FediAuthor, "verifiedBy" | "work">): string {
+  if (a.verifiedBy === "activitypub" && a.work === "episode") return "From the episode’s own ActivityPub record";
+  if (a.verifiedBy === "activitypub" && (a.work === "podcast" || a.work === "account"))
+    return "The link is this account’s own page";
+  return ATTRIBUTION_NOTE[a.verifiedBy];
+}
 
 export const MAX_AUTHORS = 3;
 
@@ -113,9 +148,25 @@ const isObj = (v: unknown): v is Json => !!v && typeof v === "object" && !Array.
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : v == null ? [] : [v]);
 
-const ARTICLE_TYPES = new Set(["Article", "Note", "Page", "Document", "Video", "Audio", "Event"]);
-const ACTOR_TYPES = new Set(["Person", "Organization", "Service", "Group", "Application"]);
+// PodcastEpisode: Castopod serves each episode as this type (Podcast Index ActivityPub draft), attributed to the
+// podcast's actor.
+const ARTICLE_TYPES = new Set([
+  "Article",
+  "Note",
+  "Page",
+  "Document",
+  "Video",
+  "Audio",
+  "Event",
+  "PodcastEpisode",
+]);
+// "Podcast": what Castopod answers to application/podcast-activity+json (its plain ActivityPub actor is a Person).
+const ACTOR_TYPES = new Set(["Person", "Organization", "Service", "Group", "Application", "Podcast"]);
 const typesOf = (o: Json) => list(o.type).filter((t): t is string => typeof t === "string");
+
+export function isPodcastEpisode(o: unknown): boolean {
+  return isObj(o) && typesOf(o).includes("PodcastEpisode");
+}
 
 export function isArticleObject(o: unknown): o is Json {
   return isObj(o) && typesOf(o).some((t) => ARTICLE_TYPES.has(t)) && o.attributedTo != null;
@@ -194,7 +245,7 @@ export function actorToAuthor(
   const icon = list(actor.icon)
     .map((i) => (isObj(i) ? linkHref(i.url) : linkHref(i)))
     .find(Boolean);
-  return { name, acct, url: linkHref(actor.url) ?? id, avatar: icon, verifiedBy };
+  return { name, acct, url: linkHref(actor.url) ?? id, actor: id, avatar: icon, verifiedBy };
 }
 
 /** fediverse:creator value → "user@domain" (accepts "@user@domain" and "acct:user@domain"). */
@@ -233,7 +284,7 @@ function tags(html: string, name: string): Record<string, string>[] {
 export function parseArticleHead(
   html: string,
   pageUrl: string,
-): { apAlternate?: string; creators: string[] } {
+): { apAlternate?: string; creators: string[]; authorLinks: string[] } {
   const end = html.search(/<\/head\s*>/i);
   const head = (end > 0 ? html.slice(0, end) : html).slice(0, 262_144);
   let apAlternate: string | undefined;
@@ -265,7 +316,56 @@ export function parseArticleHead(
     .filter((m) => (m.name ?? m.property ?? "").toLowerCase() === "fediverse:creator")
     .map((m) => parseHandle(m.content))
     .filter((h): h is string => !!h);
-  return { apAlternate, creators: [...new Set(creators)].slice(0, MAX_AUTHORS) };
+  // rel="author" links (head <link>, or <a> anywhere): a publisher's author page is often the author's
+  // ActivityPub actor too (WordPress with the ActivityPub plugin serves both at one URL).
+  const authorLinks: string[] = [];
+  for (const t of [...tags(head, "link"), ...tags(html.slice(0, 524_288), "a")]) {
+    if (!(t.rel ?? "").toLowerCase().split(/\s+/).includes("author") || !t.href) continue;
+    try {
+      const u = new URL(t.href, pageUrl);
+      u.hash = "";
+      if (isPublicHttpsUrl(u.href) && !authorLinks.includes(u.href)) authorLinks.push(u.href);
+    } catch {
+      /* ignore */
+    }
+    if (authorLinks.length >= MAX_AUTHORS) break;
+  }
+  return { apAlternate, creators: [...new Set(creators)].slice(0, MAX_AUTHORS), authorLinks };
+}
+
+/** A link preview read from a page's own head (Open Graph, then Twitter cards, then <title>), as Mastodon builds
+ *  its cards (app/lib/link_details_extractor.rb). Plain text only, clipped; the image only as a public https URL. */
+export type PagePreview = { title: string; description?: string; image?: string; provider?: string };
+
+export function parsePagePreview(html: string, pageUrl: string): PagePreview | null {
+  const end = html.search(/<\/head\s*>/i);
+  const head = (end > 0 ? html.slice(0, end) : html).slice(0, 262_144);
+  const meta = new Map<string, string>();
+  for (const m of tags(head, "meta")) {
+    const key = (m.property ?? m.name ?? "").toLowerCase();
+    if (key && m.content && !meta.has(key)) meta.set(key, m.content);
+  }
+  const clean = (v: string | undefined, n: number) => {
+    const t = decodeEntities((v ?? "").replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Math.min(Number(d), 0x10ffff))))
+      .replace(/<[^>]*>/g, "").replace(/\p{Cc}|[\u202a-\u202e\u2066-\u2069]/gu, " ").replace(/\s+/g, " ").trim();
+    return t ? t.slice(0, n) : undefined;
+  };
+  const titleTag = /<title\b[^>]*>([\s\S]{0,1000}?)<\/title>/i.exec(head)?.[1];
+  const title = clean(meta.get("og:title") ?? meta.get("twitter:title") ?? titleTag, 300);
+  if (!title) return null;
+  const description = clean(meta.get("og:description") ?? meta.get("twitter:description") ?? meta.get("description"), 400);
+  const provider = clean(meta.get("og:site_name") ?? meta.get("application-name"), 100);
+  let image: string | undefined;
+  const rawImage = meta.get("og:image:secure_url") ?? meta.get("og:image") ?? meta.get("og:image:url") ?? meta.get("twitter:image") ?? meta.get("twitter:image:src");
+  if (rawImage) {
+    try {
+      const u = new URL(rawImage, pageUrl);
+      if (isPublicHttpsUrl(u.href) && u.href.length <= 2048) image = u.href;
+    } catch {
+      /* ignore */
+    }
+  }
+  return { title, ...(description ? { description } : {}), ...(image ? { image } : {}), ...(provider ? { provider } : {}) };
 }
 
 /** WebFinger JRD → the ActivityPub actor URL. */
