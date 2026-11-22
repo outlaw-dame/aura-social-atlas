@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { friendlyBonfireError, isEmbeddedPreview, readOAuthError, standaloneAuthUrl } from '@/lib/bonfire-auth';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,6 +11,7 @@ import { AVATAR_PRESETS } from '@/lib/atlas-avatars';
 import { cn } from '@/lib/utils';
 import { Compass } from 'lucide-react';
 import { authUiCapabilities } from '@/lib/auth-runtime';
+import { runAccountAuth } from '@/lib/account-auth';
 
 export const Route = createFileRoute('/auth')({
   head: () => ({
@@ -41,6 +42,7 @@ function AuthPage() {
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [embeddedHref, setEmbeddedHref] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
 
   const socialSignIn = async (provider: 'google' | 'lovable') => {
     setError(null);
@@ -106,38 +108,42 @@ function AuthPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
     setBusy(true);
     setError(null);
 
-    if (mode === 'signup') {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: window.location.origin,
-          data: { display_name: displayName || null, avatar_key: avatarKey },
-        },
-      });
-      setBusy(false);
-      if (signUpError) {
-        setError(signUpError.message);
-        return;
-      }
-      if (!data.session) {
-        setNeedsConfirmation(true);
-        return;
+    try {
+      if (mode === 'signup') {
+        const result = await runAccountAuth(() => supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: { display_name: displayName || null, avatar_key: avatarKey },
+          },
+        }));
+        if (result.kind === 'error') {
+          setError(result.message);
+          return;
+        }
+        if (!result.data.session) {
+          setNeedsConfirmation(true);
+          return;
+        }
+      } else {
+        const result = await runAccountAuth(() => supabase.auth.signInWithPassword({ email, password }));
+        if (result.kind === 'error') {
+          setError(result.message);
+          return;
+        }
       }
       void navigate({ to: '/' });
-      return;
+    } finally {
+      // A rejected SDK request must never strand the form in a busy state.
+      submitting.current = false;
+      setBusy(false);
     }
-
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    setBusy(false);
-    if (signInError) {
-      setError(signInError.message);
-      return;
-    }
-    void navigate({ to: '/' });
   };
 
   return (
