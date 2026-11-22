@@ -92,4 +92,10 @@ describe('verified social identity presentation', () => {
       expect(source).toContain('useFedizenIdentity');
     }
   });
+
+  test('disconnect cancels and clears the verified identity cache before showing another account', () => {
+    const source = readFileSync('src/components/social/useFedizen.ts', 'utf8');
+    expect(source).toContain("qc.cancelQueries({ queryKey: ['fedizen-viewer', id], exact: true })");
+    expect(source).toContain("qc.setQueryData(['fedizen-viewer', id], { connected: false, viewer: null })");
+  });
 });
