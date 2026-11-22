@@ -56,18 +56,18 @@ describe('Fedizen read-side failure isolation', () => {
 
   test('rejects object-shaped HTTP 200 payload as upstream failure', async () => {
     globalThis.fetch = mock(async () => new Response('{"error":"secret"}', { status: 200 })) as typeof fetch;
-    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 502, data: [] });
+    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 502, data: [], failure: 'mismatch' });
   });
 
   test('HTTP 401 retains authorization failure status', async () => {
     globalThis.fetch = mock(async () => new Response('unauthorized', { status: 401 })) as typeof fetch;
-    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 401, data: [] });
+    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 401, data: [], failure: 'refused' });
   });
 
   test('network exception fails without replaying the request', async () => {
     let calls = 0;
     globalThis.fetch = mock(async () => { calls++; throw new Error('secret in transport exception'); }) as typeof fetch;
-    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 503, data: [] });
+    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 503, data: [], failure: 'unreachable' });
     expect(calls).toBe(1);
   });
   test('valid Home response preserves the fields used by the UI', async () => {
@@ -109,20 +109,20 @@ describe('Fedizen read-side failure isolation', () => {
     ];
     for (const payload of invalid) {
       globalThis.fetch = mock(async () => new Response(JSON.stringify(payload))) as typeof fetch;
-      expect(await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20')).toEqual({ status: 502, data: [] });
+      expect(await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20')).toEqual({ status: 502, data: [], failure: 'mismatch' });
     }
   });
 
   test('rejects malformed notification status nested objects', async () => {
     globalThis.fetch = mock(async () => new Response(JSON.stringify([{ id: 'n', status: { id: 'p', account: [null] } }]))) as typeof fetch;
-    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 502, data: [] });
+    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 502, data: [], failure: 'mismatch' });
   });
 
   test('declared private response oversize cancels the response stream', async () => {
     let cancelled = false;
     const body = new ReadableStream<Uint8Array>({ cancel() { cancelled = true; } });
     globalThis.fetch = mock(async () => new Response(body, { headers: { 'content-length': '3000000' } })) as typeof fetch;
-    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 502, data: [] });
+    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 502, data: [], failure: 'unreadable' });
     expect(cancelled).toBe(true);
   });
 
@@ -134,7 +134,7 @@ describe('Fedizen read-side failure isolation', () => {
       cancel() { cancelled = true; },
     }, { highWaterMark: 0 });
     globalThis.fetch = mock(async () => new Response(body)) as typeof fetch;
-    expect(await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20')).toEqual({ status: 502, data: [] });
+    expect(await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20')).toEqual({ status: 502, data: [], failure: 'unreadable' });
     expect(cancelled).toBe(true);
     expect(pulls).toBeLessThan(6);
   });

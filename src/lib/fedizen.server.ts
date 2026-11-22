@@ -600,7 +600,20 @@ export function pageCursors(link: string | null): { next?: string; prev?: string
   return out;
 }
 
-export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[]; next?: string; prev?: string }> {
+/** Why a private read gave nothing back: Fedizen refused it (its status), sent something unreadable, or sent JSON in a
+ *  shape Atlas doesn't accept. Never carries the response itself. */
+export type FedizenReadFailure = 'unreachable' | 'refused' | 'unreadable' | 'mismatch';
+
+/**
+ * A read's route for logs: the path without its query, with every segment that could name a person, post, tag or
+ * search (ids, handles, hashtags) replaced by ":x". Only Mastodon's fixed route words survive.
+ */
+export function readRoute(path: string): string {
+  const parts = path.split('?')[0].split('/');
+  return parts.map((seg, i) => (i === 2 && /^v\d(-bonfire)?$/.test(seg)) || (/^[a-z][a-z0-9_-]{0,30}$/.test(seg) && !/^(tag|tags|lookup)$/.test(parts[i - 1] ?? '') && !/\d/.test(seg)) ? seg : seg ? ':x' : seg).join('/');
+}
+
+export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[]; next?: string; prev?: string; failure?: FedizenReadFailure }> {
   const read = READS.find(r => r.match.test(path));
   if (!read) throw new Error('Unsupported Fedizen read path.');
 
@@ -614,13 +627,14 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
       cache: 'no-store',
     });
   } catch (e) {
-    console.error('Fedizen read unreachable', { why: transportDetail(e) });
-    return { status: 503, data: [] };
+    console.error('Fedizen read unreachable', { route: readRoute(path), why: transportDetail(e) });
+    return { status: 503, data: [], failure: 'unreachable' };
   }
 
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});
-    return { status: response.status, data: [] };
+    console.warn('Fedizen read refused', { route: readRoute(path), status: response.status });
+    return { status: response.status, data: [], failure: 'refused' };
   }
 
   let payload: unknown;
@@ -629,10 +643,15 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
   } catch {
     // Includes decode, timeout/stream, oversize and malformed JSON failures.
     // Do not log bearer values or private response bodies.
-    return { status: 502, data: [] };
+    console.warn('Fedizen read unreadable', { route: readRoute(path) });
+    return { status: 502, data: [], failure: 'unreadable' };
   }
   const parsed = read.schema.safeParse(payload);
-  if (!parsed.success) return { status: 502, data: [] };
+  if (!parsed.success) {
+    // Where the shape differs (field names, array positions and the kind of mismatch), never the values.
+    console.warn('Fedizen read did not match', { route: readRoute(path), issues: parsed.error.issues.slice(0, 5).map(i => ({ at: i.path.join('.'), code: i.code })) });
+    return { status: 502, data: [], failure: 'mismatch' };
+  }
   return { status: 200, data: read.single ? [parsed.data] : parsed.data as unknown[], ...pageCursors(response.headers.get('link')) };
 }
 
