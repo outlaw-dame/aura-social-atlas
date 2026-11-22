@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { clearHomeCache, readHomeCache, writeHomeCache } from '@/lib/home-timeline';
 import { useAtlasAuth } from './AuthState';
 import { disconnectFedizen, getFedizenHome, getFedizenMessages, getFedizenStatus, startFedizenConnect, type FedizenHome } from '@/lib/fedizen.functions';
-import { getNativeBonfireSnapshot, getNativeBonfireHomeContinuation } from '@/lib/bonfire-private.functions';
-import { mergeNativeBonfirePages, nextNativeHomeCursor, reconcileCachedHome, reconcileNativeContinuationStatus, shouldRequestNativeBonfireHome } from '@/lib/bonfire-native-presentation';
+import { getNativeBonfireSnapshot, getNativeBonfireHomeContinuation, getNativeHomeDetails } from '@/lib/bonfire-private.functions';
+import { mergeNativeBonfirePages, nativeCardsToRead, nextNativeHomeCursor, reconcileCachedHome, withNativeDetails, reconcileNativeContinuationStatus, shouldRequestNativeBonfireHome } from '@/lib/bonfire-native-presentation';
 import { isEmbeddedPreview } from '@/lib/bonfire-auth';
 
 /** Personal, server-authorized Fedizen feed; cached only under the Atlas user ID. */
@@ -16,6 +16,7 @@ export function useFedizen() {
   const home = useServerFn(getFedizenHome), start = useServerFn(startFedizenConnect), drop = useServerFn(disconnectFedizen);
   const nativeHome = useServerFn(getNativeBonfireSnapshot);
   const nativeContinuation = useServerFn(getNativeBonfireHomeContinuation);
+  const nativeDetails = useServerFn(getNativeHomeDetails);
   const [actionError, setActionError] = useState<{ userId: string; message: string } | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const pending = useRef(false);
@@ -92,6 +93,28 @@ export function useFedizen() {
     staleTime: 60_000,
     retry: false,
   });
+  // Cards that weren't read in time on the first load (GraphQL-only, Share only): their details are read right after,
+  // with a longer allowance, and replace them in place.
+  const merged = mergeNativeBonfirePages(q.data ?? { connected: false, accountHandle: null, posts: [], notices: [] }, nativeQuery.data?.pages);
+  // Details already read stay applied while the next set is fetched, and aren't asked for again.
+  const [readDetails, setReadDetails] = useState<Record<string, import('@/lib/fedizen-feed').FedizenPost>>({});
+  const toRead = nativeCardsToRead(merged).filter(ref => !readDetails[ref]);
+  const details = useQuery({
+    queryKey: ['bonfire-native-details', id, toRead.join(',')] as const,
+    queryFn: async () => {
+      if (!id) throw new Error('Atlas user is not signed in.');
+      const r = await nativeDetails({ data: { expectedAtlasUserId: id, statusIds: toRead } });
+      return r.status === 'available' ? r.posts : {};
+    },
+    enabled: !!id && toRead.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  useEffect(() => {
+    if (details.data && Object.keys(details.data).length) setReadDetails(d => ({ ...d, ...details.data }));
+  }, [details.data]);
+  useEffect(() => { setReadDetails({}); }, [id]);
   const embedded = typeof window !== 'undefined' && isEmbeddedPreview();
 
   return {
@@ -100,7 +123,9 @@ export function useFedizen() {
     data: q.data,
     /** When the first page was fetched (or saved on this device, when Home opened on that). */
     updatedAt: q.dataUpdatedAt,
-    native: mergeNativeBonfirePages(q.data ?? { connected: false, accountHandle: null, posts: [], notices: [] }, nativeQuery.data?.pages),
+    native: withNativeDetails(merged, readDetails),
+    /** Reads native Home again from its first page (after new posts were found). */
+    refreshNative: () => (shouldRequestNativeBonfireHome(!!id, q.data) ? nativeQuery.refetch().then(() => undefined) : Promise.resolve()),
     loadingMoreNative: nativeQuery.isFetchingNextPage,
     hasMoreNative: nativeQuery.hasNextPage,
     moreNativeError: nativeQuery.isFetchNextPageError,

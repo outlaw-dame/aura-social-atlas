@@ -15,6 +15,7 @@ import { NewPostFaces } from './NewPostFaces';
 import { newPostsLabel } from '@/lib/new-post-faces';
 import { ArrowUp, Loader2 } from 'lucide-react';
 import { useHomeTimeline } from './useHomeTimeline';
+import { useNativeNewPosts } from './useNativeNewPosts';
 
 const when = (d?: string) => d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
@@ -25,6 +26,11 @@ export function FedizenFeed() {
   const list = useRef<HTMLDivElement>(null);
   const restSource = !!f.data?.connected && !f.data.error && selectBonfireHome(f.data, f.native).source !== 'native';
   const tl = useHomeTimeline(f.data, restSource, list, f.updatedAt);
+  const nativeSource = !!f.data?.connected && !f.data.error && selectBonfireHome(f.data, f.native).source === 'native';
+  const nativeNew = useNativeNewPosts(nativeSource, nativeSource ? f.native?.posts ?? [] : [], f.refreshNative, list);
+  // One pill for either source: what's new above the feed, and how to show it.
+  const fresh = restSource ? { count: tl.newCount, gap: tl.gap, faces: tl.faces, reveal: tl.reveal } : nativeSource
+    ? { count: nativeNew.newCount, gap: nativeNew.gap, faces: nativeNew.faces, reveal: () => void nativeNew.reveal() } : null;
   const head = <div className="mb-5 flex items-baseline justify-between"><h2 className="font-serif text-2xl italic">Your Fedizen feed</h2><span className="text-[10px] uppercase text-muted-foreground">Live</span></div>;
   if (!f.signedIn) return <><section className="mb-12">{head}<p className="text-sm text-muted-foreground">Sign in to Atlas to see your Fedizen feed. <Link to="/auth" className="text-accent underline">Sign in</Link></p></section><PublicFedizenFeed /></>;
   if (f.loading) return <section className="mb-12">{head}<p className="text-sm text-muted-foreground">Loading your Fedizen feed…</p></section>;
@@ -45,9 +51,9 @@ export function FedizenFeed() {
     <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_240px]">
       <div ref={list} className="space-y-6">
         {/* New posts wait here until asked for (Bonfire: "Show N new activities"; Mastodon: "N new items"). */}
-        {restSource && tl.newCount > 0 && <div className="pointer-events-none sticky top-20 z-30 -mb-2 flex justify-center">
-          <button type="button" onClick={tl.reveal} aria-label={newPostsLabel(tl.newCount, tl.gap, tl.faces)} style={{ '--atlas-pill-bg': 'var(--primary)' } as CSSProperties} className="pointer-events-auto flex h-10 items-center gap-2 rounded-full bg-primary pl-3.5 pr-1.5 text-sm font-medium text-primary-foreground shadow-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <ArrowUp className="size-4" />{tl.faces.length ? <NewPostFaces faces={tl.faces} /> : <span className="pr-2">{tl.newCount === 1 ? '1 new post' : `${tl.newCount}${tl.gap ? '+' : ''} new posts`}</span>}
+        {fresh && fresh.count > 0 && <div className="pointer-events-none sticky top-20 z-30 -mb-2 flex justify-center">
+          <button type="button" onClick={fresh.reveal} aria-label={newPostsLabel(fresh.count, fresh.gap, fresh.faces)} disabled={nativeNew.revealing} style={{ '--atlas-pill-bg': 'var(--primary)' } as CSSProperties} className="pointer-events-auto flex h-10 items-center gap-2 rounded-full bg-primary pl-3.5 pr-1.5 text-sm font-medium text-primary-foreground shadow-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {nativeNew.revealing ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}{fresh.faces.length ? <NewPostFaces faces={fresh.faces} /> : <span className="pr-2">{fresh.count === 1 ? '1 new post' : `${fresh.count}${fresh.gap ? '+' : ''} new posts`}</span>}
           </button>
         </div>}
         {(restSource ? tl.posts : posts).length ? (restSource ? tl.posts : posts).map(p => <FeedPostCard key={p.id} post={p} actions={actions} />) : error && displayed.source !== 'native' ? null : <p className="text-sm text-muted-foreground">Your Fedizen timeline is empty. Follow people on Fedizen and their posts will appear here.</p>}

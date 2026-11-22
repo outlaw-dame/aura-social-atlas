@@ -1,5 +1,6 @@
 import type { FedizenHome } from './fedizen.functions';
 import type { NativeBonfireSnapshot } from './bonfire-private.functions';
+import type { FedizenPost } from './fedizen-feed';
 
 /**
  * The old REST timeline remains the fallback until a server-gated, identity
@@ -149,4 +150,47 @@ export function reconcileCachedHome(
   if (status.handle !== null && cached.accountHandle !== null && status.handle !== cached.accountHandle) return { refetch: true };
   const enabled = status.nativeReadEnabled === true;
   return (cached.nativeReadEnabled === true) === enabled ? { refetch: false } : { refetch: false, patch: { nativeReadEnabled: enabled } };
+}
+
+/**
+ * Native Home with the details read after the first load (getNativeHomeDetails) in place of the GraphQL-only cards
+ * they belong to. A card keeps its GraphQL id and booster; one still unread stays as it is.
+ */
+export function withNativeDetails(
+  native: NativeBonfireSnapshot | undefined,
+  details: Readonly<Record<string, FedizenPost>> | undefined,
+): NativeBonfireSnapshot | undefined {
+  if (!native || !details || native.status !== 'available') return native;
+  let changed = false;
+  const posts = native.posts.map(p => {
+    const rest = p.statusRef ? details[p.statusRef] : undefined;
+    if (!rest) return p;
+    changed = true;
+    const { statusRef: _drop, ...card } = rest;
+    return {
+      ...card,
+      id: p.id,
+      ...(p.booster ? { boostedBy: p.booster.name, booster: p.booster } : p.boostedBy ? { boostedBy: p.boostedBy } : {}),
+    };
+  });
+  return changed ? { ...native, posts } : native;
+}
+
+/** Status ids of native Home cards still waiting for their details, at most 20, in feed order. */
+export function nativeCardsToRead(native: NativeBonfireSnapshot | undefined): string[] {
+  if (!native || native.status !== 'available') return [];
+  return [...new Set(native.posts.flatMap(p => (p.statusRef && !p.statusId ? [p.statusRef] : [])))].slice(0, 20);
+}
+
+/**
+ * Which posts on the newest native page are new to the reader: those above the first one already shown. When none of
+ * the newest page is shown yet, everything on it is new and there may be more between (gap). Nothing is new before
+ * the reader has a feed.
+ */
+export function nativeNewPosts(latest: readonly FedizenPost[], shown: readonly FedizenPost[]): { fresh: FedizenPost[]; gap: boolean } {
+  if (!shown.length) return { fresh: [], gap: false };
+  const known = new Set(shown.map(p => p.id));
+  const at = latest.findIndex(p => known.has(p.id));
+  if (at === -1) return { fresh: [...latest], gap: latest.length > 0 };
+  return { fresh: latest.slice(0, at), gap: false };
 }

@@ -153,3 +153,59 @@ export const getNativeBonfireHomeContinuation = createServerFn({ method: 'GET' }
       return { ...base, status: 'unavailable' };
     }
   });
+
+const STATUS_IDS = z.array(z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)).min(1).max(20);
+
+/**
+ * Details for native Home cards that weren't read in time on the first load (their statusRef): read with a longer
+ * allowance, after the page is already on screen, and enriched as every feed is. Same gate, session and identity
+ * checks as the snapshot; the reader's own connection decides what Fedizen will show.
+ */
+export const getNativeHomeDetails = createServerFn({ method: 'POST' })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(input => z.object({ expectedAtlasUserId: z.string().uuid(), statusIds: STATUS_IDS }).strict().parse(input))
+  .handler(async ({ data, context }): Promise<{ status: NativeBonfireSnapshot['status']; posts: Record<string, FedizenPost> }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    if (!nativeBonfireReadEnabled(process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'])) return { status: 'disabled', posts: {} };
+    try {
+      const [{ verifiedNativeBonfireConnection }, native, { fedizenGet }, { fromStatuses }, { withArticleAuthors }] = await Promise.all([
+        import('./bonfire-verified-connection.server'), import('./bonfire-private.server'), import('./fedizen.server'),
+        import('./fedizen-feed'), import('./feed-enrich.server'),
+      ]);
+      const connection = await verifiedNativeBonfireConnection(data.expectedAtlasUserId, context.userId);
+      if (connection.status !== 'available') return { status: connection.status, posts: {} };
+      const found = await native.readStatuses(data.statusIds, async id => {
+        const r = await fedizenGet(connection.accessToken, `/api/v1/statuses/${id}`).catch(() => null);
+        return r?.status === 200 ? fromStatuses(r.data as never)[0] : undefined;
+      }, 8000);
+      const ids = [...found.keys()];
+      const enriched = await withArticleAuthors(ids.map(id => found.get(id)!), 2000, connection.accessToken);
+      return { status: 'available', posts: Object.fromEntries(ids.map((id, i) => [id, enriched[i]])) };
+    } catch {
+      return { status: 'unavailable', posts: {} };
+    }
+  });
+
+/**
+ * The newest native Home page as GraphQL-only cards, to tell which posts are new (the new-posts pill) without reading
+ * each one: those are read when the reader asks to see them.
+ */
+export const getNativeBonfireHomeLatest = createServerFn({ method: 'GET' })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(input => z.object({ expectedAtlasUserId: z.string().uuid() }).strict().parse(input))
+  .handler(async ({ data, context }): Promise<{ status: NativeBonfireSnapshot['status']; posts: FedizenPost[] }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    if (!nativeBonfireReadEnabled(process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'])) return { status: 'disabled', posts: [] };
+    try {
+      const [{ verifiedNativeBonfireConnection }, native] = await Promise.all([
+        import('./bonfire-verified-connection.server'), import('./bonfire-private.server'),
+      ]);
+      const connection = await verifiedNativeBonfireConnection(data.expectedAtlasUserId, context.userId);
+      if (connection.status !== 'available') return { status: connection.status, posts: [] };
+      const home = await native.readNativeBonfirePage(connection.accessToken, 'myFeed', null);
+      if (!home) return { status: 'authorization-required', posts: [] };
+      return { status: 'available', posts: native.nativeLatestPreview(home) };
+    } catch {
+      return { status: 'unavailable', posts: [] };
+    }
+  });

@@ -157,3 +157,16 @@ describe('Follow requests: Bonfire sends every pending one', () => {
     expect(JSON.stringify(r)).not.toContain('secret');
   });
 });
+
+describe('Blocked and muted people: Bonfire sends the whole list whatever limit asks', () => {
+  const acct = (n: number) => ({ id: `01K${String(n).padStart(23, '0')}`, display_name: `P${n}`, acct: `p${n}@example.social` });
+  for (const route of ['/api/v1/blocks?limit=80', '/api/v1/mutes?limit=80']) {
+    test(`${route}: more than 80 are read (seen live), and an unreadable entry is left out`, async () => {
+      const list = [...Array.from({ length: 150 }, (_, i) => acct(i)), { display_name: 'no id' }];
+      globalThis.fetch = mock(async () => new Response(JSON.stringify(list), { status: 200 })) as typeof fetch;
+      const r = await fedizenGet('sentinel', route);
+      expect(r.status).toBe(200);
+      expect(r.data).toHaveLength(150);
+    });
+  }
+});
