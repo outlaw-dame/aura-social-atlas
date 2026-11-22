@@ -1,6 +1,6 @@
 # Atlas runtime and backend ownership contract
 
-**Verified against connected infrastructure: November 21, 2026 (America/New_York).** This is the repository's operational source-of-truth map for agents and developers. It describes **current state**, not a claim that an incomplete migration is finished. Always recheck live account status, deployed commit, CI and actual secrets **by name only** before changing infrastructure.
+**Verified against connected infrastructure: November 22, 2026 (America/New_York).** This is the repository's operational source-of-truth map for agents and developers. It describes **current state**, not a claim that an incomplete migration is finished. Always recheck live account status, deployed commit, CI and actual secrets **by name only** before changing infrastructure.
 
 ## 1. What owns what?
 
@@ -9,8 +9,8 @@
 | Social identity, follows, posts, audiences, moderation, groups and fediverse federation | **Bonfire on Fedizen**, `https://fedizen.net`, externally hosted on Co-op Cloud | Do **not** reproduce Bonfire social state in Supabase, change the Fedizen host/database, or treat a public discovery event as an authenticated Home post. |
 | Atlas application backend: SSR/server functions, OAuth PKCE coordination, authenticated API gateway, push relay | **Atlas TanStack Start server**, same GitHub repository as the UI. Deployed on **Lovable Workers** for the existing Lovable application, **Railway Node/Nitro** for independent staging. | The application backend is **not** inherently Lovable; it is server code in `src/**/*.server.ts`, `src/**/*.functions.ts`, and server routes. Runtime compatibility differs (Cloudflare Workers vs Node). |
 | Atlas session, user profiles, settings, delegated Bonfire OAuth grants, push devices/relays, AI settings/filters | **Supabase PostgreSQL and Auth**. **Two independent projects**, not one globally shared database. | Use user-scoped auth/RLS where appropriate and server-only secret keys for privileged handlers. No copying accounts, tokens, encryption keys or private data between environments. |
-| Independent Atlas web staging | **Railway project** `74c7ecfc-222c-455d-ab23-1c64449c8807`, environment `20af7761-b3c0-44e1-8d9b-59fa271589c3`, `atlas-web-staging` service | GitHub source is **`staging/atlas-bonfire-client-v3` pinned to `d95776c6ddcd601d563a83ffa8103f99c4a9630a`**, not automatically `main`. Exact-head staging CI passed; the staging-only diagnostic UI is **not** merged into production. This service has Node SSR but **does not yet have** its staging Supabase server secret or custom OIDC provider configured. Do not claim authenticated parity. |
-| Independent staging Atlas database | Supabase project **`atlas-fedizen-staging`**, ID `nprmdytcoqiribpwedjc`, `us-east-1` | Empty separate staging account domain; not the existing Lovable project's data. Migrations must be reconciled between `drizzle/migrations` and `supabase/migrations` rather than blindly replayed. |
+| Independent Atlas web staging | **Railway project** `74c7ecfc-222c-455d-ab23-1c64449c8807`, environment `20af7761-b3c0-44e1-8d9b-59fa271589c3`, `atlas-web-staging` service | GitHub source is **`staging/atlas-bonfire-client-v3` pinned to `1fc3a4e728e2367053088a1436123d7246a9951b`** at the November 22 verified deployment. Exact-head staging CI passed. The isolated stage now has its Supabase server key by *variable name* and a successful Fedizen OIDC sign-in and delegated grant recorded by the acceptance tester. The sign-out replay fix is deployed, but its **live replay** and independent A/B private API isolation are still unverified; neither is a production release approval. |
+| Independent staging Atlas database | Supabase project **`atlas-fedizen-staging`**, ID `nprmdytcoqiribpwedjc`, `us-east-1` | Independent staging account domain, with at least one staging tester signed in on November 22; not the existing Lovable project's data. Migrations must be reconciled between `drizzle/migrations` and `supabase/migrations` rather than blindly replayed. |
 | Lovable preview/existing application environment | Lovable project **`d3fdefe8-1c72-40dc-8fa6-0b966befbe5b`**, preview `https://id-preview--d3fdefe8-1c72-40dc-8fa6-0b966befbe5b.lovable.app`, with **its own Lovable-managed Supabase/Auth backend** | This environment is **currently real and connected**, not a mock. It has actual Atlas users and Fedizen OAuth grants; treat it as production-like. Some generated Lovable SDK, identity bootstrap and preview auth behavior remain in use. Never delete them merely to remove branding. |
 | Network ingress/CDN/WAF/AI crawler policy | **Cloudflare** | Independent staging web hostname `https://atlas-staging.damonoutlaw.xyz` uses a private Cloudflare Tunnel to Railway (`atlas-web-staging.railway.internal:3000`). No public Railway origin domains. Authenticated pages, OAuth callbacks and GraphQL responses bypass CDN caching. |
 | Product domain | **`atlas-social.space`** | Cloudflare full DNS zone was *prepared* with branded `staging.atlas-social.space` pointing to the tunnel, but registrar authoritative delegation was **not activated at last verification**. Do not assume this branded staging hostname works or redirect the apex without a verified DNS/mx/DNSSEC cutover. |
@@ -41,8 +41,8 @@
 ## 4. What is **not migrated** yet
 
 - **Existing Lovable Auth accounts and Atlas app data** are not in `atlas-fedizen-staging`. No cutover/import is authorized or completed.
-- **Railway staging privileged Supabase client**: `SUPABASE_SERVICE_ROLE_KEY` was absent at the last connected variable inventory. Without it, Atlas server-only storage for Fedizen OAuth grants, push relays and settings cannot function.
-- **Railway staging custom Fedizen OIDC identity provider**: dedicated `custom:app-oidc` and exact Bonfire client registration/redirects are not yet established. This is separate from a `read write follow` delegated Fedizen API grant.
+- **Railway staging privileged Supabase client:** `SUPABASE_SERVICE_ROLE_KEY` is **present by name** in the connected staging service's November 22 inventory. Its value was not read. This does not imply equivalent secrets or migrations exist in the Lovable or future independent production environments.
+- **Railway staging custom Fedizen OIDC identity provider:** The November 22 operator acceptance confirmed `custom:app-oidc` sign-in and a separate Fedizen `read write follow` delegated API grant. These are independent mechanisms. Do not copy this staging registration, grant or user to production.
 - **Existing Lovable web-app backend** still runs server functions on Lovable's Workers and uses Lovable-managed Supabase/identity integration; its VAPID configuration is independent of Railway environment variables. A server-side key present in Lovable does **not** make it present on Railway.
 - **Atlas production domain/production SSR**: no validated full production cutover of `atlas-social.space` to Railway/Cloudflare/independent Supabase was completed.
 - **Production data migration or live-user OAuth handoff:** design separately with explicit consent, rollback and verified owner/data isolation. Do not treat the empty staging project as a replacement for an active database.
@@ -66,7 +66,9 @@
 - Explicitly set `VITE_ATLAS_AUTH_RUNTIME=supabase` on Railway **only when deploying a branch with this implementation**. Do not set it on the Lovable preview or expect the existing Lovable users' sessions to transfer. On a staged code change, verify both modes in CI and browser, and re-check PKCE OAuth callback and private API permissions after the environment has a real custom OIDC provider.
 - This **does not migrate or replace** the existing Lovable preview identity bridge, private user storage, OAuth clients or sessions. It removes a *UI-level assumption* that Lovable login is always available. The rest of auth parity remains an explicitly gated deployment task.
 
-## 7. Independent staging checkpoint — November 21, 2026 (EST)
+## 7. Historical independent staging checkpoint — November 21, 2026 (EST)
+
+> **Historical record, superseded by Section 8.** The missing-key, empty-user, and unconfigured-OIDC statements below describe the November 21 checkpoint, **not today's state**. Do not treat their manual configuration instructions as current blockers.
 
 **Exact-head evidence, not a production release:**
 
@@ -83,3 +85,27 @@
 4. Keep `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS` disabled, do not copy Lovable users/tokens into staging, and do not promote `#198` (staging-only diagnostic UI) or production DNS while the acceptance criteria remain unproven.
 
 The **existing Lovable deployment remains a separate runtime with its own users and Supabase**, not a fallback authority for independent Atlas. A successful staging deployment is no authorization to migrate those users.
+
+## 8. November 22, 2026 — live authentication and revocation deployment
+
+### Independently verified source/infrastructure
+
+- [#205](https://github.com/outlaw-dame/aura-social-atlas/pull/205) merged the **live Supabase session check** into `main`; [#206](https://github.com/outlaw-dame/aura-social-atlas/pull/206) backported **exactly four files** (same Git blob SHA as main) to the **actual** staging v3 branch. The old note claiming v2 was Railway's deployed branch was inaccurate.
+- The session check uses `getClaims` for signed JWT validation and `auth.getUser(jwt)` for session liveness; Auth errors and mismatched users fail closed. Parallel calls coalesce and positive checks are cached for at most 15 seconds, bounded by JWT expiration. This is **bounded revocation latency, not instantaneous invalidation**.
+- PR head [full Atlas/gateway CI #45036301330](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/45036301330) and exact merge-head [staging CI #45036522972](https://github.com/outlaw-dame/aura-social-atlas/actions/runs/45036522972) both **SUCCESS**.
+- Railway staging `atlas-web-staging` is pinned to `1fc3a4e728e2367053088a1436123d7246a9951b`; deployment `750601dd-8444-4383-b398-1b5de24abf6e` **SUCCESS**, Node server listening on port 3000. The service may auto-sleep when idle, which is not a crash. No public Railway origin domain.
+- Connected Railway variable-name inventory includes `SUPABASE_SERVICE_ROLE_KEY`; no privileged secret values were inspected. Public Cloudflare ingress `https://atlas-staging.damonoutlaw.xyz/auth` rendered the Fedizen sign-in option in an independent Browser Rendering smoke test.
+
+### Live observations and remaining acceptance
+
+The [November 22 operator acceptance record](https://github.com/outlaw-dame/aura-social-atlas/issues/123#issuecomment-7078294581) observed:
+- Successful staging Fedizen `custom:app-oidc` sign-in and separately consented delegated resource grant.
+- Following/activity and owner post reads working.
+- All eight tested private functions refusing no-token anonymous requests.
+- **A real security defect:** after sign-out, an old signed access JWT still reached private handlers even though Supabase Auth `/user` rejected it. PR #205/#206 fixes the code and the deployment; this *specific live replay has not yet been rerun on the fixed build*.
+
+The [November 22 engineering release checkpoint](https://github.com/outlaw-dame/aura-social-atlas/issues/123#issuecomment-7081091438) records the exact CI, SHA, deployment and remaining tests. Do not close issue #123 or enable `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS` until authenticated post-fix replay plus **two independently consented A/B private API principals** pass with sanitized evidence. Manual Fedizen UI A/B testing from earlier remains acknowledged, but does not substitute for API isolation.
+
+A separate **staging-only** PR [#207](https://github.com/outlaw-dame/aura-social-atlas/pull/207) proposes a one-click, user-consented sign-out/replay diagnostic that keeps the old token inside the initiating browser callback. It must pass CI and be deployed before it is advertised as usable. **Do not claim the diagnostic itself passed live merely because it was implemented.**
+
+No live Lovable account/tokens/data were migrated, no production release domain was cut over, and staging-only [PR #198](https://github.com/outlaw-dame/aura-social-atlas/pull/198) stays open.
