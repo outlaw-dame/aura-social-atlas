@@ -63,6 +63,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.4'
+      # Observe anonymous native Me using exactly Atlas's deployed query.
+      # Classify HTTP refusal, null Me, GraphQL execution errors or unexpected
+      # populated Me; never print account content or bearer credentials.
+      - name: Classify anonymous native Me denial without credentials
+        run: node scripts/probe-fedizen-graphql.mjs --anonymous-me
       - name: Verify actual Atlas public GraphQL selection sets and normalization
         run: bun scripts/probe-fedizen-public-client.ts
       # Atlas's server runs on Cloudflare Workers, which send no User-Agent; Fedizen is on DreamHost. Report (never
