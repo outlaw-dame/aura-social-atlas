@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { parseFedizenViewer, signedInThroughFedizen } from '../src/lib/fedizen-viewer';
+import { avatarFromVerifiedFedizenActor, parseFedizenViewer, signedInThroughFedizen } from '../src/lib/fedizen-viewer';
 import { readVerifiedFedizenViewer, verifyFedizenReadGrant } from '../src/lib/fedizen.server';
 
 const account = {
@@ -31,6 +31,20 @@ describe('verified social identity presentation', () => {
     expect(parseFedizenViewer({ ...account, avatar: 'https://localhost/unsafe.png' })?.avatar).toBeNull();
     expect(parseFedizenViewer({ ...account, avatar: 'https://user:secret@fedizen.net/a.png' })?.avatar).toBeNull();
     expect(parseFedizenViewer({ ...account, avatar: 'javascript:alert(1)' })?.avatar).toBeNull();
+  });
+
+  test('Bonfire placeholder falls back only to the same verified ActivityPub actor', () => {
+    const viewer = parseFedizenViewer({ ...account, avatar: 'https://fedizen.net/images/avatar.png' })!;
+    const actor = {
+      id: 'https://fedizen.net/actors/reader', preferredUsername: 'reader',
+      icon: { url: 'https://cdn.example.org/real-avatar.webp' },
+    };
+    expect(avatarFromVerifiedFedizenActor(viewer, actor)).toBe('https://cdn.example.org/real-avatar.webp');
+    expect(avatarFromVerifiedFedizenActor(viewer, { ...actor, preferredUsername: 'another-reader' })).toBeNull();
+    expect(avatarFromVerifiedFedizenActor(viewer, { ...actor, id: 'https://example.org/actors/reader' })).toBeNull();
+    expect(avatarFromVerifiedFedizenActor(viewer, { ...actor, icon: 'http://localhost/steal' })).toBeNull();
+    expect(avatarFromVerifiedFedizenActor(viewer, { ...actor, icon: { url: 'https://fedizen.net/images/avatar.png' } })).toBeNull();
+    expect(avatarFromVerifiedFedizenActor({ ...viewer, profileUrl: null }, actor)).toBeNull();
   });
 
   test('never misrepresents unavailable statistics as zero', () => {
