@@ -24,7 +24,8 @@ import type { ProfileSection } from './profile-sections';
 import { ActivityPage } from './ActivityPage';
 import { GroupsPage } from './GroupsPage';
 import { useAtlasAuth } from './AuthState';
-import { defaultAvatarKey } from '@/lib/atlas-avatars';
+import { useFedizenIdentity } from './useFedizenIdentity';
+import { IdentityAvatar } from './IdentityAvatar';
 import { DesktopHosts } from './DesktopHosts';
 import { intelligenceReady, useIntelligence } from './useIntelligence';
 
@@ -38,6 +39,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
   const ai = useIntelligence().data;
   const aiReady = intelligenceReady(ai) && ai?.active?.where === 'server';
   const auth = useAtlasAuth();
+  const identity = useFedizenIdentity();
   const [query, setQuery] = useState('');
   const [submitted, setSubmitted] = useState('');
   const [network, setNetwork] = useState('All networks');
@@ -59,7 +61,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
     { to: '/profile' as const, label: 'Profile', icon: CircleUserRound, key: 'profile' },
     { to: '/settings' as const, label: 'Settings', icon: Settings, key: 'settings' },
   ];
-  const me = auth.user ? avatarPreset(auth.profile?.avatar_key ?? defaultAvatarKey(auth.user.id)) : null;
+
   const pageView = view === 'groups' || view === 'activity' || view === 'messages' || view === 'profile';
   const pageTitles = { groups: ['Communities on Fedizen and beyond', 'Groups'], activity: ['What’s new for you', 'Activity'], messages: ['Direct conversations', 'Messages'], profile: ['', ''] } as const;
   const settingsView = view === 'settings' || view === 'intelligence' || view === 'appearance' || view === 'moderation' || view === 'hashtags' || view === 'notifications';
@@ -69,7 +71,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
     <aside className={`social-sidebar liquid-glass specular fixed inset-y-3 left-3 z-40 flex w-60 flex-col rounded-3xl border border-border p-5 transition-transform lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}>
       <div className="mb-9 flex items-center justify-between"><Link to="/" className="flex items-center gap-2 font-serif text-3xl italic"><Compass className="size-6 text-accent" strokeWidth={1.5} />Atlas</Link><Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X /></Button></div>
       <p className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Your open web</p>
-      <nav aria-label="Main navigation" className="space-y-1">{nav.map(item => <Button asChild variant="ghost" key={item.key} className={`h-11 w-full justify-start rounded-xl ${(view === item.key || (item.key === 'settings' && settingsView)) ? 'social-selected' : 'text-muted-foreground'}`}><Link to={item.to} onClick={() => setMobileOpen(false)} aria-current={(view === item.key || (item.key === 'settings' && settingsView)) ? 'page' : undefined}>{item.key === 'profile' && me ? <img src={me.src} alt="" className="social-avatar size-5 object-cover" /> : <item.icon />}{item.label}</Link></Button>)}</nav>
+      <nav aria-label="Main navigation" className="space-y-1">{nav.map(item => <Button asChild variant="ghost" key={item.key} className={`h-11 w-full justify-start rounded-xl ${(view === item.key || (item.key === 'settings' && settingsView)) ? 'social-selected' : 'text-muted-foreground'}`}><Link to={item.to} onClick={() => setMobileOpen(false)} aria-current={(view === item.key || (item.key === 'settings' && settingsView)) ? 'page' : undefined}>{item.key === 'profile' && auth.user ? <IdentityAvatar src={identity.avatar} name={identity.name} className="social-avatar size-5 object-cover" /> : <item.icon />}{item.label}</Link></Button>)}</nav>
       <div className="mt-8 border-t border-border pt-5"><p className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Explore topics</p>{topics.slice(1).map(t => <Button key={t} variant="ghost" onClick={() => toggleTopic(t)} className={`mb-1 h-9 w-full justify-start text-sm ${topic === t ? 'text-accent' : 'text-muted-foreground'}`}><span className="social-topic-dot" />{t}</Button>)}</div>
       <div className="mt-7"><p className="mb-3 text-[10px] font-semibold uppercase text-muted-foreground">Your voices</p>{state.followed.length === 0 ? <p className="text-xs leading-relaxed text-muted-foreground">No voices followed yet.</p> : creators.filter(c => state.followed.includes(c.id)).map(c => <Button variant="ghost" key={c.id} onClick={() => setCreatorDialog(c)} className="mb-2 h-auto w-full justify-start whitespace-normal px-0 text-left text-xs"><img className="social-avatar size-7 shrink-0" src={avatarPreset(c.avatar_key).src} alt="" /><span>{c.name}</span></Button>)}</div>
       <div className="mt-auto border-t border-border pt-4"><span className="flex items-center gap-2 text-xs text-muted-foreground"><Rss className="size-3" />Open web. Human voices.</span><span className="mt-2 block text-[10px] text-muted-foreground">Sample edition · session-only selections</span></div>

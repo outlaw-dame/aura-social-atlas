@@ -3,6 +3,8 @@ import { Link, Button, Icon, Sheet, Block, List, ListInput, ListItem, Popup, Pag
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useSocial } from '@/components/social/SocialState';
 import { avatarPreset } from '@/lib/atlas-avatars';
+import { IdentityAvatar } from '@/components/social/IdentityAvatar';
+import { useFedizenIdentity } from '@/components/social/useFedizenIdentity';
 import { creators, posts, fullHandle, type Creator } from '@/lib/social-catalogue';
 import { CreatorTag } from '@/components/social/CreatorTag';
 import { linkifyHashtags, extractHashtags, hashtagLabel, hashtagUrl, TagText } from '@/lib/hashtags';
@@ -79,6 +81,7 @@ export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose
  *  Edit profile, name, handle, counts (Following opens the list of follows), bio, then the tab strip. */
 export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: { onEditProfile: () => void; onOpenCreator: (creator: Creator) => void; onOpenCollection: (c: Collection) => void }) {
   const { user, profile, signOut } = useAtlasAuth();
+  const identity = useFedizenIdentity();
   const { followed, saved, toggleSave, toggleFollow } = useSocial();
   const [section, setSection] = useState<Section>('Activity');
   const [filter, setFilter] = useState<ActivityFilter>(DEFAULT_ACTIVITY_FILTER);
@@ -98,27 +101,31 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
     </div>
   );
 
-  const name = profile?.display_name || 'Your profile';
+  const name = identity.name;
   return (
     <div className="atlas-bsky">
       <div className="atlas-bsky-banner" aria-hidden="true" />
       <header className="atlas-bsky-head">
         <div className="atlas-bsky-row">
-          <img className="atlas-bsky-avatar" src={avatarPreset(profile?.avatar_key).src} alt="Your avatar" width={88} height={88} />
+          <IdentityAvatar className="atlas-bsky-avatar" src={identity.avatar} name={identity.name} alt="Your profile avatar" />
           <Button small round tonal className="atlas-bsky-edit" onClick={onEditProfile}>Edit profile</Button>
         </div>
         <h1 className="atlas-bsky-name">{name}</h1>
-        <p className="atlas-bsky-handle">{user.email}</p>
+        <p className="atlas-bsky-handle">{identity.handle}</p>
+        {identity.viewer?.profileUrl && <a href={identity.viewer.profileUrl} target="_blank" rel="noopener noreferrer" className="atlas-bsky-handle">View your verified Fedizen profile</a>}
+        {identity.isFedizen && !identity.viewer && <p className="atlas-bsky-handle">Fedizen profile not verified. No substitute photo is shown.</p>}
         <p className="atlas-bsky-counts">
-          <span><strong>0</strong> followers</span>
-          <Link className="atlas-bsky-count-link" onClick={() => setFollowsOpen(true)}><strong>{followed.length}</strong> following</Link>
-          <span><strong>0</strong> posts</span>
+          <span><strong>{identity.counts?.followers ?? '—'}</strong> followers</span>
+          {identity.isFedizen
+            ? <span><strong>{identity.counts?.following ?? '—'}</strong> following</span>
+            : <Link className="atlas-bsky-count-link" onClick={() => setFollowsOpen(true)}><strong>{followed.length}</strong> following in Atlas</Link>}
+          <span><strong>{identity.counts?.posts ?? '—'}</strong> posts</span>
         </p>
         {profile?.bio
-          ? <p className="atlas-bsky-bio">{linkifyHashtags(profile.bio)}</p>
-          : <p className="atlas-bsky-bio atlas-profile-bio-empty">No bio yet — add one so people know what you share.</p>}
+          ? <p className="atlas-bsky-bio"><span className="atlas-bsky-handle">Atlas notes · </span>{linkifyHashtags(profile.bio)}</p>
+          : <p className="atlas-bsky-bio atlas-profile-bio-empty">Profile details are managed on Fedizen. Atlas-specific notes can be added here.</p>}
         {profile?.created_at && (
-          <p className="atlas-bsky-joined"><Icon ios="f7:calendar" md="material:calendar_month" /> Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+          <p className="atlas-bsky-joined"><Icon ios="f7:calendar" md="material:calendar_month" /> Atlas account created {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
         )}
       </header>
 
