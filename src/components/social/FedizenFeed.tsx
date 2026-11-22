@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { ArrowUpRight, Bell, Link2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useFedizen } from './useFedizen';
 import { PublicFedizenFeed } from './PublicFedizenFeed';
 import { selectBonfireHome } from '@/lib/bonfire-native-presentation';
@@ -66,7 +67,22 @@ export function FedizenFeed() {
         )}</div>
       <aside><h3 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><Bell className="size-3" />Activity</h3>
         {notices.length ? <ul className="space-y-3">{notices.map(n => <li key={n.id} className="flex gap-2 text-xs">{n.avatar ? <img src={n.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-6 shrink-0 atlas-avatar object-cover" /> : <span aria-hidden="true" className="atlas-avatar flex size-6 shrink-0 items-center justify-center bg-muted font-serif text-[11px]">{n.author.charAt(0)}</span>}<span><span className="font-semibold">{n.author}</span> <span className="text-muted-foreground">{n.text}</span></span></li>)}</ul> : <p className="text-xs text-muted-foreground">No new activity.</p>}
-        <Button variant="link" size="sm" className="mt-4 px-0 text-xs text-muted-foreground" onClick={() => void f.disconnect()} disabled={f.actionBusy}>{f.actionBusy ? 'Disconnecting…' : 'Disconnect Fedizen'}</Button>
+        {/* As the phone: Disconnect revokes Atlas's access at Fedizen, so it asks first. */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="link" size="sm" className="mt-4 px-0 text-xs text-muted-foreground" disabled={f.actionBusy}>{f.actionBusy ? 'Disconnecting…' : 'Disconnect Fedizen'}</Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Disconnect Fedizen?</AlertDialogTitle>
+              <AlertDialogDescription>Atlas will stop reading and acting for your Fedizen account until you connect again.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => void f.disconnect()}>Disconnect</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </aside>
     </div>
     {actions.dialog}

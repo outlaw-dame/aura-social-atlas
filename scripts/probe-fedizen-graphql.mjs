@@ -16,6 +16,10 @@ const ENDPOINT = 'https://fedizen.net/api/graphql';
 const TIMEOUT_MS = 10000;
 const MAX_RESPONSE_BYTES = 512_000;
 const FEEDS = ['local', 'articles'];
+const ANON_ME_NAME = '__anonymous_me__';
+const ANON_ME_DOCUMENT = `query AtlasNativeMe {
+  me { accountId user { id character { username canonicalUri } profile { name icon } } }
+}`;
 const OPERATION = `query AtlasPublicFeedContract($name: String!) {
   feedActivities(first: 1, filter: { feedName: $name }) {
     edges { node { id } }
@@ -57,11 +61,47 @@ export function summarize(status, payload) {
   return result;
 }
 
+/** No anonymous account value, error message, response body, or raw extension is logged.
+ * A GraphQL error is NOT automatically proof of authorization denial: it can
+ * be a resolver exception, unsupported field, or malformed response.
+ */
+export function summarizeAnonymousMe(status, payload) {
+  const output = { httpStatus: status, me: 'missing', user: 'missing',
+    errorCount: 0, errorCodes: [], verdict: 'inconclusive' };
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return output;
+  if (Array.isArray(payload.errors)) {
+    output.errorCount = payload.errors.length;
+    output.errorCodes = payload.errors.slice(0, 5).map(error => {
+      const code = error?.extensions?.code;
+      return typeof code === 'string' && /^[A-Z_]{1,48}$/.test(code)
+        ? code : 'UNSPECIFIED';
+    });
+  } else if (Object.hasOwn(payload, 'errors')) {
+    output.errorCount = 1;
+    output.errorCodes = ['INVALID_ERRORS_SHAPE'];
+  }
+  if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+      && Object.hasOwn(payload.data, 'me')) {
+    const me = payload.data.me;
+    output.me = me === null ? 'null' : typeof me === 'object' && !Array.isArray(me) ? 'object' : 'invalid';
+    if (output.me === 'object' && Object.hasOwn(me, 'user')) {
+      output.user = me.user === null ? 'null' : typeof me.user === 'object' && !Array.isArray(me.user) ? 'object' : 'invalid';
+    }
+  }
+  // A populated anonymous identity is a security finding, regardless of
+  // GraphQL side errors. Only explicit null identity and no errors is a pass.
+  if (output.user === 'object') output.verdict = 'exposed-identity';
+  else if ((status === 401 || status === 403) && output.errorCount === 0) output.verdict = 'http-denied';
+  else if (status === 200 && output.errorCount === 0 &&
+    (output.me === 'null' || output.user === 'null')) output.verdict = 'null-me-denied';
+  return output;
+}
+
 async function probe(name, fetcher = fetch) {
   const response = await fetcher(ENDPOINT, {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ query: OPERATION, variables: { name } }),
+    body: JSON.stringify(name === ANON_ME_NAME ? { query: ANON_ME_DOCUMENT } : { query: OPERATION, variables: { name } }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
     redirect: 'error',
     cache: 'no-store',
@@ -89,11 +129,20 @@ async function probe(name, fetcher = fetch) {
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   let payload;
   try { payload = JSON.parse(new TextDecoder().decode(bytes)); }
-  catch { return { httpStatus: response.status, graphqlData: 'invalid-json', feedActivities: 'missing', edges: null, errors: [] }; }
-  return summarize(response.status, payload);
+  catch { return name === ANON_ME_NAME ? summarizeAnonymousMe(response.status, null) : { httpStatus: response.status, graphqlData: 'invalid-json', feedActivities: 'missing', edges: null, errors: [] }; }
+  return name === ANON_ME_NAME ? summarizeAnonymousMe(response.status, payload) : summarize(response.status, payload);
 }
 
 async function selfTest() {
+  assert.equal(summarizeAnonymousMe(200, { data: { me: null } }).verdict, 'null-me-denied');
+  assert.equal(summarizeAnonymousMe(200, { data: { me: { user: null } } }).verdict, 'null-me-denied');
+  assert.equal(summarizeAnonymousMe(401, {}).verdict, 'http-denied');
+  assert.equal(summarizeAnonymousMe(403, {}).verdict, 'http-denied');
+  assert.equal(summarizeAnonymousMe(200, { errors: [{ message: 'secret', extensions: { code: 'UNAUTHENTICATED' } }] }).verdict, 'inconclusive');
+  assert.equal(summarizeAnonymousMe(200, { data: { me: { user: { id: 'private-id' } } } }).verdict, 'exposed-identity');
+  assert.equal(summarizeAnonymousMe(500, {}).verdict, 'inconclusive');
+  assert.equal(JSON.stringify(summarizeAnonymousMe(200, { data: { me: { user: { id: 'private-id', email: 'test@example.org' } } }, errors: [{ message: 'private-error' }] })).includes('private-id'), false);
+  assert.equal(JSON.stringify(summarizeAnonymousMe(200, { data: { me: { user: { id: 'private-id' } } }, errors: [{ message: 'private-error' }] })).includes('private-error'), false);
   assert.deepEqual(summarize(200, { data: { feedActivities: { edges: [{ node: { id: 'private' } }] } } }), {
     httpStatus: 200, graphqlData: 'object', feedActivities: 'object', edges: 1, errors: [],
   });
@@ -117,6 +166,18 @@ async function selfTest() {
 
 async function main() {
   if (process.argv.includes('--self-test')) return selfTest();
+  if (process.argv.includes('--anonymous-me')) {
+    try {
+      const result = await probe(ANON_ME_NAME);
+      console.log(JSON.stringify({ check: 'anonymous-native-me', ...result }));
+      // Failure on proven identity exposure, never on diagnostic uncertainty.
+      if (result.verdict === 'exposed-identity') process.exitCode = 1;
+    } catch (error) {
+      console.log(JSON.stringify({ check: 'anonymous-native-me', verdict: 'inconclusive',
+        category: error?.name === 'TimeoutError' ? 'timeout' : 'network-or-protocol' }));
+    }
+    return;
+  }
   let failures = 0;
   for (const name of FEEDS) {
     try {

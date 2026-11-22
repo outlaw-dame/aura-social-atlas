@@ -18,7 +18,7 @@ Status key: **in use** (Atlas calls it today), **flag-gated** (written and teste
 | For You: busy discussions in joined groups | GraphQL feed `sortBy: REPLY_COUNT`, `timeLimit: 7` | same | **in use** | — |
 | Create a post (Public / Quiet public, CW, media, quote policy, quotes) | GraphQL `createPost` (`createPostOnFedizen`) | `createPost` (live root) | **in use** | Signed-in acceptance record |
 | Reply | REST `POST /api/v1/statuses` (`in_reply_to_id`, visibility) | `createPost(replyTo:)` (live root) | in schema | Move to `createPost` once boundaries for replies are checked |
-| Home timeline | REST `/api/v1/timelines/home` | `me.myFeed` (live schema) | **flag-gated** | Consented two-account test, then turn the flag on |
+| Home timeline | REST `/api/v1/timelines/home` | `me.myFeed` (live schema) picks the page, order and cursor; each post's details come from REST `/api/v1/statuses/:id` (GraphQL lacks visibility, language, mentions, polls, cards, video, quotes on rc.1) | **flag-gated**, cards match REST | Consented two-account test, then turn the flag on |
 | Notifications / Activity | REST `/api/v2/notifications` (grouped), markers | `me.notifications` (live schema) | **flag-gated** | Same as Home |
 | Post detail and conversation | REST `/api/v1/statuses/:id`, `/context` | `post(filter:{id})` (live schema) flag-gated; `threadContext` in schema | flag-gated / in schema | — |
 | Profiles (others) | ActivityPub actor read directly (`loadFediProfile`) | `user(filter:{id|username})` (live schema) | **flag-gated** | — |
