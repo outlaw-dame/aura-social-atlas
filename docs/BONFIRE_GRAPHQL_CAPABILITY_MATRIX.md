@@ -2,13 +2,13 @@
 
 > **Version:** 2026-11-22. **This is the progress tracker for Atlas's Bonfire API work.** The status table below is current; the dated sections after it are the original 2026-11-08/09 evidence record, kept unchanged. Fedizen (`https://fedizen.net`) reports Bonfire Community **v1.1.0-rc.1**; Bonfire **v1.1.0** was released on 2026-11-18. Maintain alongside the [implementation plan](ATLAS_IMPLEMENTATION_PLAN.md).
 
-## Where Atlas stands (2026-11-22)
+## Where Atlas stands (2026-11-22, updated after Railway became the primary backend)
 
 Atlas reaches Fedizen two ways: Bonfire's **GraphQL** API (`/api/graphql`) and Bonfire's **Mastodon-compatible REST** API (`masto_compatible_router`). Every REST call goes through the allowlist in `src/lib/fedizen.server.ts` (`READS` / `WRITES`, a schema per route); every GraphQL document is in `src/lib/bonfire/graphql/operations.ts` or the public readers (`bonfire.server.ts`, `groups.server.ts`).
 
 **How the GraphQL column was checked:** the GraphQL `field` definitions of `bonfire_social`, `bonfire_me`, `bonfire_social_graph`, `bonfire_classify`, `bonfire_files`, `bonfire_search`, `bonfire_messages` and `bonfire_api_graphql` were read at the exact commits pinned by bonfire-app's `mix.lock` for **v1.1.0-rc.1** and for **v1.1.0**. The two are the same for every operation below; the only difference is that v1.1.0 drops the events fields from `bonfire_social`. So upgrading Fedizen to v1.1.0 adds nothing to GraphQL; v1.1.0's changes are in its own pages, federation, notifications and the Mastodon API. "In schema" means defined in that source and, where marked, seen in Fedizen's live root introspection (2026-11-09); it is **not** proof that the operation works for a signed-in person on Fedizen.
 
-Status key: **in use** (Atlas calls it today), **flag-gated** (written and tested, off unless `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS=verified`, which is not set on Lovable), **in schema** (defined upstream, not used by Atlas), **none** (no GraphQL operation in these extensions), **missing** (Atlas has no way to do this yet), **broken** (in use, failing on Fedizen).
+Status key: **in use** (Atlas calls it today), **flag-gated** (written and tested, off unless `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS=verified`; **on** for Railway, the primary backend, since 2026-11-22; also set on the Lovable preview), **in schema** (defined upstream, not used by Atlas), **none** (no GraphQL operation in these extensions), **missing** (Atlas has no way to do this yet), **broken** (in use, failing on Fedizen).
 
 | Capability | Atlas today | GraphQL on Bonfire rc.1 / 1.1.0 | GraphQL status | Next |
 | --- | --- | --- | --- | --- |
@@ -18,7 +18,7 @@ Status key: **in use** (Atlas calls it today), **flag-gated** (written and teste
 | For You: busy discussions in joined groups | GraphQL feed `sortBy: REPLY_COUNT`, `timeLimit: 7` | same | **in use** | — |
 | Create a post (Public / Quiet public, CW, media, quote policy, quotes) | GraphQL `createPost` (`createPostOnFedizen`) | `createPost` (live root) | **in use** | Signed-in acceptance record |
 | Reply | REST `POST /api/v1/statuses` (`in_reply_to_id`, visibility) | `createPost(replyTo:)` (live root) | in schema | Move to `createPost` once boundaries for replies are checked |
-| Home timeline | REST `/api/v1/timelines/home` | `me.myFeed` (live schema) picks the page, order and cursor; each post's details come from REST `/api/v1/statuses/:id` (GraphQL lacks visibility, language, mentions, polls, cards, video, quotes on rc.1) | **flag-gated**, cards match REST | Consented two-account test, then turn the flag on |
+| Home timeline | Railway: GraphQL `me.myFeed` (flag on); REST `/api/v1/timelines/home` where the flag is off | `me.myFeed` picks the page, order and cursor; each post's details come from REST `/api/v1/statuses/:id` (GraphQL lacks visibility, language, mentions, polls, cards, video, quotes on rc.1); slow cards are read right after (`getNativeHomeDetails`); new posts from `getNativeBonfireHomeLatest` (#213, #219) | **in use** on Railway (owner checks pass, #123) | Consented second-account isolation test |
 | Notifications / Activity | REST `/api/v2/notifications` (grouped), markers | `me.notifications` (live schema) | **flag-gated** | Same as Home |
 | Post detail and conversation | REST `/api/v1/statuses/:id`, `/context` | `post(filter:{id})` (live schema) flag-gated; `threadContext` in schema | flag-gated / in schema | — |
 | Profiles (others) | ActivityPub actor read directly (`loadFediProfile`) | `user(filter:{id|username})` (live schema) | **flag-gated** | — |
@@ -30,10 +30,10 @@ Status key: **in use** (Atlas calls it today), **flag-gated** (written and teste
 | Bookmark / unbookmark, Saved | REST `bookmark` / `unbookmark`, `/api/v1/bookmarks` | `bookmark` (live root), `unbookmark` | in schema | — |
 | Liked posts, who liked / boosted | REST `/api/v1/favourites`, `favourited_by` / `reblogged_by` | `likersOf`, `boostersOf`, `me.likeActivities` | in schema | — |
 | Follow / unfollow | REST `accounts/:id/follow` / `unfollow` (+ `accounts/lookup`) | `follow`, `unfollow` (live root) | in schema | — |
-| Follow requests: list | REST `/api/v1/follow_requests` | **no list query** (only `requested` on relationships) | none | **broken**: #193 fixes the list (Bonfire returns every request, ignoring `limit`) |
+| Follow requests: list | REST `/api/v1/follow_requests` | **no list query** (only `requested` on relationships) | none | Fixed (#193): Bonfire returns every request, ignoring `limit` |
 | Follow requests: accept / decline | REST `follow_requests/:id/authorize` / `reject` | `acceptFollowRequest`, `rejectFollowRequest` | in schema | — |
 | Group join / leave | REST `/api/v1-bonfire/groups/:id/join` / `leave` | `joinGroup`, `leaveGroup` | in schema | — |
-| Mute / block, lists of them | REST `mutes`, `blocks`, `accounts/:id/mute|block` | read-only `silencing`, `ghosting` on relationships; no mutation | none | — |
+| Mute / block, lists of them | REST `mutes`, `blocks`, `accounts/:id/mute|block` | read-only `silencing`, `ghosting` on relationships; no mutation | none | Lists over 80 fixed (#219): Bonfire ignores `limit` here too |
 | Report | REST `/api/v1/reports` | `flag` | in schema | — |
 | Circles (Profile → Circles, pinned circle feeds) | REST Lists API (`/api/v1/lists`, `timelines/list/:id`) | not in the extensions checked (`bonfire_boundaries` not checked) | unknown | Check `bonfire_boundaries` |
 | Hashtags: follow, followed list, tag timeline | REST `tags/:name/follow`, `followed_tags`, `timelines/tag/:tag` | `feedActivities(filter:{tags})` reads; no follow operation | partial | — |
@@ -50,7 +50,7 @@ Status key: **in use** (Atlas calls it today), **flag-gated** (written and teste
 
 ### Before publishing
 
-1. **Follow requests** list (#193).
+1. **Fedizen's rate limit**: Fedizen answered 429 to Atlas on Railway (2026-11-22). Atlas now waits out `Retry-After`, never retries a 429, backs off for every account when several are limited (one server address), and reuses single-post reads for 30 s per account (`fedizen-rate-limit.ts`). Still to learn: how Fedizen's limiter is keyed (per address or per token) and its limits.
 2. **Push notifications**: replace both VAPID keys in Lovable Secrets (the private key is rejected as invalid).
 3. **Signed-in GraphQL acceptance** for Home, notifications, posts and profiles (the consented disposable-account workflow below), then decide on `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS`.
 4. **Edit your Fedizen profile** from Atlas (`updateUser`, or REST `update_credentials`).
