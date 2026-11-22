@@ -69,7 +69,7 @@ export function usePublish() {
   const [cw, setCw] = useState('');
   const [cwOn, setCwOn] = useState(false);
   const [audience, setAudienceRaw] = useState<Audience>('public');
-  /** The post being quoted (Boost → Quote), shown under the text; quotes are Public or Quiet public only. */
+  /** The post being quoted (Boost → Quote), shown under the text; quotes go to Public, Quiet public or Fedizen only. */
   const [quote, setQuoteRaw] = useState<FedizenPost | null>(null);
   const setQuote = (q: FedizenPost | null) => { setQuoteRaw(q); if (q) setPollRaw(null); if (q && !QUOTABLE.has(audience)) setAudienceRaw('public'); };
   const setAudience = (a: Audience) => { if ((!quote || QUOTABLE.has(a)) && !(poll && a === 'local')) setAudienceRaw(a); };
