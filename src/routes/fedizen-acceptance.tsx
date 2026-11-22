@@ -3,9 +3,11 @@ import { useServerFn } from '@tanstack/react-start';
 import { useEffect, useRef, useState } from 'react';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { Button } from '@/components/ui/button';
-import { startFedizenConnect } from '@/lib/fedizen.functions';
+import { getFedizenCircles, getFedizenHome, getFedizenHomeLatest, getFedizenMessages, getFedizenSaved, getFedizenStatus, getGroupedNotifications, getNotificationMarker, startFedizenConnect } from '@/lib/fedizen.functions';
 import { getFedizenNativeAcceptance } from '@/lib/bonfire-acceptance.functions';
 import { isEmbeddedPreview } from '@/lib/bonfire-auth';
+import { supabase } from '@/integrations/supabase/client';
+import { runSessionReplay, type SessionReplayResult } from '@/lib/session-revocation-check';
 import { acceptanceCooldownRemaining, sanitizeAcceptanceResult, type AcceptanceView } from '@/lib/fedizen-acceptance-view';
 
 const TITLE = 'Fedizen acceptance (staging) — Atlas';
@@ -36,12 +38,21 @@ const STATUS_TEXT: Record<AcceptanceView['status'], string> = {
 type Owned<T> = { userId: string; value: T };
 
 function FedizenAcceptancePage() {
-  const { user, loading } = useAtlasAuth();
+  const { user, loading, session, signOut } = useAtlasAuth();
   const userId = user?.id ?? null;
   const start = useServerFn(startFedizenConnect);
   const probe = useServerFn(getFedizenNativeAcceptance);
+  const readStatus = useServerFn(getFedizenStatus);
+  const readHome = useServerFn(getFedizenHome);
+  const readHomeLatest = useServerFn(getFedizenHomeLatest);
+  const readMessages = useServerFn(getFedizenMessages);
+  const readGrouped = useServerFn(getGroupedNotifications);
+  const readMarker = useServerFn(getNotificationMarker);
+  const readSaved = useServerFn(getFedizenSaved);
+  const readCircles = useServerFn(getFedizenCircles);
   const pending = useRef(false);
-  const [busy, setBusy] = useState<'connect' | 'run' | null>(null);
+  const [busy, setBusy] = useState<'connect' | 'run' | 'revocation' | null>(null);
+  const [revocation, setRevocation] = useState<SessionReplayResult | null>(null);
   const [result, setResult] = useState<Owned<AcceptanceView> | null>(null);
   const [error, setError] = useState<Owned<string> | null>(null);
   const [lastRun, setLastRun] = useState<Owned<number> | null>(null);
@@ -87,6 +98,62 @@ function FedizenAcceptancePage() {
     } finally { pending.current = false; setBusy(null); }
   };
 
+  const runRevocation = async () => {
+    // Explicit operator action only. The old token stays in this callback's
+    // memory; it is never put in component state, browser storage, logs, or URLs.
+    const jwt = session?.access_token;
+    if (!userId || !jwt || pending.current) return;
+    pending.current = true;
+    setBusy('revocation');
+    setRevocation(null);
+    setError(null);
+    const headers = { Authorization: 'Bearer ' + jwt };
+    const data = { expectedAtlasUserId: userId };
+
+    try {
+      // Prove this *specific token* is authorized before signing it out.
+      const baseline = await readStatus({ headers });
+      if (!baseline.connected) {
+        setError({ userId, value: 'Connect a Fedizen test account before checking sign-out revocation.' });
+        return;
+      }
+
+      const results = await runSessionReplay({
+        signOut,
+        wait: milliseconds => new Promise<void>(resolve => window.setTimeout(resolve, milliseconds)),
+        authRefused: async () => {
+          try {
+            const { data: auth, error } = await supabase.auth.getUser(jwt);
+            if (error && (error.status === 403 || error.status === 401)) return true;
+            if (auth?.user && !error) return false;
+            return null;
+          } catch {
+            return null;
+          }
+        },
+        // These are eight distinct, existing private reads. A returned result
+        // counts as a failure; its contents are immediately discarded.
+        checks: [
+          { label: 'Connection status', run: () => readStatus({ headers }) },
+          { label: 'Following and activity', run: () => readHome({ data, headers }) },
+          { label: 'Home refresh', run: () => readHomeLatest({ data, headers }) },
+          { label: 'Messages', run: () => readMessages({ data, headers }) },
+          { label: 'Grouped activity', run: () => readGrouped({ data: { ...data, filter: 'all' }, headers }) },
+          { label: 'Notification marker', run: () => readMarker({ data, headers }) },
+          { label: 'Saved posts', run: () => readSaved({ data, headers }) },
+          { label: 'Circles', run: () => readCircles({ data, headers }) },
+        ],
+      });
+      setRevocation(results);
+    } catch {
+      // Network errors and incomplete sign-outs must never count as PASS.
+      setRevocation({ verdict: 'inconclusive', authRefused: null, checks: [] });
+    } finally {
+      pending.current = false;
+      setBusy(null);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-background px-6 py-12 text-foreground">
       <div className="mx-auto max-w-xl">
@@ -101,7 +168,7 @@ function FedizenAcceptancePage() {
         ) : !user ? (
           <section className="mt-8 rounded-lg border border-border p-5">
             <p className="text-sm">Sign in to Atlas to use this page.</p>
-            <Button asChild className="mt-4"><Link to="/auth">Sign in</Link></Button>
+            <Button asChild className="mt-4" disabled={busy === 'revocation'}><Link to="/auth">Sign in</Link></Button>
           </section>
         ) : (
           <>
@@ -150,10 +217,55 @@ function FedizenAcceptancePage() {
               </div>
             </section>
 
+            <section className="mt-4 rounded-lg border border-border p-5" aria-labelledby="revocation-heading">
+              <h2 id="revocation-heading" className="font-medium">3. Verify sign-out revocation</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This staging-only check signs you out of Atlas, waits beyond the 15-second server cache window,
+                and retries eight private reads using the former session. It does not disconnect or revoke the
+                separate Fedizen API grant. Your access token and private responses are never displayed or saved.
+                Keep this tab open until the result appears.
+              </p>
+              <Button className="mt-4" variant="outline" onClick={runRevocation}
+                disabled={busy !== null} aria-busy={busy === 'revocation'}>
+                {busy === 'revocation' ? 'Checking session revocation…' : 'Sign out and test eight private reads'}
+              </Button>
+            </section>
+
             {message && (
               <p role="alert" className="mt-4 rounded-md border border-destructive/40 p-3 text-sm text-destructive">{message}</p>
             )}
           </>
+        )}
+        {busy === 'revocation' && (
+          <p className="mt-6 text-sm text-muted-foreground" role="status">
+            Checking the old session after sign-out. Keep this page open.
+          </p>
+        )}
+        {revocation && busy !== 'revocation' && (
+          <section className="mt-6 rounded-lg border border-border p-5" aria-live="polite">
+            <h2 className="font-medium">Sign-out replay result</h2>
+            <p className="mt-2 text-sm" role="status">
+              {revocation.verdict === 'passed'
+                ? 'PASS: Supabase rejected the old session and all eight private reads returned the expected session-ended refusal.'
+                : revocation.verdict === 'failed'
+                  ? 'FAIL: The old session or at least one private read was still accepted.'
+                  : 'INCONCLUSIVE: A network error, unexpected response or incomplete check prevented confirmation.'}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Supabase Auth refusal: {revocation.authRefused === true ? 'Confirmed'
+                : revocation.authRefused === false ? 'Not observed' : 'Not confirmed'}
+            </p>
+            {revocation.checks.length > 0 && (
+              <ul className="mt-3 space-y-1 text-sm">
+                {revocation.checks.map(check => (
+                  <li key={check.label} className="flex justify-between gap-3 border-b border-border py-1.5 last:border-0">
+                    <span>{check.label}</span>
+                    <span>{check.outcome === 'denied' ? 'Denied' : check.outcome === 'accepted' ? 'Accepted — failure' : 'Inconclusive'}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         )}
       </div>
     </main>
