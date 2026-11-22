@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { missingAlt, useReading } from '@/lib/reading-prefs';
-import { AtSign, BarChart3, Globe2, ImagePlus, Loader2, Lock, MoonStar, Plus, Quote, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { AtSign, BarChart3, Globe2, House, ImagePlus, Loader2, Lock, MoonStar, Plus, Quote, Sparkles, TriangleAlert, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { QuotePolicy } from '@/lib/quote-policy';
 import { GifPicker } from './GifPicker';
@@ -16,7 +16,7 @@ import { MentionSuggestions } from './MentionSuggestions';
 
 const composeField = () => document.getElementById('compose-post') as HTMLTextAreaElement | null;
 
-const AUDIENCE_ICON: Record<Audience, typeof Globe2> = { public: Globe2, unlisted: MoonStar, private: Lock, direct: AtSign };
+const AUDIENCE_ICON: Record<Audience, typeof Globe2> = { public: Globe2, unlisted: MoonStar, local: House, private: Lock, direct: AtSign };
 
 /**
  * Desktop: writing a new post for Fedizen — text, an optional content warning, an audience, and up to 4 images or one

@@ -94,8 +94,9 @@ export const NATIVE_POST_BY_ID_DOCUMENT = `query AtlasNativePostById($id:ID!) {
  * - `quoteId`: quote a post (FEP-044f; Mastodon 4.5's `quoted_status_id` isn't taken).
  * - `permissions`: who may quote it (lib/quote-policy; Mastodon's `quote_approval_policy` isn't taken either).
  * Arguments from bonfire_social social_api_graphql.ex (`create_post`: post_content, boundary, permissions,
- * uploaded_media, quote_id), in the camelCase Fedizen's live schema shows. `boundary` takes the presets the REST
- * adapter maps visibilities to: "public" or "unlisted".
+ * uploaded_media, quote_id), in the camelCase Fedizen's live schema shows. `boundary` takes Bonfire's post presets
+ * (bonfire_boundaries runtime_config.ex `preset_acls`, 60fc2e7): "public", "unlisted", or "local" (people signed in
+ * to Fedizen read and reply; REST has no visibility for it, and reads it back as "unlisted").
  */
 export const CREATE_POST_DOCUMENT = `mutation AtlasCreatePost($postContent: PostContentInput!, $boundary: String, $quoteId: ID, $uploadedMedia: [ID], $permissions: [BoundaryPermissionInput]) {
   createPost(postContent: $postContent, boundary: $boundary, quoteId: $quoteId, uploadedMedia: $uploadedMedia, permissions: $permissions) { id activity { canonicalUri } }

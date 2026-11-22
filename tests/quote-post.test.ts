@@ -45,3 +45,16 @@ describe('Fedizen accepts the permissions', () => {
       for (const e of quotePermissions(p)) expect(Array.isArray(e.can) && Array.isArray(e.cannot)).toBe(true);
   });
 });
+
+describe('Fedizen-only posts (Bonfire "local" boundary)', () => {
+  test('quoting is offered to people on Fedizen only; "nobody" still shuts everyone out', () => {
+    expect(quotePermissions('anyone', 'local')).toEqual([{ permission: 'quote', can: [LOCAL_CIRCLE], cannot: [] }]);
+    expect(quotePermissions('ask', 'local')).toEqual([{ permission: 'request', can: [LOCAL_CIRCLE], cannot: [] }]);
+    expect(quotePermissions('nobody', 'local')).toEqual(quotePermissions('nobody'));
+  });
+  test('the server accepts "local" for createPost and sends it as the boundary', () => {
+    const src = require('node:fs').readFileSync('src/lib/fedizen.functions.ts', 'utf8') as string;
+    expect(src).toContain("visibility: z.enum(['public', 'unlisted', 'local'])");
+    expect(src).toContain("quotePermissions(data.quotes, data.visibility === 'local' ? 'local' : 'everyone')");
+  });
+});

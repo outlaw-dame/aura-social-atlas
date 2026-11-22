@@ -675,7 +675,7 @@ export const postOnFedizen = createServerFn({ method: 'POST' }).middleware([requ
 
 
 /**
- * A new Public or Quiet public post through Bonfire GraphQL `createPost` (CREATE_POST_DOCUMENT says why not REST):
+ * A new Public, Quiet public or Fedizen-only post through Bonfire GraphQL `createPost` (CREATE_POST_DOCUMENT says why not REST):
  * the person's text, content warning and up to 4 uploaded media, who may quote it (lib/quote-policy), and, when
  * quoting, the quoted post (FEP-044f; if its author must approve quotes, Bonfire sends them a request).
  */
@@ -684,7 +684,7 @@ export const createPostOnFedizen = createServerFn({ method: 'POST' }).middleware
     quoteId: ulid.optional(),
     text: z.string().trim().max(MAX_TEXT),
     cw: z.string().trim().max(MAX_CW).optional(),
-    visibility: z.enum(['public', 'unlisted']),
+    visibility: z.enum(['public', 'unlisted', 'local']),
     mediaIds: z.array(ulid).max(4).default([]),
     quotes: z.enum(['anyone', 'ask', 'nobody']),
   }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty post').parse(d))
@@ -700,7 +700,7 @@ export const createPostOnFedizen = createServerFn({ method: 'POST' }).middleware
         operation: 'mutation', document: CREATE_POST_DOCUMENT, accessToken: c.token,
         variables: {
           postContent: { htmlBody: data.text, ...(data.cw ? { summary: data.cw } : {}) },
-          boundary: data.visibility, permissions: quotePermissions(data.quotes),
+          boundary: data.visibility, permissions: quotePermissions(data.quotes, data.visibility === 'local' ? 'local' : 'everyone'),
           ...(data.quoteId ? { quoteId: data.quoteId } : {}),
           ...(data.mediaIds.length ? { uploadedMedia: data.mediaIds } : {}),
         },
