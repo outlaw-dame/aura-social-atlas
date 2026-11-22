@@ -521,6 +521,12 @@ const listedAccount = account.extend({ id: z.string().min(1).max(64) });
  */
 const followRequestsSchema = z.array(z.unknown()).max(10_000)
   .transform(items => items.flatMap(i => { const a = listedAccount.safeParse(i); return a.success ? [a.data] : []; }));
+/**
+ * Blocked and muted people: Bonfire (rc.1) returns the whole list whatever `limit` asks (seen live: more than 80 came
+ * back for limit=80 and failed the bounded schema), so these take every entry, as follow requests do. Settings shows
+ * the whole list, and Muted needs every block to leave blocked people out.
+ */
+const moderationListSchema = followRequestsSchema;
 
 const ID = '[A-Za-z0-9_-]{1,64}';
 /** A hashtag, percent-encoded (letters in any script arrive as %XX). */
@@ -553,7 +559,7 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v1\/bookmarks\?limit=40$/, schema: bookmarksSchema },
   { match: /^\/api\/v1\/lists$/, schema: listsSchema },
   // People you block (Bonfire: MastoAccountController.blocks, people both ghosted and silenced). Instances aren't in it.
-  { match: /^\/api\/v1\/blocks\?limit=80$/, schema: accountsSchema },
+  { match: /^\/api\/v1\/blocks\?limit=80$/, schema: moderationListSchema },
   { match: new RegExp(`^/api/v1/lists/${ID}/accounts\\?limit=80$`), schema: accountsSchema },
   // One account by handle, to add someone to a circle. Answers a single Account, returned here as a one-item list.
   { match: new RegExp(`^/api/v1/accounts/lookup\\?acct=${ACCT}$`), schema: account.extend({ id: z.string().min(1).max(64) }), single: true },
@@ -585,7 +591,7 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   // Hashtags starting with what's typed after "#" in the composer (Mastodon v2 search, hashtags).
   { match: /^\/api\/v2\/search\?q=[A-Za-z0-9_%]{1,1200}&type=hashtags&limit=8$/, schema: z.object({ hashtags: z.array(z.object({ name: z.string().min(1).max(100) })).max(40) }), single: true },
   // People you mute (Bonfire: MastoAccountController.mutes).
-  { match: /^\/api\/v1\/mutes\?limit=80$/, schema: accountsSchema },
+  { match: /^\/api\/v1\/mutes\?limit=80$/, schema: moderationListSchema },
   // Posts you liked, newest first (Bonfire: MastoTimelineController.favourites).
   { match: /^\/api\/v1\/favourites\?limit=40$/, schema: bookmarksSchema },
   // Who liked or boosted a post.
