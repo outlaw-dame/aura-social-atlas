@@ -734,7 +734,7 @@ export const createCirclePostOnFedizen = createServerFn({ method: 'POST' }).midd
     if ('error' in c) return { ok: false, error: c.error };
     const { requestBonfireGraphQL, BonfireGraphQLError } = await import('./bonfire-graphql.server');
     const { CREATE_CIRCLE_POST_DOCUMENT, POST_GRANTS_DOCUMENT } = await import('./bonfire/graphql/operations');
-    const { circlePermissions, circlesCanRead } = await import('./quote-policy');
+    const { circlePermissions, circleReadCheck } = await import('./quote-policy');
     const circleIds = [...new Set(data.circleIds)];
     let created: { id: string; activity?: { canonicalUri?: string | null } | null };
     try {
@@ -760,7 +760,7 @@ export const createCirclePostOnFedizen = createServerFn({ method: 'POST' }).midd
           operation: 'query', document: POST_GRANTS_DOCUMENT, accessToken: c.token, variables: { id },
           validate: v => z.object({ post: z.object({ permissionGrants: z.array(z.object({ permission: z.string(), can: z.array(z.object({ id: z.string() })).nullish() })).nullish() }).nullable() }).parse(v).post?.permissionGrants,
         });
-        shared = circlesCanRead(grants, circleIds) ? 'confirmed' : 'missing';
+        shared = circleReadCheck(grants, circleIds);
       } catch { /* posted; whether the circles can read it is unknown */ }
     }
     return { ok: true, shared, ...(url ? { url } : {}), ...(id ? { id } : {}) };

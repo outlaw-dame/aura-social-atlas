@@ -70,15 +70,16 @@ describe('circle posts (boundary "private" + permissions for the circle)', () =>
     ]);
     for (const e of circlePermissions(['01CIRCLE'])) expect(Array.isArray(e.can) && Array.isArray(e.cannot)).toBe(true);
   });
-  test('only a stored read grant for every circle counts as shared', async () => {
-    const { circlesCanRead } = await import('../src/lib/quote-policy');
+  test('only a stored read grant for every circle counts as shared; no grants at all is unknown, not missing', async () => {
+    const { circleReadCheck } = await import('../src/lib/quote-policy');
     const read = (...ids: string[]) => ({ permission: 'read', can: ids.map(id => ({ id })) });
-    expect(circlesCanRead([read('01A')], ['01A'])).toBe(true);
-    expect(circlesCanRead([read('01A')], ['01A', '01B'])).toBe(false);
-    expect(circlesCanRead([{ permission: 'see', can: [{ id: '01A' }] }], ['01A'])).toBe(false);
-    expect(circlesCanRead([], ['01A'])).toBe(false);
-    expect(circlesCanRead(null, ['01A'])).toBe(false);
-    expect(circlesCanRead([read('01A')], [])).toBe(false);
+    expect(circleReadCheck([read('01A')], ['01A'])).toBe('confirmed');
+    expect(circleReadCheck([read('01A')], ['01A', '01B'])).toBe('missing');
+    expect(circleReadCheck([{ permission: 'see', can: [{ id: '01A' }] }], ['01A'])).toBe('missing');
+    // Fedizen rc.1 answers [] for every post (its ACL isn't preloaded), seen live 2026-11-22.
+    expect(circleReadCheck([], ['01A'])).toBe('unknown');
+    expect(circleReadCheck(null, ['01A'])).toBe('unknown');
+    expect(circleReadCheck([read('01A')], [])).toBe('unknown');
   });
   test('the mutation fixes the boundary to "private" and asks for the grants back', async () => {
     const { CREATE_CIRCLE_POST_DOCUMENT, POST_GRANTS_DOCUMENT } = await import('../src/lib/bonfire/graphql/operations');
