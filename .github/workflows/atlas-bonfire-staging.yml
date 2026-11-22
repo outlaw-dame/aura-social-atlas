@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - staging/atlas-bonfire-client
+      - staging/atlas-bonfire-client-v2
+      - staging/atlas-bonfire-client-v3
   pull_request:
     branches:
       - main
@@ -30,7 +32,7 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Test session authorization and sanitized staging UI
         run: |
-          bun test tests/bonfire-atlas-acceptance.test.ts tests/fedizen-acceptance-view.test.ts tests/fedizen-session-intent.test.ts tests/fedizen-callback-origin.test.ts tests/fedizen-oauth-grant.test.ts
+          bun test tests/auth-runtime.test.ts tests/bonfire-atlas-acceptance.test.ts tests/fedizen-acceptance-view.test.ts tests/fedizen-session-intent.test.ts tests/fedizen-callback-origin.test.ts tests/fedizen-oauth-grant.test.ts
       - name: Build Node server for Railway without privileged secrets
         env:
           NITRO_PRESET: node-server
