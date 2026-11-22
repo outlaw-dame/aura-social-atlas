@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { fromBonfirePosts, type BonfireActivityNode } from './spotlight';
+import { isPlaceholderAvatar, type FediPerson, type FedizenPost } from './fedizen-feed';
 import { BonfireGraphQLError, requestBonfireGraphQL, type BonfireGraphQLRequest } from './bonfire-graphql.server';
 import {
   NATIVE_HOME_DOCUMENT, NATIVE_ME_DOCUMENT, NATIVE_NOTIFICATIONS_DOCUMENT,
@@ -168,4 +169,76 @@ export function normalizeNativeBonfireNotifications(page: NativeBonfirePage): {
     })),
     pageInfo: page.pageInfo,
   };
+}
+
+/** Reads one post as the REST feeds show it (Mastodon `GET /api/v1/statuses/:id`, normalized by fromStatuses). */
+export type NativeStatusRead = (statusId: string) => Promise<FedizenPost | undefined>;
+
+const STATUS_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const http = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
+
+/** The person who boosted, as GraphQL names them (the activity's own subject, before the boost credits the author). */
+function boosterOf(node: BonfireActivityNode): FediPerson | undefined {
+  const s = node.subject;
+  const user = s?.character?.username?.replace(/^@/, '');
+  const name = s?.profile?.name || user;
+  if (!name) return undefined;
+  const avatar = http(s?.profile?.icon);
+  const actor = s?.character?.canonicalUri;
+  return {
+    name,
+    ...(avatar && !isPlaceholderAvatar(avatar) ? { avatar } : {}),
+    ...(user ? { acct: user.includes('@') ? user : `${user}@fedizen.net` } : {}),
+    ...(actor && /^https:\/\//i.test(actor) ? { actor } : {}),
+  };
+}
+
+/**
+ * Native Home with the same cards as the REST feed. GraphQL decides which posts are on the page, their order and the
+ * next cursor; each post's details come from its REST status (the GraphQL post id is the status id), because
+ * Bonfire rc.1's GraphQL doesn't carry visibility, language, mentions, polls, link cards, video or quotes. A boost
+ * keeps the booster GraphQL names. A post whose read fails, isn't back within the budget, or has no usable id stays
+ * the GraphQL-only card, which offers Share only, so no button claims a state Atlas doesn't know.
+ */
+export async function hydrateNativeBonfireHome(
+  page: NativeBonfirePage,
+  read: NativeStatusRead,
+  budgetMs = 2500,
+  concurrency = 8,
+): Promise<FedizenPost[]> {
+  // One entry per post, as fromBonfirePosts counts them (a boost and its original are the same post). Walked from
+  // GraphQL's nodes, not fromBonfirePosts' output, so a post without text (only an image) still gets its REST card.
+  const seen = new Set<string>();
+  const nodes = page.nodes.filter(n => {
+    const key = n.object?.id ?? n.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const found: (FedizenPost | undefined)[] = new Array(nodes.length);
+  let next = 0;
+  let stopped = false;
+  const worker = async () => {
+    while (!stopped && next < nodes.length) {
+      const i = next++;
+      const statusId = nodes[i].object?.id;
+      if (!statusId || !STATUS_ID.test(statusId)) continue;
+      found[i] = await read(statusId).catch(() => undefined);
+    }
+  };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    Promise.all(Array.from({ length: Math.min(concurrency, nodes.length) }, worker)),
+    new Promise(resolve => { timer = setTimeout(resolve, budgetMs); }),
+  ]);
+  stopped = true; // Reads not started by the deadline aren't sent.
+  if (timer) clearTimeout(timer);
+  return nodes.flatMap((node, i): FedizenPost[] => {
+    const rest = found[i];
+    // Unread: the GraphQL-only card, when GraphQL gave it something to show.
+    if (!rest) return fromBonfirePosts([node]);
+    const boost = node.verb?.verb === 'Boost' || node.verb?.verb === 'Announce';
+    const booster = boost ? boosterOf(node) : undefined;
+    return [{ ...rest, id: node.id, ...(booster ? { boostedBy: booster.name, booster } : {}) }];
+  });
 }

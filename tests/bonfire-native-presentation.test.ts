@@ -32,7 +32,8 @@ describe('Atlas native Bonfire presentation gate', () => {
     const view = selectBonfireHome(rest, native);
     expect(view.source).toBe('native');
     expect(view.posts.map(p => p.id)).toEqual(['native-1']);
-    expect(view.notices).toMatchObject([{ id: 'native-notice', author: 'Native actor', text: 'Like', type: 'activity' }]);
+    // Activity keeps the REST notifications (faces, post links, wording); GraphQL's carry only a verb and a name.
+    expect(view.notices).toEqual(rest.notices);
     expect(view.endCursor).toBe('cursor');
     expect(view.hasNextPage).toBe(true);
     expect(view.profile?.character?.username).toBe('alice');

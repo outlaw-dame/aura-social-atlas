@@ -3,8 +3,7 @@ import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent } from './fedizen-feed';
 import type { NativeBonfireIdentity, NativeBonfireNotice } from './bonfire-private.server';
-import type { fromBonfirePosts } from './spotlight';
-type NativeBonfirePost = ReturnType<typeof fromBonfirePosts>[number];
+import type { FedizenPost } from './fedizen-feed';
 
 export function nativeBonfireReadEnabled(value: string | undefined): boolean {
   return value === 'verified';
@@ -15,13 +14,30 @@ export type NativeBonfireSnapshot = {
   identity: NativeBonfireIdentity;
   /** Native IDs and account fields are not assumed to equal REST or OIDC IDs. */
   restAccountHandle: string | null;
-  posts: NativeBonfirePost[];
+  /** Home posts as the REST feed shows them (hydrateNativeBonfireHome); GraphQL-only cards where a read failed. */
+  posts: FedizenPost[];
   notices: NativeBonfireNotice[];
   homeEndCursor: string | null;
   homeHasNextPage: boolean;
   notificationEndCursor: string | null;
   notificationHasNextPage: boolean;
 };
+
+/** Native Home posts with REST details and the same enrichment as the REST feeds; server only. */
+async function hydratedHome(
+  native: typeof import('./bonfire-private.server'),
+  page: Parameters<typeof import('./bonfire-private.server').hydrateNativeBonfireHome>[0],
+  accessToken: string,
+): Promise<FedizenPost[]> {
+  const [{ fedizenGet }, { fromStatuses }, { withArticleAuthors }] = await Promise.all([
+    import('./fedizen.server'), import('./fedizen-feed'), import('./feed-enrich.server'),
+  ]);
+  const posts = await native.hydrateNativeBonfireHome(page, async statusId => {
+    const r = await fedizenGet(accessToken, `/api/v1/statuses/${statusId}`).catch(() => null);
+    return r?.status === 200 ? fromStatuses(r.data as never)[0] : undefined;
+  });
+  return withArticleAuthors(posts, 2000, accessToken);
+}
 
 /**
  * Operator gated until a real, consented OAuth test proves that Fedizen's
@@ -64,16 +80,15 @@ export const getNativeBonfireSnapshot = createServerFn({ method: 'GET' })
         native.readNativeBonfirePage(connection.accessToken, 'notifications', data.notificationsAfter ?? null),
       ]);
       if (!home || !notifications) return { ...base, status: 'authorization-required' };
-      const normalizedHome = native.normalizeNativeBonfireHome(home);
       const normalizedNotifications = native.normalizeNativeBonfireNotifications(notifications);
       return {
         status: 'available',
         identity: connection.identity,
         restAccountHandle: connection.accountHandle,
-        posts: normalizedHome.posts,
+        posts: await hydratedHome(native, home, connection.accessToken),
         notices: normalizedNotifications.notices,
-        homeEndCursor: normalizedHome.pageInfo.endCursor ?? null,
-        homeHasNextPage: normalizedHome.pageInfo.hasNextPage,
+        homeEndCursor: home.pageInfo.endCursor ?? null,
+        homeHasNextPage: home.pageInfo.hasNextPage,
         notificationEndCursor: normalizedNotifications.pageInfo.endCursor ?? null,
         notificationHasNextPage: normalizedNotifications.pageInfo.hasNextPage,
       };
@@ -125,15 +140,14 @@ export const getNativeBonfireHomeContinuation = createServerFn({ method: 'GET' }
         (!home.pageInfo.endCursor || home.pageInfo.endCursor === data.after)) {
         return { ...base, status: 'unavailable' };
       }
-      const result = native.normalizeNativeBonfireHome(home);
       return {
         ...base,
         status: 'available',
         identity: connection.identity,
         restAccountHandle: connection.accountHandle,
-        posts: result.posts,
-        homeEndCursor: result.pageInfo.endCursor ?? null,
-        homeHasNextPage: result.pageInfo.hasNextPage,
+        posts: await hydratedHome(native, home, connection.accessToken),
+        homeEndCursor: home.pageInfo.endCursor ?? null,
+        homeHasNextPage: home.pageInfo.hasNextPage,
       };
     } catch {
       return { ...base, status: 'unavailable' };
