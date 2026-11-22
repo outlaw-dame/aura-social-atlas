@@ -38,6 +38,8 @@ jobs:
           NITRO_PRESET: node-server
           VITE_SUPABASE_URL: https://example.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+          VITE_ATLAS_AUTH_RUNTIME: supabase
+          VITE_ATLAS_GOOGLE_OAUTH_ENABLED: disabled
         run: |
           bun run build
           test -f .output/server/index.mjs
