@@ -1,4 +1,6 @@
 import { useFollowRequests } from '@/components/social/useOwnPosts';
+import { NewPostFaces } from '@/components/social/NewPostFaces';
+import { newPostsLabel } from '@/lib/new-post-faces';
 import { useNotificationGroups } from '@/components/social/useNotificationGroups';
 import type { FedizenNotice } from '@/lib/fedizen-feed';
 import { singleNoticeTarget, type NoticeTarget } from '@/lib/notice-target';
@@ -86,7 +88,7 @@ export function MobileFedizenFeed() {
         {f.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{f.error}</p></Block>}
         {f.data.error && <Block strong inset>Fedizen couldn’t send your timeline right now. <Link onClick={f.retry}>Try again</Link></Block>}
         {/* New posts wait here until asked for (Bonfire: "Show N new activities"; Mastodon: "N new items"). */}
-        {tl.newCount > 0 && <div className="atlas-new-posts"><button type="button" onClick={tl.reveal}><Icon ios="f7:arrow_up" md="material:arrow_upward" />{tl.newCount === 1 ? '1 new post' : `${tl.newCount}${tl.gap ? '+' : ''} new posts`}</button></div>}
+        {tl.newCount > 0 && <div className="atlas-new-posts"><button type="button" onClick={tl.reveal} aria-label={newPostsLabel(tl.newCount, tl.gap, tl.faces)}><Icon ios="f7:arrow_up" md="material:arrow_upward" />{tl.faces.length ? <NewPostFaces faces={tl.faces} /> : <span>{tl.newCount === 1 ? '1 new post' : `${tl.newCount}${tl.gap ? '+' : ''} new posts`}</span>}</button></div>}
         {tl.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}
         {tl.hasOlder && <div ref={tl.sentinel} className="atlas-older">
           {tl.olderFailed ? <span>Couldn’t load older posts. <Link onClick={() => void tl.loadOlder()}>Try again</Link></span>

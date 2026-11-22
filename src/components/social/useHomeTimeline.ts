@@ -6,7 +6,8 @@ import type { FedizenPost } from '@/lib/fedizen-feed';
 import { appendOlder, CHECK_MAX, CHECK_MIN, newerThan, nextCheckDelay } from '@/lib/home-timeline';
 import { useReading } from '@/lib/reading-prefs';
 import { useAtlasAuth } from './AuthState';
-import { useShownCount } from './useIntelligence';
+import { useShownPosts } from './useIntelligence';
+import { newPostFaces } from '@/lib/new-post-faces';
 import { LIVE_NOTICE_EVENT, LIVE_POST_EVENT, livePosts } from './LiveUpdates';
 
 /** The element that scrolls the feed: Framework7's page content on the phone, the window on desktop. */
@@ -51,7 +52,10 @@ export function useHomeTimeline(data: FedizenHome | undefined, enabled: boolean,
 
   // New posts waiting behind the pill.
   const [pending, setPending] = useState<{ posts: FedizenPost[]; gap: boolean; next?: string }>({ posts: [], gap: false });
-  const shown = useShownCount(pending.posts);
+  const shownPending = useShownPosts(pending.posts);
+  const shown = shownPending.length;
+  // The faces on the new-posts pill: only people whose waiting posts the filters would show.
+  const faces = useMemo(() => newPostFaces(shownPending), [shownPending]);
   const atTop = useCallback(() => {
     const el = list.current;
     if (!el) return false;
@@ -164,7 +168,7 @@ export function useHomeTimeline(data: FedizenHome | undefined, enabled: boolean,
   }, [enabled, cursor, loadOlder]);
 
   return {
-    posts, newCount: shown, gap: pending.gap, reveal,
+    posts, newCount: shown, gap: pending.gap, faces, reveal,
     sentinel, hasOlder: !!cursor, loadingOlder: olderNow.loading, olderFailed: olderNow.failed, loadOlder,
   };
 }

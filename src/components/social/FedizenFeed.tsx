@@ -10,7 +10,9 @@ import { SaveButton } from './SavedAndCircles';
 import { PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
 import { FeedPostCard, useFeedPostActions } from './FeedPostCard';
-import { useRef } from 'react';
+import { useRef, type CSSProperties } from 'react';
+import { NewPostFaces } from './NewPostFaces';
+import { newPostsLabel } from '@/lib/new-post-faces';
 import { ArrowUp, Loader2 } from 'lucide-react';
 import { useHomeTimeline } from './useHomeTimeline';
 
@@ -44,8 +46,8 @@ export function FedizenFeed() {
       <div ref={list} className="space-y-6">
         {/* New posts wait here until asked for (Bonfire: "Show N new activities"; Mastodon: "N new items"). */}
         {restSource && tl.newCount > 0 && <div className="pointer-events-none sticky top-20 z-30 -mb-2 flex justify-center">
-          <button type="button" onClick={tl.reveal} className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <ArrowUp className="size-4" />{tl.newCount === 1 ? '1 new post' : `${tl.newCount}${tl.gap ? '+' : ''} new posts`}
+          <button type="button" onClick={tl.reveal} aria-label={newPostsLabel(tl.newCount, tl.gap, tl.faces)} style={{ '--atlas-pill-bg': 'var(--primary)' } as CSSProperties} className="pointer-events-auto flex h-10 items-center gap-2 rounded-full bg-primary pl-3.5 pr-1.5 text-sm font-medium text-primary-foreground shadow-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <ArrowUp className="size-4" />{tl.faces.length ? <NewPostFaces faces={tl.faces} /> : <span className="pr-2">{tl.newCount === 1 ? '1 new post' : `${tl.newCount}${tl.gap ? '+' : ''} new posts`}</span>}
           </button>
         </div>}
         {(restSource ? tl.posts : posts).length ? (restSource ? tl.posts : posts).map(p => <FeedPostCard key={p.id} post={p} actions={actions} />) : error && displayed.source !== 'native' ? null : <p className="text-sm text-muted-foreground">Your Fedizen timeline is empty. Follow people on Fedizen and their posts will appear here.</p>}

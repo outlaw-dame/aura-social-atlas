@@ -971,6 +971,13 @@ html.atlas-stack-open .view.atlas-stack { pointer-events: auto; }
 .atlas-new-posts { position: sticky; top: 8px; /* sticks below the navbar: the page's top padding already clears it */ z-index: 20; display: flex; justify-content: center; height: 0; overflow: visible; }
 .atlas-new-posts button { flex: none; width: auto; display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 18px; background: var(--f7-theme-color); color: #fff; font: inherit; font-size: 15px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.18); cursor: pointer; }
 .atlas-new-posts button i { font-size: 16px; }
+.atlas-new-posts button { --atlas-pill-bg: var(--f7-theme-color); padding: 0 6px 0 14px; gap: 8px; }
+/* Faces of the people whose new posts are waiting (NewPostFaces), shared with desktop. Each overlaps the one before,
+   with a ring in the pill's colour so they read as separate faces. */
+.atlas-new-faces { display: inline-flex; align-items: center; padding-left: 6px; }
+.atlas-new-face { width: 26px; height: 26px; margin-left: -6px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover;
+  box-shadow: 0 0 0 2px var(--atlas-pill-bg, currentColor); background: color-mix(in srgb, currentColor 25%, transparent); flex: none; }
+.atlas-new-face-initial { display: inline-grid; place-items: center; font-size: 12px; font-weight: 600; line-height: 1; }
 .atlas-new-posts button:active { opacity: .85; }
 .atlas-older { display: flex; justify-content: center; padding: 12px 16px 24px; font-size: 14px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
 .atlas-older span { display: flex; align-items: center; gap: 8px; }
