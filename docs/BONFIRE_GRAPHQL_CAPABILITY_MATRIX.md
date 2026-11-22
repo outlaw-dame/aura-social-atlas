@@ -22,7 +22,7 @@ Status key: **in use** (Atlas calls it today), **flag-gated** (written and teste
 | Notifications / Activity | REST `/api/v2/notifications` (grouped), markers | `me.notifications` (live schema) | **flag-gated** | Same as Home |
 | Post detail and conversation | REST `/api/v1/statuses/:id`, `/context` | `post(filter:{id})` (live schema) flag-gated; `threadContext` in schema | flag-gated / in schema | Roadmap 3: compare `threadContext` with REST `/context` |
 | Profiles (others) | ActivityPub actor read directly (`loadFediProfile`) | `user(filter:{id|username})` (live schema) | **flag-gated** | — |
-| Edit own profile on Fedizen | GraphQL `me.user.profile` read and `updateUser(profile:)` (name, bio, website, location) | `updateUser(profile: ProfileInput, images: ImagesUpload)` (bonfire_me `ef9c2a9`) | **in use** (text fields) | Roadmap 1: avatar and banner (`images`) |
+| Edit own profile on Fedizen | GraphQL `me.user.profile` read; `updateUser(profile:)` (name, bio, website, location); `updateUser(images:)` multipart upload (picture → `icon`, banner → `image`) | `updateUser(profile: ProfileInput, images: ImagesUpload)` (bonfire_me `ef9c2a9`) | **in use** (text fields; picture and banner pending a live upload check) | Atlas accepts JPEG, PNG, WebP, GIF up to 5 MB (Bonfire's `UPLOAD_LIMIT_IMAGES` default; bonfire_files `368bd01` also takes APNG and SVG, which Atlas doesn't send) |
 | Edit post | REST `PUT /api/v1/statuses/:id` + `/source` | `editPost` | in schema | Stay on REST: works, and GraphQL adds nothing here |
 | Delete post | REST `DELETE /api/v1/statuses/:id` | generic `delete` (any context, `bonfire_api_graphql`) | in schema | Stay on REST: works, and GraphQL adds nothing here |
 | Like / unlike | REST `favourite` / `unfavourite` | `like`, `unlike` (live root) | in schema | Stay on REST: works, and GraphQL adds nothing here |
@@ -65,7 +65,7 @@ Fedizen serves both, over the same Bonfire data: GraphQL (`/api/graphql`) and th
 
 ### Roadmap (where GraphQL adds something)
 
-1. **Profile picture and banner**: `updateUser(images: {icon, image})`, which takes multipart uploads. Atlas can't change these at all today.
+1. **Profile picture and banner**: `updateUser(images: {icon, image})` as an Absinthe multipart upload (`query`, `variables` naming a file part, the file part). Built; one upload is sent once and never retried. Needs one live check on Fedizen.
 2. **Who can see and reply to a post**: Bonfire boundaries and circles. REST offers only public, unlisted, followers and direct. Read `bonfire_boundaries` at the pinned commit first, then `createPost` (and replies) with a boundary.
 3. **Conversations**: compare GraphQL `threadContext` with REST `/statuses/:id/context` on real threads; switch only if it shows more.
 4. **Second-account isolation test** for native Home and notifications (needs a second consenting Fedizen account).

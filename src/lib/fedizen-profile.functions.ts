@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent, hasScope } from './fedizen-feed';
-import { profileInput, type FedizenProfile } from './fedizen-profile';
+import { profileImageProblem, profileInput, type FedizenProfile } from './fedizen-profile';
 
 type Problem = 'disconnected' | 'authorization-required' | 'identity-unverified' | 'needs-permission' | 'rate-limited' | 'rejected' | 'unavailable';
 const problemOf = (status: string): Problem =>
@@ -51,5 +51,36 @@ export const saveMyFedizenProfile = createServerFn({ method: 'POST' }).middlewar
       return saved ? { ok: true, profile: saved } : { ok: false, error: 'rejected' };
     } catch (e) {
       return { ok: false, error: isRateLimited(e) ? 'rate-limited' : (e as { kind?: string })?.kind === 'graphql' ? 'rejected' : 'unavailable' };
+    }
+  });
+
+/**
+ * Replaces your Fedizen profile picture or banner (multipart, relayed to Bonfire's GraphQL `updateUser(images:)`). Type
+ * and size are checked again here; Fedizen resizes the image itself.
+ */
+export const saveMyFedizenProfileImage = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => {
+    if (!(d instanceof FormData)) throw new Error('Expected a form.');
+    const file = d.get('file');
+    if (!(file instanceof Blob)) throw new Error('Expected a file.');
+    const parsed = z.object({ expectedAtlasUserId: z.string().uuid(), kind: z.enum(['avatar', 'banner']) }).parse({ expectedAtlasUserId: d.get('expectedAtlasUserId'), kind: d.get('kind') });
+    return { ...parsed, file, name: typeof (file as File).name === 'string' ? (file as File).name : parsed.kind };
+  })
+  .handler(async ({ data, context }): Promise<{ ok: true; url: string | null } | { ok: false; error: Problem | 'unsupported' | 'too-large' }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const bad = profileImageProblem(data.file);
+    if (bad) return { ok: false, error: bad };
+    try {
+      const [{ verifiedNativeBonfireConnection }, { updateMyFedizenProfileImage }] = await Promise.all([
+        import('./bonfire-verified-connection.server'), import('./fedizen-profile.server'),
+      ]);
+      const c = await verifiedNativeBonfireConnection(data.expectedAtlasUserId, context.userId);
+      if (c.status !== 'available') return { ok: false, error: problemOf(c.status) };
+      if (!hasScope(c.scope, 'write')) return { ok: false, error: 'needs-permission' };
+      const url = await updateMyFedizenProfileImage(c.accessToken, c.identity.user!.id, data.kind, data.file, data.name);
+      return { ok: true, url };
+    } catch (e) {
+      const status = (e as { status?: number })?.status;
+      return { ok: false, error: isRateLimited(e) ? 'rate-limited' : status === 413 ? 'too-large' : (e as { kind?: string })?.kind === 'graphql' ? 'rejected' : 'unavailable' };
     }
   });

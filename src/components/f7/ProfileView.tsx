@@ -6,6 +6,7 @@ import { avatarPreset } from '@/lib/atlas-avatars';
 import { IdentityAvatar } from '@/components/social/IdentityAvatar';
 import { useFedizenIdentity } from '@/components/social/useFedizenIdentity';
 import { useMyFedizenProfile } from '@/components/social/useMyFedizenProfile';
+import { ProfileImagePicker } from '@/components/social/ProfileImagePicker';
 import { BIO_MAX, isWebsite, LOCATION_MAX, NAME_MAX, WEBSITE_MAX } from '@/lib/fedizen-profile';
 import { creators, posts, fullHandle, type Creator } from '@/lib/social-catalogue';
 import { CreatorTag } from '@/components/social/CreatorTag';
@@ -82,6 +83,10 @@ export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose
         <div style={{ fontWeight: 600, fontSize: 17, marginBottom: 4 }}>Edit profile</div>
         {identity.connected && !remote && <div style={{ fontSize: 13, opacity: 0.6 }}>{fedizen.loading ? 'Loading your Fedizen profile…' : fedizen.problem}</div>}
       </Block>
+      {remote && <Block style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 0 }}>
+        {(['avatar', 'banner'] as const).map(kind => <ProfileImagePicker key={kind} kind={kind} busy={fedizen.uploading === kind} onPick={file => fedizen.saveImage(kind, file)}
+          button={(open, busy, label) => <Button tonal small round disabled={busy || !!fedizen.uploading} onClick={open}>{label}</Button>} />)}
+      </Block>}
       <List strong inset>
         {remote && <ListInput type="text" label="Name" floatingLabel value={name} maxlength={NAME_MAX} onInput={(e: any) => setName(e.target.value)} />}
         <ListInput type="textarea" label="Bio" floatingLabel placeholder="Tell people what you share…" value={bio} maxlength={remote ? BIO_MAX : 300}
@@ -129,7 +134,9 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
   const name = identity.name;
   return (
     <div className="atlas-bsky">
-      <div className="atlas-bsky-banner" aria-hidden="true" />
+      {identity.viewer?.header && !/\/images\/bonfires\.png$/.test(identity.viewer.header)
+        ? <img className="atlas-bsky-banner" src={identity.viewer.header} alt="" aria-hidden="true" referrerPolicy="no-referrer" style={{ objectFit: 'cover', width: '100%' }} />
+        : <div className="atlas-bsky-banner" aria-hidden="true" />}
       <header className="atlas-bsky-head">
         <div className="atlas-bsky-row">
           <IdentityAvatar className="atlas-bsky-avatar" src={identity.avatar} name={identity.name} alt="Your profile avatar" />

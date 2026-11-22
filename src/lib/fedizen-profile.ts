@@ -61,3 +61,19 @@ export function fromBonfireProfile(profile: unknown): FedizenProfile | null {
     location: (p.data.location ?? '').trim(),
   };
 }
+
+/**
+ * Profile picture and banner. Fedizen's IconUploader and ImageUploader take PNG, APNG, JPEG, GIF, SVG and WebP up to
+ * UPLOAD_LIMIT_IMAGES (5 MB by default); Atlas sends only JPEG, PNG, WebP and GIF (never SVG, which can carry script).
+ */
+export const PROFILE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
+export const PROFILE_IMAGE_MAX_BYTES = 5_000_000;
+export type ProfileImageKind = 'avatar' | 'banner';
+
+/** Whether a file can be sent as a profile picture or banner, and if not, why. */
+export function profileImageProblem(file: { type: string; size: number }): 'unsupported' | 'too-large' | null {
+  // An empty file is no picture at all, whatever its type says.
+  if (!(PROFILE_IMAGE_TYPES as readonly string[]).includes(file.type) || file.size <= 0) return 'unsupported';
+  if (file.size > PROFILE_IMAGE_MAX_BYTES) return 'too-large';
+  return null;
+}

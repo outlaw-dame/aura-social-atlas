@@ -291,6 +291,11 @@ let labProfile = { name: 'Atlas Lab', bio: 'A sample profile in the Device Lab. 
 export const fedizenProfile: Impl<typeof FedizenProfileFns> = {
   getMyFedizenProfile: () => ({ profile: labProfile, canWrite: true }),
   saveMyFedizenProfile: (d: { profile: typeof labProfile }) => { labProfile = { ...d.profile }; return { ok: true as const, profile: labProfile }; },
+  // The picked picture stays in this page (an object URL); nothing is uploaded anywhere.
+  saveMyFedizenProfileImage: (d: FormData) => {
+    const file = d.get('file');
+    return file instanceof Blob ? { ok: true as const, url: URL.createObjectURL(file) } : { ok: false as const, error: 'unsupported' as const };
+  },
 };
 export const groups: Impl<typeof Groups> = {
   getGroups: () => ({ groups: [...GROUPS, ...TOPICS], next: null }),
