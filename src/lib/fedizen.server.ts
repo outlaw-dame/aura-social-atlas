@@ -497,6 +497,14 @@ const bookmarksSchema = z.array(timelineStatus).max(40);
 const list = z.object({ id: z.string().min(1).max(64), title: z.string().max(200).nullish() });
 const listsSchema = z.array(list).max(200);
 const accountsSchema = z.array(account.extend({ id: z.string().min(1).max(64) })).max(80);
+const listedAccount = account.extend({ id: z.string().min(1).max(64) });
+/**
+ * Follow requests: Bonfire (rc.1, GraphQLMasto.Adapter.list_follow_requests) ignores `limit` and returns every pending
+ * request, so the list can be any length (the byte cap still bounds it); an entry Atlas can't read is left out rather
+ * than failing the whole list.
+ */
+const followRequestsSchema = z.array(z.unknown()).max(10_000)
+  .transform(items => items.flatMap(i => { const a = listedAccount.safeParse(i); return a.success ? [a.data] : []; }));
 
 const ID = '[A-Za-z0-9_-]{1,64}';
 /** A hashtag, percent-encoded (letters in any script arrive as %XX). */
@@ -550,7 +558,7 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   // than failing the whole conversation.
   { match: new RegExp(`^/api/v1/statuses/${ID}/context$`), schema: z.object({ ancestors: tolerantStatuses, descendants: tolerantStatuses }), single: true },
   // People asking to follow you (a locked account approves each): Bonfire MastoAccountController.follow_requests.
-  { match: /^\/api\/v1\/follow_requests\?limit=40$/, schema: accountsSchema },
+  { match: /^\/api\/v1\/follow_requests\?limit=40$/, schema: followRequestsSchema },
   // A post's own text and content warning, to edit it (Mastodon: StatusSourcesController; Bonfire: status_source).
   { match: new RegExp(`^/api/v1/statuses/${ID}/source$`), schema: z.object({ id: z.string().max(64).nullish(), text: z.string().max(20_000), spoiler_text: z.string().max(1000).nullish().catch(null) }), single: true },
   // A poll's current counts and the reader's votes (Bonfire: MastoPollController.show).
@@ -613,7 +621,10 @@ export function readRoute(path: string): string {
   return parts.map((seg, i) => (i === 2 && /^v\d(-bonfire)?$/.test(seg)) || (/^[a-z][a-z0-9_-]{0,30}$/.test(seg) && !/^(tag|tags|lookup)$/.test(parts[i - 1] ?? '') && !/\d/.test(seg)) ? seg : seg ? ':x' : seg).join('/');
 }
 
-export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[]; next?: string; prev?: string; failure?: FedizenReadFailure }> {
+/** Where an answer's shape differed from Atlas's schema: field paths and zod issue codes, never values. */
+export type FedizenReadIssue = { at: string; code: string };
+
+export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[]; next?: string; prev?: string; failure?: FedizenReadFailure; issues?: FedizenReadIssue[] }> {
   const read = READS.find(r => r.match.test(path));
   if (!read) throw new Error('Unsupported Fedizen read path.');
 
@@ -649,8 +660,9 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
   const parsed = read.schema.safeParse(payload);
   if (!parsed.success) {
     // Where the shape differs (field names, array positions and the kind of mismatch), never the values.
-    console.warn('Fedizen read did not match', { route: readRoute(path), issues: parsed.error.issues.slice(0, 5).map(i => ({ at: i.path.join('.'), code: i.code })) });
-    return { status: 502, data: [], failure: 'mismatch' };
+    const issues = parsed.error.issues.slice(0, 5).map(i => ({ at: i.path.join('.'), code: i.code }));
+    console.warn('Fedizen read did not match', { route: readRoute(path), issues });
+    return { status: 502, data: [], failure: 'mismatch', issues };
   }
   return { status: 200, data: read.single ? [parsed.data] : parsed.data as unknown[], ...pageCursors(response.headers.get('link')) };
 }

@@ -221,7 +221,7 @@ function FollowRequests() {
   const r = useFollowRequests();
   if (!r.people.length && !r.readError) return null;
   return <section aria-labelledby="follow-requests" className="mb-6 rounded-2xl border border-border p-4">
-    <h2 id="follow-requests" className="mb-3 text-sm font-semibold">Follow requests <span className="text-muted-foreground">{r.people.length || ''}</span></h2>
+    <h2 id="follow-requests" className="mb-3 text-sm font-semibold">Follow requests <span className="text-muted-foreground">{r.total || ''}</span></h2>
     {r.readError && <p role="alert" className="text-sm text-muted-foreground">{r.readError}</p>}
     <ul className="space-y-3">{r.people.map(p => {
       const who = { actor: p.actor, acct: p.acct, name: p.name };

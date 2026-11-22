@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import type { ForYouPost } from './feed-types';
 import { DEFAULT_LIMITS, MAX_ALT, MAX_CW, MAX_TEXT, UPLOAD_CEILING, type ComposeLimits } from './compose-media';
 import { allowedCallback, assertFedizenSessionIntent, creditsBesidesAuthor, pollOf, type FediPoll, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromGroupedNotifications, type FedizenNoticeGroup, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
-import type { FedizenReadFailure } from './fedizen.server';
+import type { FedizenReadFailure, FedizenReadIssue } from './fedizen.server';
 
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const { tokenFor } = await import('./fedizen.server');
@@ -940,7 +940,7 @@ export const getFedizenThread = createServerFn({ method: 'GET' }).middleware([re
 /** People asking to follow you: a locked account approves each one (Mastodon /follow_requests). */
 export const getFollowRequests = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.parse(d))
-  .handler(async ({ data, context }): Promise<{ people: (FedizenPerson & { acct?: string; actor?: string })[]; error?: Problem; detail?: { status: number; failure?: FedizenReadFailure } }> => {
+  .handler(async ({ data, context }): Promise<{ people: (FedizenPerson & { acct?: string; actor?: string })[]; total?: number; error?: Problem; detail?: { status: number; failure?: FedizenReadFailure; issues?: FedizenReadIssue[] } }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId);
     if ('error' in c) return { people: [], error: c.error };
@@ -949,9 +949,10 @@ export const getFollowRequests = createServerFn({ method: 'GET' }).middleware([r
     const { isPublicHttpsUrl } = await import('./article-author');
     const r = await fedizenGet(c.token, '/api/v1/follow_requests?limit=40').catch(() => null);
     // The status and kind of failure go back with the error (no content), so a failing read can be told apart from the page.
-    if (!r || r.status !== 200) return { people: [], error: r ? problem(r.status) : 'unavailable', ...(r ? { detail: { status: r.status, failure: r.failure } } : {}) };
-    const raw = r.data as { acct?: string; url?: string | null; uri?: string | null }[];
-    return { people: fromAccounts(r.data as never).map((p, i) => {
+    if (!r || r.status !== 200) return { people: [], error: r ? problem(r.status) : 'unavailable', ...(r ? { detail: { status: r.status, failure: r.failure, ...(r.issues ? { issues: r.issues } : {}) } } : {}) };
+    // Bonfire answers with every pending request; Atlas shows the first 40 and says how many there are.
+    const all = r.data as { acct?: string; url?: string | null; uri?: string | null }[], raw = all.slice(0, 40);
+    return { total: all.length, people: fromAccounts(raw as never).map((p, i) => {
       const acct = fullAcct(raw[i]?.acct), actor = [raw[i]?.uri, raw[i]?.url].find(u => isPublicHttpsUrl(u ?? undefined)) ?? undefined;
       return { ...p, ...(acct ? { acct } : {}), ...(actor ? { actor } : {}) };
     }) };
@@ -1082,8 +1083,7 @@ export const getWhoReacted = createServerFn({ method: 'GET' }).middleware([requi
     const { fullAcct } = await import('./fedizen-feed');
     const { isPublicHttpsUrl } = await import('./article-author');
     const r = await fedizenGet(c.token, `/api/v1/statuses/${data.statusId}/${data.kind === 'like' ? 'favourited_by' : 'reblogged_by'}?limit=40`).catch(() => null);
-    // The status and kind of failure go back with the error (no content), so a failing read can be told apart from the page.
-    if (!r || r.status !== 200) return { people: [], error: r ? problem(r.status) : 'unavailable', ...(r ? { detail: { status: r.status, failure: r.failure } } : {}) };
+    if (!r || r.status !== 200) return { people: [], error: r ? problem(r.status) : 'unavailable' };
     const raw = r.data as { acct?: string; url?: string | null; uri?: string | null }[];
     return { people: fromAccounts(r.data as never).map((p, i) => {
       const acct = fullAcct(raw[i]?.acct), actor = [raw[i]?.uri, raw[i]?.url].find(u => isPublicHttpsUrl(u ?? undefined)) ?? undefined;

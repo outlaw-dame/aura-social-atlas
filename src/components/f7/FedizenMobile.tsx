@@ -108,7 +108,7 @@ function MobileFollowRequests() {
   const r = useFollowRequests();
   if (!r.people.length && !r.readError) return null;
   return <>
-    <BlockTitle>Follow requests</BlockTitle>
+    <BlockTitle>Follow requests{r.total > r.people.length ? ` · ${r.total}` : ''}</BlockTitle>
     {r.readError && <Block>{r.readError}</Block>}
     <List strong inset dividers mediaList>
       {r.people.map(p => <ListItem key={p.id} title={p.name} subtitle={p.handle}
