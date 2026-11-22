@@ -356,6 +356,9 @@
 .atlas-bsky-counts strong { color: var(--foreground); font-weight: 600; margin-right: 3px; }
 .atlas-bsky-count-link { color: inherit !important; }
 .atlas-bsky-bio { margin: 12px 0 0; font-size: 15px; line-height: 1.45; }
+.atlas-bsky-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 0; font-size: 13px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
+.atlas-bsky-meta span, .atlas-bsky-meta a { display: inline-flex; align-items: center; gap: 4px; overflow-wrap: anywhere; }
+.atlas-bsky-meta i { font-size: 15px; }
 .atlas-bsky .atlas-profile-tags { justify-content: flex-start; margin-top: 12px; }
 .atlas-bsky-joined { margin: 10px 0 0; font-size: 13px; color: var(--muted-foreground); }
 .atlas-bsky-joined .icon { font-size: 14px; vertical-align: -2px; margin-right: 3px; }

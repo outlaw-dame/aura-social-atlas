@@ -5,6 +5,8 @@ import { useSocial } from '@/components/social/SocialState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { IdentityAvatar } from '@/components/social/IdentityAvatar';
 import { useFedizenIdentity } from '@/components/social/useFedizenIdentity';
+import { useMyFedizenProfile } from '@/components/social/useMyFedizenProfile';
+import { BIO_MAX, isWebsite, LOCATION_MAX, NAME_MAX, WEBSITE_MAX } from '@/lib/fedizen-profile';
 import { creators, posts, fullHandle, type Creator } from '@/lib/social-catalogue';
 import { CreatorTag } from '@/components/social/CreatorTag';
 import { linkifyHashtags, extractHashtags, hashtagLabel, hashtagUrl, TagText } from '@/lib/hashtags';
@@ -29,26 +31,43 @@ const emptySections: Record<Section, { ios: string; md: string; title: string; d
   Circles: { ios: 'f7:circle_grid_hex', md: 'material:bubble_chart', title: 'No circles yet', detail: 'Circles group the people you know, like colleagues, friends or locals, so you choose who sees and replies to each post. Circles you make on Fedizen will appear here.' },
 };
 
-/** Edit sheet for the bio and Mastodon-style featured hashtags. Rendered at app level:
+/** Edit sheet: with Fedizen connected, your Fedizen name, bio, website and location (Bonfire's updateUser), plus
+    Atlas's featured hashtags; otherwise Atlas's own bio and featured hashtags. Rendered at app level:
     Framework7 sheets nested inside a popup break the popup's swipe handler. */
 export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { profile, updateProfile } = useAtlasAuth();
+  const identity = useFedizenIdentity();
+  const fedizen = useMyFedizenProfile(identity.connected, () => { void identity.refresh(); });
+  const remote = identity.connected ? fedizen.profile : null;
+  const [name, setName] = useState('');
   const [bio, setBio] = useState(profile?.bio ?? '');
+  const [website, setWebsite] = useState('');
+  const [location, setLocation] = useState('');
   const [tags, setTags] = useState((profile?.featured_hashtags ?? []).map(t => `#${t}`).join(' '));
   const [saving, setSaving] = useState(false);
 
-  // The sheet stays mounted at app level, so refresh the fields each time it opens.
+  // The sheet stays mounted at app level, so refresh the fields each time it opens (and once the profile arrives).
   useEffect(() => {
     if (opened) {
-      setBio(profile?.bio ?? '');
+      setName(remote?.name ?? '');
+      setBio(remote ? remote.bio : profile?.bio ?? '');
+      setWebsite(remote?.website ?? '');
+      setLocation(remote?.location ?? '');
       setTags((profile?.featured_hashtags ?? []).map(t => `#${t}`).join(' '));
     }
-  }, [opened]);
+  }, [opened, remote]);
 
+  const websiteOk = !website.trim() || isWebsite(website.trim());
   const save = async () => {
     setSaving(true);
     try {
-      await updateProfile({ bio: bio.trim() || null, featured_hashtags: extractHashtags(tags) });
+      if (remote) {
+        const r = await fedizen.save({ name: name.trim(), bio: bio.trim(), website: website.trim(), location: location.trim() });
+        if (!r.ok) { f7.toast.show({ text: r.message, closeTimeout: 2400 }); return; }
+        await updateProfile({ featured_hashtags: extractHashtags(tags) });
+      } else {
+        await updateProfile({ bio: bio.trim() || null, featured_hashtags: extractHashtags(tags) });
+      }
       onClose();
     } catch {
       f7.toast.show({ text: 'Could not save — try again', closeTimeout: 1600 });
@@ -58,20 +77,24 @@ export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose
   };
 
   return (
-    <Sheet opened={opened} onSheetClosed={onClose} backdrop style={{ height: 'auto' }}>
+    <Sheet opened={opened} onSheetClosed={onClose} backdrop style={{ height: 'auto', maxHeight: '90%' }} swipeToClose>
       <Block>
         <div style={{ fontWeight: 600, fontSize: 17, marginBottom: 4 }}>Edit profile</div>
-        <div style={{ fontSize: 13, opacity: 0.6 }}>Hashtags in your bio become links. Featured hashtags show on your profile like they do on Mastodon.</div>
+        {identity.connected && !remote && <div style={{ fontSize: 13, opacity: 0.6 }}>{fedizen.loading ? 'Loading your Fedizen profile…' : fedizen.problem}</div>}
       </Block>
       <List strong inset>
-        <ListInput type="textarea" label="Bio" floatingLabel placeholder="Tell people what you share…" value={bio} maxlength={300}
+        {remote && <ListInput type="text" label="Name" floatingLabel value={name} maxlength={NAME_MAX} onInput={(e: any) => setName(e.target.value)} />}
+        <ListInput type="textarea" label="Bio" floatingLabel placeholder="Tell people what you share…" value={bio} maxlength={remote ? BIO_MAX : 300}
           onInput={(e: any) => setBio(e.target.value)} resizable />
+        {remote && <ListInput type="url" label="Website" floatingLabel placeholder="example.org" value={website} maxlength={WEBSITE_MAX} inputmode="url"
+          onInput={(e: any) => setWebsite(e.target.value)} errorMessage="Enter a web address, like example.org." errorMessageForce={!websiteOk} />}
+        {remote && <ListInput type="text" label="Location" floatingLabel value={location} maxlength={LOCATION_MAX} onInput={(e: any) => setLocation(e.target.value)} />}
         <ListInput type="text" label="Featured hashtags" floatingLabel placeholder="#design #openweb" value={tags}
-          onInput={(e: any) => setTags(e.target.value)} info="Separate with spaces, like on Mastodon." />
+          onInput={(e: any) => setTags(e.target.value)} info={remote ? 'Separate with spaces. Kept in Atlas: Fedizen has no featured hashtags.' : 'Separate with spaces, like on Mastodon.'} />
       </List>
       <Block style={{ display: 'flex', gap: 8 }}>
         <Button tonal style={{ flex: 1 }} onClick={onClose}>Cancel</Button>
-        <Button fill style={{ flex: 1 }} disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save'}</Button>
+        <Button fill style={{ flex: 1 }} disabled={saving || (identity.connected && !remote) || (!!remote && (!name.trim() || !websiteOk))} onClick={save}>{saving ? 'Saving…' : 'Save'}</Button>
       </Block>
     </Sheet>
   );
@@ -82,6 +105,8 @@ export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose
 export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: { onEditProfile: () => void; onOpenCreator: (creator: Creator) => void; onOpenCollection: (c: Collection) => void }) {
   const { user, profile, signOut } = useAtlasAuth();
   const identity = useFedizenIdentity();
+  const fedizen = useMyFedizenProfile(identity.connected);
+  const remote = identity.connected ? fedizen.profile : null;
   const { followed, saved, toggleSave, toggleFollow } = useSocial();
   const [section, setSection] = useState<Section>('Activity');
   const [filter, setFilter] = useState<ActivityFilter>(DEFAULT_ACTIVITY_FILTER);
@@ -121,9 +146,14 @@ export function ProfileView({ onEditProfile, onOpenCreator, onOpenCollection }: 
             : <Link className="atlas-bsky-count-link" onClick={() => setFollowsOpen(true)}><strong>{followed.length}</strong> following in Atlas</Link>}
           <span><strong>{identity.counts?.posts ?? '—'}</strong> posts</span>
         </p>
-        {profile?.bio
-          ? <p className="atlas-bsky-bio"><span className="atlas-bsky-handle">Atlas notes · </span>{linkifyHashtags(profile.bio)}</p>
-          : <p className="atlas-bsky-bio atlas-profile-bio-empty">Profile details are managed on Fedizen. Atlas-specific notes can be added here.</p>}
+        {remote ? <>
+          {remote.bio && remote.bio.split(/\n{2,}/).map((para, i) => <p key={i} className="atlas-bsky-bio" style={{ whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>{linkifyHashtags(para)}</p>)}
+          {(remote.location || remote.website) && <p className="atlas-bsky-meta">
+            {remote.location && <span><Icon ios="f7:placemark" md="material:place" />{remote.location}</span>}
+            {remote.website && isWebsite(remote.website) && <a className="external" target="_blank" rel="noopener noreferrer me" href={/^https?:/i.test(remote.website) ? remote.website : `https://${remote.website}`}><Icon ios="f7:link" md="material:link" />{remote.website.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</a>}
+          </p>}
+        </> : identity.connected ? (fedizen.problem && <p className="atlas-bsky-bio atlas-profile-bio-empty">{fedizen.problem}</p>)
+          : profile?.bio ? <p className="atlas-bsky-bio">{linkifyHashtags(profile.bio)}</p> : null}
         {profile?.created_at && (
           <p className="atlas-bsky-joined"><Icon ios="f7:calendar" md="material:calendar_month" /> Atlas account created {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
         )}

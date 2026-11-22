@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Bookmark, CalendarDays, Heart, Check, CircleDashed, CircleUserRound, Image, PenLine, Star, Users, X } from 'lucide-react';
+import { Bookmark, CalendarDays, Heart, Check, CircleDashed, CircleUserRound, Image, Link2, MapPin, PenLine, Star, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAtlasAuth } from './AuthState';
 import { useSocial } from './SocialState';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { IdentityAvatar } from './IdentityAvatar';
 import { useFedizenIdentity } from './useFedizenIdentity';
+import { useMyFedizenProfile } from './useMyFedizenProfile';
+import { BIO_MAX, isWebsite, LOCATION_MAX, NAME_MAX, WEBSITE_MAX } from '@/lib/fedizen-profile';
 import { creators, fullHandle, posts, type Creator } from '@/lib/social-catalogue';
 import { extractHashtags, hashtagLabel, hashtagUrl, linkifyHashtags, TagText } from '@/lib/hashtags';
 import { CreatorTag } from './CreatorTag';
@@ -42,34 +44,68 @@ function Dialog({ label, onClose, children }: { label: string; onClose: () => vo
   </div>;
 }
 
-function EditProfileDialog({ onClose }: { onClose: () => void }) {
+const field = 'w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+function EditProfileDialog({ onClose, fedizen }: { onClose: () => void; fedizen: ReturnType<typeof useMyFedizenProfile> | null }) {
   const { profile, updateProfile } = useAtlasAuth();
-  const [bio, setBio] = useState(profile?.bio ?? '');
+  // With Fedizen connected, name, bio, website and location are your Fedizen profile; featured hashtags stay Atlas's.
+  const remote = fedizen?.profile ?? null;
+  const [name, setName] = useState(remote?.name ?? '');
+  const [bio, setBio] = useState(remote ? remote.bio : profile?.bio ?? '');
+  const [website, setWebsite] = useState(remote?.website ?? '');
+  const [location, setLocation] = useState(remote?.location ?? '');
   const [tags, setTags] = useState((profile?.featured_hashtags ?? []).map(t => `#${t}`).join(' '));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const bioMax = remote ? BIO_MAX : 300;
+  const websiteOk = !website.trim() || isWebsite(website.trim());
   const save = async () => {
     setSaving(true); setError(null);
-    try { await updateProfile({ bio: bio.trim() || null, featured_hashtags: extractHashtags(tags) }); onClose(); }
-    catch { setError('Couldn’t save. Try again.'); }
+    try {
+      if (remote && fedizen) {
+        const r = await fedizen.save({ name: name.trim(), bio: bio.trim(), website: website.trim(), location: location.trim() });
+        if (!r.ok) { setError(r.message); return; }
+        await updateProfile({ featured_hashtags: extractHashtags(tags) });
+      } else {
+        await updateProfile({ bio: bio.trim() || null, featured_hashtags: extractHashtags(tags) });
+      }
+      onClose();
+    } catch { setError('Couldn’t save. Try again.'); }
     finally { setSaving(false); }
   };
   return <Dialog label="Edit profile" onClose={onClose}>
-    <p className="mb-4 text-xs text-muted-foreground">Hashtags in your bio become links. Featured hashtags show on your profile like they do on Mastodon.</p>
-    <label className="mb-1 block text-xs font-medium" htmlFor="profile-bio">Bio</label>
-    <textarea id="profile-bio" value={bio} maxLength={300} onChange={e => setBio(e.target.value)} placeholder="Tell people what you share…" className="h-28 w-full resize-none rounded-xl border border-border bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-    <p className="mb-3 text-right text-[11px] text-muted-foreground">{bio.length}/300</p>
-    <label className="mb-1 block text-xs font-medium" htmlFor="profile-tags">Featured hashtags</label>
-    <input id="profile-tags" value={tags} onChange={e => setTags(e.target.value)} placeholder="#design #openweb" className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-    <p className="mt-1 text-[11px] text-muted-foreground">Separate with spaces, like on Mastodon.</p>
+    {fedizen?.problem && !remote && <p role="status" className="mb-4 text-xs text-muted-foreground">{fedizen.problem}</p>}
+    {remote && <>
+      <label className="mb-1 block text-xs font-medium" htmlFor="profile-name">Name</label>
+      <input id="profile-name" value={name} maxLength={NAME_MAX} onChange={e => setName(e.target.value)} className={`${field} h-10`} />
+    </>}
+    <label className={`mb-1 block text-xs font-medium ${remote ? 'mt-4' : ''}`} htmlFor="profile-bio">Bio</label>
+    <textarea id="profile-bio" value={bio} maxLength={bioMax} onChange={e => setBio(e.target.value)} placeholder="Tell people what you share…" className={`${field} h-28 resize-none p-3`} />
+    <p className="mb-3 text-right text-[11px] text-muted-foreground">{bio.length}/{bioMax.toLocaleString()}</p>
+    {remote && <div className="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label className="mb-1 block text-xs font-medium" htmlFor="profile-website">Website</label>
+        <input id="profile-website" value={website} maxLength={WEBSITE_MAX} inputMode="url" autoComplete="url" onChange={e => setWebsite(e.target.value)} placeholder="example.org" aria-invalid={!websiteOk} className={`${field} h-10`} />
+        {!websiteOk && <p className="mt-1 text-[11px] text-destructive">Enter a web address, like example.org.</p>}
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium" htmlFor="profile-location">Location</label>
+        <input id="profile-location" value={location} maxLength={LOCATION_MAX} onChange={e => setLocation(e.target.value)} className={`${field} h-10`} />
+      </div>
+    </div>}
+    <label className={`mb-1 block text-xs font-medium ${remote ? 'mt-4' : ''}`} htmlFor="profile-tags">Featured hashtags</label>
+    <input id="profile-tags" value={tags} onChange={e => setTags(e.target.value)} placeholder="#design #openweb" className={`${field} h-10`} />
+    <p className="mt-1 text-[11px] text-muted-foreground">Separate with spaces, like on Mastodon.{remote ? ' Kept in Atlas: Fedizen has no featured hashtags.' : ''}</p>
     {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
-    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save'}</Button></div>
+    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={saving || (!!remote && (!name.trim() || !websiteOk))} onClick={save}>{saving ? 'Saving…' : 'Save'}</Button></div>
   </Dialog>;
 }
 
 export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpenCollection }: { initialSection?: ProfileSection; onOpenCreator: (c: Creator) => void; onOpenCollection: (c: Collection) => void }) {
   const { user, profile, loading, signOut } = useAtlasAuth();
   const identity = useFedizenIdentity();
+  const fedizen = useMyFedizenProfile(identity.connected, () => { void identity.refresh(); });
+  const remote = fedizen.profile;
   const { followed, saved, toggleSave, toggleFollow } = useSocial();
   const [section, setSection] = useState<ProfileSection>(initialSection);
   const [followsOpen, setFollowsOpen] = useState(false);
@@ -92,7 +128,7 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
     <header className="px-2 sm:px-6">
       <div className="-mt-12 flex items-end justify-between">
         <IdentityAvatar className="size-24 atlas-avatar border-4 border-background object-cover" src={identity.avatar} name={identity.name} alt="Your profile avatar" />
-        <Button variant="outline" className="mb-1 rounded-full" onClick={() => setEditing(true)}>Edit profile</Button>
+        <Button variant="outline" className="mb-1 rounded-full" disabled={identity.connected && fedizen.loading} onClick={() => setEditing(true)}>Edit profile</Button>
       </div>
       <h1 className="mt-3 font-serif text-4xl leading-tight [overflow-wrap:anywhere]">{name}</h1>
       <p className="mt-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">{identity.handle}</p>
@@ -105,8 +141,14 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
           : <button type="button" className="hover:text-foreground hover:underline" onClick={() => setFollowsOpen(true)}><strong className="mr-1 font-semibold text-foreground">{followed.length}</strong>following in Atlas</button>}
         <span><strong className="mr-1 font-semibold text-foreground">{identity.counts?.posts ?? '—'}</strong>posts</span>
       </p>
-      {profile?.bio ? <p className="mt-3 max-w-2xl text-sm leading-relaxed"><span className="text-xs text-muted-foreground">Atlas notes · </span>{linkifyHashtags(profile.bio)}</p>
-        : <p className="mt-3 text-sm text-muted-foreground">Profile details are managed on Fedizen. Atlas-specific notes can be added here.</p>}
+      {remote ? <>
+        {remote.bio && <div className="mt-3 max-w-2xl space-y-2 text-sm leading-relaxed">{remote.bio.split(/\n{2,}/).map((para, i) => <p key={i} className="whitespace-pre-line [overflow-wrap:anywhere]">{linkifyHashtags(para)}</p>)}</div>}
+        {(remote.location || remote.website) && <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {remote.location && <span className="flex items-center gap-1"><MapPin className="size-3.5" />{remote.location}</span>}
+          {remote.website && isWebsite(remote.website) && <a href={/^https?:/i.test(remote.website) ? remote.website : `https://${remote.website}`} target="_blank" rel="noopener noreferrer me" className="flex items-center gap-1 text-accent hover:underline [overflow-wrap:anywhere]"><Link2 className="size-3.5" />{remote.website.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</a>}
+        </p>}
+      </> : identity.connected ? (fedizen.problem && <p className="mt-3 text-xs text-muted-foreground">{fedizen.problem}</p>)
+        : profile?.bio ? <p className="mt-3 max-w-2xl text-sm leading-relaxed">{linkifyHashtags(profile.bio)}</p> : null}
       {profile?.created_at && <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays className="size-3.5" />Atlas account created {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>}
     </header>
 
@@ -156,6 +198,6 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
         <Button size="sm" variant="outline" className="rounded-full" onClick={() => toggleFollow(c.id)}>Following</Button>
       </li>)}</ul> : <Empty icon={Users} title="Not following anyone yet" detail="People you follow in Discover will appear here." />}
     </Dialog>}
-    {editing && <EditProfileDialog onClose={() => setEditing(false)} />}
+    {editing && <EditProfileDialog onClose={() => setEditing(false)} fedizen={identity.connected ? fedizen : null} />}
   </div>;
 }
