@@ -170,7 +170,7 @@ const ok = <T extends object>(x: T) => ({ ok: true as const, ...x });
 const me = () => ({ id: LAB_USER.id });
 
 export const fedizen: Impl<typeof Fedizen> = {
-  getFedizenStatus: () => ({ connected: true, handle: LAB_FEDIZEN_HANDLE, canWrite: true }),
+  getFedizenStatus: () => ({ connected: true, handle: LAB_FEDIZEN_HANDLE, canWrite: true, nativeReadEnabled: false }),
   startFedizenConnect: () => ({ url: null, error: 'This address can’t connect to Fedizen.' as const }),
   disconnectFedizen: () => ({ ok: true as const, revoked: true }),
   getFedizenHome: () => ({ connected: true, canWrite: true, accountHandle: LAB_FEDIZEN_HANDLE, nativeReadEnabled: false, posts: shown([...posted, ...HOME]), next: 'older-1', notices: [] }),

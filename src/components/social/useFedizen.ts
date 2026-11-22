@@ -3,15 +3,16 @@ import { useServerFn } from '@tanstack/react-start';
 import { useEffect, useRef, useState } from 'react';
 import { clearHomeCache, readHomeCache, writeHomeCache } from '@/lib/home-timeline';
 import { useAtlasAuth } from './AuthState';
-import { disconnectFedizen, getFedizenHome, getFedizenMessages, startFedizenConnect, type FedizenHome } from '@/lib/fedizen.functions';
+import { disconnectFedizen, getFedizenHome, getFedizenMessages, getFedizenStatus, startFedizenConnect, type FedizenHome } from '@/lib/fedizen.functions';
 import { getNativeBonfireSnapshot, getNativeBonfireHomeContinuation } from '@/lib/bonfire-private.functions';
-import { mergeNativeBonfirePages, nextNativeHomeCursor, reconcileNativeContinuationStatus, shouldRequestNativeBonfireHome } from '@/lib/bonfire-native-presentation';
+import { mergeNativeBonfirePages, nextNativeHomeCursor, reconcileCachedHome, reconcileNativeContinuationStatus, shouldRequestNativeBonfireHome } from '@/lib/bonfire-native-presentation';
 import { isEmbeddedPreview } from '@/lib/bonfire-auth';
 
 /** Personal, server-authorized Fedizen feed; cached only under the Atlas user ID. */
 export function useFedizen() {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();
+  const statusFn = useServerFn(getFedizenStatus);
   const home = useServerFn(getFedizenHome), start = useServerFn(startFedizenConnect), drop = useServerFn(disconnectFedizen);
   const nativeHome = useServerFn(getNativeBonfireSnapshot);
   const nativeContinuation = useServerFn(getNativeBonfireHomeContinuation);
@@ -42,6 +43,24 @@ export function useFedizen() {
     const t = setTimeout(() => writeHomeCache(id, q.data), 800);
     return () => clearTimeout(t);
   }, [id, q.data]);
+  // A Home opened from this device's copy isn't read again, so ask the server once whether native reads are on and
+  // the connection still stands: a changed switch updates only that field; a lost or different connection re-reads.
+  const fromCache = !!cached?.data.connected;
+  const status = useQuery({
+    queryKey: ['fedizen-home-status', id] as const,
+    queryFn: () => statusFn(),
+    enabled: !!id && fromCache,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  useEffect(() => {
+    if (!id || !status.data) return;
+    const { refetch, patch } = reconcileCachedHome(qc.getQueryData<FedizenHome>(key), status.data);
+    if (refetch) void qc.refetchQueries({ queryKey: key, exact: true });
+    else if (patch) qc.setQueryData<FedizenHome | undefined>(key, prev => (prev ? { ...prev, ...patch } : prev));
+    // key is derived from id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, status.data, qc]);
   const nativeKey = ['bonfire-native-home', id] as const;
   const nativeQuery = useInfiniteQuery({
     queryKey: nativeKey,

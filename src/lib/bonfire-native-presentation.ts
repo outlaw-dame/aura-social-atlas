@@ -132,3 +132,21 @@ export function reconcileNativeContinuationStatus(
   }
   return rest;
 }
+
+/**
+ * Home opens on the copy saved on this device and doesn't re-read it (useFedizen), so the server's current
+ * native-read switch and connection state are checked separately (getFedizenStatus). A changed switch updates only
+ * that field, so posts on screen stay put; a connection the server no longer has means Home must be read again.
+ * A different linked account also re-reads, since the cached posts belong to it.
+ */
+export function reconcileCachedHome(
+  cached: FedizenHome | undefined,
+  status: { connected: boolean; handle: string | null; nativeReadEnabled?: boolean } | undefined,
+): { refetch: boolean; patch?: Pick<FedizenHome, 'nativeReadEnabled'> } {
+  if (!cached || !status) return { refetch: false };
+  if (cached.connected !== status.connected) return { refetch: true };
+  if (!status.connected) return { refetch: false };
+  if (status.handle !== null && cached.accountHandle !== null && status.handle !== cached.accountHandle) return { refetch: true };
+  const enabled = status.nativeReadEnabled === true;
+  return (cached.nativeReadEnabled === true) === enabled ? { refetch: false } : { refetch: false, patch: { nativeReadEnabled: enabled } };
+}

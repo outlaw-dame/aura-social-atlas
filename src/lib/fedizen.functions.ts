@@ -42,7 +42,7 @@ export const getFedizenViewer = createServerFn({ method: 'GET' })
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const { tokenFor } = await import('./fedizen.server');
   const t = await tokenFor(context.userId);
-  return { connected: !!t, handle: t?.account_handle ?? null, canWrite: hasScope(t?.scope, 'write') };
+  return { connected: !!t, handle: t?.account_handle ?? null, canWrite: hasScope(t?.scope, 'write'), nativeReadEnabled: !!t && process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'] === 'verified' };
 });
 
 export const startFedizenConnect = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
