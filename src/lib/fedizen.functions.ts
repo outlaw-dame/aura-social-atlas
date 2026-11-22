@@ -6,6 +6,39 @@ import { DEFAULT_LIMITS, MAX_ALT, MAX_CW, MAX_TEXT, UPLOAD_CEILING, type Compose
 import { allowedCallback, assertFedizenSessionIntent, creditsBesidesAuthor, pollOf, type FediPoll, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromGroupedNotifications, type FedizenNoticeGroup, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
 import type { FedizenReadFailure, FedizenReadIssue } from './fedizen.server';
 
+/**
+ * Read-only current social identity, bound solely to the authenticated Atlas
+ * subject's delegated Fedizen grant. Never trusts a browser-supplied handle.
+ * An unavailable/mismatching identity cannot become a fake local profile.
+ */
+export const getFedizenViewer = createServerFn({ method: 'GET' })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { tokenFor, readVerifiedFedizenViewer } = await import('./fedizen.server');
+    const connected = await tokenFor(context.userId);
+    if (!connected) return { connected: false as const, viewer: null };
+    const viewer = await readVerifiedFedizenViewer(connected.access_token);
+    if (!viewer) return { connected: true as const, viewer: null };
+    const { matchesLinkedFedizenHandle } = await import('./bonfire-private.server');
+    if (!matchesLinkedFedizenHandle(connected.account_handle, viewer.handle)) {
+      // This is an authorization mismatch, not a reason to return another
+      // identity or fall back to unverified OAuth display metadata.
+      return { connected: true as const, viewer: null };
+    }
+    if (!viewer.avatar && viewer.profileUrl) {
+      // Bonfire's Mastodon compatibility adapter can send a generic avatar
+      // even when the account's actual ActivityPub actor has a picture.
+      // Use the existing DNS/IP-protected actor fetch; accept only the same
+      // verified Fedizen account's icon, never another person's profile.
+      const { fetchActor } = await import('./article-author.server');
+      const { avatarFromVerifiedFedizenActor } = await import('./fedizen-viewer');
+      const actor = await fetchActor(viewer.profileUrl).catch(() => null);
+      const avatar = avatarFromVerifiedFedizenActor(viewer, actor);
+      if (avatar) return { connected: true as const, viewer: { ...viewer, avatar } };
+    }
+    return { connected: true as const, viewer };
+  });
+
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const { tokenFor } = await import('./fedizen.server');
   const t = await tokenFor(context.userId);

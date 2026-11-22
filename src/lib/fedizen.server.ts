@@ -175,10 +175,7 @@ export function parseFedizenAccount(payload: unknown): string | null {
     ? account.acct : null;
 }
 
-export async function verifyFedizenReadGrant(
-  token: string,
-  fetcher: typeof fetch = fetch,
-): Promise<string | null> {
+async function readVerifiedFedizenPayload(token: string, fetcher: typeof fetch): Promise<unknown | null> {
   try {
     const response = await fetcher(`${FEDIZEN}/api/v1/accounts/verify_credentials`, {
       method: 'GET',
@@ -191,11 +188,30 @@ export async function verifyFedizenReadGrant(
       await response.body?.cancel().catch(() => {});
       return null;
     }
-    const data = await readBoundedFedizenJson(response, 16384);
-    return parseFedizenAccount(data);
+    return await readBoundedFedizenJson(response, 16384);
   } catch {
     return null;
   }
+}
+
+/** Verify the delegated grant's own account, preserving the original handle
+ * representation used when the connection was first persisted. */
+export async function verifyFedizenReadGrant(
+  token: string,
+  fetcher: typeof fetch = fetch,
+): Promise<string | null> {
+  return parseFedizenAccount(await readVerifiedFedizenPayload(token, fetcher));
+}
+
+/** UI-safe fields only, sourced directly from the authenticated social provider. */
+export async function readVerifiedFedizenViewer(
+  token: string,
+  fetcher: typeof fetch = fetch,
+) {
+  const payload = await readVerifiedFedizenPayload(token, fetcher);
+  if (!parseFedizenAccount(payload)) return null;
+  const { parseFedizenViewer } = await import('./fedizen-viewer');
+  return parseFedizenViewer(payload);
 }
 
 /**

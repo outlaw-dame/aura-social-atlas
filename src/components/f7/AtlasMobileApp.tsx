@@ -18,6 +18,7 @@ import { NetworkBadge } from '@/lib/networks';
 import { OPEN_TAG_EVENT, linkifyHashtagsWith, hashtagLabel, TagText } from '@/lib/hashtags';
 import { useSocial } from '@/components/social/SocialState';
 import { useAtlasAuth } from '@/components/social/AuthState';
+import { useFedizenIdentity } from '@/components/social/useFedizenIdentity';
 import { avatarPreset } from '@/lib/atlas-avatars';
 import { ProfileView, EditProfileSheet } from './ProfileView';
 import { CollectionPopup } from './Collections';
@@ -154,6 +155,7 @@ export default function AtlasMobileApp() {
   const intelligence = useIntelligence();
   const assistantEnabled = assistantWanted && intelligenceReady(intelligence.data) && intelligence.data?.active?.where === 'server';
   const auth = useAtlasAuth() as { user?: { email?: string } | null; profile?: { display_name: string | null; avatar_key: string | null } | null; signOut?: () => Promise<void> };
+  const identity = useFedizenIdentity();
   const [query, setQuery] = useState('');
   const [composeOpen, setComposeOpen] = useState(false);
   // Boost → Quote on any post opens the composer (ComposeSheet attaches the post).
@@ -266,7 +268,7 @@ export default function AtlasMobileApp() {
     { id: 'tab-discover', label: 'Discover', ios: 'f7:compass', md: 'material:explore' },
     { id: 'tab-groups', label: 'Groups', ios: 'f7:person_3', md: 'material:groups' },
     { id: 'tab-activity', label: 'Activity', ios: 'f7:bell', md: 'material:notifications_none' },
-    { id: 'tab-profile', label: 'Profile', ios: 'f7:person_crop_circle', md: 'material:account_circle', avatar: auth.user ? avatarPreset(auth.profile?.avatar_key).src : undefined },
+    { id: 'tab-profile', label: 'Profile', ios: 'f7:person_crop_circle', md: 'material:account_circle', avatar: auth.user ? (identity.avatar ?? undefined) : undefined },
   ];
 
   // Wide windows (and folded spans) mirror the desktop Discover page.
