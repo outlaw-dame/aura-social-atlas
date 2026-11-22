@@ -1,4 +1,5 @@
 import { FEDIZEN_USER_AGENT, transportDetail } from './fedizen-http';
+import { accountKey, forgetAccountReads, noteRateLimited, waitLeft } from './fedizen-rate-limit';
 /**
  * Server-only Bonfire GraphQL transport.
  *
@@ -13,7 +14,8 @@ import { FEDIZEN_USER_AGENT, transportDetail } from './fedizen-http';
 const ENDPOINT = 'https://fedizen.net/api/graphql';
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 10_000;
-const RETRY_STATUSES = new Set([429, 502, 503, 504]);
+// 429 isn't retried here: Fedizen asked Atlas to wait (fedizen-rate-limit.ts), and asking again only extends it.
+const RETRY_STATUSES = new Set([502, 503, 504]);
 
 export type BonfireGraphQLErrorKind =
   | 'http' | 'graphql' | 'invalid-response' | 'too-large'
@@ -117,6 +119,11 @@ export async function requestBonfireGraphQL<T>(request: BonfireGraphQLRequest<T>
   if (!document.trim() || (operation !== 'query' && operation !== 'mutation')) {
     throw new BonfireGraphQLError('invalid-response');
   }
+  // Signed-out reads share one allowance; each account has its own (fedizen-rate-limit.ts).
+  const account = accessToken ? await accountKey(accessToken) : 'signed-out';
+  if (waitLeft(account) > 0) throw new BonfireGraphQLError('http', 429);
+  // A write may change what this account read before (its own posts, likes and profile).
+  if (operation === 'mutation') forgetAccountReads(account);
   const maxAttempts = operation === 'query' ? 3 : 1;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (signal?.aborted) throw new BonfireGraphQLError('cancelled');
@@ -147,6 +154,12 @@ export async function requestBonfireGraphQL<T>(request: BonfireGraphQLRequest<T>
     }
 
     if (!response.ok) {
+      if (response.status === 429) {
+        await response.body?.cancel().catch(() => {});
+        const ms = noteRateLimited(account, response.headers.get('retry-after'));
+        console.warn('Fedizen rate limited', { route: 'graphql', operation, waitSeconds: Math.round(ms / 1000) });
+        throw new BonfireGraphQLError('http', 429);
+      }
       if (RETRY_STATUSES.has(response.status) && attempt < maxAttempts - 1) {
         await response.body?.cancel().catch(() => {});
         await pause();

@@ -1,5 +1,6 @@
 import { FEDIZEN_USER_AGENT, transportDetail, type FedizenTransportFailure } from './fedizen-http';
 import { FEDIZEN, FEDIZEN_API_SCOPE } from './fedizen-feed';
+import { accountKey, cachedStatus, forgetAccountReads, keepStatus, noteRateLimited, waitLeft } from './fedizen-rate-limit';
 import { z } from 'zod';
 
 const b64url = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -649,6 +650,14 @@ export type FedizenReadIssue = { at: string; code: string };
 export async function fedizenGet(token: string, path: string): Promise<{ status: number; data: unknown[]; next?: string; prev?: string; failure?: FedizenReadFailure; issues?: FedizenReadIssue[] }> {
   const read = READS.find(r => r.match.test(path));
   if (!read) throw new Error('Unsupported Fedizen read path.');
+  // Fedizen's rate limit (fedizen-rate-limit.ts): wait it out rather than ask again; a post read moments ago is reused.
+  const account = await accountKey(token);
+  if (waitLeft(account) > 0) return { status: 429, data: [], failure: 'refused' };
+  const isStatus = STATUS_PATH.test(path);
+  if (isStatus) {
+    const hit = cachedStatus(account, path);
+    if (hit !== undefined) return { status: 200, data: [hit] };
+  }
 
   let response: Response;
   try {
@@ -666,7 +675,10 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
 
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});
-    console.warn('Fedizen read refused', { route: readRoute(path), status: response.status });
+    if (response.status === 429) {
+      const ms = noteRateLimited(account, response.headers.get('retry-after'));
+      console.warn('Fedizen rate limited', { route: readRoute(path), waitSeconds: Math.round(ms / 1000) });
+    } else console.warn('Fedizen read refused', { route: readRoute(path), status: response.status });
     return { status: response.status, data: [], failure: 'refused' };
   }
 
@@ -686,8 +698,12 @@ export async function fedizenGet(token: string, path: string): Promise<{ status:
     console.warn('Fedizen read did not match', { route: readRoute(path), issues });
     return { status: 502, data: [], failure: 'mismatch', issues };
   }
+  if (isStatus) keepStatus(account, path, parsed.data);
   return { status: 200, data: read.single ? [parsed.data] : parsed.data as unknown[], ...pageCursors(response.headers.get('link')) };
 }
+
+/** One post (GET /api/v1/statuses/:id): the read kept briefly per account. */
+const STATUS_PATH = new RegExp(`^/api/v1/statuses/${ID}$`);
 
 /**
  * The writes Atlas makes as the person, and nothing else:
@@ -807,6 +823,10 @@ export async function fedizenSend(token: string, method: 'POST' | 'PUT' | 'DELET
   if (!route.body !== !body) throw new Error('Unsupported Fedizen write body.');
   const payload = route.body ? route.body.safeParse(body) : null;
   if (payload && !payload.success) throw new Error('Unsupported Fedizen write body.');
+  const account = await accountKey(token);
+  if (waitLeft(account) > 0) return { status: 429, data: null };
+  // Whatever this account changes, its earlier reads may no longer be true (its own like, boost or reply).
+  forgetAccountReads(account);
   let response: Response;
   try {
     response = await fetch(`${FEDIZEN}${path}`, {
@@ -821,8 +841,10 @@ export async function fedizenSend(token: string, method: 'POST' | 'PUT' | 'DELET
     console.error('Fedizen write unreachable', { why: transportDetail(e) });
     return { status: 503, data: null };
   }
+  forgetAccountReads(account); // and again once the write is done, in case a read landed in between
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});
+    if (response.status === 429) noteRateLimited(account, response.headers.get('retry-after'));
     return { status: response.status, data: null };
   }
   try {
@@ -853,6 +875,8 @@ export async function fedizenUpload(token: string, file: Blob, name: string, des
   const form = new FormData();
   form.set('file', file, name.replace(/[^\w.-]+/g, '_').slice(0, 100) || 'upload');
   if (description.trim()) form.set('description', description.trim());
+  const account = await accountKey(token);
+  if (waitLeft(account) > 0) return { status: 429 };
   let response: Response;
   try {
     response = await fetch(`${FEDIZEN}/api/v2/media`, {
@@ -867,7 +891,11 @@ export async function fedizenUpload(token: string, file: Blob, name: string, des
   } catch {
     return { status: 503 };
   }
-  if (!response.ok) { await response.body?.cancel().catch(() => {}); return { status: response.status }; }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    if (response.status === 429) noteRateLimited(account, response.headers.get('retry-after'));
+    return { status: response.status };
+  }
   try {
     const m = uploadedSchema.safeParse(await readBoundedFedizenJson(response, 65536));
     if (!m.success) return { status: 502 };
