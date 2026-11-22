@@ -132,9 +132,12 @@ export function useFedizen() {
         const personal = [['fedizen-foryou', id], ['fedizen-circle-feed', id], ['fedizen-tag-feed', id], ['fedizen-followed-tags', id]] as const;
         await Promise.all([
           qc.cancelQueries({ queryKey: key, exact: true }),
+          qc.cancelQueries({ queryKey: ['fedizen-viewer', id], exact: true }),
           qc.cancelQueries({ queryKey: nativeKey, exact: true }),
           ...personal.map(k => qc.cancelQueries({ queryKey: k })),
         ]);
+        // A stale verified avatar/handle must not survive disconnect.
+        qc.setQueryData(['fedizen-viewer', id], { connected: false, viewer: null });
         qc.removeQueries({ queryKey: nativeKey, exact: true });
         for (const k of personal) qc.removeQueries({ queryKey: k });
         const disconnected: FedizenHome = {
