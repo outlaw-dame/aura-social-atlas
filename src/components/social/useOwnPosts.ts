@@ -131,13 +131,16 @@ export function useFollowRequests() {
     onSuccess: (r, v) => {
       if (!r.ok) { setError(problem(r.error)); return; }
       setError(null);
-      qc.setQueryData(['fedizen-follow-requests', user?.id], (old: { people: { id: string }[] } | undefined) => (old ? { ...old, people: old.people.filter(p => p.id !== v.accountId) } : old));
+      qc.setQueryData(['fedizen-follow-requests', user?.id], (old: { people: { id: string }[]; total?: number } | undefined) => (old ? { ...old, people: old.people.filter(p => p.id !== v.accountId), total: Math.max(0, (old.total ?? old.people.length) - 1) } : old));
+      // Only the first 40 are shown: once those are answered, read the rest.
+      const left = qc.getQueryData<{ people: unknown[]; total?: number }>(['fedizen-follow-requests', user?.id]);
+      if (left && !left.people.length && (left.total ?? 0) > 0) void qc.invalidateQueries({ queryKey: ['fedizen-follow-requests', user?.id] });
       void qc.invalidateQueries({ queryKey: ['fedizen-home'] });
     },
     onError: () => setError(problem('unavailable')),
   });
   return {
-    people: q.data?.people ?? [], loading: q.isLoading, readError: q.data?.error && q.data.error !== 'not-connected' ? problem(q.data.error) : null,
+    people: q.data?.people ?? [], total: q.data?.total ?? q.data?.people.length ?? 0, loading: q.isLoading, readError: q.data?.error && q.data.error !== 'not-connected' ? problem(q.data.error) : null,
     answer: (accountId: string, accept: boolean) => m.mutate({ accountId, accept }), busyId: m.isPending ? m.variables?.accountId : undefined, error,
   };
 }

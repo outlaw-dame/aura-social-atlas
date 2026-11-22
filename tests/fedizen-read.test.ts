@@ -56,7 +56,7 @@ describe('Fedizen read-side failure isolation', () => {
 
   test('rejects object-shaped HTTP 200 payload as upstream failure', async () => {
     globalThis.fetch = mock(async () => new Response('{"error":"secret"}', { status: 200 })) as typeof fetch;
-    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 502, data: [], failure: 'mismatch' });
+    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toMatchObject({ status: 502, data: [], failure: 'mismatch' });
   });
 
   test('HTTP 401 retains authorization failure status', async () => {
@@ -109,13 +109,13 @@ describe('Fedizen read-side failure isolation', () => {
     ];
     for (const payload of invalid) {
       globalThis.fetch = mock(async () => new Response(JSON.stringify(payload))) as typeof fetch;
-      expect(await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20')).toEqual({ status: 502, data: [], failure: 'mismatch' });
+      expect(await fedizenGet('sentinel', '/api/v1/timelines/home?limit=20')).toMatchObject({ status: 502, data: [], failure: 'mismatch' });
     }
   });
 
   test('rejects malformed notification status nested objects', async () => {
     globalThis.fetch = mock(async () => new Response(JSON.stringify([{ id: 'n', status: { id: 'p', account: [null] } }]))) as typeof fetch;
-    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toEqual({ status: 502, data: [], failure: 'mismatch' });
+    expect(await fedizenGet('sentinel', '/api/v1/notifications?limit=20')).toMatchObject({ status: 502, data: [], failure: 'mismatch' });
   });
 
   test('declared private response oversize cancels the response stream', async () => {
@@ -139,4 +139,21 @@ describe('Fedizen read-side failure isolation', () => {
     expect(pulls).toBeLessThan(6);
   });
 
+});
+
+describe('Follow requests: Bonfire sends every pending one', () => {
+  const acct = (n: number) => ({ id: `01J${String(n).padStart(23, '0')}`, display_name: `P${n}`, acct: `p${n}@example.social` });
+  test('more than 80 are read, and an entry Atlas cannot read is left out instead of failing the list', async () => {
+    const list = [...Array.from({ length: 120 }, (_, i) => acct(i)), { display_name: 'no id' }];
+    globalThis.fetch = mock(async () => new Response(JSON.stringify(list), { status: 200 })) as typeof fetch;
+    const r = await fedizenGet('sentinel', '/api/v1/follow_requests?limit=40');
+    expect(r.status).toBe(200);
+    expect(r.data).toHaveLength(120);
+  });
+  test('an answer that is not a list says where it differed, without values', async () => {
+    globalThis.fetch = mock(async () => new Response('{"error":"secret"}', { status: 200 })) as typeof fetch;
+    const r = await fedizenGet('sentinel', '/api/v1/follow_requests?limit=40');
+    expect(r).toMatchObject({ status: 502, failure: 'mismatch', issues: [{ at: '', code: 'invalid_type' }] });
+    expect(JSON.stringify(r)).not.toContain('secret');
+  });
 });
