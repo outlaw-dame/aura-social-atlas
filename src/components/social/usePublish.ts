@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { attachGifOnFedizen, createPostOnFedizen, getFedizenComposeLimits, getFedizenStatus, getGifsEnabled, postOnFedizen, uploadFedizenMedia } from '@/lib/fedizen.functions';
+import { attachGifOnFedizen, createCirclePostOnFedizen, createPostOnFedizen, getFedizenComposeLimits, getFedizenStatus, getGifsEnabled, postOnFedizen, uploadFedizenMedia } from '@/lib/fedizen.functions';
 import type { Gif } from '@/lib/klipy.server';
 import { QUOTE_POLICIES, saveQuotePolicy, savedQuotePolicy, type QuotePolicy } from '@/lib/quote-policy';
 import type { FedizenPost } from '@/lib/fedizen-feed';
@@ -10,20 +10,30 @@ import { ImageTooLarge, describable, prepareImage } from '@/lib/prepare-image';
 import { useAtlasAuth } from './AuthState';
 import { LIBRARY_PROBLEM } from './useFedizenLibrary';
 import { AI_PROBLEM, useAiRunner } from './useIntelligence';
+import { useFedizenCircles } from './useFedizenLibrary';
 
-export type Audience = 'public' | 'unlisted' | 'local' | 'private' | 'direct';
+export type Audience = 'public' | 'unlisted' | 'local' | 'private' | 'circle' | 'direct';
 export const AUDIENCES: { id: Audience; label: string; note: string }[] = [
   { id: 'public', label: 'Public', note: 'Anyone, on and off the fediverse' },
   { id: 'unlisted', label: 'Quiet public', note: 'Anyone, but kept out of public timelines and search' },
   // Bonfire's "local" boundary (bonfire_boundaries runtime_config.ex `preset_acls`): only people signed in to Fedizen can read and reply.
   { id: 'local', label: 'Fedizen only', note: 'Only people with a Fedizen account' },
   { id: 'private', label: 'Followers', note: 'Only people who follow you' },
+  // Bonfire grants the chosen circle see, read and reply (lib/quote-policy circlePermissions).
+  { id: 'circle', label: 'A circle', note: 'Only the people in one of your circles' },
   { id: 'direct', label: 'Mentioned people', note: 'Only the people you @mention' },
 ];
 
 /** Audiences a quote can go to, through GraphQL `createPost`; Followers and Mentioned people posts can't quote or be quoted. */
 const QUOTABLE: ReadonlySet<Audience> = new Set(['public', 'unlisted', 'local']);
-export const LOCAL_SENSITIVE = 'On a Fedizen-only post, add a content warning to mark media sensitive.';
+/** Audiences only GraphQL `createPost` can express (REST has no "local" and no circles): no poll, no sensitive mark. */
+const GRAPH_ONLY: ReadonlySet<Audience> = new Set(['local', 'circle']);
+export const GRAPH_SENSITIVE = 'On a Fedizen-only or circle post, add a content warning to mark media sensitive.';
+/** After a circle post, when Fedizen doesn't confirm the circle may read it. */
+export const CIRCLE_SHARED_NOTE = {
+  missing: 'Posted, but Fedizen doesn’t show that the circle can read it.',
+  unknown: 'Posted. Atlas couldn’t check that the circle can read it.',
+} as const;
 
 export type Attachment = {
   /** A file the person picked; absent for a GIF from the picker, which the server fetches (`gif`). */
@@ -57,7 +67,7 @@ export function usePublish() {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();
   const statusFn = useServerFn(getFedizenStatus), limitsFn = useServerFn(getFedizenComposeLimits);
-  const upload = useServerFn(uploadFedizenMedia), post = useServerFn(postOnFedizen), createFn = useServerFn(createPostOnFedizen), attachGif = useServerFn(attachGifOnFedizen);
+  const upload = useServerFn(uploadFedizenMedia), post = useServerFn(postOnFedizen), createFn = useServerFn(createPostOnFedizen), circleFn = useServerFn(createCirclePostOnFedizen), attachGif = useServerFn(attachGifOnFedizen);
   const gifsFn = useServerFn(getGifsEnabled);
   const status = useQuery({ queryKey: ['fedizen-status', user?.id], queryFn: () => statusFn(), enabled: !!user, staleTime: 60_000 });
   const canPost = !!status.data?.connected && !!status.data?.canWrite;
@@ -72,7 +82,12 @@ export function usePublish() {
   /** The post being quoted (Boost → Quote), shown under the text; quotes go to Public, Quiet public or Fedizen only. */
   const [quote, setQuoteRaw] = useState<FedizenPost | null>(null);
   const setQuote = (q: FedizenPost | null) => { setQuoteRaw(q); if (q) setPollRaw(null); if (q && !QUOTABLE.has(audience)) setAudienceRaw('public'); };
-  const setAudience = (a: Audience) => { if ((!quote || QUOTABLE.has(a)) && !(poll && a === 'local')) setAudienceRaw(a); };
+  const setAudience = (a: Audience) => { if ((!quote || QUOTABLE.has(a)) && !(poll && GRAPH_ONLY.has(a))) setAudienceRaw(a); };
+  const circlesQ = useFedizenCircles(canPost);
+  const circles = circlesQ.data?.circles ?? [];
+  const [circleChoice, setCircleId] = useState<string | null>(null);
+  /** The circle a circle post goes to: the one chosen, else the first. */
+  const circleId = circles.find(c => c.id === circleChoice)?.id ?? circles[0]?.id ?? null;
   const [sensitiveChoice, setSensitive] = useState(false);
   const [quotePolicy, setQuotePolicyRaw] = useState<QuotePolicy>(savedQuotePolicy);
   const setQuotePolicy = (q: QuotePolicy) => { setQuotePolicyRaw(q); saveQuotePolicy(q); };
@@ -94,9 +109,9 @@ export function usePublish() {
   // A poll goes through REST: Fedizen's createPoll takes no quote permissions, so its quoting follows Fedizen's default.
   // Fedizen only exists only in GraphQL (REST's visibilities have no "local"), so such a post always goes that way: it
   // takes no poll, and media marked sensitive needs a content warning (see `send`).
-  const viaGraph = audience === 'local' || (!poll && QUOTABLE.has(audience) && (!!quote || !sensitiveOnly));
+  const viaGraph = GRAPH_ONLY.has(audience) || (!poll && QUOTABLE.has(audience) && (!!quote || !sensitiveOnly));
   /** Why who-may-quote can't be chosen for this post, if it can't. Followers-only and mentions-only posts can't be quoted (as on Mastodon). */
-  const quoteLock: 'private' | 'sensitive' | 'poll' | null = audience === 'private' || audience === 'direct' ? 'private' : viaGraph ? null : poll ? 'poll' : 'sensitive';
+  const quoteLock: 'private' | 'sensitive' | 'poll' | null = audience === 'private' || audience === 'direct' || audience === 'circle' ? 'private' : viaGraph ? null : poll ? 'poll' : 'sensitive';
   const pollChoices = poll ? poll.options.map(o => o.trim()) : [];
   const pollValid = !poll || (pollChoices.every(Boolean) && pollChoices.length >= 2 && new Set(pollChoices.map(o => o.toLowerCase())).size === pollChoices.length);
 
@@ -150,14 +165,15 @@ export function usePublish() {
   const broken = media.some(m => m.state === 'failed');
   const length = [...text].length;
   const ready = canPost && !sending && !busy && !broken && (text.trim().length > 0 || media.length > 0 || !!poll) && pollValid && length <= limits.maxChars && (!cwOn || warning.length > 0);
-  const startPoll = () => { if (media.length || quote || audience === 'local') return; setPollRaw({ options: ['', ''], expiresIn: POLL_DURATIONS[5].seconds, multiple: false }); };
+  const startPoll = () => { if (media.length || quote || GRAPH_ONLY.has(audience)) return; setPollRaw({ options: ['', ''], expiresIn: POLL_DURATIONS[5].seconds, multiple: false }); };
   const editPoll = (p: Partial<ComposePoll>) => setPollRaw(cur => (cur ? { ...cur, ...p } : cur));
 
   const reset = () => { media.forEach(m => { if (m.file) URL.revokeObjectURL(m.url); }); setText(''); setCw(''); setCwOn(false); setSensitive(false); setMedia([]); setNotice(null); setAudienceRaw('public'); setQuoteRaw(null); setPollRaw(null); };
 
-  const send = async (): Promise<{ url?: string; id?: string } | null> => {
+  const send = async (): Promise<{ url?: string; id?: string; note?: string } | null> => {
     if (!user || !ready) return null;
-    if (audience === 'local' && sensitiveOnly) { setNotice(LOCAL_SENSITIVE); return null; }
+    if (GRAPH_ONLY.has(audience) && sensitiveOnly) { setNotice(GRAPH_SENSITIVE); return null; }
+    if (audience === 'circle' && !circleId) { setNotice('Make a circle first, in Profile → Circles.'); return null; }
     setSending(true); setNotice(null);
     try {
       const ids: string[] = [];
@@ -184,7 +200,10 @@ export function usePublish() {
         patch(m.key, { state: 'uploaded', mediaId: r.id });
         ids.push(r.id);
       }
-      const r = viaGraph && QUOTABLE.has(audience)
+      const r = audience === 'circle'
+        ? await circleFn({ data: { expectedAtlasUserId: user.id, text: text.trim(), circleIds: [circleId!], ...(warning ? { cw: warning.slice(0, MAX_CW) } : {}), mediaIds: ids } })
+          .catch(() => ({ ok: false as const, error: 'unavailable' as const }))
+        : viaGraph && QUOTABLE.has(audience)
         ? await createFn({ data: { expectedAtlasUserId: user.id, ...(quote?.statusId ? { quoteId: quote.statusId } : {}), text: text.trim(), visibility: audience, ...(warning ? { cw: warning.slice(0, MAX_CW) } : {}), mediaIds: ids, quotes: quotePolicy } })
           .catch(() => ({ ok: false as const, error: 'unavailable' as const }))
         : await post({ data: { expectedAtlasUserId: user.id, text: text.trim(), visibility: audience, ...(warning ? { cw: warning.slice(0, MAX_CW) } : {}), mediaIds: ids, sensitive, ...(poll ? { poll: { options: pollChoices, expiresIn: poll.expiresIn, multiple: poll.multiple } } : {}) } })
@@ -193,18 +212,20 @@ export function usePublish() {
       reset();
       void qc.invalidateQueries({ queryKey: ['fedizen-home', user.id] });
       void qc.invalidateQueries({ queryKey: ['fedizen-recent-tags', user.id] });
-      return { url: r.url, ...('id' in r && r.id ? { id: r.id } : {}) };
+      const shared = 'shared' in r ? (r.shared as keyof typeof CIRCLE_SHARED_NOTE | 'confirmed') : undefined;
+      return { url: r.url, ...('id' in r && r.id ? { id: r.id } : {}), ...(shared && shared !== 'confirmed' ? { note: CIRCLE_SHARED_NOTE[shared] } : {}) };
     } finally { setSending(false); }
   };
 
   return {
     signedIn: !!user, canPost, connected: !!status.data?.connected, limits,
     text, setText, cw, setCw, cwOn, setCwOn, audience, setAudience, quote, setQuote,
-    audiences: AUDIENCES.filter(a => (!quote || QUOTABLE.has(a.id)) && !(poll && a.id === 'local')),
+    audiences: AUDIENCES.filter(a => (!quote || QUOTABLE.has(a.id)) && !(poll && GRAPH_ONLY.has(a.id)) && (a.id !== 'circle' || circles.length > 0 || audience === 'circle')),
+    circles, circleId, setCircleId,
     sensitive, sensitiveLocked: media.length > 0 && warning.length > 0, setSensitive,
     media, add, addGif, gifs: gifsQ.data?.enabled === true, remove, setAlt, generateAlt, canGenerateAlt: ai.ready,
     quotePolicy, setQuotePolicy, quotePolicies: QUOTE_POLICIES, quoteLock,
     notice, clearNotice: () => setNotice(null), sending, ready, length, reset, send,
-    poll, startPoll, editPoll, removePoll: () => setPollRaw(null), canPoll: !media.length && !quote && audience !== 'local', pollDurations: POLL_DURATIONS, pollValid,
+    poll, startPoll, editPoll, removePoll: () => setPollRaw(null), canPoll: !media.length && !quote && !GRAPH_ONLY.has(audience), pollDurations: POLL_DURATIONS, pollValid,
   };
 }

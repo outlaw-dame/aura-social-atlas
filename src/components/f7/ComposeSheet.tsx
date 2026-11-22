@@ -14,6 +14,7 @@ import { useComposeIntent } from '@/lib/compose-intent';
 const AUDIENCE_ICON: Record<Audience, { ios: string; md: string }> = {
   public: { ios: 'f7:globe', md: 'material:public' }, unlisted: { ios: 'f7:moon', md: 'material:nights_stay' },
   local: { ios: 'f7:house', md: 'material:home' },
+  circle: { ios: 'f7:circle_grid_hex', md: 'material:group_work' },
   private: { ios: 'f7:lock', md: 'material:lock' }, direct: { ios: 'f7:at', md: 'material:alternate_email' },
 };
 
@@ -47,7 +48,7 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
   const altFields = useRef(new Map<string, HTMLInputElement>());
   const post = async () => {
     const r = await p.send();
-    if (r) { f7.toast.create({ text: 'Posted', closeTimeout: 1500 }).open(); onClose(); }
+    if (r) { f7.toast.create({ text: r.note ?? 'Posted', closeTimeout: r.note ? 5000 : 1500 }).open(); onClose(); }
   };
   // Alt text reminder (Settings → Posting), as Ivory asks: Add alt text goes back to the first undescribed one.
   const send = async () => {
@@ -141,10 +142,15 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
           {p.audiences.map(a => <ListItem key={a.id} radio radioIcon="end" name="atlas-audience" title={a.label} footer={a.note} checked={p.audience === a.id} onChange={() => p.setAudience(a.id)}>
             <Icon slot="media" ios={AUDIENCE_ICON[a.id].ios} md={AUDIENCE_ICON[a.id].md} />
           </ListItem>)}
+          {p.audience === 'circle' && p.circles.length > 0 && <ListItem title="Circle" smartSelect smartSelectParams={{ openIn: 'popover', closeOnSelect: true }}>
+            <select value={p.circleId ?? ''} onChange={e => p.setCircleId(e.target.value)}>
+              {p.circles.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+            </select>
+          </ListItem>}
         </List>
         <List strong inset>
           <ListItem link={p.quoteLock ? undefined : '#'} title="Quotes" after={p.quoteLock === 'sensitive' || p.quoteLock === 'poll' ? 'Fedizen’s default' : p.quotePolicies.find(q => q.id === quoteShown)?.short}
-            footer={p.quoteLock === 'private' ? 'Followers-only and mentions-only posts can’t be quoted' : p.quoteLock === 'poll' ? 'Quoting a poll follows your Fedizen default' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : undefined}
+            footer={p.quoteLock === 'private' ? 'Followers, circle and mentions-only posts can’t be quoted' : p.quoteLock === 'poll' ? 'Quoting a poll follows your Fedizen default' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : undefined}
             onClick={p.quoteLock || p.sending ? undefined : chooseQuotes}>
             <Icon slot="media" ios="f7:quote_bubble" md="material:format_quote" />
           </ListItem>

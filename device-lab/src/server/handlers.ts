@@ -238,6 +238,8 @@ export const fedizen: Impl<typeof Fedizen> = {
   getFedizenComposeLimits: () => DEFAULT_LIMITS,
   uploadFedizenMedia: () => ({ ok: false as const, error: 'unavailable' as const }),
   postOnFedizen: (d: { text: string; visibility?: FedizenPost['visibility']; cw?: string }) => { const p = post(d.text, { by: 'me', min: 0, visibility: d.visibility ?? 'public', ...(d.cw ? { cw: d.cw } : {}) }); posted.unshift(p); return ok({ url: p.url, id: p.id }); },
+  // A sample circle post: kept in this page as a followers-only card; the sample circle 'reads' it at once.
+  createCirclePostOnFedizen: (d: { text: string; cw?: string }) => { const p = post(d.text, { by: 'me', min: 0, visibility: 'private', ...(d.cw ? { cw: d.cw } : {}) }); posted.unshift(p); return ok({ url: p.url, id: p.id, shared: 'confirmed' as const }); },
   createPostOnFedizen: (d: { text: string; visibility?: FedizenPost['visibility']; cw?: string }) => { const p = post(d.text, { by: 'me', min: 0, visibility: d.visibility ?? 'public', ...(d.cw ? { cw: d.cw } : {}) }); posted.unshift(p); return ok({ url: p.url, id: p.id }); },
   getGifs: () => ({ ok: false as const, error: 'unavailable' as never }),
   getGifsEnabled: () => ({ enabled: false }),

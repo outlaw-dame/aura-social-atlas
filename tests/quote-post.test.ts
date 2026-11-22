@@ -58,3 +58,32 @@ describe('Fedizen-only posts (Bonfire "local" boundary)', () => {
     expect(src).toContain("quotePermissions(data.quotes, data.visibility === 'local' ? 'local' : 'everyone')");
   });
 });
+
+describe('circle posts (boundary "private" + permissions for the circle)', () => {
+  test('the circle may see, read and reply; nobody may quote or ask to', async () => {
+    const { circlePermissions } = await import('../src/lib/quote-policy');
+    expect(circlePermissions(['01CIRCLE'])).toEqual([
+      { permission: 'see', can: ['01CIRCLE'], cannot: [] },
+      { permission: 'read', can: ['01CIRCLE'], cannot: [] },
+      { permission: 'reply', can: ['01CIRCLE'], cannot: [] },
+      ...quotePermissions('nobody'),
+    ]);
+    for (const e of circlePermissions(['01CIRCLE'])) expect(Array.isArray(e.can) && Array.isArray(e.cannot)).toBe(true);
+  });
+  test('only a stored read grant for every circle counts as shared', async () => {
+    const { circlesCanRead } = await import('../src/lib/quote-policy');
+    const read = (...ids: string[]) => ({ permission: 'read', can: ids.map(id => ({ id })) });
+    expect(circlesCanRead([read('01A')], ['01A'])).toBe(true);
+    expect(circlesCanRead([read('01A')], ['01A', '01B'])).toBe(false);
+    expect(circlesCanRead([{ permission: 'see', can: [{ id: '01A' }] }], ['01A'])).toBe(false);
+    expect(circlesCanRead([], ['01A'])).toBe(false);
+    expect(circlesCanRead(null, ['01A'])).toBe(false);
+    expect(circlesCanRead([read('01A')], [])).toBe(false);
+  });
+  test('the mutation fixes the boundary to "private" and asks for the grants back', async () => {
+    const { CREATE_CIRCLE_POST_DOCUMENT, POST_GRANTS_DOCUMENT } = await import('../src/lib/bonfire/graphql/operations');
+    for (const arg of ['boundary: "private"', 'toCircles: $toCircles', 'permissions: $permissions', '[BoundaryPermissionInput]']) expect(CREATE_CIRCLE_POST_DOCUMENT).toContain(arg);
+    expect(CREATE_CIRCLE_POST_DOCUMENT).not.toContain('quoteId');
+    expect(POST_GRANTS_DOCUMENT).toContain('permissionGrants { permission can { id } }');
+  });
+});

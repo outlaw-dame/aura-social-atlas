@@ -715,6 +715,57 @@ export const createPostOnFedizen = createServerFn({ method: 'POST' }).middleware
     }
   });
 
+/**
+ * A post only the chosen circles (Profile → Circles) may see, read and reply to, through GraphQL `createPost`
+ * (CREATE_CIRCLE_POST_DOCUMENT says why `toCircles` alone isn't enough). Afterwards Atlas reads the post's grants back:
+ * `shared` is 'confirmed' only when Fedizen shows every circle may read it, 'missing' when it shows otherwise, and
+ * 'unknown' when it couldn't be read. No poll (createPost takes none) and no sensitive mark without a content warning.
+ */
+export const createCirclePostOnFedizen = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({
+    text: z.string().trim().max(MAX_TEXT),
+    cw: z.string().trim().max(MAX_CW).optional(),
+    circleIds: z.array(ulid).min(1).max(10),
+    mediaIds: z.array(ulid).max(4).default([]),
+  }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty post').parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; url?: string; id?: string; shared: 'confirmed' | 'missing' | 'unknown' } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { requestBonfireGraphQL, BonfireGraphQLError } = await import('./bonfire-graphql.server');
+    const { CREATE_CIRCLE_POST_DOCUMENT, POST_GRANTS_DOCUMENT } = await import('./bonfire/graphql/operations');
+    const { circlePermissions, circlesCanRead } = await import('./quote-policy');
+    const circleIds = [...new Set(data.circleIds)];
+    let created: { id: string; activity?: { canonicalUri?: string | null } | null };
+    try {
+      created = await requestBonfireGraphQL({
+        operation: 'mutation', document: CREATE_CIRCLE_POST_DOCUMENT, accessToken: c.token,
+        variables: {
+          postContent: { htmlBody: data.text, ...(data.cw ? { summary: data.cw } : {}) },
+          toCircles: circleIds, permissions: circlePermissions(circleIds),
+          ...(data.mediaIds.length ? { uploadedMedia: data.mediaIds } : {}),
+        },
+        validate: v => z.object({ createPost: z.object({ id: z.string().max(64), activity: z.object({ canonicalUri: z.string().max(2048).nullish() }).nullish() }) }).parse(v).createPost,
+      });
+    } catch (e) {
+      const status = e instanceof BonfireGraphQLError ? e.status : undefined;
+      return { ok: false, error: status ? problem(status) : 'unavailable' };
+    }
+    const id = /^[A-Za-z0-9_-]{1,64}$/.test(created.id) ? created.id : undefined;
+    const url = created.activity?.canonicalUri && /^https:\/\/fedizen\.net\//.test(created.activity.canonicalUri) ? created.activity.canonicalUri : undefined;
+    let shared: 'confirmed' | 'missing' | 'unknown' = 'unknown';
+    if (id) {
+      try {
+        const grants = await requestBonfireGraphQL({
+          operation: 'query', document: POST_GRANTS_DOCUMENT, accessToken: c.token, variables: { id },
+          validate: v => z.object({ post: z.object({ permissionGrants: z.array(z.object({ permission: z.string(), can: z.array(z.object({ id: z.string() })).nullish() })).nullish() }).nullable() }).parse(v).post?.permissionGrants,
+        });
+        shared = circlesCanRead(grants, circleIds) ? 'confirmed' : 'missing';
+      } catch { /* posted; whether the circles can read it is unknown */ }
+    }
+    return { ok: true, shared, ...(url ? { url } : {}), ...(id ? { id } : {}) };
+  });
+
 type GifProblem = 'not-configured' | 'busy' | 'unavailable';
 
 /**
