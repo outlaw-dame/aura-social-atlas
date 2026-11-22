@@ -22,7 +22,7 @@ Status key: **in use** (Atlas calls it today), **flag-gated** (written and teste
 | Notifications / Activity | REST `/api/v2/notifications` (grouped), markers | `me.notifications` (live schema) | **flag-gated** | Same as Home |
 | Post detail and conversation | REST `/api/v1/statuses/:id`, `/context` | `post(filter:{id})` (live schema) flag-gated; `threadContext` in schema | flag-gated / in schema | — |
 | Profiles (others) | ActivityPub actor read directly (`loadFediProfile`) | `user(filter:{id|username})` (live schema) | **flag-gated** | — |
-| Edit own profile on Fedizen | — | `updateUser` | in schema | **missing** in Atlas |
+| Edit own profile on Fedizen | GraphQL `me.user.profile` read and `updateUser(profile:)` (name, bio, website, location) | `updateUser(profile: ProfileInput, images: ImagesUpload)` (bonfire_me `ef9c2a9`) | **in use** (text fields) | Avatar and banner (`images`: multipart uploads) |
 | Edit post | REST `PUT /api/v1/statuses/:id` + `/source` | `editPost` | in schema | — |
 | Delete post | REST `DELETE /api/v1/statuses/:id` | generic `delete` (any context, `bonfire_api_graphql`) | in schema | — |
 | Like / unlike | REST `favourite` / `unfavourite` | `like`, `unlike` (live root) | in schema | — |
@@ -53,7 +53,7 @@ Status key: **in use** (Atlas calls it today), **flag-gated** (written and teste
 1. **Fedizen's rate limit**: Fedizen answered 429 to Atlas on Railway (2026-11-22). Atlas now waits out `Retry-After`, never retries a 429, backs off for every account when several are limited (one server address), and reuses single-post reads for 30 s per account (`fedizen-rate-limit.ts`). Still to learn: how Fedizen's limiter is keyed (per address or per token) and its limits.
 2. **Push notifications**: replace both VAPID keys in Lovable Secrets (the private key is rejected as invalid).
 3. **Signed-in GraphQL acceptance** for Home, notifications, posts and profiles (the consented disposable-account workflow below), then decide on `ATLAS_BONFIRE_NATIVE_GRAPHQL_READS`.
-4. **Edit your Fedizen profile** from Atlas (`updateUser`, or REST `update_credentials`).
+4. **Edit your Fedizen profile**: name, bio, website and location from Atlas through `updateUser`. Avatar and banner uploads are still to do.
 5. **Fedizen's version**: it reports rc.1. v1.1.0 changes no GraphQL operation above, but fixes and adds behaviour Atlas relies on through the Mastodon API (notifications, groups, keyword filters, follow and like delivery); upgrading is the operator's choice.
 6. **Schema snapshot**: still no full effective schema export of Fedizen (see the capture record below).
 

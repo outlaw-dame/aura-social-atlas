@@ -100,3 +100,16 @@ export const NATIVE_POST_BY_ID_DOCUMENT = `query AtlasNativePostById($id:ID!) {
 export const CREATE_POST_DOCUMENT = `mutation AtlasCreatePost($postContent: PostContentInput!, $boundary: String, $quoteId: ID, $uploadedMedia: [ID], $permissions: [BoundaryPermissionInput]) {
   createPost(postContent: $postContent, boundary: $boundary, quoteId: $quoteId, uploadedMedia: $uploadedMedia, permissions: $permissions) { id activity { canonicalUri } }
 }`;
+
+/**
+ * The signed-in person's own Fedizen profile, as `updateUser` edits it (bonfire_me me_api_graphql.ex at the commit
+ * Fedizen's v1.1.0-rc.1 pins, ef9c2a9: `profile_input` is name, summary, website, location).
+ */
+export const MY_PROFILE_DOCUMENT = `query AtlasMyProfile {
+  me { user { id character { username } profile { name summary website location } } }
+}`;
+
+/** Edits it. `images` (avatar and banner, multipart uploads) isn't sent: Atlas doesn't upload profile images yet. */
+export const UPDATE_MY_PROFILE_DOCUMENT = `mutation AtlasUpdateMyProfile($profile: ProfileInput) {
+  updateUser(profile: $profile) { user { id character { username } profile { name summary website location } } }
+}`;

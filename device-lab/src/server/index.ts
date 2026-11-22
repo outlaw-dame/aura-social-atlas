@@ -3,7 +3,7 @@
  * real functions return (each handler is typed against the real function's result, so `bun run lab:check` fails when
  * the app's shapes change). Writes (like, save, join, follow, post…) change the sample data for this page load only.
  */
-import { bonfire, bonfirePrivate, collections, fediProfile, fedizen, groups, intelligence, push, spotlight, tagFeed, translation, voices } from './handlers';
+import { bonfire, bonfirePrivate, collections, fediProfile, fedizen, fedizenProfile, groups, intelligence, push, spotlight, tagFeed, translation, voices } from './handlers';
 
 type Mod = Record<string, ((data: unknown) => unknown) | undefined>;
 const MODULES: Record<string, Mod> = {
@@ -12,6 +12,7 @@ const MODULES: Record<string, Mod> = {
   collections: collections as Mod,
   'fedi-profile': fediProfile as Mod,
   fedizen: fedizen as Mod,
+  'fedizen-profile': fedizenProfile as Mod,
   groups: groups as Mod,
   intelligence: intelligence as Mod,
   push: push as Mod,

@@ -7,6 +7,7 @@ import type * as Bonfire from '@/lib/bonfire.functions';
 import type * as BonfirePrivate from '@/lib/bonfire-private.functions';
 import type * as Collections from '@/lib/collections.functions';
 import type * as FediProfileFns from '@/lib/fedi-profile.functions';
+import type * as FedizenProfileFns from '@/lib/fedizen-profile.functions';
 import type * as Fedizen from '@/lib/fedizen.functions';
 import type * as Groups from '@/lib/groups.functions';
 import type * as Intelligence from '@/lib/intelligence.functions';
@@ -282,6 +283,14 @@ export const bonfire: Impl<typeof Bonfire> = {
 export const bonfirePrivate: Impl<typeof BonfirePrivate> = {
   getNativeBonfireSnapshot: () => ({ status: 'disabled' as const, identity: null as never, restAccountHandle: LAB_FEDIZEN_HANDLE, posts: [], notices: [], homeEndCursor: null, homeHasNextPage: false, notificationEndCursor: null, notificationHasNextPage: false }),
   getNativeBonfireHomeContinuation: () => ({ status: 'disabled' as const, identity: null as never, restAccountHandle: LAB_FEDIZEN_HANDLE, posts: [], notices: [], homeEndCursor: null, homeHasNextPage: false, notificationEndCursor: null, notificationHasNextPage: false }),
+  getNativeHomeDetails: () => ({ status: 'disabled' as const, posts: {} }),
+  getNativeBonfireHomeLatest: () => ({ status: 'disabled' as const, posts: [] }),
+};
+// Sample (invented) Fedizen profile for Edit profile; saving changes it for this page load only.
+let labProfile = { name: 'Atlas Lab', bio: 'A sample profile in the Device Lab. #openweb', website: 'example.org', location: 'Sample City' };
+export const fedizenProfile: Impl<typeof FedizenProfileFns> = {
+  getMyFedizenProfile: () => ({ profile: labProfile, canWrite: true }),
+  saveMyFedizenProfile: (d: { profile: typeof labProfile }) => { labProfile = { ...d.profile }; return { ok: true as const, profile: labProfile }; },
 };
 export const groups: Impl<typeof Groups> = {
   getGroups: () => ({ groups: [...GROUPS, ...TOPICS], next: null }),

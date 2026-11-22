@@ -41,6 +41,8 @@ export async function verifiedNativeBonfireConnection(
     status: 'available' as const,
     accessToken: connection.access_token,
     accountHandle: connection.account_handle,
+    /** The grant's scopes, to tell whether it may write. */
+    scope: connection.scope,
     identity,
   };
 }
