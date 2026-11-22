@@ -17,29 +17,29 @@ Status key: **in use** (Atlas calls it today), **flag-gated** (written and teste
 | Groups directory, group page, group posts | GraphQL `categories`, `category`, `feedActivities(feedName:"known_groups")`, read signed out | same | **in use** | — |
 | For You: busy discussions in joined groups | GraphQL feed `sortBy: REPLY_COUNT`, `timeLimit: 7` | same | **in use** | — |
 | Create a post (Public / Quiet public, CW, media, quote policy, quotes) | GraphQL `createPost` (`createPostOnFedizen`) | `createPost` (live root) | **in use** | Signed-in acceptance record |
-| Reply | REST `POST /api/v1/statuses` (`in_reply_to_id`, visibility) | `createPost(replyTo:)` (live root) | in schema | Move to `createPost` once boundaries for replies are checked |
+| Reply | REST `POST /api/v1/statuses` (`in_reply_to_id`, visibility) | `createPost(replyTo:)` (live root) | in schema | Roadmap 2: `createPost(replyTo:)` only if replies need Bonfire boundaries |
 | Home timeline | Railway: GraphQL `me.myFeed` (flag on); REST `/api/v1/timelines/home` where the flag is off | `me.myFeed` picks the page, order and cursor; each post's details come from REST `/api/v1/statuses/:id` (GraphQL lacks visibility, language, mentions, polls, cards, video, quotes on rc.1); slow cards are read right after (`getNativeHomeDetails`); new posts from `getNativeBonfireHomeLatest` (#213, #219) | **in use** on Railway (owner checks pass, #123) | Consented second-account isolation test |
 | Notifications / Activity | REST `/api/v2/notifications` (grouped), markers | `me.notifications` (live schema) | **flag-gated** | Same as Home |
-| Post detail and conversation | REST `/api/v1/statuses/:id`, `/context` | `post(filter:{id})` (live schema) flag-gated; `threadContext` in schema | flag-gated / in schema | — |
+| Post detail and conversation | REST `/api/v1/statuses/:id`, `/context` | `post(filter:{id})` (live schema) flag-gated; `threadContext` in schema | flag-gated / in schema | Roadmap 3: compare `threadContext` with REST `/context` |
 | Profiles (others) | ActivityPub actor read directly (`loadFediProfile`) | `user(filter:{id|username})` (live schema) | **flag-gated** | — |
-| Edit own profile on Fedizen | GraphQL `me.user.profile` read and `updateUser(profile:)` (name, bio, website, location) | `updateUser(profile: ProfileInput, images: ImagesUpload)` (bonfire_me `ef9c2a9`) | **in use** (text fields) | Avatar and banner (`images`: multipart uploads) |
-| Edit post | REST `PUT /api/v1/statuses/:id` + `/source` | `editPost` | in schema | — |
-| Delete post | REST `DELETE /api/v1/statuses/:id` | generic `delete` (any context, `bonfire_api_graphql`) | in schema | — |
-| Like / unlike | REST `favourite` / `unfavourite` | `like`, `unlike` (live root) | in schema | — |
-| Boost / undo boost | REST `reblog` / `unreblog` | `boost` only; **no undo-boost operation** | in schema (half) | Keep REST for undo |
-| Bookmark / unbookmark, Saved | REST `bookmark` / `unbookmark`, `/api/v1/bookmarks` | `bookmark` (live root), `unbookmark` | in schema | — |
-| Liked posts, who liked / boosted | REST `/api/v1/favourites`, `favourited_by` / `reblogged_by` | `likersOf`, `boostersOf`, `me.likeActivities` | in schema | — |
-| Follow / unfollow | REST `accounts/:id/follow` / `unfollow` (+ `accounts/lookup`) | `follow`, `unfollow` (live root) | in schema | — |
+| Edit own profile on Fedizen | GraphQL `me.user.profile` read and `updateUser(profile:)` (name, bio, website, location) | `updateUser(profile: ProfileInput, images: ImagesUpload)` (bonfire_me `ef9c2a9`) | **in use** (text fields) | Roadmap 1: avatar and banner (`images`) |
+| Edit post | REST `PUT /api/v1/statuses/:id` + `/source` | `editPost` | in schema | Stay on REST: works, and GraphQL adds nothing here |
+| Delete post | REST `DELETE /api/v1/statuses/:id` | generic `delete` (any context, `bonfire_api_graphql`) | in schema | Stay on REST: works, and GraphQL adds nothing here |
+| Like / unlike | REST `favourite` / `unfavourite` | `like`, `unlike` (live root) | in schema | Stay on REST: works, and GraphQL adds nothing here |
+| Boost / undo boost | REST `reblog` / `unreblog` | `boost` only; **no undo-boost operation** | in schema (half) | Stay on REST: GraphQL can't undo a boost |
+| Bookmark / unbookmark, Saved | REST `bookmark` / `unbookmark`, `/api/v1/bookmarks` | `bookmark` (live root), `unbookmark` | in schema | Stay on REST: works, and GraphQL adds nothing here |
+| Liked posts, who liked / boosted | REST `/api/v1/favourites`, `favourited_by` / `reblogged_by` | `likersOf`, `boostersOf`, `me.likeActivities` | in schema | Stay on REST: works, and GraphQL adds nothing here |
+| Follow / unfollow | REST `accounts/:id/follow` / `unfollow` (+ `accounts/lookup`) | `follow`, `unfollow` (live root) | in schema | Stay on REST: works, and GraphQL adds nothing here |
 | Follow requests: list | REST `/api/v1/follow_requests` | **no list query** (only `requested` on relationships) | none | Fixed (#193): Bonfire returns every request, ignoring `limit` |
-| Follow requests: accept / decline | REST `follow_requests/:id/authorize` / `reject` | `acceptFollowRequest`, `rejectFollowRequest` | in schema | — |
-| Group join / leave | REST `/api/v1-bonfire/groups/:id/join` / `leave` | `joinGroup`, `leaveGroup` | in schema | — |
+| Follow requests: accept / decline | REST `follow_requests/:id/authorize` / `reject` | `acceptFollowRequest`, `rejectFollowRequest` | in schema | Stay on REST: works, and GraphQL adds nothing here |
+| Group join / leave | REST `/api/v1-bonfire/groups/:id/join` / `leave` | `joinGroup`, `leaveGroup` | in schema | Stay on REST: works, and GraphQL adds nothing here |
 | Mute / block, lists of them | REST `mutes`, `blocks`, `accounts/:id/mute|block` | read-only `silencing`, `ghosting` on relationships; no mutation | none | Lists over 80 fixed (#219): Bonfire ignores `limit` here too |
-| Report | REST `/api/v1/reports` | `flag` | in schema | — |
-| Circles (Profile → Circles, pinned circle feeds) | REST Lists API (`/api/v1/lists`, `timelines/list/:id`) | not in the extensions checked (`bonfire_boundaries` not checked) | unknown | Check `bonfire_boundaries` |
+| Report | REST `/api/v1/reports` | `flag` | in schema | Stay on REST: works, and GraphQL adds nothing here |
+| Circles (Profile → Circles, pinned circle feeds) | REST Lists API (`/api/v1/lists`, `timelines/list/:id`) | not in the extensions checked (`bonfire_boundaries` not checked) | unknown | Roadmap 2: check `bonfire_boundaries` |
 | Hashtags: follow, followed list, tag timeline | REST `tags/:name/follow`, `followed_tags`, `timelines/tag/:tag` | `feedActivities(filter:{tags})` reads; no follow operation | partial | — |
-| Search (people, posts, hashtags) | REST `/api/v2/search`, `accounts/search` | `searchUsers`, `searchActivities` | in schema | — |
+| Search (people, posts, hashtags) | REST `/api/v2/search`, `accounts/search` | `searchUsers`, `searchActivities` | in schema | Stay on REST: works, and GraphQL adds nothing here |
 | Polls: read, vote | REST `/api/v1/polls/:id`, `votes` | none | none | — |
-| Media upload, alt text | REST `/api/v2/media` | `uploadMedia`, `updateMedia`, `deleteMedia`, `addMediaByUri` (`bonfire_files`) | in schema | — |
+| Media upload, alt text | REST `/api/v2/media` | `uploadMedia`, `updateMedia`, `deleteMedia`, `addMediaByUri` (`bonfire_files`) | in schema | REST for posts; roadmap 1 for profile images |
 | Messages (direct conversations) | REST `/api/v1/conversations` (read); sent as `direct` posts | **none** in `bonfire_messages` | none | — |
 | Push notifications | REST `/api/v1/push/subscription`, through Atlas's relay | none | none | **blocked** on the VAPID private key (Settings → Notifications) |
 | Live updates | Mastodon streaming (WebSocket), else Bonfire SSE | `feedActivity` subscription (transport unverified on Fedizen) | in schema | — |
@@ -47,6 +47,29 @@ Status key: **in use** (Atlas calls it today), **flag-gated** (written and teste
 | Collections (Mastodon 4.6) | Atlas tables + Mastodon servers; Bonfire has none | none | none | Move to Fedizen when Bonfire ships FEP-7aa9 |
 | Instance blocks | Opens Fedizen's page | none | none | — |
 | Events | — | removed in v1.1.0 | none | — |
+
+### Which API: GraphQL or REST (owner decision, 2026-11-22)
+
+Fedizen serves both, over the same Bonfire data: GraphQL (`/api/graphql`) and the Mastodon-compatible REST API. Atlas uses **whichever can do more on Fedizen's version**, and changes a working path only when the change gains something the person can use. Using GraphQL is not a goal in itself.
+
+- **GraphQL** where REST can't do it, or does less:
+  - Bonfire's own concepts: groups, boundaries, quotes and quote policy.
+  - Profile fields and images (`updateUser`).
+  - Native Home order and cursors.
+  - Possibly fuller threads (`threadContext`).
+- **REST** where it works and GraphQL is missing or weaker on rc.1 / 1.1.0:
+  - Undo boost, mutes and blocks (changing them), polls, messages, followed hashtags and push.
+  - Every working action, kept as is: like, bookmark, follow, report, search, edit and delete.
+- **Both**, when neither is complete alone. Native Home reads GraphQL for the page and REST for each post's details (#213).
+- **Every row needs a reason.** Its "Next" column says why it stays where it is, or what moving it would gain.
+
+### Roadmap (where GraphQL adds something)
+
+1. **Profile picture and banner**: `updateUser(images: {icon, image})`, which takes multipart uploads. Atlas can't change these at all today.
+2. **Who can see and reply to a post**: Bonfire boundaries and circles. REST offers only public, unlisted, followers and direct. Read `bonfire_boundaries` at the pinned commit first, then `createPost` (and replies) with a boundary.
+3. **Conversations**: compare GraphQL `threadContext` with REST `/statuses/:id/context` on real threads; switch only if it shows more.
+4. **Second-account isolation test** for native Home and notifications (needs a second consenting Fedizen account).
+5. **Rate limit**: learn how Fedizen keys its limiter and its limits; keep each page's request count low (`fedizen-rate-limit.ts`).
 
 ### Before publishing
 
