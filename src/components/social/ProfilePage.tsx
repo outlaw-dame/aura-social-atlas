@@ -4,7 +4,9 @@ import { Bookmark, CalendarDays, Heart, Check, CircleDashed, CircleUserRound, Im
 import { Button } from '@/components/ui/button';
 import { useAtlasAuth } from './AuthState';
 import { useSocial } from './SocialState';
-import { avatarPreset, defaultAvatarKey } from '@/lib/atlas-avatars';
+import { avatarPreset } from '@/lib/atlas-avatars';
+import { IdentityAvatar } from './IdentityAvatar';
+import { useFedizenIdentity } from './useFedizenIdentity';
 import { creators, fullHandle, posts, type Creator } from '@/lib/social-catalogue';
 import { extractHashtags, hashtagLabel, hashtagUrl, linkifyHashtags, TagText } from '@/lib/hashtags';
 import { CreatorTag } from './CreatorTag';
@@ -67,6 +69,7 @@ function EditProfileDialog({ onClose }: { onClose: () => void }) {
 
 export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpenCollection }: { initialSection?: ProfileSection; onOpenCreator: (c: Creator) => void; onOpenCollection: (c: Collection) => void }) {
   const { user, profile, loading, signOut } = useAtlasAuth();
+  const identity = useFedizenIdentity();
   const { followed, saved, toggleSave, toggleFollow } = useSocial();
   const [section, setSection] = useState<ProfileSection>(initialSection);
   const [followsOpen, setFollowsOpen] = useState(false);
@@ -78,7 +81,7 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
     <Button asChild className="mt-5"><Link to="/auth">Sign in</Link></Button>
   </Empty>;
 
-  const name = profile?.display_name || 'Your profile';
+  const name = identity.name;
   const featured = profile?.featured_hashtags ?? [];
   const savedPosts = posts.filter(p => saved.includes(p.id));
   const followedCreators = creators.filter(c => followed.includes(c.id));
@@ -88,19 +91,23 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
     <div className="h-36 rounded-3xl sm:h-44" aria-hidden="true" style={{ background: 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 30%, var(--card)), color-mix(in oklab, var(--accent) 8%, var(--card)))' }} />
     <header className="px-2 sm:px-6">
       <div className="-mt-12 flex items-end justify-between">
-        <img className="size-24 atlas-avatar border-4 border-background bg-secondary object-cover" src={avatarPreset(profile?.avatar_key ?? defaultAvatarKey(user.id)).src} alt="Your avatar" width={96} height={96} />
+        <IdentityAvatar className="size-24 atlas-avatar border-4 border-background object-cover" src={identity.avatar} name={identity.name} alt="Your profile avatar" />
         <Button variant="outline" className="mb-1 rounded-full" onClick={() => setEditing(true)}>Edit profile</Button>
       </div>
       <h1 className="mt-3 font-serif text-4xl leading-tight [overflow-wrap:anywhere]">{name}</h1>
-      <p className="mt-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">{user.email}</p>
+      <p className="mt-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">{identity.handle}</p>
+      {identity.viewer?.profileUrl && <a href={identity.viewer.profileUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs text-accent hover:underline">View your verified Fedizen profile</a>}
+      {identity.isFedizen && !identity.viewer && <p className="mt-2 text-xs text-muted-foreground">Fedizen's account details are unavailable or have not yet been verified. No substitute profile picture is shown.</p>}
       <p className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground">
-        <span><strong className="mr-1 font-semibold text-foreground">0</strong>followers</span>
-        <button type="button" className="hover:text-foreground hover:underline" onClick={() => setFollowsOpen(true)}><strong className="mr-1 font-semibold text-foreground">{followed.length}</strong>following</button>
-        <span><strong className="mr-1 font-semibold text-foreground">0</strong>posts</span>
+        <span><strong className="mr-1 font-semibold text-foreground">{identity.counts?.followers ?? '—'}</strong>followers</span>
+        {identity.isFedizen
+          ? <span><strong className="mr-1 font-semibold text-foreground">{identity.counts?.following ?? '—'}</strong>following</span>
+          : <button type="button" className="hover:text-foreground hover:underline" onClick={() => setFollowsOpen(true)}><strong className="mr-1 font-semibold text-foreground">{followed.length}</strong>following in Atlas</button>}
+        <span><strong className="mr-1 font-semibold text-foreground">{identity.counts?.posts ?? '—'}</strong>posts</span>
       </p>
-      {profile?.bio ? <p className="mt-3 max-w-2xl text-sm leading-relaxed">{linkifyHashtags(profile.bio)}</p>
-        : <p className="mt-3 text-sm text-muted-foreground">No bio yet — add one so people know what you share.</p>}
-      {profile?.created_at && <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays className="size-3.5" />Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>}
+      {profile?.bio ? <p className="mt-3 max-w-2xl text-sm leading-relaxed"><span className="text-xs text-muted-foreground">Atlas notes · </span>{linkifyHashtags(profile.bio)}</p>
+        : <p className="mt-3 text-sm text-muted-foreground">Profile details are managed on Fedizen. Atlas-specific notes can be added here.</p>}
+      {profile?.created_at && <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays className="size-3.5" />Atlas account created {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>}
     </header>
 
     <div role="tablist" aria-label="Profile sections" className="sticky top-16 z-10 mt-6 flex overflow-x-auto border-b border-border bg-background/80 backdrop-blur-xl [scrollbar-width:none]">
@@ -111,6 +118,7 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
     </div>
 
     <section id="profile-panel" role="tabpanel" aria-labelledby={`profile-tab-${section.toLowerCase()}`} className="pt-8">
+      {section === 'Activity' && identity.isFedizen && <p className="mb-4 text-sm text-muted-foreground">Your Fedizen identity and counts are live. This profile's activity panel is not yet synced; use <Link to="/feeds" className="text-accent underline">Following</Link> to view your authorized feed.</p>}
       {section === 'Activity' && <div className="mb-6 flex flex-wrap items-center gap-2" role="group" aria-label="Show in Activity">
         <span className="mr-1 text-xs text-muted-foreground">Showing {activityLabel(filter)}</span>
         {(['replies', 'boosts'] as const).map(k => <Button key={k} size="sm" variant="ghost" aria-pressed={filter[k]} onClick={() => setFilter(f => ({ ...f, [k]: !f[k] }))}
