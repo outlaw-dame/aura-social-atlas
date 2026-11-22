@@ -66,7 +66,7 @@ Fedizen serves both, over the same Bonfire data: GraphQL (`/api/graphql`) and th
 ### Roadmap (where GraphQL adds something)
 
 1. **Profile picture and banner**: `updateUser(images: {icon, image})` as an Absinthe multipart upload (`query`, `variables` naming a file part, the file part). Built; one upload is sent once and never retried. Needs one live check on Fedizen.
-2. **Who can see and reply to a post**: Bonfire boundaries and circles. REST offers only public, unlisted, followers and direct. Fedizen only (`boundary: "local"`) is built; circles wait for a live check of `boundary: "private"` + `permissions`.
+2. **Who can see and reply to a post**: Bonfire boundaries and circles. REST offers only public, unlisted, followers and direct. Fedizen only (`boundary: "local"`) is built and passed live (2026-11-22: 404 signed out on REST and ActivityPub, not in the public outbox). Circle posts (`boundary: "private"` + `permissions`) are built; Fedizen accepts them, but rc.1 can't confirm the grant to the poster: `post.permissionGrants` answers [] because `Bonfire.Posts.read` doesn't preload the ACL. Only a circle member reading the post confirms it.
 3. **Conversations**: compare GraphQL `threadContext` with REST `/statuses/:id/context` on real threads; switch only if it shows more.
 4. **Second-account isolation test** for native Home and notifications (needs a second consenting Fedizen account).
 5. **Rate limit**: learn how Fedizen keys its limiter and its limits; keep each page's request count low (`fedizen-rate-limit.ts`).

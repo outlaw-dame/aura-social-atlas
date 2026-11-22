@@ -47,10 +47,17 @@ export function circlePermissions(circleIds: string[]): BoundaryPermission[] {
   ];
 }
 
-/** Whether Fedizen's stored grants let every one of these circles read the post. */
-export function circlesCanRead(grants: { permission: string; can?: { id: string }[] | null }[] | null | undefined, circleIds: string[]): boolean {
-  const readers = new Set((grants ?? []).filter(g => g.permission === 'read').flatMap(g => (g.can ?? []).map(c => c.id)));
-  return circleIds.length > 0 && circleIds.every(id => readers.has(id));
+/**
+ * What Fedizen's stored grants say about these circles reading the post: 'confirmed' when every circle may read it,
+ * 'missing' when grants came back without that, 'unknown' when none came back. On rc.1 the single-post query
+ * (`Bonfire.Posts.read`, bonfire_posts) doesn't preload the post's ACL, so `permissionGrants` answers [] for every
+ * post (bonfire_social social_api_graphql.ex: `e(post, :controlled, :acl, :grants, nil) || %{}` → []); an empty
+ * answer says nothing about the circle.
+ */
+export function circleReadCheck(grants: { permission: string; can?: { id: string }[] | null }[] | null | undefined, circleIds: string[]): 'confirmed' | 'missing' | 'unknown' {
+  if (!grants?.length || !circleIds.length) return 'unknown';
+  const readers = new Set(grants.filter(g => g.permission === 'read').flatMap(g => (g.can ?? []).map(c => c.id)));
+  return circleIds.every(id => readers.has(id)) ? 'confirmed' : 'missing';
 }
 
 /**
