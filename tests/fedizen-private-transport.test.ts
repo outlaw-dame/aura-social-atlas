@@ -34,7 +34,7 @@ describe('Fedizen private reads and writes are allowlisted', () => {
     expect(seen?.redirect).toBe('manual');
     expect(seen?.cache).toBe('no-store');
     globalThis.fetch = (async () => new Response('[{"unread":true}]')) as unknown as typeof fetch;
-    expect(await fedizenGet('t', '/api/v1/conversations?limit=30')).toEqual({ status: 502, data: [] });
+    expect(await fedizenGet('t', '/api/v1/conversations?limit=30')).toEqual({ status: 502, data: [], failure: 'mismatch' });
   });
   test('an oversized link preview is dropped field by field, never the whole timeline', async () => {
     globalThis.fetch = (async () => new Response(JSON.stringify([
