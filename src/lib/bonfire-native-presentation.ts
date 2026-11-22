@@ -17,14 +17,9 @@ export function selectBonfireHome(
     return {
       source: 'native' as const,
       posts: native.posts,
-      notices: native.notices.map(n => ({
-        id: n.id,
-        type: 'activity',
-        author: n.actor,
-        date: n.date,
-        avatar: undefined,
-        text: n.verb,
-      })),
+      // Activity stays the REST notifications Home already read: GraphQL notifications carry only a verb and a name,
+      // without the faces, post links and wording the column shows.
+      notices: rest.notices,
       profile: native.identity?.user ?? null,
       hasNextPage: native.homeHasNextPage,
       endCursor: native.homeEndCursor,
