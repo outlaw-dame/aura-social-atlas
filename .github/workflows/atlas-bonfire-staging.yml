@@ -5,7 +5,6 @@ on:
       - main
       - staging/atlas-bonfire-client
       - staging/atlas-bonfire-client-v2
-      - staging/atlas-bonfire-client-v3
   pull_request:
     branches:
       - main
