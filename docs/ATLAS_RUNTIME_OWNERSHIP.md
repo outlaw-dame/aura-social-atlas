@@ -57,3 +57,11 @@
 - [Release acceptance issue #123](https://github.com/outlaw-dame/aura-social-atlas/issues/123)
 
 **Never remove an active Lovable integration just to make GitHub look independent.** Independence requires a tested application build, runtime secrets, equivalent authentication, data migration or explicitly separate accounts, verified end-to-end user behavior, and a controlled domain cutover.
+
+## 6. Explicit auth UX runtime selection (code migration gate)
+
+- `VITE_ATLAS_AUTH_RUNTIME` may be `lovable` (existing preview; default for backward compatibility) or `supabase` (independent deployment). This is a **public build-time capability choice**, not a secret and not an authorization boundary. The server still validates sessions and ownership.
+- Lovable mode preserves the current Google and Lovable-branded identity buttons, which use the existing Lovable Cloud Auth bridge, alongside Bonfire's Supabase custom OIDC flow.
+- In Supabase mode the Lovable-branded sign-in path is **not offered**. Google sign-in uses `supabase.auth.signInWithOAuth({ provider: 'google' })` **only** when `VITE_ATLAS_GOOGLE_OAUTH_ENABLED=enabled` and the selected Supabase project's Google provider is configured. Otherwise hide it to avoid dead sign-in buttons. Email/password and Bonfire login still require their actual project-side setup; do not assume they work because buttons render.
+- Explicitly set `VITE_ATLAS_AUTH_RUNTIME=supabase` on Railway **only when deploying a branch with this implementation**. Do not set it on the Lovable preview or expect the existing Lovable users' sessions to transfer. On a staged code change, verify both modes in CI and browser, and re-check PKCE OAuth callback and private API permissions after the environment has a real custom OIDC provider.
+- This **does not migrate or replace** the existing Lovable preview identity bridge, private user storage, OAuth clients or sessions. It removes a *UI-level assumption* that Lovable login is always available. The rest of auth parity remains an explicitly gated deployment task.
