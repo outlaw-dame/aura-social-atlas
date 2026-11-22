@@ -68,7 +68,7 @@ describe('staging-only explicit owner private reads', () => {
     const route = readFileSync('src/routes/fedizen-acceptance.tsx', 'utf8');
     expect(route).toContain('Test my eight protected reads');
     expect(route).toContain('Private/direct visibility markers found');
-    expect(route).toContain('another Fedizen account');
+    expect(route).toContain('different Fedizen account');
     expect(route).not.toContain('console.log(jwt)');
     const source = readFileSync('src/lib/staging-private-read-audit.ts', 'utf8');
     expect(source).not.toContain('JSON.stringify(result)');
