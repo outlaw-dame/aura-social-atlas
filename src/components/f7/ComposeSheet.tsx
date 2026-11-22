@@ -13,6 +13,7 @@ import { useComposeIntent } from '@/lib/compose-intent';
 
 const AUDIENCE_ICON: Record<Audience, { ios: string; md: string }> = {
   public: { ios: 'f7:globe', md: 'material:public' }, unlisted: { ios: 'f7:moon', md: 'material:nights_stay' },
+  local: { ios: 'f7:house', md: 'material:home' },
   private: { ios: 'f7:lock', md: 'material:lock' }, direct: { ios: 'f7:at', md: 'material:alternate_email' },
 };
 

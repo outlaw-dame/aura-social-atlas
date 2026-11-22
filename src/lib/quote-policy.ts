@@ -42,10 +42,12 @@ export type BoundaryPermission = { permission: 'quote' | 'request'; can: string[
  * posting (seen live on fedizen.net; bonfire_social lib/api/social_api_graphql.ex, and its post_boundary_test.exs
  * always sends both).
  */
-export function quotePermissions(policy: QuotePolicy): BoundaryPermission[] {
+export function quotePermissions(policy: QuotePolicy, reach: 'everyone' | 'local' = 'everyone'): BoundaryPermission[] {
+  // A Fedizen-only post is read only on Fedizen, so only people there are offered quoting or asking to quote.
+  const who = reach === 'local' ? [LOCAL_CIRCLE] : EVERYONE;
   switch (policy) {
-    case 'anyone': return [{ permission: 'quote', can: EVERYONE, cannot: [] }];
-    case 'ask': return [{ permission: 'request', can: EVERYONE, cannot: [] }];
+    case 'anyone': return [{ permission: 'quote', can: who, cannot: [] }];
+    case 'ask': return [{ permission: 'request', can: who, cannot: [] }];
     case 'nobody': return [{ permission: 'quote', can: [], cannot: EVERYONE }, { permission: 'request', can: [], cannot: EVERYONE }];
   }
 }

@@ -11,13 +11,19 @@ import { useAtlasAuth } from './AuthState';
 import { LIBRARY_PROBLEM } from './useFedizenLibrary';
 import { AI_PROBLEM, useAiRunner } from './useIntelligence';
 
-export type Audience = 'public' | 'unlisted' | 'private' | 'direct';
+export type Audience = 'public' | 'unlisted' | 'local' | 'private' | 'direct';
 export const AUDIENCES: { id: Audience; label: string; note: string }[] = [
   { id: 'public', label: 'Public', note: 'Anyone, on and off the fediverse' },
   { id: 'unlisted', label: 'Quiet public', note: 'Anyone, but kept out of public timelines and search' },
+  // Bonfire's "local" boundary (bonfire_boundaries runtime_config.ex `preset_acls`): only people signed in to Fedizen can read and reply.
+  { id: 'local', label: 'Fedizen only', note: 'Only people with a Fedizen account' },
   { id: 'private', label: 'Followers', note: 'Only people who follow you' },
   { id: 'direct', label: 'Mentioned people', note: 'Only the people you @mention' },
 ];
+
+/** Audiences a quote can go to, through GraphQL `createPost`; Followers and Mentioned people posts can't quote or be quoted. */
+const QUOTABLE: ReadonlySet<Audience> = new Set(['public', 'unlisted', 'local']);
+export const LOCAL_SENSITIVE = 'On a Fedizen-only post, add a content warning to mark media sensitive.';
 
 export type Attachment = {
   /** A file the person picked; absent for a GIF from the picker, which the server fetches (`gif`). */
@@ -65,8 +71,8 @@ export function usePublish() {
   const [audience, setAudienceRaw] = useState<Audience>('public');
   /** The post being quoted (Boost → Quote), shown under the text; quotes are Public or Quiet public only. */
   const [quote, setQuoteRaw] = useState<FedizenPost | null>(null);
-  const setQuote = (q: FedizenPost | null) => { setQuoteRaw(q); if (q) setPollRaw(null); if (q && audience !== 'public' && audience !== 'unlisted') setAudienceRaw('public'); };
-  const setAudience = (a: Audience) => { if (!quote || a === 'public' || a === 'unlisted') setAudienceRaw(a); };
+  const setQuote = (q: FedizenPost | null) => { setQuoteRaw(q); if (q) setPollRaw(null); if (q && !QUOTABLE.has(audience)) setAudienceRaw('public'); };
+  const setAudience = (a: Audience) => { if ((!quote || QUOTABLE.has(a)) && !(poll && a === 'local')) setAudienceRaw(a); };
   const [sensitiveChoice, setSensitive] = useState(false);
   const [quotePolicy, setQuotePolicyRaw] = useState<QuotePolicy>(savedQuotePolicy);
   const setQuotePolicy = (q: QuotePolicy) => { setQuotePolicyRaw(q); saveQuotePolicy(q); };
@@ -86,7 +92,9 @@ export function usePublish() {
   // sensitive without a content warning goes through REST, which keeps the mark, and Fedizen's default applies.
   const sensitiveOnly = sensitive && !warning;
   // A poll goes through REST: Fedizen's createPoll takes no quote permissions, so its quoting follows Fedizen's default.
-  const viaGraph = !poll && (audience === 'public' || audience === 'unlisted') && (!!quote || !sensitiveOnly);
+  // Fedizen only exists only in GraphQL (REST's visibilities have no "local"), so such a post always goes that way: it
+  // takes no poll, and media marked sensitive needs a content warning (see `send`).
+  const viaGraph = audience === 'local' || (!poll && QUOTABLE.has(audience) && (!!quote || !sensitiveOnly));
   /** Why who-may-quote can't be chosen for this post, if it can't. Followers-only and mentions-only posts can't be quoted (as on Mastodon). */
   const quoteLock: 'private' | 'sensitive' | 'poll' | null = audience === 'private' || audience === 'direct' ? 'private' : viaGraph ? null : poll ? 'poll' : 'sensitive';
   const pollChoices = poll ? poll.options.map(o => o.trim()) : [];
@@ -142,13 +150,14 @@ export function usePublish() {
   const broken = media.some(m => m.state === 'failed');
   const length = [...text].length;
   const ready = canPost && !sending && !busy && !broken && (text.trim().length > 0 || media.length > 0 || !!poll) && pollValid && length <= limits.maxChars && (!cwOn || warning.length > 0);
-  const startPoll = () => { if (media.length || quote) return; setPollRaw({ options: ['', ''], expiresIn: POLL_DURATIONS[5].seconds, multiple: false }); };
+  const startPoll = () => { if (media.length || quote || audience === 'local') return; setPollRaw({ options: ['', ''], expiresIn: POLL_DURATIONS[5].seconds, multiple: false }); };
   const editPoll = (p: Partial<ComposePoll>) => setPollRaw(cur => (cur ? { ...cur, ...p } : cur));
 
   const reset = () => { media.forEach(m => { if (m.file) URL.revokeObjectURL(m.url); }); setText(''); setCw(''); setCwOn(false); setSensitive(false); setMedia([]); setNotice(null); setAudienceRaw('public'); setQuoteRaw(null); setPollRaw(null); };
 
   const send = async (): Promise<{ url?: string; id?: string } | null> => {
     if (!user || !ready) return null;
+    if (audience === 'local' && sensitiveOnly) { setNotice(LOCAL_SENSITIVE); return null; }
     setSending(true); setNotice(null);
     try {
       const ids: string[] = [];
@@ -175,7 +184,7 @@ export function usePublish() {
         patch(m.key, { state: 'uploaded', mediaId: r.id });
         ids.push(r.id);
       }
-      const r = viaGraph && (audience === 'public' || audience === 'unlisted')
+      const r = viaGraph && QUOTABLE.has(audience)
         ? await createFn({ data: { expectedAtlasUserId: user.id, ...(quote?.statusId ? { quoteId: quote.statusId } : {}), text: text.trim(), visibility: audience, ...(warning ? { cw: warning.slice(0, MAX_CW) } : {}), mediaIds: ids, quotes: quotePolicy } })
           .catch(() => ({ ok: false as const, error: 'unavailable' as const }))
         : await post({ data: { expectedAtlasUserId: user.id, text: text.trim(), visibility: audience, ...(warning ? { cw: warning.slice(0, MAX_CW) } : {}), mediaIds: ids, sensitive, ...(poll ? { poll: { options: pollChoices, expiresIn: poll.expiresIn, multiple: poll.multiple } } : {}) } })
@@ -191,11 +200,11 @@ export function usePublish() {
   return {
     signedIn: !!user, canPost, connected: !!status.data?.connected, limits,
     text, setText, cw, setCw, cwOn, setCwOn, audience, setAudience, quote, setQuote,
-    audiences: quote ? AUDIENCES.filter(a => a.id === 'public' || a.id === 'unlisted') : AUDIENCES,
+    audiences: AUDIENCES.filter(a => (!quote || QUOTABLE.has(a.id)) && !(poll && a.id === 'local')),
     sensitive, sensitiveLocked: media.length > 0 && warning.length > 0, setSensitive,
     media, add, addGif, gifs: gifsQ.data?.enabled === true, remove, setAlt, generateAlt, canGenerateAlt: ai.ready,
     quotePolicy, setQuotePolicy, quotePolicies: QUOTE_POLICIES, quoteLock,
     notice, clearNotice: () => setNotice(null), sending, ready, length, reset, send,
-    poll, startPoll, editPoll, removePoll: () => setPollRaw(null), canPoll: !media.length && !quote, pollDurations: POLL_DURATIONS, pollValid,
+    poll, startPoll, editPoll, removePoll: () => setPollRaw(null), canPoll: !media.length && !quote && audience !== 'local', pollDurations: POLL_DURATIONS, pollValid,
   };
 }
