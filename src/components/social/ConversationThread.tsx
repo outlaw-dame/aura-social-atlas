@@ -9,6 +9,8 @@ import { isPostClick } from '@/lib/open-post';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { shortAgo } from '@/lib/feed-types';
 import { PostActionBar } from './PostActionBar';
+// More (Share, the original, filters, and Edit and Delete on your own posts), as on feed cards.
+import { PostMoreMenu } from './FilterLikeThis';
 import { ArrivalNote, Face, ParticipantsStrip, ReplyModeSwitch, justArrived, useIsMePost, useMyAcct, useScrollAnchor } from './ConversationParts';
 import { useFilterGate } from './FilterGate';
 import { useFollowedAmong } from './useIntelligence';
@@ -342,7 +344,7 @@ function Row({ post: p, kind, number, replyingTo, actions, onOpenPost, arrived, 
         {replyingTo && <p className="atlas-ph-replyto"><CornerDownRight aria-hidden="true" />Replying to <b>{replyingTo.author}</b></p>}
         <div className={hero ? 'atlas-ph-content is-large' : 'atlas-ph-content'}><Content post={p} /></div>
         {hero && <HeroDetails post={p} />}
-        <div className="atlas-ph-actions"><PostActionBar post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply} /></div>
+        <div className="atlas-ph-actions"><PostActionBar post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply} more={<PostMoreMenu post={p} />} /></div>
       </div>
     </article>
   </Gate>;
