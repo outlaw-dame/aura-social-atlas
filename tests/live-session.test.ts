@@ -66,6 +66,24 @@ describe("signed-out sessions are refused on private routes", () => {
     expect(auth.calls).toBe(2);
   });
 
+  test("a page's simultaneous reads share one Auth round trip", async () => {
+    const auth = authAnswering(live("user-a"));
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () => confirmLiveSession(auth, "jwt", claims, now)),
+    );
+    expect(results.every(Boolean)).toBe(true);
+    expect(auth.calls).toBe(1);
+  });
+
+  test("simultaneous reads of a signed-out session are all refused", async () => {
+    const auth = authAnswering(ended);
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => confirmLiveSession(auth, "jwt", claims, now)),
+    );
+    expect(results.some(Boolean)).toBe(false);
+    expect(auth.calls).toBe(1);
+  });
+
   test("a refusal is never remembered", async () => {
     const auth = authAnswering(ended, live("user-a"));
     expect(await confirmLiveSession(auth, "jwt", claims, now)).toBe(false);
