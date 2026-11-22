@@ -92,12 +92,21 @@ describe("native Home shows the same cards as the REST feed", () => {
       page([post("act-c", "01BOOSTED", { verb: { verb: "Announce" }, subject: local })]),
       async (id) => restPost(id),
     );
-    expect(p.booster).toEqual({ name: "Cat", acct: "cat@fedizen.net", actor: "https://fedizen.net/users/cat" });
+    expect(p.booster).toEqual({
+      name: "Cat",
+      acct: "cat@fedizen.net",
+      actor: "https://fedizen.net/users/cat",
+    });
   });
 
   test("a failed, refused or missing read leaves the GraphQL card with Share only", async () => {
     const posts = await hydrateNativeBonfireHome(
-      page([post("act-1", "01FAILS"), post("act-2", "01GONE"), post("act-3", undefined), post("act-4", "../evil")]),
+      page([
+        post("act-1", "01FAILS"),
+        post("act-2", "01GONE"),
+        post("act-3", undefined),
+        post("act-4", "../evil"),
+      ]),
       async (id) => {
         if (id === "01FAILS") throw new Error("network");
         return undefined;
@@ -156,7 +165,10 @@ describe("native Home shows the same cards as the REST feed", () => {
   test("a post GraphQL repeats on the page is shown and read once", async () => {
     const reads: string[] = [];
     const posts = await hydrateNativeBonfireHome(
-      page([post("act-1", "01SAME"), post("act-2", "01SAME", { verb: { verb: "Boost" }, subject: booster })]),
+      page([
+        post("act-1", "01SAME"),
+        post("act-2", "01SAME", { verb: { verb: "Boost" }, subject: booster }),
+      ]),
       async (id) => {
         reads.push(id);
         return restPost(id);
@@ -164,5 +176,24 @@ describe("native Home shows the same cards as the REST feed", () => {
     );
     expect(posts).toHaveLength(1);
     expect(reads).toEqual(["01SAME"]);
+  });
+});
+
+describe("posts without text", () => {
+  test("an image-only post still gets its REST card; unread, GraphQL has nothing to show", async () => {
+    const imageOnly = {
+      id: "act-img",
+      object: { id: "01IMAGE", creator: author },
+      subject: author,
+      objectPostContent: { htmlBody: "" },
+      media: [{ url: "https://fedizen.net/i.png", mediaType: "image/png" }],
+    };
+    const hydrated = await hydrateNativeBonfireHome(page([imageOnly]), async (id) => ({
+      ...restPost(id),
+      paragraphs: [],
+      image: "https://fedizen.net/i.png",
+    }));
+    expect(hydrated.map((p) => [p.id, p.statusId])).toEqual([["act-img", "01IMAGE"]]);
+    expect(await hydrateNativeBonfireHome(page([imageOnly]), async () => undefined)).toEqual([]);
   });
 });

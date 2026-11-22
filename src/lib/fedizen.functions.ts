@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import type { ForYouPost } from './feed-types';
 import { DEFAULT_LIMITS, MAX_ALT, MAX_CW, MAX_TEXT, UPLOAD_CEILING, type ComposeLimits } from './compose-media';
-import { allowedCallback, assertFedizenSessionIntent, creditsBesidesAuthor, pollOf, type FediPoll, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromGroupedNotifications, type FedizenNoticeGroup, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
+import { allowedCallback, assertFedizenSessionIntent, pollOf, type FediPoll, fedizenReadError, fromAccounts, fromConversations, fromLists, fromNotifications, fromGroupedNotifications, type FedizenNoticeGroup, fromStatuses, hasScope, lookupAcct, type FedizenCircle, type FedizenConversation, type FedizenNotice, type FedizenPerson, type FedizenPost } from './fedizen-feed';
 import type { FedizenReadFailure, FedizenReadIssue } from './fedizen.server';
 
 export const getFedizenStatus = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {

@@ -206,36 +206,39 @@ export async function hydrateNativeBonfireHome(
   budgetMs = 2500,
   concurrency = 8,
 ): Promise<FedizenPost[]> {
-  const shown: FedizenPost[] = fromBonfirePosts(page.nodes);
-  const nodes = new Map(page.nodes.map(n => [n.id, n]));
-  const found: (FedizenPost | undefined)[] = new Array(shown.length);
+  // One entry per post, as fromBonfirePosts counts them (a boost and its original are the same post). Walked from
+  // GraphQL's nodes, not fromBonfirePosts' output, so a post without text (only an image) still gets its REST card.
+  const seen = new Set<string>();
+  const nodes = page.nodes.filter(n => {
+    const key = n.object?.id ?? n.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const found: (FedizenPost | undefined)[] = new Array(nodes.length);
   let next = 0;
   let stopped = false;
   const worker = async () => {
-    while (!stopped && next < shown.length) {
+    while (!stopped && next < nodes.length) {
       const i = next++;
-      const statusId = nodes.get(shown[i].id)?.object?.id;
+      const statusId = nodes[i].object?.id;
       if (!statusId || !STATUS_ID.test(statusId)) continue;
       found[i] = await read(statusId).catch(() => undefined);
     }
   };
   let timer: ReturnType<typeof setTimeout> | undefined;
   await Promise.race([
-    Promise.all(Array.from({ length: Math.min(concurrency, shown.length) }, worker)),
+    Promise.all(Array.from({ length: Math.min(concurrency, nodes.length) }, worker)),
     new Promise(resolve => { timer = setTimeout(resolve, budgetMs); }),
   ]);
   stopped = true; // Reads not started by the deadline aren't sent.
   if (timer) clearTimeout(timer);
-  return shown.map((native, i) => {
+  return nodes.flatMap((node, i): FedizenPost[] => {
     const rest = found[i];
-    if (!rest) return native;
-    const node = nodes.get(native.id);
-    const boost = node?.verb?.verb === 'Boost' || node?.verb?.verb === 'Announce';
-    const booster = boost && node ? boosterOf(node) : undefined;
-    return {
-      ...rest,
-      id: native.id,
-      ...(booster ? { boostedBy: booster.name, booster } : {}),
-    };
+    // Unread: the GraphQL-only card, when GraphQL gave it something to show.
+    if (!rest) return fromBonfirePosts([node]);
+    const boost = node.verb?.verb === 'Boost' || node.verb?.verb === 'Announce';
+    const booster = boost ? boosterOf(node) : undefined;
+    return [{ ...rest, id: node.id, ...(booster ? { boostedBy: booster.name, booster } : {}) }];
   });
 }
