@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { AVATAR_PRESETS } from '@/lib/atlas-avatars';
 import { cn } from '@/lib/utils';
 import { Compass } from 'lucide-react';
+import { authUiCapabilities } from '@/lib/auth-runtime';
 
 export const Route = createFileRoute('/auth')({
   head: () => ({
@@ -27,6 +28,10 @@ export const Route = createFileRoute('/auth')({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const authUi = authUiCapabilities(
+    import.meta.env.VITE_ATLAS_AUTH_RUNTIME,
+    import.meta.env.VITE_ATLAS_GOOGLE_OAUTH_ENABLED,
+  );
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,10 +44,29 @@ function AuthPage() {
 
   const socialSignIn = async (provider: 'google' | 'lovable') => {
     setError(null);
-    const result = await lovable.auth.signInWithOAuth(provider, {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) setError(result.error.message);
+    setBusy(true);
+    try {
+      if (authUi.runtime === 'supabase') {
+        // Independent Atlas deployments must never call Lovable Cloud auth.
+        // The UI exposes Google only when that provider was explicitly enabled
+        // for the selected Supabase project.
+        if (provider !== 'google' || !authUi.google) return;
+        const { error: oauthError } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin },
+        });
+        if (oauthError) setError(oauthError.message);
+        return;
+      }
+      const result = await lovable.auth.signInWithOAuth(provider, {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) setError(result.error.message);
+    } catch {
+      setError('Could not start sign-in. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   // Show an error the auth server sent back after a failed Bonfire round trip.
@@ -199,17 +223,22 @@ function AuthPage() {
             <div className="flex items-center gap-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               <span className="h-px flex-1 bg-border" />or<span className="h-px flex-1 bg-border" />
             </div>
-            <Button type="button" variant="outline" className="w-full rounded-full" onClick={() => void socialSignIn('google')}>
-              Continue with Google
-            </Button>
-            <button
-              type="button"
-              className="lovable-auth-button"
-              style={{ width: '100%' }}
-              onClick={() => void socialSignIn('lovable')}
-            >
-              Continue with Lovable
-            </button>
+            {authUi.google && (
+              <Button type="button" variant="outline" className="w-full rounded-full" disabled={busy} onClick={() => void socialSignIn('google')}>
+                Continue with Google
+              </Button>
+            )}
+            {authUi.lovable && (
+              <button
+                type="button"
+                className="lovable-auth-button"
+                style={{ width: '100%' }}
+                disabled={busy}
+                onClick={() => void socialSignIn('lovable')}
+              >
+                Continue with Lovable
+              </button>
+            )}
             {embeddedHref ? (
               <div className="space-y-2">
                 <Button asChild variant="outline" className="w-full rounded-full">
