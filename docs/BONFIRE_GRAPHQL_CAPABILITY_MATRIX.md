@@ -16,7 +16,7 @@ Status key: **in use** (Atlas calls it today), **flag-gated** (written and teste
 | Articles (Recent articles, Spotlight) | GraphQL `feedActivities(feedName:"articles")` | same | **in use**, live-accepted 2026-11-09 | — |
 | Groups directory, group page, group posts | GraphQL `categories`, `category`, `feedActivities(feedName:"known_groups")`, read signed out | same | **in use** | — |
 | For You: busy discussions in joined groups | GraphQL feed `sortBy: REPLY_COUNT`, `timeLimit: 7` | same | **in use** | — |
-| Create a post (Public / Quiet public, CW, media, quote policy, quotes) | GraphQL `createPost` (`createPostOnFedizen`) | `createPost` (live root) | **in use** | Signed-in acceptance record |
+| Create a post (Public / Quiet public / Fedizen only, CW, media, quote policy, quotes) | GraphQL `createPost` (`createPostOnFedizen`; Fedizen only = `boundary: "local"`, which REST can't express) | `createPost` (live root) | **in use** | Signed-in acceptance record |
 | Reply | REST `POST /api/v1/statuses` (`in_reply_to_id`, visibility) | `createPost(replyTo:)` (live root) | in schema | Roadmap 2: `createPost(replyTo:)` only if replies need Bonfire boundaries |
 | Home timeline | Railway: GraphQL `me.myFeed` (flag on); REST `/api/v1/timelines/home` where the flag is off | `me.myFeed` picks the page, order and cursor; each post's details come from REST `/api/v1/statuses/:id` (GraphQL lacks visibility, language, mentions, polls, cards, video, quotes on rc.1); slow cards are read right after (`getNativeHomeDetails`); new posts from `getNativeBonfireHomeLatest` (#213, #219) | **in use** on Railway (owner checks pass, #123) | Consented second-account isolation test |
 | Notifications / Activity | REST `/api/v2/notifications` (grouped), markers | `me.notifications` (live schema) | **flag-gated** | Same as Home |
@@ -35,7 +35,7 @@ Status key: **in use** (Atlas calls it today), **flag-gated** (written and teste
 | Group join / leave | REST `/api/v1-bonfire/groups/:id/join` / `leave` | `joinGroup`, `leaveGroup` | in schema | Stay on REST: works, and GraphQL adds nothing here |
 | Mute / block, lists of them | REST `mutes`, `blocks`, `accounts/:id/mute|block` | read-only `silencing`, `ghosting` on relationships; no mutation | none | Lists over 80 fixed (#219): Bonfire ignores `limit` here too |
 | Report | REST `/api/v1/reports` | `flag` | in schema | Stay on REST: works, and GraphQL adds nothing here |
-| Circles (Profile → Circles, pinned circle feeds) | REST Lists API (`/api/v1/lists`, `timelines/list/:id`) | not in the extensions checked (`bonfire_boundaries` not checked) | unknown | Roadmap 2: check `bonfire_boundaries` |
+| Circles (Profile → Circles, pinned circle feeds) | REST Lists API (`/api/v1/lists`, `timelines/list/:id`) | `createPost(toCircles:)` reaches circle feeds only: on rc.1 `Acls.prepare_cast` reads `to_circles` from opts, the resolver puts it in post attrs, so it grants no access (bonfire_boundaries 60fc2e7, bonfire_social d64795d) | in schema, not access | Roadmap 2: `boundary: "private"` + `permissions` naming the circle, after a live check |
 | Hashtags: follow, followed list, tag timeline | REST `tags/:name/follow`, `followed_tags`, `timelines/tag/:tag` | `feedActivities(filter:{tags})` reads; no follow operation | partial | — |
 | Search (people, posts, hashtags) | REST `/api/v2/search`, `accounts/search` | `searchUsers`, `searchActivities` | in schema | Stay on REST: works, and GraphQL adds nothing here |
 | Polls: read, vote | REST `/api/v1/polls/:id`, `votes` | none | none | — |
@@ -66,7 +66,7 @@ Fedizen serves both, over the same Bonfire data: GraphQL (`/api/graphql`) and th
 ### Roadmap (where GraphQL adds something)
 
 1. **Profile picture and banner**: `updateUser(images: {icon, image})` as an Absinthe multipart upload (`query`, `variables` naming a file part, the file part). Built; one upload is sent once and never retried. Needs one live check on Fedizen.
-2. **Who can see and reply to a post**: Bonfire boundaries and circles. REST offers only public, unlisted, followers and direct. Read `bonfire_boundaries` at the pinned commit first, then `createPost` (and replies) with a boundary.
+2. **Who can see and reply to a post**: Bonfire boundaries and circles. REST offers only public, unlisted, followers and direct. Fedizen only (`boundary: "local"`) is built; circles wait for a live check of `boundary: "private"` + `permissions`.
 3. **Conversations**: compare GraphQL `threadContext` with REST `/statuses/:id/context` on real threads; switch only if it shows more.
 4. **Second-account isolation test** for native Home and notifications (needs a second consenting Fedizen account).
 5. **Rate limit**: learn how Fedizen keys its limiter and its limits; keep each page's request count low (`fedizen-rate-limit.ts`).
