@@ -6,6 +6,8 @@
  * preset. The server checks the returned handle against the stored, previously
  * verified delegated-grant owner before it exposes this projection.
  */
+import { isPublicHttpsUrl } from './article-author';
+
 export type FedizenViewer = {
   handle: string;
   name: string;
@@ -18,15 +20,8 @@ export type FedizenViewer = {
 };
 
 function httpsUrl(raw: unknown): string | null {
-  if (typeof raw !== 'string' || raw.length < 1 || raw.length > 2048 || /[\s\x00-\x1f]/.test(raw)) return null;
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'https:' || url.username || url.password) return null;
-    if (url.hostname === 'localhost' || url.hostname.endsWith('.localhost')) return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
+  if (typeof raw !== 'string' || /[\s\x00-\x1f]/.test(raw) || !isPublicHttpsUrl(raw)) return null;
+  return new URL(raw).toString();
 }
 
 function count(raw: unknown): number | null {
@@ -74,4 +69,24 @@ export function signedInThroughFedizen(user: {
   return !!user && (user.app_metadata?.provider === 'custom:app-oidc' ||
     user.app_metadata?.providers?.includes('custom:app-oidc') === true ||
     user.identities?.some(identity => identity.provider === 'custom:app-oidc') === true);
+}
+
+/**
+ * Bonfire sometimes returns its generic /images/avatar.png for a real actor.
+ * Resolve only the verified account's own ActivityPub actor and require the
+ * expected username and same Fedizen host before accepting an icon.
+ */
+export function avatarFromVerifiedFedizenActor(viewer: FedizenViewer, rawActor: unknown): string | null {
+  if (!viewer.profileUrl || !rawActor || typeof rawActor !== 'object' || Array.isArray(rawActor)) return null;
+  const actor = rawActor as Record<string, unknown>;
+  const id = httpsUrl(actor.id);
+  if (!id || new URL(id).hostname !== 'fedizen.net') return null;
+  const username = actor.preferredUsername;
+  if (typeof username !== 'string' || username.toLowerCase() !== viewer.handle.slice(1).split('@')[0].toLowerCase()) return null;
+  const icon = Array.isArray(actor.icon) ? actor.icon[0] : actor.icon;
+  const url = typeof icon === 'string' ? icon :
+    icon && typeof icon === 'object' && !Array.isArray(icon) ? (icon as { url?: unknown }).url : null;
+  const avatar = httpsUrl(url);
+  return avatar && !(new URL(avatar).hostname === 'fedizen.net' &&
+    new URL(avatar).pathname === '/images/avatar.png') ? avatar : null;
 }
