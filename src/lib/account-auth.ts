@@ -7,9 +7,9 @@ export type AccountAuthResult<T> =
   | { kind: 'success'; data: T }
   | { kind: 'error'; message: string };
 
-export async function runAccountAuth<T>(
-  request: () => Promise<{ data: T; error: { message: string } | null }>,
-): Promise<AccountAuthResult<T>> {
+export async function runAccountAuth<T extends { data: unknown; error: { message: string } | null }>(
+  request: () => Promise<T>,
+): Promise<AccountAuthResult<T['data']>> {
   try {
     const { data, error } = await request();
     if (error) return { kind: 'error', message: error.message };
