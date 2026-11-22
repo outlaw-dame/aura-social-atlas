@@ -188,7 +188,7 @@ async function readVerifiedFedizenPayload(token: string, fetcher: typeof fetch):
       await response.body?.cancel().catch(() => {});
       return null;
     }
-    return await readBoundedFedizenJson(response, 32768);
+    return await readBoundedFedizenJson(response, 16384);
   } catch {
     return null;
   }
