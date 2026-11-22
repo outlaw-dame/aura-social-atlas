@@ -26,6 +26,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiLiveRouteImport } from './routes/api/live'
 import { Route as FedizenCallbackRouteImport } from './routes/fedizen.callback'
+import { Route as FedizenAcceptanceRouteImport } from './routes/fedizen-acceptance'
 import { Route as PostIdRouteImport } from './routes/post.$id'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
@@ -121,6 +122,11 @@ const FedizenCallbackRoute = FedizenCallbackRouteImport.update({
   path: '/fedizen/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FedizenAcceptanceRoute = FedizenAcceptanceRouteImport.update({
+  id: '/fedizen-acceptance',
+  path: '/fedizen-acceptance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PostIdRoute = PostIdRouteImport.update({
   id: '/post/$id',
   path: '/post/$id',
@@ -185,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRoute
   '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/post/$id': typeof PostIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
@@ -212,6 +219,7 @@ export interface FileRoutesByTo {
   '/api/chat': typeof ApiChatRoute
   '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/post/$id': typeof PostIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
@@ -241,6 +249,7 @@ export interface FileRoutesById {
   '/api/chat': typeof ApiChatRoute
   '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
+  '/fedizen-acceptance': typeof FedizenAcceptanceRoute
   '/post/$id': typeof PostIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
@@ -271,6 +280,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/live'
     | '/fedizen/callback'
+    | '/fedizen-acceptance'
     | '/post/$id'
     | '/settings/appearance'
     | '/settings/hashtags'
@@ -298,6 +308,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/live'
     | '/fedizen/callback'
+    | '/fedizen-acceptance'
     | '/post/$id'
     | '/settings/appearance'
     | '/settings/hashtags'
@@ -326,6 +337,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/live'
     | '/fedizen/callback'
+    | '/fedizen-acceptance'
     | '/post/$id'
     | '/settings/appearance'
     | '/settings/hashtags'
@@ -355,6 +367,7 @@ export interface RootRouteChildren {
   ApiChatRoute: typeof ApiChatRoute
   ApiLiveRoute: typeof ApiLiveRoute
   FedizenCallbackRoute: typeof FedizenCallbackRoute
+  FedizenAcceptanceRoute: typeof FedizenAcceptanceRoute
   PostIdRoute: typeof PostIdRoute
   TagsTagRoute: typeof TagsTagRoute
   ApiPushRelayIdRoute: typeof ApiPushRelayIdRoute
@@ -481,6 +494,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FedizenCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/fedizen-acceptance': {
+      id: '/fedizen-acceptance'
+      path: '/fedizen-acceptance'
+      fullPath: '/fedizen-acceptance'
+      preLoaderRoute: typeof FedizenAcceptanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/post/$id': {
       id: '/post/$id'
       path: '/post/$id'
@@ -587,6 +607,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiChatRoute: ApiChatRoute,
   ApiLiveRoute: ApiLiveRoute,
   FedizenCallbackRoute: FedizenCallbackRoute,
+  FedizenAcceptanceRoute: FedizenAcceptanceRoute,
   PostIdRoute: PostIdRoute,
   TagsTagRoute: TagsTagRoute,
   ApiPushRelayIdRoute: ApiPushRelayIdRoute,
