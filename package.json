@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "lab:dev": "vite --config device-lab/vite.config.ts",
     "lab:build": "vite build --config device-lab/vite.config.ts",
-    "lab:check": "tsc --noEmit -p device-lab"
+    "lab:check": "tsc --noEmit -p device-lab",
+    "start": "node .output/server/index.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.48",

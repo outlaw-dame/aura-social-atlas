@@ -27,3 +27,10 @@ export const getFedizenNativeAcceptance = createServerFn({ method: 'POST' })
       return { status: 'failed', checks: [] };
     }
   });
+
+/**
+ * Whether this server offers the acceptance page at all. Answers only the gate, without sign-in, so the page can
+ * show "not found" on deployments that don't run the diagnostics (the Lovable preview, production).
+ */
+export const getFedizenAcceptancePageEnabled = createServerFn({ method: 'GET' })
+  .handler(async (): Promise<boolean> => fedizenAcceptanceEnabled(process.env['ATLAS_FEDIZEN_ACCEPTANCE_PROBES']));
