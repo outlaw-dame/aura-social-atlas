@@ -31,7 +31,27 @@ export const LOCAL_CIRCLE = '3SERSFR0MY0VR10CA11NSTANCE';
 export const FEDIVERSE_CIRCLE = '7EDERATEDW1THANACT1V1TYPVB';
 const EVERYONE = [LOCAL_CIRCLE, FEDIVERSE_CIRCLE];
 
-export type BoundaryPermission = { permission: 'quote' | 'request'; can: string[]; cannot: string[] };
+export type BoundaryPermission = { permission: 'quote' | 'request' | 'see' | 'read' | 'reply'; can: string[]; cannot: string[] };
+
+/** The verbs a circle gets on a post shared with it: find it, read it, answer it. */
+export const CIRCLE_VERBS = ['see', 'read', 'reply'] as const;
+
+/**
+ * `createPost(permissions:)` for a post only these circles may see, read and reply to. Nobody may quote it or ask to,
+ * as with followers-only posts.
+ */
+export function circlePermissions(circleIds: string[]): BoundaryPermission[] {
+  return [
+    ...CIRCLE_VERBS.map(permission => ({ permission, can: [...circleIds], cannot: [] })),
+    ...quotePermissions('nobody'),
+  ];
+}
+
+/** Whether Fedizen's stored grants let every one of these circles read the post. */
+export function circlesCanRead(grants: { permission: string; can?: { id: string }[] | null }[] | null | undefined, circleIds: string[]): boolean {
+  const readers = new Set((grants ?? []).filter(g => g.permission === 'read').flatMap(g => (g.can ?? []).map(c => c.id)));
+  return circleIds.length > 0 && circleIds.every(id => readers.has(id));
+}
 
 /**
  * The `createPost(permissions:)` that make a post's quoting follow the choice, whatever the preset grants.
