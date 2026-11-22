@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { confirmLiveSession } from '@/integrations/supabase/live-session.server';
 
 /**
  * The signed-in Atlas user behind a plain API route (server functions get this from requireSupabaseAuth): the Supabase
@@ -19,5 +20,6 @@ export async function userIdFromRequest(request: Request): Promise<string | null
   };
   const supabase = createClient(url, key, { global: { fetch: fetchWithKey }, auth: { storage: undefined, persistSession: false, autoRefreshToken: false } });
   const { data, error } = await supabase.auth.getClaims(token);
-  return !error && typeof data?.claims?.sub === 'string' ? data.claims.sub : null;
+  if (error || typeof data?.claims?.sub !== 'string') return null;
+  return (await confirmLiveSession(supabase, token, data.claims)) ? data.claims.sub : null;
 }

@@ -3,6 +3,7 @@ import { createMiddleware } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
+import { confirmLiveSession } from './live-session.server'
 
 
 
@@ -98,6 +99,11 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
 
     if (!data.claims.sub) {
       throw new Error('Unauthorized: No user ID found in token');
+    }
+
+    // getClaims verifies the signature only; a signed-out session's token stays valid until it expires.
+    if (!(await confirmLiveSession(supabase, token, data.claims))) {
+      throw new Error('Unauthorized: Session has ended');
     }
 
     return next({
