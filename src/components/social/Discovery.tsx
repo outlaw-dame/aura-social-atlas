@@ -66,7 +66,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
   const pageTitles = { groups: ['Communities on Fedizen and beyond', 'Groups'], activity: ['What’s new for you', 'Activity'], messages: ['Direct conversations', 'Messages'], profile: ['', ''] } as const;
   const settingsView = view === 'settings' || view === 'intelligence' || view === 'appearance' || view === 'moderation' || view === 'hashtags' || view === 'notifications';
   const toggleTopic = (value: string) => { setTopic(value); setMobileOpen(false); };
-  return <div className={state.dark ? 'dark' : ''}><div className="social-app min-h-screen bg-background text-foreground">
+  return <div><div className="social-app min-h-screen bg-background text-foreground">
     {mobileOpen && <Button variant="ghost" aria-label="Close navigation" onClick={() => setMobileOpen(false)} className="social-backdrop fixed inset-0 z-30 h-auto rounded-none lg:hidden" />}
     <aside className={`social-sidebar liquid-glass specular fixed inset-y-3 left-3 z-40 flex w-60 flex-col rounded-3xl border border-border p-5 transition-transform lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}>
       <div className="mb-9 flex items-center justify-between"><Link to="/" className="flex items-center gap-2 font-serif text-3xl italic"><Compass className="size-6 text-accent" strokeWidth={1.5} />Atlas</Link><Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X /></Button></div>

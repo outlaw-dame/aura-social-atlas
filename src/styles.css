@@ -1318,3 +1318,95 @@ ruby rt { font-size: .6em; }
 .atlas-tr-note { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; opacity: .65; }
 .atlas-tr-link { border: 0; background: none; padding: 4px 0; color: var(--accent, var(--f7-theme-color)); font: inherit; font-weight: 600; cursor: pointer; width: auto; }
 .atlas-tr-source select { appearance: none; -webkit-appearance: none; border: 0; padding: 0 2px; margin: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; field-sizing: content; max-width: 12em; }
+
+/* Dim (src/lib/theme-mode.ts): <html class="dark" data-theme="dim">. Every dark style still applies; this swaps the
+   palette for charcoal surfaces. Values match the main app's Hybrid Dim. Text contrast (WCAG 2.x) on the page
+   #191C22 / cards #242830 / raised #30353F: #F3F1ED 15.1 / 13.1 / 10.9, #B3B4BA 8.3 / 7.1 / 6.0, #A0A3AB 6.8 / 5.9
+   / 4.9, all above AA's 4.5:1. #666A74 is 3.2:1 or less, so it is not used for text. Grays are written as hex or
+   srgb, because oklch mixes turn them brown. The reader's accent is left alone, as in Dark. */
+:root[data-theme="dim"], [data-theme="dim"] .dark {
+  --background: #191C22;
+  --foreground: #F3F1ED;
+  --card: #242830;
+  --card-foreground: #F3F1ED;
+  --popover: #242830;
+  --popover-foreground: #F3F1ED;
+  --primary: #F3F1ED;
+  --primary-foreground: #191C22;
+  --secondary: #30353F;
+  --secondary-foreground: #F3F1ED;
+  --muted: #30353F;
+  --muted-foreground: #B3B4BA;
+  --border: rgba(243, 241, 237, 0.12);
+  --input: rgba(243, 241, 237, 0.22);
+  --social-overlay: rgba(10, 12, 16, 0.55);
+  --social-glass-dark: linear-gradient(135deg, rgba(36, 40, 48, 0.85), rgba(25, 28, 34, 0.7));
+  --social-selected: color-mix(in srgb, var(--card) 82%, transparent);
+  --social-avatar: color-mix(in srgb, var(--accent) 12%, var(--secondary));
+}
+/* Framework7 (phone): beats its `.ios.dark` / `.dark` values. */
+html[data-theme="dim"].dark {
+  --f7-page-bg-color: #191C22;
+  --f7-text-color: #F3F1ED;
+  --f7-bars-text-color: #F3F1ED;
+  --f7-bars-bg-color: rgba(25, 28, 34, 0.62);
+  --f7-bars-bg-color-rgb: 25, 28, 34;
+  --f7-glass-bg-color: rgba(48, 53, 63, 0.5);
+  --f7-block-strong-bg-color: #242830;
+  --f7-block-strong-text-color: #F3F1ED;
+  --f7-list-strong-bg-color: #242830;
+  --f7-card-bg-color: #242830;
+  --f7-card-expandable-bg-color: #242830;
+  --f7-autocomplete-dropdown-bg-color: #242830;
+  --f7-fab-label-bg-color: #242830;
+  --f7-list-group-title-bg-color: #30353F;
+  --f7-chip-bg-color: #30353F;
+  --f7-chip-text-color: #F3F1ED;
+  --f7-swipeout-active-bg-color: #30353F;
+  --f7-dialog-bg-color-rgb: 36, 40, 48;
+  --f7-dialog-text-color: #F3F1ED;
+  --f7-login-screen-bg-color: #191C22;
+  --f7-login-screen-content-bg-color: #191C22;
+  --f7-messagebar-sheet-bg-color: #191C22;
+  --f7-list-item-border-color: rgba(243, 241, 237, 0.12);
+  --f7-list-outline-inset-border-color: rgba(243, 241, 237, 0.12);
+  --f7-card-outline-border-color: rgba(243, 241, 237, 0.12);
+  --f7-card-header-border-color: rgba(243, 241, 237, 0.12);
+  --f7-card-footer-border-color: rgba(243, 241, 237, 0.12);
+  --f7-table-cell-border-color: rgba(243, 241, 237, 0.12);
+  --f7-chip-outline-border-color: rgba(243, 241, 237, 0.12);
+  --f7-actions-button-border-color: rgba(243, 241, 237, 0.12);
+  --f7-input-outline-border-color: rgba(243, 241, 237, 0.22);
+  --f7-input-text-color: #F3F1ED;
+  --f7-block-title-text-color: #B3B4BA;
+  --f7-block-header-text-color: #B3B4BA;
+  --f7-block-footer-text-color: #B3B4BA;
+  --f7-list-item-after-text-color: #B3B4BA;
+  --f7-list-item-header-text-color: #B3B4BA;
+  --f7-list-item-footer-text-color: #B3B4BA;
+  --f7-list-item-text-text-color: #B3B4BA;
+  --f7-list-group-title-text-color: #B3B4BA;
+  --f7-card-footer-text-color: #B3B4BA;
+  --f7-navbar-subtitle-text-color: #B3B4BA;
+  --f7-actions-label-text-color: #B3B4BA;
+  --f7-input-info-text-color: #B3B4BA;
+  --f7-searchbar-placeholder-color: #A0A3AB;
+  --f7-searchbar-search-icon-color: #A0A3AB;
+  --f7-searchbar-input-text-color: #F3F1ED;
+  /* iOS segmented control: a recessed track with the chosen segment raised. */
+  --f7-segmented-strong-bg-color: #14161B;
+  --f7-segmented-strong-button-active-bg-color: #30353F;
+  --f7-segmented-strong-button-active-box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  /* Material (Android) surfaces, lowest to highest. */
+  --f7-md-surface: #191C22;
+  --f7-md-surface-1: #1E2128;
+  --f7-md-surface-2: #242830;
+  --f7-md-surface-2-rgb: 36, 40, 48;
+  --f7-md-surface-3: #2A2E37;
+  --f7-md-surface-4: #2D323B;
+  --f7-md-surface-5: #30353F;
+  --f7-md-surface-variant: #30353F;
+  --f7-md-on-surface: #F3F1ED;
+  --f7-md-on-surface-variant: #B3B4BA;
+}
+[data-theme="dim"] .atlas-boost-menu { --atlas-menu-bg: #30353F; --atlas-menu-fg: #F3F1ED; }
