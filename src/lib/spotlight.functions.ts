@@ -8,16 +8,10 @@ import {
 } from './spotlight';
 import { collectPublicSpotlightCandidates } from './spotlight-personal.server';
 
-/** Shared, PUBLIC Spotlight sources. These do not depend on an individual
- * user's OAuth grant and never send a request to mastodon.social.
- */
+/** Bonfire's public, verified RECENT Article projection. It does not await
+ * trends, which can be slow or empty. No individual OAuth grant is used. */
 export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): Promise<{ items: SpotlightItem[]; bonfireCount: number }> => {
-  const { readFedizenPublicSpotlight } = await import('./spotlight-federated.server');
-  const [{ articles }, trendPayload] = await Promise.all([
-    import('./bonfire.server').then(m => m.fetchRecentArticles()),
-    readFedizenPublicSpotlight('trends'),
-  ]);
-
+  const { articles } = await import('./bonfire.server').then(m => m.fetchRecentArticles());
   const recent: SpotlightItem[] = articles.slice(0, 6).map(a => {
     const account = bonfireAuthor(a);
     const provider = (() => { try { return new URL(a.url).hostname || 'fedizen.net'; } catch { return 'fedizen.net'; } })();
@@ -45,6 +39,15 @@ export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): 
       filterText: a.paragraphs.slice(0, 4).join(' ').slice(0, 1800),
     };
   });
+  return { items: recent, bonfireCount: recent.length };
+});
+
+/** Independent public trend lookup: a stalled or empty trend provider must
+ * not delay Bonfire's verified recent articles. No viewer credentials here;
+ * personalized filtering happens before either result is rendered. */
+export const getSpotlightTrends = createServerFn({ method: 'GET' }).handler(async (): Promise<{ items: SpotlightItem[] }> => {
+  const { readFedizenPublicSpotlight } = await import('./spotlight-federated.server');
+  const trendPayload = await readFedizenPublicSpotlight('trends');
   const links = fromMastodonLinks(trendPayload as never, { source: 'Bonfire', observedBy: 'fedizen.net' });
 
   // Confirm podcast/video types and publisher identity against the article's
@@ -61,7 +64,7 @@ export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): 
       else if (media?.video) it.kind = 'video';
     }
   }
-  return { items: combineSpotlight(links, recent), bonfireCount: recent.length };
+  return { items: links };
 });
 
 /** Fedizen's federated-public REST timeline currently returns 401 anonymously.
