@@ -174,6 +174,10 @@
   --social-status: oklch(0.65 0.14 160);
 }
 .social-app { min-height: 100dvh; letter-spacing: 0; overflow-x: clip; } /* nothing wider than the screen can widen the page, which makes iOS zoom out */
+/* A word or address longer than the screen (a long link, hashtag run or handle in a post) wraps instead of setting the
+   width of the whole feed (seen on iPhone, 23 Nov 2026: one such post made every card 954px wide on a 393px screen): overflow-wrap: anywhere also lowers the text's min-content width, which grid and flex
+   columns size from. Code blocks keep their own horizontal scroll. */
+.social-app :where(p, li, blockquote, h1, h2, h3, h4, dd, figcaption) { overflow-wrap: anywhere; }
 .dark {
   --social-selected: color-mix(in oklab, var(--card) 82%, transparent);
   --social-avatar: color-mix(in oklab, var(--accent) 12%, var(--secondary));

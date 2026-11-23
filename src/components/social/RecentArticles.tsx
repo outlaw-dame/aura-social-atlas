@@ -17,7 +17,7 @@ export function RecentArticles() {
     {isLoading ? <p className="text-sm text-muted-foreground">Loading articles from Fedizen…</p>
       : isError || data?.error ? <p className="text-sm text-muted-foreground">Fedizen couldn’t be reached right now. <Button variant="link" size="sm" className="px-1" onClick={() => refetch()}>Try again</Button></p>
       : !articles.length ? <p className="text-sm text-muted-foreground">Fedizen answered, but no articles have been published yet.</p>
-      : <div className="grid gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">{articles.slice(0, 9).map(a => <article key={a.id}>
+      : <div className="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">{articles.slice(0, 9).map(a => <article key={a.id}>
         <button type="button" onClick={() => setOpen(a)} className="group block w-full text-left">
           {a.image && <div className="mb-3 overflow-hidden rounded-2xl"><img src={a.image} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover transition-transform duration-700 group-hover:scale-[1.025]" /></div>}
           <h3 className="font-serif text-xl leading-snug group-hover:underline">{a.title}</h3>

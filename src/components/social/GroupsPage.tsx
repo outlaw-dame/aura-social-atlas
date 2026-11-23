@@ -107,7 +107,7 @@ function Directory() {
     : dir.firstFailed ? note(<>Fedizen couldn’t be reached right now. <Button variant="link" size="sm" className="px-1" onClick={() => dir.refetch()}>Try again</Button></>)
     : !dir.groups.length ? <div className="py-16 text-center"><Users className="mx-auto mb-4 size-8 text-muted-foreground" strokeWidth={1.5} /><h2 className="font-serif text-2xl">No groups yet.</h2><p className="mx-auto mt-3 max-w-xs text-sm text-muted-foreground">Groups on Fedizen, and those it follows on Lemmy, Mbin and other servers, will appear here.</p></div>
     : <>
-      {shown.length ? <ul className="grid gap-3 sm:grid-cols-2">
+      {shown.length ? <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
         {shown.map(g => <li key={g.id}>
           <Link to="/groups" search={{ group: g.id }} className="group/card block h-full overflow-hidden rounded-2xl border border-border bg-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <GroupBanner g={g} className="h-20" />

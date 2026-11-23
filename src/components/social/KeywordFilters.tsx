@@ -111,7 +111,7 @@ function OptionsEditor({ options, onChange, duration, onDuration, className = ''
     const next = options.places.includes(p) ? options.places.filter(x => x !== p) : [...options.places, p];
     if (next.length) onChange({ ...options, places: FILTER_PLACES.filter(x => next.includes(x)) });
   };
-  return <div className={`grid gap-4 rounded-2xl border border-border p-4 text-sm sm:grid-cols-3 ${className}`}>
+  return <div className={`grid grid-cols-[minmax(0,1fr)] gap-4 rounded-2xl border border-border p-4 text-sm sm:grid-cols-3 ${className}`}>
     <fieldset><legend className="mb-2 font-medium">Where</legend>
       {FILTER_PLACES.map(p => <label key={p} className="mb-1 flex items-center gap-2"><input type="checkbox" className="accent-[var(--accent)]" checked={options.places.includes(p)} onChange={() => toggle(p)} />{PLACE_LABEL[p]}</label>)}
     </fieldset>
