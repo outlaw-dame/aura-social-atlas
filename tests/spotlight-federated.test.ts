@@ -83,9 +83,30 @@ describe('Spotlight instance scope and honest ranking signals', () => {
         reblogs_count: 0, replies_count: 0, favourites_count: 0 }),
       status('incomplete', { card: { url: 'https://example.org/none', title: 'Bad' } }),
     ]);
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({ kind: 'link', reason: 'recent', shares: 2, observedBy: 'fedizen.net' });
     expect(result[0].url).toContain('example.org/story');
+    expect(result[1]).toMatchObject({ kind: 'link', reason: 'recent', shares: 1 });
+    expect(result[1].url).toBe('https://example.org/zero');
+  });
+
+  it('includes single-source, zero-engagement public links but not private or opted-out posts', () => {
+    const preview = {
+      title: 'Single public article worth reading',
+      description: 'A useful description long enough to qualify without an engagement count.',
+      url: 'https://example.org/solo',
+    };
+    const make = (id: string, extra: Record<string, unknown> = {}) => ({
+      id, visibility: 'public', card: preview,
+      account: { acct: 'reader', url: 'https://fedizen.net/@reader', discoverable: true },
+      reblogs_count: 0, favourites_count: 0, replies_count: 0, ...extra,
+    });
+    const result = fromFederatedLinkCards([
+      make('solo'), make('private', { visibility: 'private', card: { ...preview, url: 'https://example.org/private' } }),
+      make('hidden', { account: { acct: 'reader', url: 'https://fedizen.net/@reader', discoverable: false }, card: { ...preview, url: 'https://example.org/hidden' } }),
+    ]);
+    expect(result.map(x => x.url)).toEqual(['https://example.org/solo']);
+    expect(result[0]).toMatchObject({ shares: 1, reason: 'recent', sourceComplete: true });
   });
 
   it('deduplicates safe tracking aliases but preserves meaningful query arguments', () => {

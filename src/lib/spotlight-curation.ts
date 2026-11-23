@@ -2,7 +2,7 @@
  * for per-account decisions. "Provider" is a publisher, not an account origin.
  */
 import type { FilterablePost } from './content-filter';
-import type { SpotlightItem } from './spotlight';
+import { combineSpotlight, type SpotlightItem } from './spotlight';
 
 export type SpotlightModeration = {
   blockedHandles: string[];
@@ -37,9 +37,14 @@ export function domainBlocked(host: string, domains: readonly string[]): boolean
  * A link with no identified source actor is NOT safe to place in a user's Spotlight.
  * Every known contributing actor must pass the same moderation boundary.
  */
-export function allowedSpotlightItem(item: SpotlightItem, moderation: SpotlightModeration): boolean {
-  const sources = item.sourceAccounts ?? [];
-  if (item.sourceComplete === false || !sources.length) return false;
+/** Apply account blocks, mutes and domain coverage to the raw contributors
+ * before any grouped card can inherit blocked text or suppress a safe URL. */
+export function allowedSpotlightSources(
+  inputSources: SpotlightItem['sourceAccounts'], sourceComplete: SpotlightItem['sourceComplete'],
+  moderation: SpotlightModeration,
+): boolean {
+  const sources = inputSources ?? [];
+  if (sourceComplete === false || !sources.length) return false;
   const blocked = new Set([...moderation.blockedHandles, ...moderation.mutedHandles].map(normalizedAccount).filter(Boolean));
   const bannedIds = new Set([...moderation.blockedIds, ...moderation.mutedIds]);
   for (const source of sources) {
@@ -58,6 +63,12 @@ export function allowedSpotlightItem(item: SpotlightItem, moderation: SpotlightM
     if (moderation.domainCoverage !== 'complete' && host !== 'fedizen.net') return false;
     if (domainBlocked(host, moderation.blockedDomains)) return false;
   }
+  return true;
+}
+
+export function allowedSpotlightItem(item: SpotlightItem, moderation: SpotlightModeration): boolean {
+  if (!allowedSpotlightSources(item.sourceAccounts, item.sourceComplete, moderation)) return false;
+  const blocked = new Set([...moderation.blockedHandles, ...moderation.mutedHandles].map(normalizedAccount).filter(Boolean));
   const attributedAuthor = item.authorAccount?.acct;
   if (attributedAuthor) {
     const acct = normalizedAccount(attributedAuthor);
@@ -81,4 +92,18 @@ export function spotlightFilterPost(item: SpotlightItem): FilterablePost {
     authorId: item.sourceAccounts?.[0]?.id,
     visibility: 'public',
   };
+}
+
+/** Reject blocked/unverifiable source records BEFORE coalescing equal URLs.
+ * Public trend metadata alone does not prove a contributor is safe for the
+ * viewer. Precedence applies only among records which passed moderation. */
+export function selectModeratedSpotlight(
+  shared: SpotlightItem[], viewer: SpotlightItem[], moderation: SpotlightModeration,
+): SpotlightItem[] {
+  const eligible = (items: SpotlightItem[]) => items.filter(item => allowedSpotlightItem(item, moderation));
+  return combineSpotlight(
+    eligible(shared.filter(item => item.reason === 'trending')),
+    eligible(viewer),
+    eligible(shared.filter(item => item.reason !== 'trending')),
+  );
 }

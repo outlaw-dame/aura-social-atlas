@@ -46,7 +46,10 @@ const removed = labLive.removed;
 const following = new Set<PersonKey>(['orbit', 'studio', 'ana', 'grace', 'sam', 'mika', 'kenji', 'hearth', 'theo', 'mara', 'priya']);
 const followedTags = new Set(['space', 'astronomy', 'design', 'astrophotography']);
 const muted: FedizenPerson[] = [];
-const blocked: FedizenPerson[] = [{ id: 'acct-blocked', name: 'Crypto Giveaway', handle: '@giveaway@spam.example', avatar: undefined }];
+// Invented spam accounts, enough to show the blocked list's search and "Show all".
+const blocked: FedizenPerson[] = [{ id: 'acct-blocked', name: 'Crypto Giveaway', handle: '@giveaway@spam.example', avatar: undefined },
+  ...['Free Followers', 'Airdrop Alerts', 'Win A Phone', 'Lucky Draw', 'Promo Bot', 'Click Here', 'Fast Cash', 'Coin Rain', 'Mega Deals', 'Prize Desk', 'Daily Bonus', 'Hot Tips']
+    .map((name, i) => ({ id: `acct-blocked-${i}`, name, handle: `@${name.toLowerCase().replace(/ /g, '')}@spam.example`, avatar: undefined }))];
 const memberships: Record<string, Membership> = Object.fromEntries((G.joined as string[]).map(id => [id, 'member' as Membership]));
 const live = labLive.replies;
 
@@ -437,7 +440,10 @@ export const tagFeed: Impl<typeof TagFeed> = {
   })),
 };
 
-export const spotlight: Impl<typeof Spotlight> = { getSpotlight: () => ({ items: SPOTLIGHT, bonfireCount: 1 }) };
+export const spotlight: Impl<typeof Spotlight> = {
+  getSpotlight: () => ({ items: SPOTLIGHT, bonfireCount: 1 }),
+  getSpotlightTrends: () => ({ items: [] }),
+};
 export const translation: Impl<typeof Translation> = {
   getTranslationKeys: () => ({ serverKeys: true, deepl: null }),
   saveDeeplKey: () => ({ error: 'not-configured' as const }),

@@ -168,9 +168,9 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
     if (!card || typeof card.url !== 'string' || card.url.length > 2048 ||
       typeof card.title !== 'string' || card.title.trim().length < 10 ||
       typeof card.description !== 'string' || card.description.trim().length < 30) continue;
-    // A missing preview image must not hide an otherwise substantial public
-    // article. Keep the same URL/title/description/engagement safety gates;
-    // cards without images render in Spotlight's text list, not the carousel.
+    // A real public story does not need multiple shares or an image to be
+    // eligible for the RECENT section. Engagement remains a ranking signal,
+    // never a prerequisite or a fabricated "trending" assertion.
     const previewImage = typeof card.image === 'string' && isPublicHttpsUrl(card.image)
       ? card.image : undefined;
     const key = spotlightUrlKey(card.url);
@@ -212,7 +212,6 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
     });
   }
   return [...groups.values()]
-    .filter(group => group.seen.size >= 2 || group.activity >= 3)
     .sort((a, b) => b.activity - a.activity || b.seen.size - a.seen.size)
     .slice(0, 8)
     .map(({ item, seen }) => ({ ...item, shares: seen.size }));
