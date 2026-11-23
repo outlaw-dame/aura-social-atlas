@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { allowedSpotlightItem, type SpotlightModeration } from '../src/lib/spotlight-curation';
 import { collectPublicSpotlightCandidates } from '../src/lib/spotlight-personal.server';
-import { fromFederatedLinkCards, fromFederatedVideos } from '../src/lib/spotlight';
+import { fromFederatedLinkCards, fromFederatedVideos, spotlightUrlKey } from '../src/lib/spotlight';
 import { fedizenGet } from '../src/lib/fedizen.server';
 
 const policy: SpotlightModeration = {
@@ -138,6 +138,24 @@ describe('owner-only bounded Spotlight source sampling', () => {
     } finally {
       globalThis.fetch = savedFetch;
     }
+  });
+
+  it('rejects localhost, private IP, internal host, credentials and non-HTTPS article links', () => {
+    for (const bad of [
+      'https://localhost/story',
+      'https://127.0.0.1/story',
+      'https://10.0.0.1/story',
+      'https://internal/story',
+      'https://user:secret@example.org/story',
+      'https://example.org:444/story',
+      'http://example.org/story',
+    ]) {
+      expect(spotlightUrlKey(bad)).toBeNull();
+      expect(fromFederatedLinkCards([status('unsafe-' + bad.length, 'local', 'fedizen.net', {
+        card: { ...preview, url: bad },
+      })])).toEqual([]);
+    }
+    expect(spotlightUrlKey('https://example.org/story')).toBe('https://example.org/story');
   });
 
   it('does not label one sampled public source as a network trend', () => {
