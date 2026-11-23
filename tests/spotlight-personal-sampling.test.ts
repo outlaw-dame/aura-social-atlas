@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { allowedSpotlightItem, type SpotlightModeration } from '../src/lib/spotlight-curation';
-import { collectPublicSpotlightCandidates } from '../src/lib/spotlight-personal.server';
+import { collectPublicSpotlightCandidates, isPublicSpotlightStatus } from '../src/lib/spotlight-personal.server';
 import { fromFederatedLinkCards, fromFederatedVideos, spotlightUrlKey } from '../src/lib/spotlight';
 import { fedizenGet } from '../src/lib/fedizen.server';
 
@@ -71,7 +71,7 @@ describe('owner-only bounded Spotlight source sampling', () => {
       status('private', 'writer', 'fedizen.net', { visibility: 'private' }),
       status('reply', 'writer', 'fedizen.net', { in_reply_to_id: '01P' }),
     ];
-    const local = posts.filter((v) => v.visibility === 'public' && !v.in_reply_to_id);
+    const local = posts.filter(isPublicSpotlightStatus);
     const eligible = fromFederatedLinkCards(local).filter(it => allowedSpotlightItem(it, policy));
     expect(eligible).toHaveLength(1);
     expect(eligible[0].sourceAccounts?.[0].handle).toBe('writer');
