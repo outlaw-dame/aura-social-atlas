@@ -3,12 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { useAtlasAuth } from './AuthState';
 import { useStrictSpotlightFilters } from './useIntelligence';
-import { getSpotlight, getSpotlightModeration, getViewerSpotlight } from '@/lib/spotlight.functions';
+import { getSpotlight, getViewerSpotlight } from '@/lib/spotlight.functions';
 import { combineSpotlight, type SpotlightItem } from '@/lib/spotlight';
 import { allowedSpotlightItem, spotlightFilterPost } from '@/lib/spotlight-curation';
 
-/** Both Atlas desktop and phone use the same fail-closed personalized
- * projection. No global query cache ever contains a personalized verdict.
+/** Both Atlas desktop and phone reuse ONE owner-bound moderation snapshot
+ * returned atomically with the sampled federated content. No public cache may
+ * contain a user policy or private bearer; moderator failure means zero cards.
  */
 export function useCuratedSpotlight(): {
   items: SpotlightItem[];
@@ -17,7 +18,6 @@ export function useCuratedSpotlight(): {
 } {
   const { user } = useAtlasAuth();
   const viewerFn = useServerFn(getViewerSpotlight);
-  const moderationFn = useServerFn(getSpotlightModeration);
   const identity = user?.id;
 
   const shared = useQuery({
@@ -26,33 +26,25 @@ export function useCuratedSpotlight(): {
     enabled: !!identity,
     staleTime: 5 * 60_000,
   });
-  const moderation = useQuery({
-    queryKey: ['spotlight-moderation', identity],
-    queryFn: () => {
-      if (!identity) throw new Error('No active Atlas session');
-      return moderationFn({ data: { expectedAtlasUserId: identity } });
-    },
-    enabled: !!identity, staleTime: 30_000, retry: false,
-    refetchOnWindowFocus: 'always', refetchInterval: 2 * 60_000,
-  });
   const viewer = useQuery({
     queryKey: ['spotlight-viewer', identity],
     queryFn: () => {
       if (!identity) throw new Error('No active Atlas session');
       return viewerFn({ data: { expectedAtlasUserId: identity } });
     },
-    enabled: !!identity && moderation.data?.moderation != null,
-    staleTime: 30_000, retry: false, refetchOnWindowFocus: true,
+    enabled: !!identity, staleTime: 30_000, retry: false,
+    refetchOnWindowFocus: 'always', refetchInterval: 2 * 60_000,
   });
 
-  // Never display with a snapshot that is currently being rechecked.
-  const policy = moderation.isFetching ? null : moderation.data?.moderation;
+  // Never trust an old snapshot during a moderation refresh. An API error,
+  // stale session or failed block/mute read can't be treated as no blocks.
+  const policy = viewer.isFetching ? null : viewer.data?.moderation;
   const candidates = useMemo(() => {
     if (!identity || !policy) return [];
     const base = shared.data?.items ?? [];
     const all = combineSpotlight(
       base.filter(item => item.reason === 'trending'),
-      viewer.data ?? [],
+      viewer.data?.items ?? [],
       base.filter(item => item.reason !== 'trending'),
     );
     return all.filter(item => allowedSpotlightItem(item, policy));
@@ -62,7 +54,7 @@ export function useCuratedSpotlight(): {
   const items = useMemo(() => candidates.filter(item => cleared.has(item.id)), [candidates, cleared]);
   return {
     items,
-    loading: !!identity && (shared.isLoading || moderation.isFetching || viewer.isLoading),
-    unavailable: !identity || moderation.isError || (!!moderation.data && !moderation.data.moderation),
+    loading: !!identity && (shared.isLoading || viewer.isFetching),
+    unavailable: !identity || viewer.isError || (!!viewer.data && !viewer.data.moderation),
   };
 }
