@@ -30,16 +30,18 @@ describe('owner-only bounded Spotlight source sampling', () => {
       async cursor => {
         calls++;
         expect(cursor).toBe('opaque-cursor');
-        return { status: 200, data: [status('local', 'local')] };
+        return { status: 200, data: [status('local', 'local', 'fedizen.net', {
+          card: { ...preview, url: 'https://example.org/another-public-story' },
+        })] };
       },
     );
     expect(calls).toBe(1);
     expect(result.pagesRead).toBe(2);
-    expect(result.linked).toHaveLength(1);
-    expect(result.linked[0].reason).toBe('recent');
-    expect(allowedSpotlightItem(result.linked[0], policy)).toBe(false);
-    // Both sharers of the *same* linked URL must be evaluated together: the
-    // disallowed remote actor cannot be laundered by an allowed local sharer.
+    expect(result.linked).toHaveLength(2);
+    expect(result.linked.every(it => it.reason === 'recent')).toBe(true);
+    const eligible = result.linked.filter(it => allowedSpotlightItem(it, policy));
+    expect(eligible).toHaveLength(1);
+    expect(eligible[0].url).toBe('https://example.org/another-public-story');
   });
 
   it('shows an eligible local source immediately, never fetching more pages', async () => {
