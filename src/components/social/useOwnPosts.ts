@@ -194,8 +194,10 @@ export function useMutes(enabled = true) {
     mutationFn: (v: { accountId?: string; acct?: string; on: boolean }) => write({ data: { expectedAtlasUserId: user!.id, ...v } }),
     onSuccess: r => { if (r.ok) {
       setError(null);
-      if (user) qc.setQueryData(['spotlight-moderation', user.id], { moderation: null });
-      void qc.invalidateQueries({ queryKey: ['spotlight-moderation'] });
+      if (user) {
+        void qc.cancelQueries({ queryKey: ['spotlight-viewer', user.id] });
+        qc.setQueryData(['spotlight-viewer', user.id], { items: [], moderation: null });
+      }
       void qc.invalidateQueries({ queryKey: ['spotlight-viewer'] });
       void qc.invalidateQueries({ queryKey: ['fedizen-mutes'] });
       refreshFeeds(qc);
