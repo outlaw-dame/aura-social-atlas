@@ -61,7 +61,10 @@ export class FilterEngine {
     this.judge = c.judge;
     this.similar = c.filters.some(f => f.semantic) ? c.similar : undefined;
     this.following = c.following;
-    if (version === this.version) return;
+    // A React Query refresh can return an equivalent *new* filter array.
+    // Preserve the current reference without clearing semantic verdict caches;
+    // otherwise strict Spotlight identity checks stay false forever.
+    if (version === this.version) { this.filters = c.filters; return; }
     this.version = version;
     this.filters = c.filters;
     this.compiled = compileFilters(c.filters);
