@@ -23,11 +23,11 @@ export function isPublicSpotlightStatus(value: unknown): boolean {
     !status.reblog && !status.quote && !status.in_reply_to_id;
 }
 
-/** A provider's "local" timeline may include a remote original or mirrored
- * activity. Verify each individual contributor BEFORE link aggregation, so a
- * blocked remote account cannot contaminate a safe local story sharing its URL.
- * This is also used before podcast author resolution, not just link previews. */
-export function eligibleLocalPublicPosts(values: unknown[], moderation: SpotlightModeration): unknown[] {
+/** Both "local" and federated timeline pages can mix actor origins.
+ * Verify each original contributor against the same complete owner policy
+ * BEFORE combining links or extracting podcast candidates. A blocked source
+ * must neither contaminate a safe card nor contribute to its text or score. */
+export function eligiblePublicSpotlightPosts(values: unknown[], moderation: SpotlightModeration): unknown[] {
   return values.slice(0, 20).filter(value => {
     if (!isPublicSpotlightStatus(value)) return false;
     const status = value as Record<string, unknown>;
@@ -52,7 +52,7 @@ export async function collectPublicSpotlightCandidates(
   hasEligibleAlternative = false,
 ): Promise<PublicSpotlightCandidates> {
   if (first.status !== 200 || !Array.isArray(first.data)) return { posts: [], linked: [], videos: [], pagesRead: 0 };
-  const posts = first.data.slice(0, 20).filter(isPublicSpotlightStatus);
+  const posts = eligiblePublicSpotlightPosts(first.data, moderation);
   let linked = fromFederatedLinkCards(posts);
   let videos = fromFederatedVideos(posts);
   let pagesRead = 1;
@@ -63,7 +63,7 @@ export async function collectPublicSpotlightCandidates(
     let next: PublicSpotlightPage | null = null;
     try { next = await readNext(first.next); } catch { /* keep the first public page */ }
     if (next?.status === 200 && Array.isArray(next.data)) {
-      posts.push(...next.data.slice(0, 20).filter(isPublicSpotlightStatus));
+      posts.push(...eligiblePublicSpotlightPosts(next.data, moderation));
       linked = fromFederatedLinkCards(posts);
       videos = fromFederatedVideos(posts);
       pagesRead++;
