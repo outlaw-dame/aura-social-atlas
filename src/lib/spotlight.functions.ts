@@ -72,17 +72,17 @@ export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): 
 export const getViewerSpotlight = createServerFn({ method: 'POST' })
   .middleware([requireSupabaseAuth])
   .inputValidator(data => z.object({ expectedAtlasUserId: z.string().uuid() }).strict().parse(data))
-  .handler(async ({ data, context }): Promise<SpotlightItem[]> => {
+  .handler(async ({ data, context }): Promise<{ items: SpotlightItem[]; moderation: SpotlightModeration | null }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const { tokenFor, fedizenGet } = await import('./fedizen.server');
     const connected = await tokenFor(context.userId);
-    if (!connected) return [];
+    if (!connected) return { items: [], moderation: null };
     const { readSpotlightModeration } = await import('./spotlight-moderation.server');
     const [moderation, response] = await Promise.all([
       readSpotlightModeration(path => fedizenGet(connected.access_token, path)),
       fedizenGet(connected.access_token, '/api/v1/timelines/public?limit=20'),
     ]);
-    if (!moderation || response.status !== 200) return [];
+    if (!moderation || response.status !== 200) return { items: [], moderation };
     const publicPosts = response.data.filter(item => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
       const status = item as Record<string, unknown>;
@@ -108,7 +108,7 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
       if (typeof author?.acct !== 'string' || !author.acct) return [];
       return [{ url: card.url, source: { id: typeof author.id === 'string' ? author.id : undefined, handle: author.acct }, text: status.content.slice(0, 1400) }];
     }).slice(0, 4);
-    if (!candidates.length) return combineSpotlight(linked, videos).filter(it => allowedSpotlightItem(it, moderation));
+    if (!candidates.length) return { items: combineSpotlight(linked, videos).filter(it => allowedSpotlightItem(it, moderation)), moderation };
     const { resolveAuthorsFor, mediaFor } = await import('./article-author.server');
     await resolveAuthorsFor(candidates.map(c => c.url), 2500).catch(() => new Map());
     const podcasts: SpotlightItem[] = [];
@@ -125,20 +125,6 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
         sourceAccounts: [candidate.source], sourceComplete: true, filterText: candidate.text,
       });
     }
-    return combineSpotlight(linked, podcasts, videos).filter(it => allowedSpotlightItem(it, moderation));
+    return { items: combineSpotlight(linked, podcasts, videos).filter(it => allowedSpotlightItem(it, moderation)), moderation };
   });
 
-/** Personal moderation snapshot for BOTH desktop and phone Spotlight. A
- * transport error or partial block list is reported as unavailable, never [].
- */
-export const getSpotlightModeration = createServerFn({ method: 'POST' })
-  .middleware([requireSupabaseAuth])
-  .inputValidator(data => z.object({ expectedAtlasUserId: z.string().uuid() }).strict().parse(data))
-  .handler(async ({ data, context }): Promise<{ moderation: SpotlightModeration | null }> => {
-    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
-    const { tokenFor, fedizenGet } = await import('./fedizen.server');
-    const connection = await tokenFor(context.userId);
-    if (!connection) return { moderation: null };
-    const { readSpotlightModeration } = await import('./spotlight-moderation.server');
-    return { moderation: await readSpotlightModeration(path => fedizenGet(connection.access_token, path)) };
-  });
