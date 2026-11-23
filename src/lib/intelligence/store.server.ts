@@ -11,6 +11,10 @@ export function problem(e: unknown): AiProblem {
   if (e instanceof ProviderError) return e.code;
   if (e instanceof VaultError) return e.code === 'unreadable' ? 'bad-key' : e.code;
   if (e instanceof Error && e.message === 'bad-output') return 'bad-output';
+  // Not a provider's answer (those are logged in llm.ts): say what kind of error it was, so it can be traced.
+  // Only the error's class and a short code, never its message or the user.
+  const code = (e as { code?: unknown } | null)?.code;
+  console.warn(JSON.stringify({ event: 'ai.unexpected_error', name: e instanceof Error ? e.name.slice(0, 60) : typeof e, code: typeof code === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(code) ? code : undefined, storage: !!(e as { storage?: unknown } | null)?.storage }));
   return 'unavailable';
 }
 
