@@ -6,7 +6,7 @@ import { allowedSpotlightItem, type SpotlightModeration } from './spotlight-cura
 import {
   bonfireAuthor, combineSpotlight, fromFederatedLinkCards, fromFederatedVideos, fromMastodonLinks, type SpotlightItem,
 } from './spotlight';
-import { collectPublicSpotlightCandidates, eligibleLocalPublicPosts } from './spotlight-personal.server';
+import { collectPublicSpotlightCandidates, eligiblePublicSpotlightPosts } from './spotlight-personal.server';
 
 /** Bonfire's public, verified RECENT Article projection. It does not await
  * trends, which can be slow or empty. No individual OAuth grant is used. */
@@ -91,7 +91,7 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
     ]);
     if (!moderation || (response.status !== 200 && local.status !== 200)) return { items: [], moderation };
     const localPosts = local.status === 200 && Array.isArray(local.data)
-      ? eligibleLocalPublicPosts(local.data, moderation) : [];
+      ? eligiblePublicSpotlightPosts(local.data, moderation) : [];
     const localLinked = fromFederatedLinkCards(localPosts);
     const localVideos = fromFederatedVideos(localPosts);
     const localEligible = [...localLinked, ...localVideos].some(it => allowedSpotlightItem(it, moderation));
