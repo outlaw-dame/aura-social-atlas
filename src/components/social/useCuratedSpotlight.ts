@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { useAtlasAuth } from './AuthState';
 import { useStrictSpotlightFilters } from './useIntelligence';
-import { getSpotlight, getViewerSpotlight } from '@/lib/spotlight.functions';
+import { getSpotlight, getSpotlightTrends, getViewerSpotlight } from '@/lib/spotlight.functions';
 import type { SpotlightItem } from '@/lib/spotlight';
 import { selectModeratedSpotlight, spotlightFilterPost } from '@/lib/spotlight-curation';
 
@@ -26,6 +26,12 @@ export function useCuratedSpotlight(): {
     enabled: !!identity,
     staleTime: 5 * 60_000,
   });
+  const trends = useQuery({
+    queryKey: ['spotlight-trends'],
+    queryFn: () => getSpotlightTrends(),
+    enabled: !!identity,
+    staleTime: 60_000,
+  });
   const viewer = useQuery({
     queryKey: ['spotlight-viewer', identity],
     queryFn: () => {
@@ -43,9 +49,9 @@ export function useCuratedSpotlight(): {
   const policy = viewer.isError ? null : viewer.data?.moderation;
   const candidates = useMemo(() => {
     if (!identity || !policy) return [];
-    const base = shared.data?.items ?? [];
+    const base = [...(trends.data?.items ?? []), ...(shared.data?.items ?? [])];
     return selectModeratedSpotlight(base, viewer.data?.items ?? [], policy);
-  }, [identity, policy, shared.data, viewer.data]);
+  }, [identity, policy, trends.data, shared.data, viewer.data]);
   const filterable = useMemo(() => candidates.map(spotlightFilterPost), [candidates]);
   const cleared = useStrictSpotlightFilters(filterable);
   const items = useMemo(() => candidates.filter(item => cleared.has(item.id)), [candidates, cleared]);
@@ -54,7 +60,8 @@ export function useCuratedSpotlight(): {
     // A slow public source or a policy refresh must not mask already-cleared
     // owner-bound results. Only the cold start needs a loading placeholder.
     loading: !!identity && !items.length &&
-      ((!viewer.data && viewer.isPending) || (!shared.data && shared.isPending)),
+      ((!viewer.data && viewer.isPending) || (!shared.data && shared.isPending) ||
+        (!trends.data && trends.isPending)),
     unavailable: !identity || viewer.isError || (!!viewer.data && !viewer.data.moderation),
   };
 }
