@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { allowedSpotlightItem, normalizedAccount, selectModeratedSpotlight, spotlightFilterPost, type SpotlightModeration } from '../src/lib/spotlight-curation';
+import { allowedSpotlightItem, normalizedAccount, selectModeratedSpotlight, spotlightFilterPost, verifiedBonfireArticleSource, type SpotlightModeration } from '../src/lib/spotlight-curation';
 import { readSpotlightModeration } from '../src/lib/spotlight-moderation.server';
 import { fromFederatedLinkCards, fromFederatedVideos, type SpotlightItem } from '../src/lib/spotlight';
 import { FilterEngine } from '../src/lib/filter-engine';
@@ -283,5 +283,36 @@ describe('strict discovery diagnostics never weaken moderation', () => {
     engine.configure({ filters: [rule()], ai: false, deep: false });
     expect(engine.discoveryState(flagged)).toBe('filtered');
     expect(engine.discoveryState(safe)).toBe('clear');
+  });
+});
+
+describe('Bonfire Article candidate provenance and owner moderation', () => {
+  it('verifies local and explicitly remote Article actors without treating bare names as remote proof', () => {
+    const source = (handle: string, authorUrl: string) => {
+      const article = { handle, authorUrl };
+      const byline = { acct: handle.includes('@') ? `@${handle.replace(/^@/, '')}` : `@${handle}@fedizen.net`,
+        name: 'Writer', url: authorUrl, verifiedBy: 'fedizen' as const };
+      return verifiedBonfireArticleSource(article, byline);
+    };
+    expect(source('local', 'https://fedizen.net/users/local')).toMatchObject({
+      sourceComplete: true, sourceAccounts: [{ handle: 'local@fedizen.net' }],
+    });
+    const remote = source('writer@remote.example', 'https://remote.example/users/writer');
+    expect(remote.sourceComplete).toBe(true);
+    expect(allowedSpotlightItem(card(remote.sourceAccounts as SpotlightItem['sourceAccounts'], remote), empty)).toBe(false);
+    expect(allowedSpotlightItem(card(remote.sourceAccounts as SpotlightItem['sourceAccounts'], remote), {
+      ...empty, domainCoverage: 'complete', blockedDomains: [],
+    })).toBe(true);
+    expect(source('writer', 'https://remote.example/users/writer').sourceComplete).toBe(false);
+    expect(source('writer@remote.example', 'https://impostor.example/users/writer').sourceComplete).toBe(false);
+    expect(source('writer@remote.example', 'http://remote.example/users/writer').sourceComplete).toBe(false);
+    expect(source('writer@remote.example', 'https://remote.example:444/users/writer').sourceComplete).toBe(false);
+  });
+
+  it('retains an eligible local article deeper than the first six untrusted results', () => {
+    const remote = card([{ handle: 'remote@remote.example' }], { sourceComplete: true });
+    const local = card([{ handle: 'good' }], { id: 'local-later', url: 'https://example.org/unique-later-article' });
+    const records = Array.from({ length: 7 }, (_, n) => ({ ...remote, id: `remote-${n}`, url: `https://example.org/remote-${n}` })).concat(local);
+    expect(selectModeratedSpotlight(records, [], empty).map(x => x.id)).toEqual(['local-later']);
   });
 });
