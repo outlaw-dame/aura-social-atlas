@@ -223,9 +223,9 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
  * Do not collapse distinct query URLs unless they have explicitly-safe tracking parameters.
  */
 export function spotlightUrlKey(value: string): string | null {
+  if (!isPublicHttpsUrl(value)) return null;
   try {
     const url = new URL(value);
-    if (url.protocol !== 'https:' || url.username || url.password) return null;
     url.hash = '';
     for (const key of [...url.searchParams.keys()]) {
       if (/^utm_/i.test(key) || /^(fbclid|gclid|mc_cid|mc_eid)$/i.test(key)) url.searchParams.delete(key);
