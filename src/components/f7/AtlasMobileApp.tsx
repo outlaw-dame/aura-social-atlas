@@ -39,7 +39,7 @@ import { badgeText, useUnreadActivity } from '@/components/social/useNotificatio
 import { MobileFeeds } from './MobileFeeds';
 import { FollowedTagsPage, TagFeedPage } from './TagFeed';
 import { bindStack, popToRoot, postPageUrl, pushPage, showTab, tagPageUrl } from './navigation';
-import { ModerationPage } from './Moderation';
+import { BlockedPeoplePage, ModerationPage, MutedPeoplePage } from './Moderation';
 import { AppearancePage, MobileSettingsList } from './SettingsPages';
 import { MobileSpotlight, MobileVoicesToKnow } from './Discover';
 import { IntelligencePage, KeywordFilterPage, KeywordFiltersPage } from './Intelligence';
@@ -500,5 +500,7 @@ const STACK_ROUTES = [
   { path: '/keyword-filters/:id/', component: KeywordFilterPage },
   { path: '/appearance/', component: AppearancePage },
   { path: '/moderation/', component: ModerationPage },
+  { path: '/blocked-people/', component: BlockedPeoplePage },
+  { path: '/muted-people/', component: MutedPeoplePage },
   { path: '/creator-tag/:creator/:tag/', component: SampleTagPage },
 ];
