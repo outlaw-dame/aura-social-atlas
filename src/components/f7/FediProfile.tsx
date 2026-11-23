@@ -1,5 +1,3 @@
-import { FEDIZEN_BLOCKED_URL } from '@/lib/fedizen-feed';
-import { serverOf } from '@/components/social/useServerBlock';
 import { useEffect } from 'react';
 import { openTag } from '@/lib/hashtags';
 import { linkifyPost } from '@/components/social/PostPeople';
@@ -40,7 +38,7 @@ function Follow({ p }: { p: FediProfile }) {
   </>;
 }
 
-/** Phone: More (…) in a profile's navbar: Circles, Mute / Unmute, Report and their server's Block / Unblock, for a confirmed handle that isn't yours. */
+/** Phone: More (…) in a profile's navbar: Circles, Mute / Unmute, Report, and Block their server (unblocking is on Fedizen), for a confirmed handle that isn't yours. */
 function ProfileMore({ p }: { p: FediProfile }) {
   const { user } = useAtlasAuth();
   const me = useIsMe(p.acct);
@@ -55,8 +53,7 @@ function ProfileMore({ p }: { p: FediProfile }) {
     [{ text: 'Cancel', strong: true }],
   ] }).open();
   const circleButton = circles.canWrite && circles.ready && circles.circles.length > 0 ? [{ text: 'Circles…', onClick: chooseCircles }] : [];
-  const blockedServers = serverOf(p.acct) ? [{ text: 'Blocked servers on Fedizen', onClick: () => window.open(FEDIZEN_BLOCKED_URL, '_blank', 'noopener') }] : [];
-  return <Link iconOnly aria-label="More" onClick={() => f7.actions.create({ buttons: [[...circleButton, ...mod.buttons, ...blockedServers], [{ text: 'Cancel', strong: true }]] }).open()}><Icon ios="f7:ellipsis_circle" md="material:more_vert" /></Link>;
+  return <Link iconOnly aria-label="More" onClick={() => f7.actions.create({ buttons: [[...circleButton, ...mod.buttons], [{ text: 'Cancel', strong: true }]] }).open()}><Icon ios="f7:ellipsis_circle" md="material:more_vert" /></Link>;
 }
 
 export function FediProfilePopup({ target, onClose }: { target: FediProfileTarget | null; onClose: () => void }) {

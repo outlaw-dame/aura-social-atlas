@@ -178,12 +178,12 @@ export const ACCOUNT_SERVER_DOCUMENT = `query AtlasAccountServer($username: Stri
 }`;
 
 /**
- * Blocking a whole server for yourself. Bonfire has no API for it (no /api/v1/domain_blocks, no GraphQL field for
- * instances), but `blockUser`/`unblockUser` hand their id to Bonfire.Boundaries.Blocks.block/unblock, which take "users
+ * Blocking a whole server for yourself (unblocking can't be done this way: Blocks.unblock/3 doesn't resolve a server
+ * id, so it removes nothing; verified live 23 Nov 2026). Bonfire has no API for it (no /api/v1/domain_blocks, no GraphQL field for
+ * instances), but `blockUser` hands its id to Bonfire.Boundaries.Blocks.block/3, which takes "users
  * or instances" and block a Peer through its instance circle (bonfire_boundaries blocks.ex). After a block the
  * resolver checks the result as a person's block, so even a block that worked comes back "Could not block user"
  * (verified live on Fedizen, 23 Nov 2026: the server appeared on its Blocked page). Until Bonfire adds Mastodon's domain_blocks (docs/upstream/bonfire-domain-blocks.md), this
  * is the only way for an app.
  */
 export const BLOCK_SERVER_DOCUMENT = `mutation AtlasBlockServer($id: ID!) { blockUser(id: $id) { id } }`;
-export const UNBLOCK_SERVER_DOCUMENT = `mutation AtlasUnblockServer($id: ID!) { unblockUser(id: $id) { id } }`;

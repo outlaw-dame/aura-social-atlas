@@ -1,7 +1,7 @@
 /** Blocking a whole server for one person through Bonfire's GraphQL (see BLOCK_SERVER_DOCUMENT for why it's indirect). */
 import { z } from 'zod';
 import { requestBonfireGraphQL } from './bonfire-graphql.server';
-import { ACCOUNT_SERVER_DOCUMENT, BLOCK_SERVER_DOCUMENT, UNBLOCK_SERVER_DOCUMENT } from './bonfire/graphql/operations';
+import { ACCOUNT_SERVER_DOCUMENT, BLOCK_SERVER_DOCUMENT } from './bonfire/graphql/operations';
 
 export type ServerBlockOutcome = 'done' | 'unconfirmed';
 
@@ -34,16 +34,15 @@ export async function serverIdFor(acct: string): Promise<string | null> {
 }
 
 /**
- * Blocks or unblocks that server. Never retried (a mutation). Bonfire's answer says nothing either way: its check after
- * the change only recognises people, so a server block that worked comes back "Could not block user" (seen live on
- * Fedizen, 23 Nov 2026: the server was on the Blocked page all the same), and an unblock comes back as an error loading
- * the server as a user. Only a transport failure means it surely didn't happen.
+ * Blocks that server. Never retried (a mutation). Bonfire's answer says nothing: its check afterwards only recognises
+ * people, so a server block that worked comes back "Could not block user" (seen live on Fedizen, 23 Nov 2026: the
+ * server was on the Blocked page all the same). Only a transport failure means it surely didn't happen.
  */
-export async function changeServerBlock(accessToken: string, serverId: string, on: boolean): Promise<ServerBlockOutcome> {
+export async function blockServer(accessToken: string, serverId: string): Promise<ServerBlockOutcome> {
   try {
     return await requestBonfireGraphQL<ServerBlockOutcome>({
-      operation: 'mutation', document: on ? BLOCK_SERVER_DOCUMENT : UNBLOCK_SERVER_DOCUMENT, accessToken, variables: { id: serverId },
-      validate: data => (data && typeof data === 'object' && (data as Record<string, unknown>)[on ? 'blockUser' : 'unblockUser'] ? 'done' : 'unconfirmed'),
+      operation: 'mutation', document: BLOCK_SERVER_DOCUMENT, accessToken, variables: { id: serverId },
+      validate: data => (data && typeof data === 'object' && (data as Record<string, unknown>).blockUser ? 'done' : 'unconfirmed'),
     });
   } catch (e) {
     if ((e as { kind?: string })?.kind === 'graphql') return 'unconfirmed';
