@@ -33,7 +33,7 @@ export function useCuratedSpotlight(): {
       return moderationFn({ data: { expectedAtlasUserId: identity } });
     },
     enabled: !!identity, staleTime: 30_000, retry: false,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: 'always', refetchInterval: 2 * 60_000,
   });
   const viewer = useQuery({
     queryKey: ['spotlight-viewer', identity],
@@ -45,7 +45,8 @@ export function useCuratedSpotlight(): {
     staleTime: 30_000, retry: false, refetchOnWindowFocus: true,
   });
 
-  const policy = moderation.data?.moderation;
+  // Never display with a snapshot that is currently being rechecked.
+  const policy = moderation.isFetching ? null : moderation.data?.moderation;
   const candidates = useMemo(() => {
     if (!identity || !policy) return [];
     const base = shared.data?.items ?? [];
@@ -61,7 +62,7 @@ export function useCuratedSpotlight(): {
   const items = useMemo(() => candidates.filter(item => cleared.has(item.id)), [candidates, cleared]);
   return {
     items,
-    loading: !!identity && (shared.isLoading || moderation.isLoading || viewer.isLoading),
+    loading: !!identity && (shared.isLoading || moderation.isFetching || viewer.isLoading),
     unavailable: !identity || moderation.isError || (!!moderation.data && !moderation.data.moderation),
   };
 }
