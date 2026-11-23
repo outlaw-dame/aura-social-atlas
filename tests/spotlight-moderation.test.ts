@@ -18,7 +18,7 @@ const card = (sourceAccounts: SpotlightItem['sourceAccounts'], extras: Partial<S
 describe('personal Spotlight identity and moderation gate', () => {
   it('never equates unknown contributors with a safe account', () => {
     expect(allowedSpotlightItem(card(undefined), empty)).toBe(false);
-    expect(allowedSpotlightItem(card([{ handle: 'a' }]), empty)).toBe(false);
+    expect(allowedSpotlightItem(card([{ handle: 'not-an-account@@@' }]), empty)).toBe(false);
   });
 
   it('suppresses a blocked or muted source even when a different sharer is allowed', () => {
