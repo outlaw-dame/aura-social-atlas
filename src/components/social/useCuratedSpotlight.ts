@@ -15,6 +15,8 @@ export function useCuratedSpotlight(): {
   items: SpotlightItem[];
   loading: boolean;
   unavailable: boolean;
+  checking: boolean;
+  screeningUnavailable: boolean;
 } {
   const { user } = useAtlasAuth();
   const viewerFn = useServerFn(getViewerSpotlight);
@@ -53,8 +55,8 @@ export function useCuratedSpotlight(): {
     return selectModeratedSpotlight(base, viewer.data?.items ?? [], policy);
   }, [identity, policy, trends.data, shared.data, viewer.data]);
   const filterable = useMemo(() => candidates.map(spotlightFilterPost), [candidates]);
-  const cleared = useStrictSpotlightFilters(filterable);
-  const items = useMemo(() => candidates.filter(item => cleared.has(item.id)), [candidates, cleared]);
+  const screening = useStrictSpotlightFilters(filterable);
+  const items = useMemo(() => candidates.filter(item => screening.cleared.has(item.id)), [candidates, screening]);
   return {
     items,
     // A slow public source or a policy refresh must not mask already-cleared
@@ -63,5 +65,7 @@ export function useCuratedSpotlight(): {
       ((!viewer.data && viewer.isPending) || (!shared.data && shared.isPending) ||
         (!trends.data && trends.isPending)),
     unavailable: !identity || viewer.isError || (!!viewer.data && !viewer.data.moderation),
+    checking: screening.checking && !items.length,
+    screeningUnavailable: screening.unavailable && !items.length,
   };
 }

@@ -474,7 +474,9 @@ export function useShownPosts<T extends FilterablePost & { handle?: string }>(po
  * reader. Until the user's filter list is loaded and the existing engine
  * finishes relevant semantic checks, zero items may be displayed.
  */
-export function useStrictSpotlightFilters(posts: FilterablePost[]): ReadonlySet<string> {
+export function useStrictSpotlightFilters(posts: FilterablePost[]): {
+  cleared: ReadonlySet<string>; checking: boolean; unavailable: boolean;
+} {
   const env = useContext(EngineContext);
   const q = useContentFilters(true);
   const revision = useSyncExternalStore(env?.engine.subscribe ?? noop, env?.engine.getRevision ?? zero, zero);
@@ -488,9 +490,18 @@ export function useStrictSpotlightFilters(posts: FilterablePost[]): ReadonlySet<
     if (!ready) return;
     for (const p of posts) env?.engine.request(p, 'public');
   }, [env, posts, ready]);
-  return useMemo(() => new Set(ready
-    ? posts.filter(post => env!.engine.discoveryClear(post, 'public')).map(post => post.id)
-    : []), [ready, posts, env, revision]); // eslint-disable-line react-hooks/exhaustive-deps
+  return useMemo(() => {
+    const cleared = new Set<string>();
+    let checking = !ready && !q.isError && posts.length > 0;
+    let unavailable = q.isError && posts.length > 0;
+    if (ready) for (const post of posts) {
+      const state = env!.engine.discoveryState(post, 'public');
+      if (state === 'clear') cleared.add(post.id);
+      else if (state === 'pending') checking = true;
+      else if (state === 'unavailable') unavailable = true;
+    }
+    return { cleared, checking, unavailable };
+  }, [ready, q.isError, posts, env, revision]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 export function useShownCount(posts: (FilterablePost & { handle?: string })[]): number {

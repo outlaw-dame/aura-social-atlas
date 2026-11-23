@@ -246,3 +246,42 @@ describe('semantic discovery reconfiguration while a previous batch is in flight
     expect(engine.discoveryClear(newPost, 'public')).toBe(true);
   });
 });
+
+describe('strict discovery diagnostics never weaken moderation', () => {
+  it('distinguishes no configured semantic model from a pending check', () => {
+    const engine = new FilterEngine();
+    const post = spotlightFilterPost(card([{ handle: 'good' }], { title: 'Topic not yet checked' }));
+    engine.configure({ filters: [rule({ semantic: true, kind: 'topic', text: 'danger' })], ai: false, deep: false });
+    expect(engine.discoveryState(post)).toBe('unavailable');
+    expect(engine.discoveryClear(post)).toBe(false);
+  });
+
+  it('reports semantic provider failure, not endless checking or allowed content', async () => {
+    const engine = new FilterEngine();
+    const post = spotlightFilterPost(card([{ handle: 'good' }], { title: 'Semantically unclassified story' }));
+    let complete!: () => void;
+    const called = new Promise<void>(resolve => { complete = resolve; });
+    engine.configure({ filters: [rule({ semantic: true })], ai: false, deep: false, similar: async () => {
+      complete();
+      return null; // rate limit, provider outage, or malformed response
+    } });
+    engine.request(post, 'public');
+    expect(engine.discoveryState(post)).toBe('pending');
+    await Promise.race([
+      called,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('No semantic request')), 2500)),
+    ]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(engine.discoveryState(post)).toBe('unavailable');
+    expect(engine.discoveryClear(post)).toBe(false);
+  });
+
+  it('still distinguishes filtered lexical stories from pending relationship exceptions', () => {
+    const engine = new FilterEngine();
+    const flagged = spotlightFilterPost(card([{ handle: 'good' }], { title: 'Contains spoiler material' }));
+    const safe = spotlightFilterPost(card([{ handle: 'good' }], { title: 'Ordinary public news' }));
+    engine.configure({ filters: [rule()], ai: false, deep: false });
+    expect(engine.discoveryState(flagged)).toBe('filtered');
+    expect(engine.discoveryState(safe)).toBe('clear');
+  });
+});

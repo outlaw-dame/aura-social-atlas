@@ -25,6 +25,8 @@ export type FollowLookup = { get(accountId: string): boolean | undefined; reques
 /** For each post, the filters (checked in context) it's close to in meaning, and whether each is a close match. */
 export type Similar = (posts: { n: number; id: string; text: string }[], filters: ContentFilter[]) => Promise<{ n: number; matches: { id: string; strong: boolean }[] }[] | null>;
 export type EngineConfig = { filters: ContentFilter[]; ai: boolean; deep: boolean; judge?: Judge; similar?: Similar; following?: FollowLookup; scope?: string };
+/** Strict public discovery: unknown is not authorization to show a card. */
+export type DiscoveryState = 'clear' | 'filtered' | 'pending' | 'unavailable';
 
 type Pending = { key: string; post: FilterablePost; candidates: string[] };
 
@@ -41,6 +43,7 @@ export class FilterEngine {
   private similar?: Similar;
   /** Semantic-index verdicts: filter ids each post is close to, and the close ones. */
   private near = new Map<string, { all: string[]; strong: string[] }>();
+  private nearFailed = new Set<string>();
   private nearQueue = new Map<string, FilterablePost>();
   private nearBusy = false;
   private following?: FollowLookup;
@@ -82,6 +85,7 @@ export class FilterEngine {
     this.queue.clear();
     this.failed.clear();
     this.near.clear();
+    this.nearFailed.clear();
     this.nearQueue.clear();
     this.results = this.restore();
     this.emit();
@@ -118,24 +122,33 @@ export class FilterEngine {
   hasCurrentFilters(filters: ContentFilter[]): boolean { return this.filters === filters; }
 
   discoveryClear(p: FilterablePost, place: FilterPlace = 'public'): boolean {
+    return this.discoveryState(p, place) === 'clear';
+  }
+
+  /** Which strict discovery gate is withholding a card. This has no side
+   * effects: request() starts checks, and listeners wake the UI on completion.
+   * Unavailable does NOT bypass moderation, even if a lexical check is clear. */
+  discoveryState(p: FilterablePost, place: FilterPlace = 'public'): DiscoveryState {
     const applicable = this.filters.filter(f => applies(f, place));
     const semantic = applicable.filter(f => f.semantic);
     if (semantic.length) {
       const key = this.key(p);
-      // No semantic provider? Do not silently degrade a promised semantic hide
-      // into a plain keyword-only check for public recommendations.
-      // A contextual AI model with deep matching explicitly enabled can act
-      // without the local semantic index. Otherwise absence of a similarity
-      // engine is not evidence that an unseen topic is safe.
-      if (!this.similar && (!this.ai || !this.deep)) return false;
-      if (this.similar && !this.near.has(key)) return false;
+      // Discovery has no safe option to reveal potentially blocked material
+      // when the configured meaning-based filters cannot run.
+      if (!this.similar && (!this.ai || !this.deep)) return 'unavailable';
+      if (this.similar && !this.near.has(key)) {
+        return this.nearFailed.has(key) ? 'unavailable' : 'pending';
+      }
       const hits = lexicalHits(this.compiled, p);
       const nearMatches = this.near.get(key)?.all ?? [];
       const needsJudgment = this.ai && (this.deep || hits.some(h =>
         semantic.some(f => f.id === h.filterId)) || nearMatches.some(id => semantic.some(f => f.id === id)));
-      if (needsJudgment && !this.results.has(key)) return false;
+      if (needsJudgment && !this.results.has(key)) {
+        return this.failed.has(key) ? 'unavailable' : 'pending';
+      }
     }
-    return this.evaluate(p, place).state === 'clear';
+    const verdict = this.evaluate(p, place);
+    return verdict.state === 'clear' ? 'clear' : verdict.state === 'pending' ? 'pending' : 'filtered';
   }
 
   /** What the feed does with this post right now. Pure: call `request` (in an effect) to have the AI check it. */
@@ -188,7 +201,7 @@ export class FilterEngine {
   /** Queues a post for the semantic index; with an AI model, posts it finds close go to the AI like word matches. */
   private requestNear(p: FilterablePost) {
     const key = this.key(p);
-    if (this.near.has(key) || this.nearQueue.has(key)) return;
+    if (this.near.has(key) || this.nearFailed.has(key) || this.nearQueue.has(key)) return;
     this.nearQueue.set(key, p);
     if (!this.nearBusy) void this.flushNear();
   }
@@ -211,7 +224,13 @@ export class FilterEngine {
         let changed = false;
         batch.forEach(([key, p], n) => {
           const m = byN.get(n);
-          if (!m) return; // the engine failed: words (and the AI, if any) still apply
+          if (!m) {
+            // An embedding outage must not look like an infinitely pending
+            // request. Keep public discovery withheld, but surface failure.
+            this.nearFailed.add(key);
+            changed = true;
+            return;
+          }
           this.near.set(key, { all: m.map(x => x.id), strong: m.filter(x => x.strong).map(x => x.id) });
           // A completed negative match must wake strict-discovery viewers too.
           changed = true;
