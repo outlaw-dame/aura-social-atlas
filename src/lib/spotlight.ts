@@ -1,10 +1,16 @@
-/** Browser-safe Spotlight types and normalizers (Mastodon trending links + Bonfire articles). */
+/** Browser-safe Spotlight types/normalizers: provider-relative links, real ActivityPub articles and media. */
 import { htmlToRich, type RichBlock } from './rich-text';
 import type { FediAuthor } from './article-author';
 
 export type SpotlightItem = {
   id: string; source: 'Mastodon' | 'Bonfire'; title: string; description: string; url: string;
   image?: string; provider: string; author?: string; shares?: number; published?: string;
+  /** A verified media/content classification, never inferred from a popularity count. */
+  kind?: 'link' | 'article' | 'podcast' | 'video';
+  /** How this item was selected. In particular, 'recent' must not be presented as trending. */
+  reason?: 'trending' | 'recent';
+  /** The instance from which Atlas learned about the item, NOT the publisher's domain. */
+  observedBy?: string;
   /** First verified fediverse author (kept for existing callers). */
   authorAccount?: FediAuthor;
   /** Every verified fediverse author, up to three — Mastodon only ever shows one. */
@@ -13,19 +19,19 @@ export type SpotlightItem = {
 };
 
 type MastodonAuthor = { name?: string; url?: string; account?: { display_name?: string; username?: string; acct?: string; url?: string; avatar?: string } | null };
-type MastodonLink = { url: string; title: string; description?: string; image?: string | null; provider_name?: string; author_name?: string; author_url?: string; authors?: MastodonAuthor[]; history?: { uses: string }[] };
+type MastodonLink = { url: string; title: string; description?: string; image?: string | null; type?: string; provider_name?: string; author_name?: string; author_url?: string; authors?: MastodonAuthor[]; history?: { uses: string }[] };
 
 const httpOnly = (u?: string) => (u && /^https?:\/\//i.test(u) ? u : undefined);
 
 /** Authors with a linked fediverse account, as Mastodon's "More from" byline credits them (Mastodon
  *  has already verified these against the account's attribution domains). Mastodon shows only the first. */
-export function linkAuthor(l: Pick<MastodonLink, 'authors' | 'author_name' | 'author_url'>) {
+export function linkAuthor(l: Pick<MastodonLink, 'authors' | 'author_name' | 'author_url'>, instanceHost = 'mastodon.social') {
   const accounts: FediAuthor[] = (l.authors ?? [])
     .filter(x => x.account?.acct && httpOnly(x.account.url))
     .slice(0, 3)
     .map(x => {
       const acc = x.account!;
-      const acct = acc.acct!.includes('@') ? acc.acct! : `${acc.acct}@mastodon.social`;
+      const acct = acc.acct!.includes('@') ? acc.acct! : `${acc.acct}@${instanceHost}`;
       return { name: acc.display_name || acc.username || acct, acct: `@${acct.replace(/^@/, '')}`, url: acc.url!, avatar: httpOnly(acc.avatar), verifiedBy: 'mastodon' as const };
     });
   const first = l.authors?.find(x => x.account?.acct && httpOnly(x.account.url));
@@ -47,12 +53,34 @@ type MastodonStatus = { id: string; url?: string | null; uri: string; content?: 
 
 const strip = (html = '') => html.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim();
 
-export function fromMastodonLinks(links: MastodonLink[]): SpotlightItem[] {
-  return links.filter(l => l.url && l.title).map(l => ({
-    id: `m:${l.url}`, source: 'Mastodon', title: l.title, description: l.description ?? '', url: l.url,
-    image: l.image ?? undefined, provider: l.provider_name || new URL(l.url).hostname, ...linkAuthor(l),
-    shares: (l.history ?? []).reduce((n, h) => n + Number(h.uses || 0), 0),
-  }));
+/** Normalize a Mastodon-compatible trends response from its ACTUAL serving instance.
+ * Bonfire's synthetic history.accounts equals reference count, not distinct people.
+ * Treat 'uses' only as source-reported references, never as a unique-person count.
+ */
+export function fromMastodonLinks(
+  links: MastodonLink[],
+  options: { source?: 'Mastodon' | 'Bonfire'; observedBy?: string } = {},
+): SpotlightItem[] {
+  const source = options.source ?? 'Mastodon';
+  const host = options.observedBy ?? (source === 'Bonfire' ? 'fedizen.net' : 'mastodon.social');
+  return links.flatMap(l => {
+    if (typeof l.url !== 'string' || !/^https:\/\//i.test(l.url) ||
+        typeof l.title !== 'string' || !l.title.trim() || l.title.length > 500) return [];
+    let hostname: string;
+    try { hostname = new URL(l.url).hostname; } catch { return []; }
+    const history = Array.isArray(l.history) ? l.history.slice(0, 14) : [];
+    const references = history.reduce((n, h) => {
+      const uses = Number(h?.uses);
+      return Number.isSafeInteger(uses) && uses >= 0 && uses < 1e8 ? n + uses : n;
+    }, 0);
+    return [{
+      id: `l:${l.url}`, source, title: l.title.trim(), description: typeof l.description === 'string' ? l.description.slice(0, 1000) : '',
+      url: l.url, image: httpOnly(l.image ?? undefined),
+      provider: (typeof l.provider_name === 'string' && l.provider_name.trim()) || hostname,
+      ...linkAuthor(l, host), shares: references || undefined, kind: l.type === 'video' ? 'video' as const : 'link' as const,
+      reason: 'trending' as const, observedBy: host,
+    }];
+  });
 }
 
 /** Bonfire articles arrive as statuses; keep those with a title-bearing card or substantial text. */
@@ -67,6 +95,68 @@ export function fromBonfireStatuses(statuses: MastodonStatus[]): SpotlightItem[]
       author: s.account?.display_name || s.account?.acct, published: s.created_at,
     }];
   });
+}
+
+/** Video candidates seen on the signed-in instance's PUBLIC federated timeline.
+ * Media type is explicit, not inferred from link text. PodcastEpisode identity is
+ * handled separately by the ActivityPub resolver; generic audio is not a podcast.
+ */
+export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.net'): SpotlightItem[] {
+  return statuses.slice(0, 40).flatMap(value => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+    const s = value as Record<string, unknown>;
+    if (s.visibility !== 'public' || typeof s.id !== 'string' || typeof s.url !== 'string' ||
+        !httpOnly(s.url) || s.reblog) return [];
+    const media = Array.isArray(s.media_attachments) ? s.media_attachments : [];
+    const video = media.find(m => m && typeof m === 'object' &&
+      (m as Record<string, unknown>).type === 'video' &&
+      httpOnly((m as Record<string, unknown>).url as string));
+    if (!video || !media.length) return [];
+    const v = video as Record<string, unknown>;
+    const text = strip(typeof s.content === 'string' ? s.content : '');
+    const title = text.slice(0, 130) || 'Video on the fediverse';
+    if (!title || title.length > 200) return [];
+    const account = s.account && typeof s.account === 'object' ? s.account as Record<string, unknown> : null;
+    return [{ id: `v:${s.id}`, source: 'Bonfire' as const,
+      url: s.url, title, description: text.slice(0, 400),
+      image: httpOnly(v.preview_url as string) || undefined,
+      provider: observedBy, author: typeof account?.display_name === 'string' ? account.display_name : undefined,
+      published: typeof s.created_at === 'string' ? s.created_at : undefined,
+      kind: 'video' as const, reason: 'recent' as const, observedBy }];
+  });
+}
+
+/** A story can arrive as a trending link and a native article; display one
+ * entity rather than adding overlapping cross-instance share counters.
+ * Do not collapse distinct query URLs unless they have explicitly-safe tracking parameters.
+ */
+export function spotlightUrlKey(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password) return null;
+    url.hash = '';
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^utm_/i.test(key) || /^(fbclid|gclid|mc_cid|mc_eid)$/i.test(key)) url.searchParams.delete(key);
+    }
+    return url.toString();
+  } catch { return null; }
+}
+
+export function combineSpotlight(...sources: SpotlightItem[][]): SpotlightItem[] {
+  const result: SpotlightItem[] = [];
+  const seen = new Set<string>();
+  const max = Math.max(0, ...sources.map(source => source.length));
+  for (let i = 0; i < max; i++) {
+    for (const group of sources) {
+      const item = group[i];
+      if (!item) continue;
+      const key = spotlightUrlKey(item.url);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      result.push(item);
+    }
+  }
+  return result;
 }
 
 /** Interleave sources so Spotlight reads as a mix rather than two blocks. */
