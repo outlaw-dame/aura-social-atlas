@@ -42,12 +42,15 @@ export function useCuratedSpotlight(): {
   const candidates = useMemo(() => {
     if (!identity || !policy) return [];
     const base = shared.data?.items ?? [];
-    const all = combineSpotlight(
-      base.filter(item => item.reason === 'trending'),
-      viewer.data?.items ?? [],
-      base.filter(item => item.reason !== 'trending'),
+    // Authorize each source independently BEFORE URL deduplication. A public
+    // trend with no verifiable contributor must not shadow a safe, owner-bound
+    // article for the same URL (or promote a blocked contributor's preview).
+    const eligible = (items: SpotlightItem[]) => items.filter(item => allowedSpotlightItem(item, policy));
+    return combineSpotlight(
+      eligible(base.filter(item => item.reason === 'trending')),
+      eligible(viewer.data?.items ?? []),
+      eligible(base.filter(item => item.reason !== 'trending')),
     );
-    return all.filter(item => allowedSpotlightItem(item, policy));
   }, [identity, policy, shared.data, viewer.data]);
   const filterable = useMemo(() => candidates.map(spotlightFilterPost), [candidates]);
   const cleared = useStrictSpotlightFilters(filterable);
