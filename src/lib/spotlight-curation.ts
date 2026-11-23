@@ -90,14 +90,18 @@ export function verifiedBonfireArticleSource(
   article: Pick<BonfireArticle, 'handle' | 'authorUrl'>,
   author: SpotlightItem['authorAccount'],
 ): Pick<SpotlightItem, 'sourceAccounts' | 'sourceComplete'> {
-  const missing = { sourceAccounts: [], sourceComplete: false } as const;
+  const missing: Pick<SpotlightItem, 'sourceAccounts' | 'sourceComplete'> = {
+    sourceAccounts: [], sourceComplete: false,
+  };
   const acct = author?.acct && normalizedAccount(author.acct);
-  if (!acct || !article.authorUrl) return missing;
+  if (!acct || !article.authorUrl || author?.url !== article.authorUrl) return missing;
   const host = accountHost(acct);
   const raw = article.handle?.replace(/^@/, '') ?? '';
   // Bare usernames are local only if the independently verified actor host
   // really is Fedizen. Remote actors need an explicit host in their handle.
-  if (host !== 'fedizen.net' && !/^[^@]+@[^@]+$/.test(raw)) return missing;
+  // Also cross-check the original handle against the displayed byline: a
+  // canonical actor URL cannot repair conflicting identity claims.
+  if (normalizedAccount(raw) !== acct || (host !== 'fedizen.net' && !raw.includes('@'))) return missing;
   try {
     const actor = new URL(article.authorUrl);
     if (actor.protocol !== 'https:' || actor.username || actor.password || actor.port ||
