@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { allowedSpotlightItem, normalizedAccount, selectModeratedSpotlight, spotlightFilterPost, verifiedBonfireArticleSource, type SpotlightModeration } from '../src/lib/spotlight-curation';
+import { allowedSpotlightItem, normalizedAccount, selectModeratedSpotlight, spotlightFilterPost, spotlightInitialLoading, verifiedBonfireArticleSource, type SpotlightModeration } from '../src/lib/spotlight-curation';
 import { readSpotlightModeration } from '../src/lib/spotlight-moderation.server';
 import { fromFederatedLinkCards, fromFederatedVideos, type SpotlightItem } from '../src/lib/spotlight';
 import { FilterEngine } from '../src/lib/filter-engine';
@@ -314,5 +314,21 @@ describe('Bonfire Article candidate provenance and owner moderation', () => {
     const local = card([{ handle: 'good' }], { id: 'local-later', url: 'https://example.org/unique-later-article' });
     const records = Array.from({ length: 7 }, (_, n) => ({ ...remote, id: `remote-${n}`, url: `https://example.org/remote-${n}` })).concat(local);
     expect(selectModeratedSpotlight(records, [], empty).map(x => x.id)).toEqual(['local-later']);
+  });
+});
+
+describe('Spotlight loading honors independent source readiness', () => {
+  const base = { signedIn: true, hasItems: false, moderationUnavailable: false };
+  it('never requires the optional trending request to finish', () => {
+    expect(spotlightInitialLoading({ ...base, viewerPending: false, articlesPending: false })).toBe(false);
+  });
+  it('still waits for a required owner policy or its initial public Article source', () => {
+    expect(spotlightInitialLoading({ ...base, viewerPending: true, articlesPending: false })).toBe(true);
+    expect(spotlightInitialLoading({ ...base, viewerPending: false, articlesPending: true })).toBe(true);
+  });
+  it('shows cleared articles immediately and reports missing moderation, not perpetual loading', () => {
+    expect(spotlightInitialLoading({ ...base, hasItems: true, viewerPending: true, articlesPending: true })).toBe(false);
+    expect(spotlightInitialLoading({ ...base, moderationUnavailable: true, viewerPending: false, articlesPending: true })).toBe(false);
+    expect(spotlightInitialLoading({ ...base, signedIn: false, viewerPending: true, articlesPending: true })).toBe(false);
   });
 });
