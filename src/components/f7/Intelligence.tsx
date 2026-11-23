@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Block, BlockFooter, BlockTitle, Button, Link, List, ListInput, ListItem, Navbar, Page, Toggle, f7 } from 'framework7-react';
 import { PROVIDERS, PROVIDER_IDS, type ProviderId } from '@/lib/intelligence/providers';
 import { BROWSER_CAPABLE } from '@/lib/intelligence/llm';
@@ -159,17 +159,21 @@ export function KeywordFiltersPage() {
   const [text, setText] = useState(''), [options, setOptions] = useState<FilterOptions>(DEFAULT_OPTIONS), [duration, setDuration] = useState(0), [note, setNote] = useState<string | null>(null);
   const [suggested, setSuggested] = useState<{ text: string; reason: string }[] | null>(null), [thinking, setThinking] = useState(false);
   const add = async (texts: string[], how: FilterOptions) => { if (texts.length) setNote(await act.add(texts, how)); };
-  const importList = () => f7.dialog.prompt('Paste your filters from Fedizen’s Safety settings, one per line, or a Mastodon filter export. If they come from Fedizen, remove them there: it matches words without context.', 'Import filters', async v => {
+  const file = useRef<HTMLInputElement>(null);
+  const importText = async (v: string) => {
     const groups = parseImport(v);
     if (!groups.length) { setNote('Nothing to import there.'); return; }
     for (const g of groups) await add(g.texts, g.options);
-  });
+  };
+  const importList = () => f7.dialog.prompt('Paste your filters from Fedizen’s Safety settings, one per line, or a Mastodon filter export. If they come from Fedizen, remove them there: it matches words without context.', 'Import filters', v => void importText(v));
   const togglePlace = (p: FilterPlace) => {
     const next = options.places.includes(p) ? options.places.filter(x => x !== p) : [...options.places, p];
     if (next.length) setOptions(o => ({ ...o, places: FILTER_PLACES.filter(x => next.includes(x)) }));
   };
   return <Page>
     <Navbar title="Keyword filters" backLink backLinkShowText={false} />
+    <input ref={file} type="file" accept="application/json,.json,text/plain,.txt,.csv" hidden
+      onChange={async e => { const f = e.target.files?.[0]; e.target.value = ''; if (f && f.size < 2_000_000) await importText(await f.text()); }} />
     {!user ? <Block strong inset>Sign in to Atlas to keep keyword filters.</Block>
       : q.data && 'error' in q.data ? <Block strong inset>{AI_PROBLEM[q.data.error]}</Block>
       : <>
@@ -208,7 +212,8 @@ export function KeywordFiltersPage() {
             setThinking(true); const r = await act.suggest(); setThinking(false);
             if ('error' in r) setNote(AI_PROBLEM[r.error]); else setSuggested(r.suggestions);
           }} />}
-          <ListItem link="#" title="Import" footer="Fedizen’s list or a Mastodon export" onClick={importList} />
+          <ListItem link="#" title="Paste a list" footer="From Fedizen’s Safety settings, one per line" onClick={importList} />
+          <ListItem link="#" title="Import a file" footer="Mastodon’s filter export, or a text list" onClick={() => file.current?.click()} />
           {filters.length > 0 && <ListItem link="#" title="Export" footer="In Mastodon’s format" onClick={() => downloadExport(filters)} />}
           <ListItem link={FEDIZEN_KEYWORD_FILTERS_URL} external target="_blank" title="Fedizen’s Safety settings" />
           {!ai && <ListItem link="#" title="Check filters in context" footer="With Intelligence" onClick={() => pushPage('/intelligence/')} />}

@@ -24,7 +24,7 @@ import { IdentityAvatar } from './IdentityAvatar';
 import { DesktopHosts } from './DesktopHosts';
 import { intelligenceReady, useIntelligence } from './useIntelligence';
 
-export type DiscoveryView = 'feeds' | 'discover' | 'groups' | 'activity' | 'messages' | 'profile' | 'settings' | 'intelligence' | 'appearance' | 'moderation' | 'hashtags' | 'notifications';
+export type DiscoveryView = 'feeds' | 'discover' | 'groups' | 'activity' | 'messages' | 'profile' | 'settings' | 'intelligence' | 'appearance' | 'moderation' | 'hashtags' | 'notifications' | 'import';
 
 /** The desktop page. Its navigation matches the phone app's dock: Feeds, Discover, Groups, Activity, your
  *  profile (Saved is a tab there; follows open from its Following count), then Settings. */
@@ -51,7 +51,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
 
   const pageView = view === 'groups' || view === 'activity' || view === 'messages' || view === 'profile';
   const pageTitles = { groups: ['Communities on Fedizen and beyond', 'Groups'], activity: ['What’s new for you', 'Activity'], messages: ['Direct conversations', 'Messages'], profile: ['', ''] } as const;
-  const settingsView = view === 'settings' || view === 'intelligence' || view === 'appearance' || view === 'moderation' || view === 'hashtags' || view === 'notifications';
+  const settingsView = view === 'settings' || view === 'intelligence' || view === 'appearance' || view === 'moderation' || view === 'hashtags' || view === 'notifications' || view === 'import';
   return <div><div className="social-app min-h-screen bg-background text-foreground">
     {mobileOpen && <Button variant="ghost" aria-label="Close navigation" onClick={() => setMobileOpen(false)} className="social-backdrop fixed inset-0 z-30 h-auto rounded-none lg:hidden" />}
     <aside className={`social-sidebar liquid-glass specular fixed inset-y-3 left-3 z-40 flex w-60 flex-col rounded-3xl border border-border p-5 transition-transform lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}>
@@ -73,7 +73,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
         <AccountButton />
       </header>
       <main className="mx-auto max-w-[1400px] px-5 pb-28 pt-7 sm:px-9">
-        {settingsView ? <Preferences page={view === 'intelligence' ? 'intelligence' : view === 'appearance' ? 'appearance' : view === 'moderation' ? 'moderation' : view === 'hashtags' ? 'hashtags' : view === 'notifications' ? 'notifications' : 'settings'} /> : view === 'profile' ? <div className="mx-auto max-w-4xl"><ProfilePage initialSection={profileSection} onOpenCollection={collections.open} /></div> : pageView ? <div className={`mx-auto ${view === 'groups' ? 'max-w-4xl' : 'max-w-3xl'}`}>
+        {settingsView ? <Preferences page={view === 'intelligence' ? 'intelligence' : view === 'appearance' ? 'appearance' : view === 'moderation' ? 'moderation' : view === 'hashtags' ? 'hashtags' : view === 'notifications' ? 'notifications' : view === 'import' ? 'import' : 'settings'} /> : view === 'profile' ? <div className="mx-auto max-w-4xl"><ProfilePage initialSection={profileSection} onOpenCollection={collections.open} /></div> : pageView ? <div className={`mx-auto ${view === 'groups' ? 'max-w-4xl' : 'max-w-3xl'}`}>
           {!(view === 'groups' && groupId) && <div className="mb-8 animate-float-up"><p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><span className="social-status-dot" />{pageTitles[view][0]}</p><h1 className="font-serif text-4xl leading-tight sm:text-5xl">{pageTitles[view][1]}</h1></div>}
           {view === 'activity' ? <ActivityPage /> : view === 'messages' ? <MessagesPage /> : <GroupsPage groupId={groupId} />}
         </div> : <>

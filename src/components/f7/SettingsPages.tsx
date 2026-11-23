@@ -7,7 +7,7 @@ import { setThemeMode, useThemeMode } from '@/lib/theme-mode';
 
 /**
  * Phone Settings: the same categories, in the same order, as desktop's /settings — Intelligence, Notifications,
- * Appearance, Moderation, Followed hashtags — each its own pushed page (Apple's Settings pattern: a list that drills
+ * Appearance, Moderation, Followed hashtags, Import — each its own pushed page (Apple's Settings pattern: a list that drills
  * into leaf pages), so a setting is in the same place on either.
  */
 const CATEGORIES = [
@@ -16,6 +16,7 @@ const CATEGORIES = [
   { url: '/appearance/', title: 'Appearance', ios: 'f7:paintbrush', md: 'material:palette' },
   { url: '/moderation/', title: 'Moderation', ios: 'f7:shield_lefthalf_fill', md: 'material:shield' },
   { url: '/followed-tags/', title: 'Followed hashtags', ios: 'f7:tag', md: 'material:sell' },
+  { url: '/import/', title: 'Import', ios: 'f7:tray_arrow_down', md: 'material:upload_file' },
 ] as const;
 
 export function MobileSettingsList() {
