@@ -5,7 +5,7 @@ import { useAtlasAuth } from './AuthState';
 import { useStrictSpotlightFilters } from './useIntelligence';
 import { getSpotlight, getSpotlightTrends, getViewerSpotlight } from '@/lib/spotlight.functions';
 import type { SpotlightItem } from '@/lib/spotlight';
-import { selectModeratedSpotlight, spotlightFilterPost } from '@/lib/spotlight-curation';
+import { selectModeratedSpotlight, spotlightFilterPost, spotlightInitialLoading } from '@/lib/spotlight-curation';
 
 /** Both Atlas desktop and phone reuse ONE owner-bound moderation snapshot
  * returned atomically with the sampled federated content. No public cache may
@@ -32,7 +32,11 @@ export function useCuratedSpotlight(): {
     queryKey: ['spotlight-trends'],
     queryFn: () => getSpotlightTrends(),
     enabled: !!identity,
-    staleTime: 60_000,
+    // Fedizen caches trending links much longer than its personalized feed.
+    // This optional source must never block local articles or owner policy.
+    staleTime: 10 * 60_000,
+    refetchInterval: 10 * 60_000,
+    refetchOnWindowFocus: false,
   });
   const viewer = useQuery({
     queryKey: ['spotlight-viewer', identity],
@@ -57,14 +61,17 @@ export function useCuratedSpotlight(): {
   const filterable = useMemo(() => candidates.map(spotlightFilterPost), [candidates]);
   const screening = useStrictSpotlightFilters(filterable);
   const items = useMemo(() => candidates.filter(item => screening.cleared.has(item.id)), [candidates, screening]);
+  const unavailable = !identity || viewer.isError || (!!viewer.data && !viewer.data.moderation);
   return {
     items,
-    // A slow public source or a policy refresh must not mask already-cleared
-    // owner-bound results. Only the cold start needs a loading placeholder.
-    loading: !!identity && !items.length &&
-      ((!viewer.data && viewer.isPending) || (!shared.data && shared.isPending) ||
-        (!trends.data && trends.isPending)),
-    unavailable: !identity || viewer.isError || (!!viewer.data && !viewer.data.moderation),
+    // Initial owner policy and public Articles may be essential, but trending
+    // is strictly optional and can be absent/slow without prolonging loading.
+    loading: spotlightInitialLoading({
+      signedIn: !!identity, hasItems: items.length > 0, moderationUnavailable: unavailable,
+      viewerPending: !viewer.data && viewer.isPending,
+      articlesPending: !shared.data && shared.isPending,
+    }),
+    unavailable,
     checking: screening.checking && !items.length,
     screeningUnavailable: screening.unavailable && !items.length,
   };
