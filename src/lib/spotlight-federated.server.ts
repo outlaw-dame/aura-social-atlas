@@ -1,15 +1,13 @@
 /** Public-only provider reads for Spotlight. Fixed to the Bonfire instance the
  * Atlas account currently uses, not mastodon.social or arbitrary user URLs.
- *
- * Fedizen's public timeline is its OWN observed federation horizon: remote
- * accounts not encountered by Fedizen will not appear here.
+ * Fedizen's federated public timeline is AUTH REQUIRED and is fetched through
+ * the existing owner-bound Fedizen REST client, not this anonymous cache.
  */
 import { FEDIZEN } from './fedizen-feed';
 
-export type SpotlightPublicRoute = 'trends' | 'federated';
+export type SpotlightPublicRoute = 'trends';
 const ROUTES: Record<SpotlightPublicRoute, string> = {
   trends: '/api/v1/trends/links?limit=12',
-  federated: '/api/v1/timelines/public?limit=30',
 };
 const MAX_BYTES = 1024 * 1024;
 const TIMEOUT_MS = 6500;
@@ -57,7 +55,7 @@ export async function fetchFixedFedizenJson(route: SpotlightPublicRoute, fetcher
     let offset = 0;
     for (const part of parts) { bytes.set(part, offset); offset += part.byteLength; }
     const data: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-    return Array.isArray(data) ? data.slice(0, route === 'trends' ? 12 : 30) : [];
+    return Array.isArray(data) ? data.slice(0, 12) : [];
   } catch { return []; }
 }
 
