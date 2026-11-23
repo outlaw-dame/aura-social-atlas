@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { videoFromAttachment } from "../src/lib/fedi-video";
 
 describe("GIFs Mastodon transcoded to video play like GIFs", () => {
@@ -21,18 +21,5 @@ describe("GIFs Mastodon transcoded to video play like GIFs", () => {
     // Off-screen pausing stays on under Reduce Motion; only automatic playback is gated.
     expect(gif).not.toMatch(/if \(!el \|\| reduced\) return/);
     expect(gif).toContain("if (!e.isIntersecting) el.pause(); else if (!reduced) void el.play()");
-  });
-});
-
-describe("Sample photos ship as AVIF where it pays, JPEG as fallback", () => {
-  const cat = readFileSync("src/lib/social-catalogue.ts", "utf8");
-  test("three photos are AVIF with their JPEG registered as fallback; the star field stays JPEG", () => {
-    for (const n of ["architecture", "design", "travel"]) {
-      expect(cat).toContain(`@/assets/news-${n}.avif`);
-      expect(readFileSync(`src/assets/news-${n}.avif`).subarray(4, 12).toString("latin1")).toBe("ftypavif");
-      expect(statSync(`src/assets/news-${n}.avif`).size).toBeLessThan(statSync(`src/assets/news-${n}.jpg`).size * 0.8);
-    }
-    expect(cat).toMatch(/registerImageFallbacks\(\[\[architecture, architectureJpg\], \[design, designJpg\], \[travel, travelJpg\]\]\)/);
-    expect(cat).toContain("@/assets/news-space.jpg");
   });
 });

@@ -54,7 +54,7 @@ export function GatewayDiscovery() {
   if (!configured) return (
     <section aria-label="Public relay discovery" className="mb-8 rounded-2xl border border-border bg-card/60 p-5">
       <p className="flex items-center gap-2 text-sm font-medium"><Compass className="size-4" /> Open-web discovery</p>
-      <p className="mt-2 text-sm text-muted-foreground">Independent relay discovery isn't connected yet. Existing Fedizen feeds and creator stories are unaffected.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Independent relay discovery isn't connected yet. Your Fedizen feeds are unaffected.</p>
     </section>
   );
 

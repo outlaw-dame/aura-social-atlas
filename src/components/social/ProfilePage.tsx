@@ -1,18 +1,14 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Bookmark, CalendarDays, Heart, Check, CircleDashed, CircleUserRound, Image, Link2, MapPin, PenLine, Star, Users, X } from 'lucide-react';
+import { Bookmark, CalendarDays, Heart, Check, CircleDashed, CircleUserRound, Image, Link2, MapPin, PenLine, Star, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAtlasAuth } from './AuthState';
-import { useSocial } from './SocialState';
-import { avatarPreset } from '@/lib/atlas-avatars';
 import { IdentityAvatar } from './IdentityAvatar';
 import { useFedizenIdentity } from './useFedizenIdentity';
 import { useMyFedizenProfile } from './useMyFedizenProfile';
 import { ProfileImagePicker } from './ProfileImagePicker';
 import { BIO_MAX, isWebsite, LOCATION_MAX, NAME_MAX, WEBSITE_MAX } from '@/lib/fedizen-profile';
-import { creators, fullHandle, posts, type Creator } from '@/lib/social-catalogue';
 import { extractHashtags, hashtagLabel, hashtagUrl, linkifyHashtags, TagText } from '@/lib/hashtags';
-import { CreatorTag } from './CreatorTag';
 import { DesktopCollections } from './CollectionsDesktop';
 import { DesktopCircles, DesktopLiked, DesktopSaved } from './SavedAndCircles';
 import type { Collection } from '@/lib/collections';
@@ -106,14 +102,12 @@ function EditProfileDialog({ onClose, fedizen }: { onClose: () => void; fedizen:
   </Dialog>;
 }
 
-export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpenCollection }: { initialSection?: ProfileSection; onOpenCreator: (c: Creator) => void; onOpenCollection: (c: Collection) => void }) {
+export function ProfilePage({ initialSection = 'Activity', onOpenCollection }: { initialSection?: ProfileSection; onOpenCollection: (c: Collection) => void }) {
   const { user, profile, loading, signOut } = useAtlasAuth();
   const identity = useFedizenIdentity();
   const fedizen = useMyFedizenProfile(identity.connected, () => { void identity.refresh(); });
   const remote = fedizen.profile;
-  const { followed, saved, toggleSave, toggleFollow } = useSocial();
   const [section, setSection] = useState<ProfileSection>(initialSection);
-  const [followsOpen, setFollowsOpen] = useState(false);
   const [filter, setFilter] = useState<ActivityFilter>(DEFAULT_ACTIVITY_FILTER);
   const [editing, setEditing] = useState(false);
 
@@ -124,8 +118,6 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
 
   const name = identity.name;
   const featured = profile?.featured_hashtags ?? [];
-  const savedPosts = posts.filter(p => saved.includes(p.id));
-  const followedCreators = creators.filter(c => followed.includes(c.id));
   const e = empty[section];
 
   return <div className="animate-float-up">
@@ -143,9 +135,7 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
       {identity.isFedizen && !identity.viewer && <p className="mt-2 text-xs text-muted-foreground">Fedizen's account details are unavailable or have not yet been verified. No substitute profile picture is shown.</p>}
       <p className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground">
         <span><strong className="mr-1 font-semibold text-foreground">{identity.counts?.followers ?? '—'}</strong>followers</span>
-        {identity.isFedizen
-          ? <span><strong className="mr-1 font-semibold text-foreground">{identity.counts?.following ?? '—'}</strong>following</span>
-          : <button type="button" className="hover:text-foreground hover:underline" onClick={() => setFollowsOpen(true)}><strong className="mr-1 font-semibold text-foreground">{followed.length}</strong>following in Atlas</button>}
+        <span><strong className="mr-1 font-semibold text-foreground">{identity.counts?.following ?? '—'}</strong>following</span>
         <span><strong className="mr-1 font-semibold text-foreground">{identity.counts?.posts ?? '—'}</strong>posts</span>
       </p>
       {remote ? <>
@@ -182,29 +172,11 @@ export function ProfilePage({ initialSection = 'Activity', onOpenCreator, onOpen
       {section === 'Collections' && <DesktopCollections onOpen={onOpenCollection} />}
       {section === 'Circles' && <DesktopCircles />}
       {section === 'Liked' && <DesktopLiked />}
-      {section === 'Saved' && <DesktopSaved stories={savedPosts.length ? <div className="grid gap-x-6 gap-y-9 border-t border-border pt-8 sm:grid-cols-2"><h3 className="text-[10px] font-semibold uppercase text-muted-foreground sm:col-span-2">Stories saved in Atlas</h3>{savedPosts.map(p => {
-        const c = creators.find(x => x.id === p.creatorId);
-        return <article key={p.id}>
-          <a href={p.url} target="_blank" rel="noreferrer" className="group block overflow-hidden rounded-2xl"><img src={p.image} alt={p.alt} loading="lazy" className="aspect-[4/3] w-full object-cover transition-transform duration-700 group-hover:scale-[1.025]" /></a>
-          <h3 className="mt-3 font-serif text-2xl leading-tight"><a href={p.url} target="_blank" rel="noreferrer">{p.title}</a></h3>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{p.excerpt}</p>
-          {c && <CreatorTag creator={c} onOpen={() => onOpenCreator(c)} />}
-          <Button variant="ghost" size="sm" className="mt-2 px-0 text-muted-foreground" onClick={() => toggleSave(p.id)}><Bookmark className="fill-accent text-accent" />Remove from saved</Button>
-        </article>;
-      })}</div> : undefined} />}
+      {section === 'Saved' && <DesktopSaved />}
       {!['Featured', 'Collections', 'Saved', 'Liked', 'Circles'].includes(section) && <Empty icon={e.icon} title={e.title} detail={e.detail} />}
     </section>
     <footer className="mt-10 border-t border-border pt-5"><Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { void signOut(); }}>Sign out</Button></footer>
 
-    {followsOpen && <Dialog label="Following" onClose={() => setFollowsOpen(false)}>
-      {followedCreators.length ? <ul className="max-h-[60vh] space-y-1 overflow-y-auto">{followedCreators.map(c => <li key={c.id} className="flex items-center gap-3 rounded-xl p-2 hover:bg-secondary/60">
-        <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => { setFollowsOpen(false); onOpenCreator(c); }}>
-          <img src={avatarPreset(c.avatar_key).src} alt="" className="social-avatar size-10 shrink-0" />
-          <span className="min-w-0"><span className="block truncate text-sm font-semibold">{c.name}</span><span className="block truncate text-xs text-muted-foreground">{fullHandle(c)}</span></span>
-        </button>
-        <Button size="sm" variant="outline" className="rounded-full" onClick={() => toggleFollow(c.id)}>Following</Button>
-      </li>)}</ul> : <Empty icon={Users} title="Not following anyone yet" detail="People you follow in Discover will appear here." />}
-    </Dialog>}
     {editing && <EditProfileDialog onClose={() => setEditing(false)} fedizen={identity.connected ? fedizen : null} />}
   </div>;
 }

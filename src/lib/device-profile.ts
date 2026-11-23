@@ -294,6 +294,12 @@ export function watchDeviceProfile(onChange: (p: DeviceProfile) => void): () => 
   window.addEventListener("resize", schedule);
   window.addEventListener("orientationchange", schedule);
   window.visualViewport?.addEventListener("resize", schedule);
+  // A width read while the page is still loading, or when it comes back from the back/forward cache, can be stale with
+  // no resize to follow, leaving the wide layout on a phone until a reload. Read again once the page has loaded and is
+  // shown, and on the next frame.
+  window.addEventListener("load", schedule);
+  window.addEventListener("pageshow", schedule);
+  schedule();
   const lists = WATCHED_QUERIES.map((q) => {
     try {
       const m = window.matchMedia(q);
@@ -310,6 +316,8 @@ export function watchDeviceProfile(onChange: (p: DeviceProfile) => void): () => 
     window.removeEventListener("resize", schedule);
     window.removeEventListener("orientationchange", schedule);
     window.visualViewport?.removeEventListener("resize", schedule);
+    window.removeEventListener("load", schedule);
+    window.removeEventListener("pageshow", schedule);
     lists.forEach((m) => m?.removeEventListener("change", schedule));
     dp?.removeEventListener?.("change", schedule);
   };

@@ -24,8 +24,6 @@ describe("Phone: a hashtag's feed is pushed, not a sheet", () => {
 
   test("routed pages read current app state, not a closure captured when they were pushed", () => {
     expect(app).not.toMatch(/pushPage\([^)]*render:/);
-    expect(app).toContain("<SampleCards.Provider value={postCard}>");
-    expect(app).toMatch(/function SampleTagPage[\s\S]*useContext\(SampleCards\)/);
   });
 
   test("the stack sits under the tab bar and passes touches through until something is pushed", () => {

@@ -45,12 +45,12 @@ function SavedPostCard({ p, save }: { p: FedizenPost; save: ReturnType<typeof us
   </article></MobileFilterGate>;
 }
 
-/** Profile → Saved on the phone. `stories` are discovery stories saved this session, shown after. */
-export function MobileSaved({ stories }: { stories?: React.ReactNode }) {
+/** Profile → Saved on the phone. */
+export function MobileSaved() {
   const q = useFedizenSaved();
   const save = useSaveToggle();
   const posts = q.data?.posts ?? [];
-  const empty = !q.isLoading && !q.data?.error && !posts.length && !stories;
+  const empty = !q.isLoading && !q.data?.error && !posts.length;
   return <div className="atlas-library">
     <p className="atlas-library-note">Posts you save on Fedizen. Each keeps the audience its author chose.</p>
     {q.isLoading && <p className="atlas-library-note">Loading your saved posts…</p>}
@@ -62,7 +62,6 @@ export function MobileSaved({ stories }: { stories?: React.ReactNode }) {
       <h2>Nothing saved yet</h2>
       <p>Save posts from your Fedizen feed, and they’ll be here.</p>
     </div>}
-    {stories}
   </div>;
 }
 
