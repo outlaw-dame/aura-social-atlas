@@ -53,8 +53,39 @@ function failure(status: number): ProviderError {
   return new ProviderError('unavailable', status);
 }
 
+/** A short identifier-like value (Google's error.status, OpenAI's error.code/type), else nothing. */
+const token = (v: unknown) => (typeof v === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(v) ? v : undefined);
+
+/**
+ * The provider's error kind from an error body, never its message: OpenAI-shaped `{error:{code,type}}`, Google's
+ * `{error:{status}}` and its OpenAI layer's `[{error:{…}}]`. Messages can echo what was sent, so they're left out.
+ */
+export function errorKind(text: string): { code?: string; type?: string; status?: string } | undefined {
+  let j: unknown;
+  try { j = JSON.parse(text.slice(0, 20_000)); } catch { return undefined; }
+  const err = ((Array.isArray(j) ? j[0] : j) as { error?: unknown } | null)?.error;
+  if (!err || typeof err !== 'object') return undefined;
+  const e = err as Record<string, unknown>;
+  const out = { code: token(e.code) ?? (typeof e.code === 'number' ? String(e.code) : undefined), type: token(e.type), status: token(e.status) };
+  return out.code || out.type || out.status ? out : undefined;
+}
+
+/**
+ * One line on the server when a provider call fails, so "The provider didn't answer" can be traced: the provider, the
+ * API path (no query), the model, the HTTP status or timeout/network, the provider's error kind, and how long it took.
+ * Never the key, the request or the provider's error message (which can echo what was sent), and no user id.
+ */
+function noteCallFailure(c: Credential, url: string, model: unknown, startedAt: number, outcome: { status: number; kind?: ReturnType<typeof errorKind> } | { reason: 'timeout' | 'network' }) {
+  if (inBrowser()) return;
+  let path = '';
+  try { path = new URL(url).pathname.replace(/\/accounts\/[0-9a-f]{32}\//, '/accounts/:account/'); } catch { /* not a URL */ }
+  console.warn(JSON.stringify({ event: 'ai.call_failed', provider: c.provider, path, model: typeof model === 'string' ? model.slice(0, 120) : undefined, ms: Date.now() - startedAt, ...outcome }));
+}
+
 export async function call(url: string, c: Credential, init: { method?: string; body?: unknown; timeout?: number } = {}): Promise<unknown> {
   if (inBrowser() && !BROWSER_CAPABLE[c.provider]) throw new ProviderError('browser-blocked');
+  const startedAt = Date.now();
+  const model = (init.body as { model?: unknown } | undefined)?.model;
   let res: Response;
   try {
     res = await fetch(url, {
@@ -67,12 +98,14 @@ export async function call(url: string, c: Credential, init: { method?: string; 
       ...(inBrowser() ? { credentials: 'omit' as const, referrerPolicy: 'no-referrer' as const } : {}),
     });
   } catch (e) {
+    noteCallFailure(c, url, model, startedAt, { reason: e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError') ? 'timeout' : 'network' });
     // In a browser, a request the provider's CORS rules refuse fails as a TypeError before any response arrives.
     throw new ProviderError(inBrowser() && e instanceof TypeError ? 'browser-blocked' : 'unavailable');
   }
   if (!res.ok) {
-    // Read (and drop) the body: provider error text can echo request content, so it's never passed on or logged.
-    await res.text().catch(() => '');
+    // Provider error text can echo request content, so only its error kind is kept (logged), never the message.
+    const body = await res.text().catch(() => '');
+    noteCallFailure(c, url, model, startedAt, { status: res.status, kind: errorKind(body) });
     throw failure(res.status);
   }
   const text = await res.text();
