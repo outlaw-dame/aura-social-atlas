@@ -119,7 +119,7 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
     if (account?.discoverable === false || s.visibility !== 'public' || s.sensitive === true ||
         (typeof s.spoiler_text === 'string' && s.spoiler_text.trim()) ||
         typeof s.id !== 'string' || typeof s.url !== 'string' ||
-        !isPublicHttpsUrl(s.url) || s.reblog) return [];
+        !isPublicHttpsUrl(s.url) || s.reblog || s.quote) return [];
     const media = Array.isArray(s.media_attachments) ? s.media_attachments : [];
     const video = media.find(m => m && typeof m === 'object' &&
       (m as Record<string, unknown>).type === 'video' &&
@@ -160,7 +160,7 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
     const account = status.account && typeof status.account === 'object' && !Array.isArray(status.account)
       ? status.account as Record<string, unknown> : null;
     if (status.visibility !== 'public' || status.sensitive === true ||
-      account?.discoverable === false || status.reblog ||
+      account?.discoverable === false || status.reblog || status.quote ||
       (typeof status.spoiler_text === 'string' && status.spoiler_text.trim()) ||
       typeof status.id !== 'string') continue;
     const card = status.card && typeof status.card === 'object' && !Array.isArray(status.card)
