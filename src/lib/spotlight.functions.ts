@@ -1,23 +1,20 @@
 import { createServerFn } from '@tanstack/react-start';
+import { z } from 'zod';
+import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
+import { assertFedizenSessionIntent } from './fedizen-feed';
 import {
   bonfireAuthor, combineSpotlight, fromFederatedVideos, fromMastodonLinks,
   type SpotlightItem,
 } from './spotlight';
 
-/**
- * Spotlight is provider-relative. The first release reads public trends,
- * public federated video posts, and real ActivityPub Articles known to Fedizen.
- * It does NOT scrape mastodon.social or pretend Fedizen knows the whole fediverse.
- *
- * Trending / recent are separate selection semantics, not interchangeable.
- * The Link Conversations feature is deliberately not implemented here.
+/** Shared, PUBLIC Spotlight sources. These do not depend on an individual
+ * user's OAuth grant and never send a request to mastodon.social.
  */
 export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): Promise<{ items: SpotlightItem[]; bonfireCount: number }> => {
   const { readFedizenPublicSpotlight } = await import('./spotlight-federated.server');
-  const [{ articles }, trendPayload, federatedPayload] = await Promise.all([
+  const [{ articles }, trendPayload] = await Promise.all([
     import('./bonfire.server').then(m => m.fetchRecentArticles()),
     readFedizenPublicSpotlight('trends'),
-    readFedizenPublicSpotlight('federated'),
   ]);
 
   const recent: SpotlightItem[] = articles.slice(0, 6).map(a => {
@@ -31,23 +28,10 @@ export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): 
     };
   });
   const links = fromMastodonLinks(trendPayload as never, { source: 'Bonfire', observedBy: 'fedizen.net' });
-  const videos = fromFederatedVideos(federatedPayload);
 
-  // Independently verify publisher attribution, and recognize PodcastEpisode
-  // and Video ActivityPub objects through the EXISTING guarded resolver.
-  // Only four potential episodes from PUBLIC federated posts are considered.
-  const candidates = federatedPayload.flatMap(value => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
-    const post = value as Record<string, unknown>;
-    const card = post.card && typeof post.card === 'object' ? post.card as Record<string, unknown> : null;
-    if (post.visibility !== 'public' || typeof post.content !== 'string' ||
-      !/\b(podcast|episode)\b/i.test(post.content) || typeof card?.url !== 'string' ||
-      !/^https:\/\//i.test(card.url) || card.url.length > 2048) return [];
-    return [card.url];
-  }).slice(0, 4);
-
-  const urls = [...new Set([...candidates, ...links.map(it => it.url)])].slice(0, 16);
-  const podcasts: SpotlightItem[] = [];
+  // Confirm podcast/video types and publisher identity against the article's
+  // ActivityPub object, using Atlas's guarded bounded resolution.
+  const urls = [...new Set(links.map(it => it.url))].slice(0, 12);
   if (urls.length) {
     const { resolveAuthorsFor, mediaFor } = await import('./article-author.server');
     const found = await resolveAuthorsFor(urls, 3000).catch(() => new Map());
@@ -58,9 +42,47 @@ export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): 
       if (media?.episode) it.kind = 'podcast';
       else if (media?.video) it.kind = 'video';
     }
+  }
+  return { items: combineSpotlight(links, recent), bonfireCount: recent.length };
+});
+
+/** Fedizen's federated-public REST timeline currently returns 401 anonymously.
+ * This is an OWNER-BOUND *read* using this Atlas user's separate delegated
+ * Fedizen grant. Only actual PUBLIC posts are projected into Spotlight. This
+ * query is never cached globally or passed through the public discovery gateway.
+ */
+export const getViewerSpotlight = createServerFn({ method: 'POST' })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(data => z.object({ expectedAtlasUserId: z.string().uuid() }).strict().parse(data))
+  .handler(async ({ data, context }): Promise<SpotlightItem[]> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor, fedizenGet } = await import('./fedizen.server');
+    const connected = await tokenFor(context.userId);
+    if (!connected) return [];
+    const response = await fedizenGet(connected.access_token, '/api/v1/timelines/public?limit=20');
+    if (response.status !== 200) return [];
+    const publicPosts = response.data.filter(item =>
+      item && typeof item === 'object' && (item as Record<string, unknown>).visibility === 'public');
+    const videos = fromFederatedVideos(publicPosts);
+
+    // A podcast is accepted only after verified ActivityPub PodcastEpisode
+    // parsing, NEVER because a status happened to mention the word podcast.
+    const candidates = publicPosts.flatMap(value => {
+      const status = value as Record<string, unknown>;
+      const card = status.card && typeof status.card === 'object'
+        ? status.card as Record<string, unknown> : null;
+      if (typeof status.content !== 'string' ||
+        !/\b(podcast|episode)\b/i.test(status.content) || typeof card?.url !== 'string' ||
+        !/^https:\/\//i.test(card.url) || card.url.length > 2048) return [];
+      return [card.url];
+    }).slice(0, 4);
+    if (!candidates.length) return videos;
+    const { resolveAuthorsFor, mediaFor } = await import('./article-author.server');
+    await resolveAuthorsFor(candidates, 2500).catch(() => new Map());
+    const podcasts: SpotlightItem[] = [];
     for (const url of candidates) {
       const episode = mediaFor(url)?.episode;
-      if (!episode) continue; // ordinary audio/keyword matches are not podcast episodes
+      if (!episode) continue;
       podcasts.push({
         id: `p:${episode.url}`, source: 'Bonfire', url: episode.url,
         title: episode.title, description: '', image: episode.image,
@@ -70,10 +92,5 @@ export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): 
         kind: 'podcast', reason: 'recent', observedBy: 'fedizen.net',
       });
     }
-  }
-
-  return {
-    items: combineSpotlight(links, recent, podcasts, videos),
-    bonfireCount: recent.length,
-  };
-});
+    return combineSpotlight(podcasts, videos);
+  });
