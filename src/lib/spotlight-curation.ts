@@ -68,6 +68,7 @@ export function allowedSpotlightSources(
 
 export function allowedSpotlightItem(item: SpotlightItem, moderation: SpotlightModeration): boolean {
   if (!allowedSpotlightSources(item.sourceAccounts, item.sourceComplete, moderation)) return false;
+  const blocked = new Set([...moderation.blockedHandles, ...moderation.mutedHandles].map(normalizedAccount).filter(Boolean));
   const attributedAuthor = item.authorAccount?.acct;
   if (attributedAuthor) {
     const acct = normalizedAccount(attributedAuthor);
