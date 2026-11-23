@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { allowedSpotlightItem, type SpotlightModeration } from '../src/lib/spotlight-curation';
-import { collectPublicSpotlightCandidates, eligibleLocalPublicPosts } from '../src/lib/spotlight-personal.server';
+import { collectPublicSpotlightCandidates, eligiblePublicSpotlightPosts } from '../src/lib/spotlight-personal.server';
 import { fromFederatedLinkCards, fromFederatedVideos, spotlightUrlKey } from '../src/lib/spotlight';
 import { fedizenGet } from '../src/lib/fedizen.server';
 
@@ -38,7 +38,8 @@ describe('owner-only bounded Spotlight source sampling', () => {
     );
     expect(calls).toBe(1);
     expect(result.pagesRead).toBe(2);
-    expect(result.linked).toHaveLength(2);
+    // Unknown remote actors never enter the card ledger or its text.
+    expect(result.linked).toHaveLength(1);
     expect(result.linked.every(it => it.reason === 'recent')).toBe(true);
     const eligible = result.linked.filter(it => allowedSpotlightItem(it, policy));
     expect(eligible).toHaveLength(1);
@@ -71,7 +72,7 @@ describe('owner-only bounded Spotlight source sampling', () => {
       status('private', 'writer', 'fedizen.net', { visibility: 'private' }),
       status('reply', 'writer', 'fedizen.net', { in_reply_to_id: '01P' }),
     ];
-    const local = eligibleLocalPublicPosts(posts, policy);
+    const local = eligiblePublicSpotlightPosts(posts, policy);
     const eligible = fromFederatedLinkCards(local).filter(it => allowedSpotlightItem(it, policy));
     expect(local).toHaveLength(1);
     expect(eligible).toHaveLength(1);
@@ -84,7 +85,7 @@ describe('owner-only bounded Spotlight source sampling', () => {
       status('allowed', 'author', 'fedizen.net', { reblogs_count: 0, favourites_count: 0 }),
       status('muted', 'muted', 'fedizen.net'),
     ];
-    const screened = eligibleLocalPublicPosts(shared, { ...policy, mutedHandles: ['muted'] });
+    const screened = eligiblePublicSpotlightPosts(shared, { ...policy, mutedHandles: ['muted'] });
     expect(screened).toHaveLength(1);
     const grouped = fromFederatedLinkCards(screened);
     expect(grouped).toHaveLength(1);
@@ -100,7 +101,42 @@ describe('owner-only bounded Spotlight source sampling', () => {
       { id: 'array-account', visibility: 'public', account: [], card: preview },
       { id: 'empty-account', visibility: 'public', account: {}, card: preview },
     ];
-    expect(eligibleLocalPublicPosts(missing, policy)).toEqual([]);
+    expect(eligiblePublicSpotlightPosts(missing, policy)).toEqual([]);
+  });
+
+  it('does not let a blocked contributor suppress a safe share of the same article', async () => {
+    const shared = { ...preview, url: 'https://example.org/same-article' };
+    const posts = [
+      status('blocked', 'blocked@fedizen.net', 'fedizen.net', { card: shared, content: 'Forbidden quote' }),
+      status('safe', 'safe', 'fedizen.net', { card: shared, content: 'Legitimate summary' }),
+    ];
+    const blocking = { ...policy, blockedHandles: ['blocked@fedizen.net'] };
+    const result = await collectPublicSpotlightCandidates(
+      { status: 200, data: posts }, blocking,
+      async () => { throw new Error('No further page expected'); },
+    );
+    expect(result.posts).toHaveLength(1);
+    expect(result.linked).toHaveLength(1);
+    expect(result.linked[0].sourceAccounts?.map(x => x.handle)).toEqual(['safe']);
+    expect(result.linked[0].filterText).not.toContain('Forbidden quote');
+    expect(result.linked[0].filterText).toContain('Legitimate summary');
+    expect(allowedSpotlightItem(result.linked[0], blocking)).toBe(true);
+  });
+
+  it('never counts rejected federated contributors as shares or eligibility evidence', async () => {
+    const shared = { ...preview, url: 'https://example.org/shared' };
+    const posts = [
+      status('remote', 'remote@elsewhere.example', 'elsewhere.example', { card: shared }),
+      status('safe', 'safe', 'fedizen.net', { card: shared, reblogs_count: 0, replies_count: 0, favourites_count: 0 }),
+    ];
+    const result = await collectPublicSpotlightCandidates(
+      { status: 200, data: posts }, policy,
+      async () => { throw new Error('No further page expected'); },
+    );
+    expect(result.linked).toHaveLength(1);
+    expect(result.linked[0].shares).toBe(1);
+    expect(result.linked[0].sourceAccounts?.map(x => x.handle)).toEqual(['safe']);
+    expect(allowedSpotlightItem(result.linked[0], policy)).toBe(true);
   });
 
   it('shows an eligible local source immediately, never fetching more pages', async () => {
