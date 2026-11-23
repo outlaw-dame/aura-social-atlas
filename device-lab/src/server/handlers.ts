@@ -187,7 +187,9 @@ export const fedizen: Impl<typeof Fedizen> = {
   },
   getNotificationMarker: () => ({ lastRead: notificationMarker }),
   setNotificationMarker: (d: { lastRead: string }) => { notificationMarker = d.lastRead; return { ok: true as const }; },
-  followFedizenAccount: (d: { accountId: string; on: boolean }) => {
+  followFedizenAccount: (d: { accountId?: string; acct?: string; on: boolean }) => {
+    // By handle (Settings → Import): any handle "works" here; only sample people change the sample follows.
+    if (!d.accountId) return { ok: true as const, state: d.on ? 'following' as const : 'none' as const };
     const k = d.accountId.replace(/^acct-/, '') as PersonKey;
     if (d.on) following.add(k); else following.delete(k);
     return { ok: true as const, state: d.on ? 'following' as const : 'none' as const };

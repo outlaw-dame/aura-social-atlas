@@ -31,6 +31,7 @@ import { Route as PostIdRouteImport } from './routes/post.$id'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
 import { Route as SettingsHashtagsRouteImport } from './routes/settings.hashtags'
+import { Route as SettingsImportRouteImport } from './routes/settings.import'
 import { Route as SettingsIntelligenceRouteImport } from './routes/settings.intelligence'
 import { Route as SettingsModerationRouteImport } from './routes/settings.moderation'
 import { Route as SettingsNotificationsRouteImport } from './routes/settings.notifications'
@@ -147,6 +148,11 @@ const SettingsHashtagsRoute = SettingsHashtagsRouteImport.update({
   path: '/hashtags',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsImportRoute = SettingsImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsIntelligenceRoute = SettingsIntelligenceRouteImport.update({
   id: '/intelligence',
   path: '/intelligence',
@@ -195,6 +201,7 @@ export interface FileRoutesByFullPath {
   '/post/$id': typeof PostIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
+  '/settings/import': typeof SettingsImportRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
   '/settings/moderation': typeof SettingsModerationRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
@@ -223,6 +230,7 @@ export interface FileRoutesByTo {
   '/post/$id': typeof PostIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
+  '/settings/import': typeof SettingsImportRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
   '/settings/moderation': typeof SettingsModerationRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
@@ -253,6 +261,7 @@ export interface FileRoutesById {
   '/post/$id': typeof PostIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/hashtags': typeof SettingsHashtagsRoute
+  '/settings/import': typeof SettingsImportRoute
   '/settings/intelligence': typeof SettingsIntelligenceRoute
   '/settings/moderation': typeof SettingsModerationRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
@@ -284,6 +293,7 @@ export interface FileRouteTypes {
     | '/post/$id'
     | '/settings/appearance'
     | '/settings/hashtags'
+    | '/settings/import'
     | '/settings/intelligence'
     | '/settings/moderation'
     | '/settings/notifications'
@@ -312,6 +322,7 @@ export interface FileRouteTypes {
     | '/post/$id'
     | '/settings/appearance'
     | '/settings/hashtags'
+    | '/settings/import'
     | '/settings/intelligence'
     | '/settings/moderation'
     | '/settings/notifications'
@@ -341,6 +352,7 @@ export interface FileRouteTypes {
     | '/post/$id'
     | '/settings/appearance'
     | '/settings/hashtags'
+    | '/settings/import'
     | '/settings/intelligence'
     | '/settings/moderation'
     | '/settings/notifications'
@@ -529,6 +541,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsHashtagsRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/import': {
+      id: '/settings/import'
+      path: '/import'
+      fullPath: '/settings/import'
+      preLoaderRoute: typeof SettingsImportRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/intelligence': {
       id: '/settings/intelligence'
       path: '/intelligence'
@@ -570,6 +589,7 @@ declare module '@tanstack/react-router' {
 interface SettingsRouteChildren {
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsHashtagsRoute: typeof SettingsHashtagsRoute
+  SettingsImportRoute: typeof SettingsImportRoute
   SettingsIntelligenceRoute: typeof SettingsIntelligenceRoute
   SettingsModerationRoute: typeof SettingsModerationRoute
   SettingsNotificationsRoute: typeof SettingsNotificationsRoute
@@ -579,6 +599,7 @@ interface SettingsRouteChildren {
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsHashtagsRoute: SettingsHashtagsRoute,
+  SettingsImportRoute: SettingsImportRoute,
   SettingsIntelligenceRoute: SettingsIntelligenceRoute,
   SettingsModerationRoute: SettingsModerationRoute,
   SettingsNotificationsRoute: SettingsNotificationsRoute,

@@ -192,16 +192,20 @@ async function myAccountId(token: string, handle: string | null | undefined): Pr
 
 /**
  * Follow (or unfollow) someone by their Fedizen account id, as Fedizen itself named them in a notification: "Follow
- * back" in Activity. No handle check is needed, unlike following from a profile, since the id came from Fedizen.
+ * back" in Activity, or by a handle from a list the person imported (Settings → Import). No WebFinger check against an
+ * actor is needed, unlike following from a profile: the id comes from Fedizen, or the handle is the person's own list.
  */
 export const followFedizenAccount = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => me.extend({ accountId: statusId, on: z.boolean() }).parse(d))
-  .handler(async ({ data, context }): Promise<{ ok: true; state: 'following' | 'requested' | 'none' } | { ok: false; error: Problem }> => {
+  .inputValidator(d => me.and(who).and(z.object({ on: z.boolean() })).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; state: 'following' | 'requested' | 'none' } | { ok: false; error: Problem | 'not-found' }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId, true);
     if ('error' in c) return { ok: false, error: c.error };
+    // By handle (an import from another account): Fedizen looks it up, fetching a remote account through WebFinger.
+    const id = await accountIdFor(c.token, data);
+    if (typeof id !== 'string') return { ok: false, error: id.error };
     const { fedizenSend } = await import('./fedizen.server');
-    const r = await fedizenSend(c.token, 'POST', `/api/v1/accounts/${data.accountId}/${data.on ? 'follow' : 'unfollow'}`);
+    const r = await fedizenSend(c.token, 'POST', `/api/v1/accounts/${id}/${data.on ? 'follow' : 'unfollow'}`);
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
     const rel = r.data as { following?: boolean | null; requested?: boolean | null } | null;
     return { ok: true, state: rel?.following ? 'following' : rel?.requested ? 'requested' : data.on ? 'requested' : 'none' };
