@@ -12,6 +12,12 @@ on:
       - 'src/lib/spotlight.ts'
       - 'src/lib/spotlight.functions.ts'
       - 'src/lib/spotlight-federated.server.ts'
+      - 'src/lib/spotlight-curation.ts'
+      - 'src/lib/spotlight-moderation.server.ts'
+      - 'src/components/social/useCuratedSpotlight.ts'
+      - 'src/components/social/useIntelligence.tsx'
+      - 'src/lib/filter-engine.ts'
+      - 'tests/spotlight-moderation.test.ts'
       - 'src/components/social/Spotlight.tsx'
       - 'src/components/f7/Discover.tsx'
       - 'tests/spotlight-federated.test.ts'
@@ -40,7 +46,7 @@ jobs:
         run: |
           bun test tests/auth-runtime.test.ts tests/bonfire-atlas-acceptance.test.ts tests/fedizen-acceptance-view.test.ts tests/fedizen-session-intent.test.ts tests/fedizen-callback-origin.test.ts tests/fedizen-oauth-grant.test.ts
       - name: Test Spotlight provider boundaries and content classification
-        run: bun test tests/spotlight-federated.test.ts
+        run: bun test tests/spotlight-federated.test.ts tests/spotlight-moderation.test.ts
       - name: Build Node server for Railway without privileged secrets
         env:
           NITRO_PRESET: node-server

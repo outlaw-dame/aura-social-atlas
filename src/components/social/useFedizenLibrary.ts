@@ -180,8 +180,11 @@ export function useBlockActions() {
       try {
         const r = await change({ data: { expectedAtlasUserId: user.id, ...d } });
         if (!r.ok) return LIBRARY_PROBLEM[r.error];
-        // The block changes what the feeds may show: refresh the list and every personal feed holding their posts.
-        await Promise.all(['fedizen-blocks', 'fedizen-home', 'bonfire-native-home', 'fedizen-messages', 'fedizen-saved', 'fedizen-foryou', 'fedizen-circle-feed', 'fedizen-tag-feed']
+        // Invalidate Spotlight immediately rather than flashing a newly blocked actor
+        // while a stale moderation snapshot is being refreshed.
+        await qc.cancelQueries({ queryKey: ['spotlight-viewer', user.id] });
+        qc.setQueryData(['spotlight-viewer', user.id], { items: [], moderation: null });
+        await Promise.all(['spotlight-viewer', 'fedizen-blocks', 'fedizen-home', 'bonfire-native-home', 'fedizen-messages', 'fedizen-saved', 'fedizen-foryou', 'fedizen-circle-feed', 'fedizen-tag-feed']
           .map(k => qc.invalidateQueries({ queryKey: [k] })));
         return null;
       } catch { return LIBRARY_PROBLEM.unavailable; }

@@ -168,5 +168,20 @@ describe('Blocked and muted people: Bonfire sends the whole list whatever limit 
       expect(r.status).toBe(200);
       expect(r.data).toHaveLength(150);
     });
+    test(`${route}: Spotlight must not silently drop a blocked/muted actor`, async () => {
+      const malformed = [...Array.from({ length: 150 }, (_, i) => acct(i)), { display_name: 'unknown identity' }];
+      globalThis.fetch = mock(async () => new Response(JSON.stringify(malformed), { status: 200 })) as typeof fetch;
+      const result = await fedizenGet('sentinel', route, { requireCompleteModeration: true });
+      expect(result.status).toBe(502);
+      expect(result.failure).toBe('mismatch');
+      expect(result.data).toEqual([]);
+    });
+    test(`${route}: Spotlight accepts a complete large moderation list`, async () => {
+      const complete = Array.from({ length: 150 }, (_, i) => acct(i));
+      globalThis.fetch = mock(async () => new Response(JSON.stringify(complete), { status: 200 })) as typeof fetch;
+      const result = await fedizenGet('sentinel', route, { requireCompleteModeration: true });
+      expect(result.status).toBe(200);
+      expect(result.data).toHaveLength(150);
+    });
   }
 });

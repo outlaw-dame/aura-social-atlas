@@ -11,6 +11,14 @@ export type SpotlightItem = {
   reason?: 'trending' | 'recent';
   /** The instance from which Atlas learned about the item, NOT the publisher's domain. */
   observedBy?: string;
+  /** Identified PUBLIC contributors, distinct from the publisher. Empty means
+   * provenance is unknown and personalized Spotlight must suppress the card.
+   */
+  sourceAccounts?: { id?: string; handle: string; actorUrl?: string }[];
+  /** False if any sampled public contributor had no verifiable account. */
+  sourceComplete?: boolean;
+  /** Sample of the public source-post text to apply the reader's filters. */
+  filterText?: string;
   /** First verified fediverse author (kept for existing callers). */
   authorAccount?: FediAuthor;
   /** Every verified fediverse author, up to three — Mastodon only ever shows one. */
@@ -111,7 +119,7 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
     if (account?.discoverable === false || s.visibility !== 'public' || s.sensitive === true ||
         (typeof s.spoiler_text === 'string' && s.spoiler_text.trim()) ||
         typeof s.id !== 'string' || typeof s.url !== 'string' ||
-        !isPublicHttpsUrl(s.url) || s.reblog) return [];
+        !isPublicHttpsUrl(s.url) || s.reblog || s.quote || s.in_reply_to_id) return [];
     const media = Array.isArray(s.media_attachments) ? s.media_attachments : [];
     const video = media.find(m => m && typeof m === 'object' &&
       (m as Record<string, unknown>).type === 'video' &&
@@ -126,7 +134,16 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
       image: isPublicHttpsUrl(v.preview_url as string) ? v.preview_url as string : undefined,
       provider: new URL(s.url).hostname, author: typeof account?.display_name === 'string' ? account.display_name : undefined,
       published: typeof s.created_at === 'string' ? s.created_at : undefined,
-      kind: 'video' as const, reason: 'recent' as const, observedBy }];
+      kind: 'video' as const, reason: 'recent' as const, observedBy,
+      sourceComplete: typeof account?.acct === 'string' && !!account.acct &&
+        (isPublicHttpsUrl(account.uri as string) || isPublicHttpsUrl(account.url as string)),
+      sourceAccounts: typeof account?.acct === 'string' && account.acct
+        ? [{ id: typeof account.id === 'string' ? account.id : undefined,
+             handle: account.acct,
+             actorUrl: isPublicHttpsUrl(account.uri as string) ? account.uri as string :
+               isPublicHttpsUrl(account.url as string) ? account.url as string : undefined }] : [],
+      filterText: text.slice(0, 1400),
+    }];
   });
 }
 
@@ -143,7 +160,7 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
     const account = status.account && typeof status.account === 'object' && !Array.isArray(status.account)
       ? status.account as Record<string, unknown> : null;
     if (status.visibility !== 'public' || status.sensitive === true ||
-      account?.discoverable === false || status.reblog ||
+      account?.discoverable === false || status.reblog || status.quote || status.in_reply_to_id ||
       (typeof status.spoiler_text === 'string' && status.spoiler_text.trim()) ||
       typeof status.id !== 'string') continue;
     const card = status.card && typeof status.card === 'object' && !Array.isArray(status.card)
@@ -158,10 +175,20 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
       const count = status[field];
       return total + (typeof count === 'number' && Number.isInteger(count) && count >= 0 && count < 1e6 ? count : 0);
     }, 0);
+    const actorUrl = isPublicHttpsUrl(account?.uri as string) ? account?.uri as string :
+      isPublicHttpsUrl(account?.url as string) ? account?.url as string : undefined;
+    const contributor = typeof account?.acct === 'string' && account.acct && actorUrl
+      ? { id: typeof account.id === 'string' ? account.id : undefined,
+          handle: account.acct, actorUrl }
+      : null;
+    const sourceText = strip(typeof status.content === 'string' ? status.content : '').slice(0, 500);
     const existing = groups.get(key);
     if (existing) {
       if (existing.seen.has(status.id)) continue;
       existing.seen.add(status.id);
+      if (contributor) existing.item.sourceAccounts?.push(contributor);
+      else existing.item.sourceComplete = false; // never restored by later sharers
+      existing.item.filterText = [existing.item.filterText, sourceText].filter(Boolean).join(' ').slice(0, 1800);
       existing.activity = Math.max(existing.activity, rawActivity);
       continue;
     }
@@ -175,6 +202,8 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
           || new URL(key).hostname,
         author, published: typeof status.created_at === 'string' ? status.created_at : undefined,
         kind: 'link', reason: 'recent', observedBy,
+        sourceAccounts: contributor ? [contributor] : [], sourceComplete: !!contributor,
+        filterText: sourceText,
       },
     });
   }

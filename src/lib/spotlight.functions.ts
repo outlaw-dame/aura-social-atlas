@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent } from './fedizen-feed';
+import { allowedSpotlightItem, type SpotlightModeration } from './spotlight-curation';
 import {
   bonfireAuthor, combineSpotlight, fromFederatedLinkCards, fromFederatedVideos, fromMastodonLinks,
   type SpotlightItem,
@@ -20,12 +21,28 @@ export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): 
   const recent: SpotlightItem[] = articles.slice(0, 6).map(a => {
     const account = bonfireAuthor(a);
     const provider = (() => { try { return new URL(a.url).hostname || 'fedizen.net'; } catch { return 'fedizen.net'; } })();
+    // Bonfire's Article GraphQL projection exposes username and canonical actor
+    // URI separately. A bare username is NOT evidence of a local Fedizen
+    // actor: a federated author may have the same username. With no domain-
+    // block list, only a native actor whose canonical URL is on the actual
+    // instance may be safely attributed to a local account.
+    const localAuthor = (() => {
+      if (!a.authorUrl || !a.handle) return false;
+      try {
+        const actor = new URL(a.authorUrl);
+        return actor.protocol === 'https:' && actor.hostname.toLowerCase() === 'fedizen.net' &&
+          !a.handle.replace(/^@/, '').includes('@');
+      } catch { return false; }
+    })();
     return {
       id: `a:${a.id}`, source: 'Bonfire', title: a.title, description: a.summary,
       url: a.url, image: a.image, provider, author: a.author,
       authorUrl: a.authorUrl, published: a.date,
       authorAccount: account, authorAccounts: account ? [account] : undefined,
       kind: 'article', reason: 'recent', observedBy: 'fedizen.net',
+      sourceAccounts: localAuthor && account?.acct ? [{ handle: account.acct, actorUrl: a.authorUrl }] : [],
+      sourceComplete: localAuthor && !!account?.acct,
+      filterText: a.paragraphs.slice(0, 4).join(' ').slice(0, 1800),
     };
   });
   const links = fromMastodonLinks(trendPayload as never, { source: 'Bonfire', observedBy: 'fedizen.net' });
@@ -55,13 +72,17 @@ export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): 
 export const getViewerSpotlight = createServerFn({ method: 'POST' })
   .middleware([requireSupabaseAuth])
   .inputValidator(data => z.object({ expectedAtlasUserId: z.string().uuid() }).strict().parse(data))
-  .handler(async ({ data, context }): Promise<SpotlightItem[]> => {
+  .handler(async ({ data, context }): Promise<{ items: SpotlightItem[]; moderation: SpotlightModeration | null }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const { tokenFor, fedizenGet } = await import('./fedizen.server');
     const connected = await tokenFor(context.userId);
-    if (!connected) return [];
-    const response = await fedizenGet(connected.access_token, '/api/v1/timelines/public?limit=20');
-    if (response.status !== 200) return [];
+    if (!connected) return { items: [], moderation: null };
+    const { readSpotlightModeration } = await import('./spotlight-moderation.server');
+    const [moderation, response] = await Promise.all([
+      readSpotlightModeration(path => fedizenGet(connected.access_token, path, { requireCompleteModeration: true })),
+      fedizenGet(connected.access_token, '/api/v1/timelines/public?limit=20'),
+    ]);
+    if (!moderation || response.status !== 200) return { items: [], moderation };
     const publicPosts = response.data.filter(item => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
       const status = item as Record<string, unknown>;
@@ -82,14 +103,21 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
       if (typeof status.content !== 'string' ||
         !/\b(podcast|episode)\b/i.test(status.content) || typeof card?.url !== 'string' ||
         !/^https:\/\//i.test(card.url) || card.url.length > 2048) return [];
-      return [card.url];
+      const author = status.account && typeof status.account === 'object'
+        ? status.account as Record<string, unknown> : null;
+      if (typeof author?.acct !== 'string' || !author.acct) return [];
+      const actorUrl = typeof author.uri === 'string' ? author.uri :
+        typeof author.url === 'string' ? author.url : undefined;
+      if (!actorUrl) return [];
+      return [{ url: card.url, source: { id: typeof author.id === 'string' ? author.id : undefined,
+        handle: author.acct, actorUrl }, text: status.content.slice(0, 1400) }];
     }).slice(0, 4);
-    if (!candidates.length) return combineSpotlight(linked, videos);
+    if (!candidates.length) return { items: combineSpotlight(linked, videos).filter(it => allowedSpotlightItem(it, moderation)), moderation };
     const { resolveAuthorsFor, mediaFor } = await import('./article-author.server');
-    await resolveAuthorsFor(candidates, 2500).catch(() => new Map());
+    await resolveAuthorsFor(candidates.map(c => c.url), 2500).catch(() => new Map());
     const podcasts: SpotlightItem[] = [];
-    for (const url of candidates) {
-      const episode = mediaFor(url)?.episode;
+    for (const candidate of candidates) {
+      const episode = mediaFor(candidate.url)?.episode;
       if (!episode) continue;
       podcasts.push({
         id: `p:${episode.url}`, source: 'Bonfire', url: episode.url,
@@ -98,7 +126,9 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
         authorUrl: episode.podcast.url, authorAccount: episode.podcast,
         authorAccounts: [episode.podcast], published: episode.published,
         kind: 'podcast', reason: 'recent', observedBy: 'fedizen.net',
+        sourceAccounts: [candidate.source], sourceComplete: true, filterText: candidate.text,
       });
     }
-    return combineSpotlight(linked, podcasts, videos);
+    return { items: combineSpotlight(linked, podcasts, videos).filter(it => allowedSpotlightItem(it, moderation)), moderation };
   });
+
