@@ -79,7 +79,7 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
     if (!connected) return { items: [], moderation: null };
     const { readSpotlightModeration } = await import('./spotlight-moderation.server');
     const [moderation, response] = await Promise.all([
-      readSpotlightModeration(path => fedizenGet(connected.access_token, path)),
+      readSpotlightModeration(path => fedizenGet(connected.access_token, path, { requireCompleteModeration: true })),
       fedizenGet(connected.access_token, '/api/v1/timelines/public?limit=20'),
     ]);
     if (!moderation || response.status !== 200) return { items: [], moderation };
