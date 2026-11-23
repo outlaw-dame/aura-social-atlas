@@ -4,7 +4,7 @@ import { PROVIDERS, PROVIDER_IDS, type ProviderId } from '@/lib/intelligence/pro
 import { BROWSER_CAPABLE } from '@/lib/intelligence/llm';
 import { FILTER_PLACES, MAX_EXPANSIONS, type FilterAction, type FilterPlace } from '@/lib/content-filter';
 import { FEDIZEN_KEYWORD_FILTERS_URL } from '@/lib/fedizen-feed';
-import { AI_PROBLEM, DEFAULT_OPTIONS, type KeyRef, intelligenceReady, useContentFilters, useFilterActions, useFilterCautions, useIntelligence, useIntelligenceActions, type FilterOptions } from '@/components/social/useIntelligence';
+import { AI_PROBLEM, DEFAULT_OPTIONS, type KeyRef, intelligenceReady, whyUnavailable, useContentFilters, useFilterActions, useFilterCautions, useIntelligence, useIntelligenceActions, type FilterOptions } from '@/components/social/useIntelligence';
 import { ACTION_LABEL, ACTION_SHORT, DURATIONS, PLACE_LABEL, downloadExport, expiresAfter, filterSummary, parseImport } from '@/components/social/filter-options';
 import { DEVICE_KEY_NOTE, keyTitle } from '@/components/social/IntelligenceSettings';
 import { useAtlasAuth } from '@/components/social/AuthState';
@@ -104,10 +104,10 @@ export function IntelligencePage() {
 
         <BlockTitle>Features</BlockTitle>
         <List strong inset dividers>
-          <ListItem title="Assistant" footer={active?.where === 'device' ? 'Needs a key on Atlas’s server.' : 'A sparkle button opens chat.'}>
+          <ListItem title="Assistant" footer={whyUnavailable(s, true) ?? 'A sparkle button opens chat.'}>
             <Toggle slot="after" checked={social.assistantEnabled && ready && active?.where === 'server'} disabled={!ready || active?.where !== 'server'} onToggleChange={() => social.setAssistantEnabled(!social.assistantEnabled)} />
           </ListItem>
-          <ListItem title="Check every post against topic filters" footer="Also sends every public post you scroll past to your provider."><Toggle slot="after" checked={s.deepMatching} disabled={!ready || act.busy} onToggleChange={() => void act.update({ deepMatching: !s.deepMatching })} /></ListItem>
+          <ListItem title="Check every post against topic filters" footer={whyUnavailable(s) ?? "Also sends every public post you scroll past to your provider."}><Toggle slot="after" checked={s.deepMatching} disabled={!ready || act.busy} onToggleChange={() => void act.update({ deepMatching: !s.deepMatching })} /></ListItem>
           <ListItem link="#" title="Keyword filters" onClick={() => pushPage('/keyword-filters/')} />
         </List>
         <MobileSemanticSettings />

@@ -21,7 +21,8 @@ import { makeSimilar, useSemantic } from './useSemanticIndex';
 export const AI_PROBLEM: Record<AiProblem, string> = {
   'not-configured': 'Intelligence isn’t set up on this Atlas server yet.',
   'not-ready': 'Turn on Intelligence and add a key first.',
-  'bad-key': 'That key wasn’t accepted. Check it and try again.',
+  'bad-key': 'The provider says that key isn’t valid or is turned off. Check it and try again.',
+  'no-credit': 'The provider says that account has no credit left. Add credit there and try again.',
   'no-access': 'That key can’t use any chat models. Check its permissions with the provider.',
   'rate-limited': 'The provider is limiting requests on this key. Try again in a minute.',
   unavailable: 'The provider didn’t answer. Try again.',
@@ -64,6 +65,18 @@ export function useIntelligence() {
 }
 
 /** True when filters and the assistant can use AI right now. */
+/**
+ * Why an AI setting can't be switched on yet, or null when it can: no AI turned on, no key that chats (embeddings-only
+ * keys don't), or, for the assistant, a key kept only on this device.
+ */
+export function whyUnavailable(s: Intelligence | undefined, needsServerKey = false): string | null {
+  if (!s?.available) return null;
+  if (!s.active) return 'Add a key from Anthropic, OpenAI, Google, Mistral, Kimi or Cloudflare first. Keys for semantic filters only can’t chat.';
+  if (!s.enabled) return 'Turn on Use AI in Atlas first.';
+  if (needsServerKey && s.active.where !== 'server') return 'Needs a key kept on Atlas’s server.';
+  return null;
+}
+
 export const intelligenceReady = (s?: Intelligence | IntelligenceStatus) => !!s?.available && s.enabled && ('active' in s ? !!s.active : !!s.provider && !!s.model);
 
 const problemOf = async (e: unknown): Promise<AiProblem> => {
@@ -104,7 +117,7 @@ export function useIntelligenceActions() {
         const r = await save({ data: { expectedAtlasUserId: id, provider, key, ...(account ? { account } : {}), ...(label?.trim() ? { label: label.trim().slice(0, 40) } : {}) } });
         if ('error' in r) return AI_PROBLEM[r.error];
         put(r.status); return null;
-      } catch { return AI_PROBLEM['bad-key']; }
+      } catch { return AI_PROBLEM.unavailable; }
     }),
     /** Removes a key, on this device or on Atlas's server, by its id. */
     removeKey: (k: KeyRef) => run(async () => {
@@ -174,7 +187,7 @@ export function useAiRunner() {
       if (!c) continue;
       try { return await job(c, k.model); } catch (e) {
         first ??= e;
-        if (!(e instanceof ProviderError) || !['rate-limited', 'unavailable', 'bad-key', 'no-access', 'bad-model', 'no-vision'].includes(e.code)) break;
+        if (!(e instanceof ProviderError) || !['rate-limited', 'unavailable', 'bad-key', 'no-access', 'no-credit', 'bad-model', 'no-vision'].includes(e.code)) break;
       }
     }
     throw first ?? new Error('not-ready');
