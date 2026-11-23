@@ -1,9 +1,10 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 import type { FediMention, FediPerson, FedizenPost } from '@/lib/fedizen-feed';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { linkifyHashtagsWith } from '@/lib/hashtags';
 import { ProfileHoverCard } from './ProfileHoverCard';
+import { useLiveAvatar } from './useLiveAvatar';
 
 /**
  * The people in a post — its author, who boosted it, whom it mentions — each opening their profile in Atlas
@@ -88,9 +89,9 @@ export const canOpen = (p: { acct?: string; actor?: string }) => !!(p.acct || p.
 export const openAuthor = (p: FedizenPost) => openFediProfile({ actor: p.actor, acct: p.acct, name: p.author });
 
 function Face({ person, size }: { person: FediPerson; size: number }) {
-  const [broken, setBroken] = useState(false);
-  return person.avatar && !broken
-    ? <img src={person.avatar} alt="" width={size} height={size} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="atlas-boost-face" />
+  const face = useLiveAvatar(person.avatar, person.actor);
+  return face.src
+    ? <img src={face.src} alt="" width={size} height={size} loading="lazy" referrerPolicy="no-referrer" onError={face.onError} className="atlas-boost-face" />
     : <span aria-hidden="true" className="atlas-boost-face atlas-boost-initial">{person.name.charAt(0)}</span>;
 }
 

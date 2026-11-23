@@ -13,6 +13,7 @@ import { FeedPostCard, useFeedPostActions, type FeedActions } from './FeedPostCa
 import { groupSentence, noticeLabel, type FediPerson, type FedizenPost, type FedizenNotice, type FedizenNoticeGroup, type NoticeFilter, type NoticePost } from '@/lib/fedizen-feed';
 import { noticeActionLabel, noticeTarget, singleNoticeTarget, type NoticeTarget } from '@/lib/notice-target';
 import { openCollection } from '@/lib/collections';
+import { useLiveAvatar } from './useLiveAvatar';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 const kinds: Record<string, { icon: typeof Bell; color: string }> = {
@@ -120,7 +121,7 @@ function GroupRow({ g, unread, actions }: { g: FedizenNoticeGroup; unread: boole
     <span className="grid size-10 shrink-0 place-items-center rounded-full text-white" style={{ background: k.color }}><k.icon className="size-5" aria-hidden="true" /></span>
     <div className="pointer-events-none min-w-0 flex-1">
       {g.people.length > 0 && <div className="mb-1.5 flex items-center -space-x-2">{g.people.slice(0, 6).map((p, i) => {
-        const face = <span className="block atlas-avatar ring-2 ring-background"><Face avatar={p.avatar} name={p.name} small /></span>;
+        const face = <span className="block atlas-avatar ring-2 ring-background"><Face avatar={p.avatar} actor={p.actor} name={p.name} small /></span>;
         const go = open1(p);
         return go ? <ProfileHoverCard key={i} target={{ actor: p.actor, acct: p.acct, name: p.name }}><button type="button" className="pointer-events-auto relative" onClick={go} aria-label={`${p.name}. Open their profile`}>{face}</button></ProfileHoverCard> : <span key={i}>{face}</span>;
       })}
@@ -174,7 +175,7 @@ function PeopleList({ g }: { g: FedizenNoticeGroup }) {
   return <ul className="space-y-2">
     {people.map((p, i) => <li key={p.acct ?? p.actor ?? i} className="flex items-center gap-3">
       <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" disabled={!p.acct && !p.actor} onClick={() => openFediProfile({ actor: p.actor, acct: p.acct, name: p.name })}>
-        <Face avatar={p.avatar} name={p.name} small /><span className="min-w-0"><span className="block truncate text-sm font-semibold">{p.name}</span>{p.acct && <span className="block truncate text-xs text-muted-foreground">@{p.acct}</span>}</span>
+        <Face avatar={p.avatar} actor={p.actor} name={p.name} small /><span className="min-w-0"><span className="block truncate text-sm font-semibold">{p.name}</span>{p.acct && <span className="block truncate text-xs text-muted-foreground">@{p.acct}</span>}</span>
       </button>
       {'id' in p && <FollowBack p={p} back={g.type === 'follow'} />}
     </li>)}
@@ -201,7 +202,7 @@ function SingleActivity({ notices: list, note }: { notices: FedizenNotice[]; not
     const who = n.acct || n.actor ? { actor: n.actor, acct: n.acct, name: n.author } : null;
     const t = singleNoticeTarget(n);
     const face = <span className="relative size-10 shrink-0">
-        <Face avatar={n.avatar} name={n.author} />
+        <Face avatar={n.avatar} actor={n.actor} name={n.author} />
         <span className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full text-white ring-2 ring-background" style={{ background: k.color }}><k.icon className="size-3" aria-hidden="true" /></span>
       </span>;
     return <li key={n.id} className={rowClass(false)}>
@@ -217,32 +218,47 @@ function SingleActivity({ notices: list, note }: { notices: FedizenNotice[]; not
  * People asking to follow you, with Accept and Decline, at the top of Activity as Mastodon lists follow requests. Only
  * shown while there are some (an account that approves followers gets them).
  */
+/**
+ * People asking to follow you, as one row above Activity — their faces, how many, and a chevron — that opens the list
+ * in place (as Instagram, Threads and Ivory keep requests out of the way). Shown open, hundreds of requests would push
+ * every notification off the screen.
+ */
 function FollowRequests() {
   const r = useFollowRequests();
+  const [open, setOpen] = useState(false);
   if (!r.people.length && !r.readError) return null;
-  return <section aria-labelledby="follow-requests" className="mb-6 rounded-2xl border border-border p-4">
-    <h2 id="follow-requests" className="mb-3 text-sm font-semibold">Follow requests <span className="text-muted-foreground">{r.total || ''}</span></h2>
-    {r.readError && <p role="alert" className="text-sm text-muted-foreground">{r.readError}</p>}
-    <ul className="space-y-3">{r.people.map(p => {
-      const who = { actor: p.actor, acct: p.acct, name: p.name };
-      return <li key={p.id} className="flex items-center gap-3">
-        <ProfileHoverCard target={who}><button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => openFediProfile(who)} aria-label={`${p.name} ${p.handle}. Open their profile`}>
-          <Face avatar={p.avatar} name={p.name} />
-          <span className="min-w-0"><span className="block truncate text-sm font-semibold">{p.name}</span><span className="block truncate text-xs text-muted-foreground">{p.handle}</span></span>
-        </button></ProfileHoverCard>
-        <Button size="sm" disabled={r.busyId === p.id} onClick={() => r.answer(p.id, true)}>Accept</Button>
-        <Button size="sm" variant="outline" disabled={r.busyId === p.id} onClick={() => r.answer(p.id, false)}>Decline</Button>
-      </li>;
-    })}</ul>
-    {r.error && <p role="alert" className="mt-2 text-sm text-destructive">{r.error}</p>}
+  const count = r.total || r.people.length;
+  const names = r.people.slice(0, 2).map(p => p.name).join(', ') + (count > 2 ? ` and ${count - 2} more` : '');
+  return <section aria-labelledby="follow-requests" className="mb-6 rounded-2xl border border-border">
+    <button type="button" aria-expanded={open} aria-controls="follow-request-list" onClick={() => setOpen(o => !o)} className="flex w-full items-center gap-3 rounded-2xl p-4 text-left hover:bg-muted/50">
+      <span className="flex shrink-0 -space-x-3" aria-hidden="true">{r.people.slice(0, 3).map(p => <span key={p.id} className="block atlas-avatar ring-2 ring-background"><Face avatar={p.avatar} actor={p.actor} name={p.name} small /></span>)}</span>
+      <span className="min-w-0 flex-1"><span id="follow-requests" className="block text-sm font-semibold">Follow requests</span>{r.readError ? <span role="alert" className="block text-xs text-muted-foreground">{r.readError}</span> : <span className="block truncate text-xs text-muted-foreground">{names}</span>}</span>
+      <span className="text-sm text-muted-foreground">{count}</span>
+      {open ? <ChevronUp className="size-4 text-muted-foreground" aria-hidden="true" /> : <ChevronDown className="size-4 text-muted-foreground" aria-hidden="true" />}
+    </button>
+    {open && <div id="follow-request-list" className="border-t border-border p-4">
+      <ul className="space-y-3">{r.people.map(p => {
+        const who = { actor: p.actor, acct: p.acct, name: p.name };
+        return <li key={p.id} className="flex items-center gap-3">
+          <ProfileHoverCard target={who}><button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => openFediProfile(who)} aria-label={`${p.name} ${p.handle}. Open their profile`}>
+            <Face avatar={p.avatar} actor={p.actor} name={p.name} />
+            <span className="min-w-0"><span className="block truncate text-sm font-semibold">{p.name}</span><span className="block truncate text-xs text-muted-foreground">{p.handle}</span></span>
+          </button></ProfileHoverCard>
+          <Button size="sm" disabled={r.busyId === p.id} onClick={() => r.answer(p.id, true)}>Accept</Button>
+          <Button size="sm" variant="outline" disabled={r.busyId === p.id} onClick={() => r.answer(p.id, false)}>Decline</Button>
+        </li>;
+      })}</ul>
+      {count > r.people.length && <p className="mt-3 text-xs text-muted-foreground">Showing the first {r.people.length} of {count}. Answer these to see more.</p>}
+    </div>}
+    {r.error && <p role="alert" className="px-4 pb-3 text-sm text-destructive">{r.error}</p>}
   </section>;
 }
 
 /** An avatar, or the initial when there's none or it won't load. */
-function Face({ avatar, name, small }: { avatar?: string; name: string; small?: boolean }) {
-  const [broken, setBroken] = useState(false);
+function Face({ avatar, actor, name, small }: { avatar?: string; actor?: string; name: string; small?: boolean }) {
+  const face = useLiveAvatar(avatar, actor);
   const size = small ? 'size-8' : 'size-10';
-  return avatar && !broken
-    ? <img src={avatar} alt="" referrerPolicy="no-referrer" onError={() => setBroken(true)} className={`${size} atlas-avatar object-cover`} />
+  return face.src
+    ? <img src={face.src} alt="" referrerPolicy="no-referrer" onError={face.onError} className={`${size} atlas-avatar object-cover`} />
     : <span className={`social-avatar ${size} font-serif ${small ? 'text-sm' : 'text-lg'}`} aria-hidden="true">{name.charAt(0)}</span>;
 }

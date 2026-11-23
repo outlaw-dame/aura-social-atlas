@@ -454,7 +454,7 @@ export function fromLists(list: { id: string; title?: string | null }[]): Fedize
   return list.filter(l => l && typeof l.id === 'string').map(l => ({ id: l.id, title: (l.title ?? '').trim() || 'Untitled circle' }));
 }
 export function fromAccounts(list: Acct[]): FedizenPerson[] {
-  return list.filter(a => a && typeof a.id === 'string' && a.id).map(a => ({ id: a.id!, name: name(a), handle: `@${a.acct ?? a.username ?? ''}`, avatar: http(a.avatar) }));
+  return list.filter(a => a && typeof a.id === 'string' && a.id).map(a => ({ id: a.id!, name: name(a), handle: `@${a.acct ?? a.username ?? ''}`, avatar: avatarOf(a) }));
 }
 /** "@name@server", "name@server" or "name" → what Mastodon's account lookup takes, or null. */
 export function lookupAcct(handle: string): string | null {

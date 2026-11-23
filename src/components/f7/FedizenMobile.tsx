@@ -5,13 +5,15 @@ import { useNotificationGroups } from '@/components/social/useNotificationGroups
 import type { FedizenNotice } from '@/lib/fedizen-feed';
 import { singleNoticeTarget, type NoticeTarget } from '@/lib/notice-target';
 import { MobileGroupedActivity } from './MobileActivityList';
+import { pushPage } from './navigation';
 import { noticeIcon } from './notice-icons';
 import { openPost } from '@/lib/open-post';
 import { Segmented } from 'framework7-react';
 import { openTag } from '@/lib/hashtags';
 import { useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
-import { Block, BlockTitle, Button, Card, CardContent, CardFooter, Link, List, ListItem, Navbar, NavRight, Page, Popup, f7 } from 'framework7-react';
+import { Block, BlockFooter, BlockTitle, Button, Card, CardContent, CardFooter, Link, List, ListItem, Navbar, NavRight, Page, Popup, f7 } from 'framework7-react';
+import { useLiveAvatar } from '@/components/social/useLiveAvatar';
 import { getRecentArticles, getFedizenPublic } from '@/lib/bonfire.functions';
 import type { BonfireArticle } from '@/lib/spotlight';
 import { useFedizen, useFedizenMessages } from '@/components/social/useFedizen';
@@ -105,25 +107,49 @@ export function MobileFedizenFeed() {
   </>;
 }
 
-/** Phone: people asking to follow you, with Accept and Decline, above Activity (only while there are some). */
+/**
+ * Phone: people asking to follow you, as one row above Activity (only while there are some) — their faces, how many,
+ * and a chevron — that opens the list on its own page, as Instagram, Threads and Ivory do. A long list of requests
+ * would otherwise push every notification off the screen.
+ */
 function MobileFollowRequests() {
   const r = useFollowRequests();
   if (!r.people.length && !r.readError) return null;
-  return <>
-    <BlockTitle>Follow requests{r.total > r.people.length ? ` · ${r.total}` : ''}</BlockTitle>
+  const count = r.total || r.people.length;
+  return <List strong inset dividers mediaList>
+    <ListItem link="#" title="Follow requests" subtitle={r.readError ?? r.people.slice(0, 2).map(p => p.name).join(', ') + (count > 2 ? ` and ${count - 2} more` : '')}
+      after={String(count)} onClick={() => pushPage('/follow-requests/')}>
+      <span slot="media" className="atlas-request-faces" aria-hidden="true">{r.people.slice(0, 3).map(p => <RequestFace key={p.id} p={p} />)}</span>
+    </ListItem>
+  </List>;
+}
+
+function RequestFace({ p }: { p: { name: string; avatar?: string; actor?: string } }) {
+  const face = useLiveAvatar(p.avatar, p.actor);
+  return face.src ? <img src={face.src} alt="" width={40} height={40} referrerPolicy="no-referrer" onError={face.onError} /> : <span className="atlas-activity-initial">{p.name.charAt(0)}</span>;
+}
+
+/** Phone: Activity → Follow requests (a pushed page), each with Accept and Decline. */
+export function FollowRequestsPage() {
+  const r = useFollowRequests();
+  const count = r.total || r.people.length;
+  return <Page>
+    <Navbar title="Follow requests" backLink backLinkShowText={false} />
     {r.readError && <Block>{r.readError}</Block>}
-    <List strong inset dividers mediaList>
+    {!r.people.length && !r.readError && <Block>No one is waiting for an answer.</Block>}
+    {r.people.length > 0 && <List strong inset dividers mediaList>
       {r.people.map(p => <ListItem key={p.id} title={p.name} subtitle={p.handle}
         link="#" onClick={() => openFediProfile({ actor: p.actor, acct: p.acct, name: p.name })}>
-        <span slot="media" className="atlas-activity-media">{p.avatar ? <img src={p.avatar} alt="" width={40} height={40} referrerPolicy="no-referrer" /> : <span className="atlas-activity-initial" aria-hidden="true">{p.name.charAt(0)}</span>}</span>
+        <span slot="media" className="atlas-activity-media"><RequestFace p={p} /></span>
         <span slot="footer" className="atlas-request-actions">
           <Button small fill round disabled={r.busyId === p.id} onClick={(e: { stopPropagation?: () => void }) => { e.stopPropagation?.(); r.answer(p.id, true); }}>Accept</Button>
           <Button small tonal round disabled={r.busyId === p.id} onClick={(e: { stopPropagation?: () => void }) => { e.stopPropagation?.(); r.answer(p.id, false); }}>Decline</Button>
         </span>
       </ListItem>)}
-    </List>
+    </List>}
+    {count > r.people.length && <BlockFooter>Showing the first {r.people.length} of {count}. Answer these to see more.</BlockFooter>}
     {r.error && <Block><p role="alert" style={{ margin: 0 }}>{r.error}</p></Block>}
-  </>;
+  </Page>;
 }
 
 /** Activity tab: the person's real Fedizen notifications. `visible`: the tab is on screen (marks them read). */

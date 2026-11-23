@@ -94,3 +94,16 @@ export const getFediCircles = createServerFn({ method: 'GET' }).middleware([requ
     const r = await fedizenGet(t.access_token, `/api/v1/accounts/${who.id}/lists`);
     return r.status === 200 ? { accountId: who.id, ids: fromLists(r.data as never).map(l => l.id) } : { accountId: who.id, ids: [], error: problem(r.status) };
   });
+
+/**
+ * The avatar an account publishes now (its actor's `icon`), for when the copy Fedizen keeps no longer loads: servers
+ * move or delete old pictures, and Fedizen keeps pointing at them. Read through the guarded fetch and cached on the
+ * server (feed-enrich.server actorAvatars); null when the actor gives none.
+ */
+export const getActorAvatar = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ actor: actorInput }).strict().parse(d))
+  .handler(async ({ data }): Promise<{ avatar: string | null }> => {
+    const { actorAvatars } = await import('./feed-enrich.server');
+    const found = await actorAvatars([data.actor], 4000).catch(() => new Map<string, string>());
+    return { avatar: found.get(data.actor) ?? null };
+  });

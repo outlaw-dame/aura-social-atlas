@@ -358,6 +358,7 @@ export const fediProfile: Impl<typeof FediProfileFns> = {
     return { accountId: id, ids: circles.filter(c => c.members.some(m => m.id === id)).map(c => c.id) };
   },
   getFediProfile: (d: { acct?: string; actor?: string }) => ({ profile: profileOf(d?.acct, d?.actor) }),
+  getActorAvatar: (d: { actor: string }) => ({ avatar: profileOf(undefined, d?.actor)?.avatar ?? null }),
   getFediFollow: (d: { acct?: string; actor?: string }) => {
     const x = d.acct ? personByAcct(d.acct) : undefined; const k = x ? (Object.keys(PEOPLE) as PersonKey[]).find(y => PEOPLE[y] === x) : undefined;
     return { state: (k && following.has(k) ? 'following' : 'none') as 'following' | 'none', canWrite: true };

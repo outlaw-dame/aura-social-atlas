@@ -13,6 +13,7 @@ import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { Icon } from './F7Extras';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
 import { noticeIcon } from './notice-icons';
+import { useLiveAvatar } from '@/components/social/useLiveAvatar';
 
 const iconFor = (type: string) => noticeIcon[type] ?? { ios: 'f7:bell_fill', md: 'material:notifications' };
 
@@ -116,9 +117,9 @@ function RowTarget({ t, label, expanded, onToggle }: { t: NoticeTarget | null; l
 }
 
 function Face({ p }: { p: FediPerson }) {
-  const [broken, setBroken] = useState(false);
-  return p.avatar && !broken
-    ? <img src={p.avatar} alt="" width={30} height={30} referrerPolicy="no-referrer" onError={() => setBroken(true)} />
+  const face = useLiveAvatar(p.avatar, p.actor);
+  return face.src
+    ? <img src={face.src} alt="" width={30} height={30} referrerPolicy="no-referrer" onError={face.onError} />
     : <span className="atlas-activity-initial" aria-hidden="true">{p.name.charAt(0)}</span>;
 }
 
