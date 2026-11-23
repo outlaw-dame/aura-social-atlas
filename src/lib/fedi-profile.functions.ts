@@ -76,3 +76,21 @@ export const setFediFollow = createServerFn({ method: 'POST' }).middleware([requ
     const rel = r.data as { following?: boolean | null; requested?: boolean | null } | undefined;
     return { ok: true, state: rel?.following ? 'following' : rel?.requested ? 'requested' : data.on ? 'requested' : 'none' };
   });
+
+/**
+ * Which of your circles they're in (Mastodon /api/v1/accounts/:id/lists; Bonfire `circles_containing_subject`), with
+ * their Fedizen account id, which adding and removing them goes by (changeFedizenCircleMember).
+ */
+export const getFediCircles = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ acct: acctInput, actor: actorInput }).parse(d))
+  .handler(async ({ data, context }): Promise<{ accountId?: string; ids: string[]; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor, fedizenGet } = await import('./fedizen.server');
+    const { fromLists } = await import('./fedizen-feed');
+    const t = await tokenFor(context.userId);
+    if (!t) return { ids: [], error: 'not-connected' };
+    const who = await findOnFedizen(t.access_token, data.acct, data.actor);
+    if ('error' in who) return { ids: [], error: who.error };
+    const r = await fedizenGet(t.access_token, `/api/v1/accounts/${who.id}/lists`);
+    return r.status === 200 ? { accountId: who.id, ids: fromLists(r.data as never).map(l => l.id) } : { accountId: who.id, ids: [], error: problem(r.status) };
+  });

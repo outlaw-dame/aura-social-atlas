@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { missingAlt, useReading } from '@/lib/reading-prefs';
-import { AtSign, BarChart3, CircleDot, Globe2, House, ImagePlus, Loader2, Lock, MoonStar, Plus, Quote, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { AtSign, BarChart3, CircleDot, Globe2, House, UsersRound, ImagePlus, Loader2, Lock, MoonStar, Plus, Quote, Sparkles, TriangleAlert, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { QuotePolicy } from '@/lib/quote-policy';
 import { GifPicker } from './GifPicker';
@@ -16,7 +16,7 @@ import { MentionSuggestions } from './MentionSuggestions';
 
 const composeField = () => document.getElementById('compose-post') as HTMLTextAreaElement | null;
 
-const AUDIENCE_ICON: Record<Audience, typeof Globe2> = { public: Globe2, unlisted: MoonStar, local: House, private: Lock, circle: CircleDot, direct: AtSign };
+const AUDIENCE_ICON: Record<Audience, typeof Globe2> = { public: Globe2, unlisted: MoonStar, local: House, private: Lock, circle: CircleDot, saved: UsersRound, direct: AtSign };
 
 /**
  * Desktop: writing a new post for Fedizen — text, an optional content warning, an audience, and up to 4 images or one
@@ -104,9 +104,13 @@ export function PostComposer({ publish, onPosted, inputRef }: { publish: ReturnT
         <SelectTrigger aria-label="Which circle" className="h-8 w-auto max-w-[10rem] gap-1.5 border-0 bg-transparent px-2 text-xs shadow-none"><SelectValue /></SelectTrigger>
         <SelectContent>{p.circles.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}</SelectContent>
       </Select>}
+      {p.audience === 'saved' && p.savedAudiences.length > 0 && <Select value={p.savedAudienceId ?? undefined} onValueChange={v => p.setSavedAudienceId(v)} disabled={p.sending}>
+        <SelectTrigger aria-label="Which saved audience" className="h-8 w-auto max-w-[10rem] gap-1.5 border-0 bg-transparent px-2 text-xs shadow-none"><SelectValue /></SelectTrigger>
+        <SelectContent>{p.savedAudiences.map(a => <SelectItem key={a.id} value={a.id}><span className="flex flex-col"><span>{a.label}</span>{a.description && <span className="text-[11px] opacity-70">{a.description}</span>}</span></SelectItem>)}</SelectContent>
+      </Select>}
       {/* Who may quote (lib/quote-policy). Followers-only and mentions-only posts can't be quoted, as on Mastodon. */}
       <Select value={p.quoteLock === 'private' ? 'nobody' : p.quotePolicy} onValueChange={v => p.setQuotePolicy(v as QuotePolicy)} disabled={p.sending || !!p.quoteLock}>
-        <SelectTrigger aria-label="Who can quote it" title={p.quoteLock === 'private' ? 'Followers, circle and mentions-only posts can’t be quoted' : p.quoteLock === 'poll' ? 'Quoting a poll follows your Fedizen default' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : 'Who can quote it'}
+        <SelectTrigger aria-label="Who can quote it" title={p.quoteLock === 'private' ? 'Followers, circle, saved-audience and mentions-only posts can’t be quoted' : p.quoteLock === 'poll' ? 'Quoting a poll follows your Fedizen default' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : 'Who can quote it'}
           className="h-8 w-auto gap-1.5 border-0 bg-transparent px-2 text-xs shadow-none">
           <Quote className="size-3.5" /><span>{p.quoteLock === 'sensitive' || p.quoteLock === 'poll' ? 'Default' : (p.quotePolicies.find(q => q.id === (p.quoteLock === 'private' ? 'nobody' : p.quotePolicy))?.short)}</span>
         </SelectTrigger>

@@ -48,7 +48,7 @@ export function Follow({ p }: { p: FediProfile }) {
 function MoreFor({ p }: { p: FediProfile }) {
   const { user } = useAtlasAuth();
   const me = useIsMe(p.acct);
-  return <ProfileMoreMenu name={p.name} acct={p.acct} enabled={!!user && !me && p.acctVerified && p.kind !== 'group'} />;
+  return <ProfileMoreMenu name={p.name} acct={p.acct} actor={p.actor} enabled={!!user && !me && p.acctVerified && p.kind !== 'group'} />;
 }
 
 export function FediProfileDialog({ target, onClose }: { target: FediProfileTarget | null; onClose: () => void }) {

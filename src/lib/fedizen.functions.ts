@@ -368,29 +368,87 @@ export const replyOnFedizen = createServerFn({ method: 'POST' }).middleware([req
     return { ok: true, ...(url ? { url } : {}) };
   });
 
-/** Your circles on Fedizen. */
+/**
+ * Your circles on Fedizen, with their descriptions when GraphQL `myCircles` answers (`describable`: descriptions can be
+ * read and saved). Otherwise REST /api/v1/lists, which has names only.
+ */
 export const getFedizenCircles = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.parse(d))
-  .handler(async ({ data, context }): Promise<{ circles: FedizenCircle[]; canWrite: boolean; error?: Problem }> => {
+  .handler(async ({ data, context }): Promise<{ circles: FedizenCircle[]; canWrite: boolean; describable: boolean; error?: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const { tokenFor, fedizenGet } = await import('./fedizen.server');
     const t = await tokenFor(context.userId);
-    if (!t) return { circles: [], canWrite: false, error: 'not-connected' };
-    const r = await fedizenGet(t.access_token, '/api/v1/lists');
+    if (!t) return { circles: [], canWrite: false, describable: false, error: 'not-connected' };
     const canWrite = hasScope(t.scope, 'write');
-    return r.status === 200 ? { circles: fromLists(r.data as never), canWrite } : { circles: [], canWrite, error: problem(r.status) };
+    try {
+      const { readMyCircles } = await import('./fedizen-circles.server');
+      return { circles: await readMyCircles(t.access_token), canWrite, describable: true };
+    } catch { /* GraphQL couldn't answer: names from REST */ }
+    const r = await fedizenGet(t.access_token, '/api/v1/lists');
+    return r.status === 200 ? { circles: fromLists(r.data as never), canWrite, describable: false } : { circles: [], canWrite, describable: false, error: problem(r.status) };
   });
 
-/** Who is in one circle. */
-export const getFedizenCircleMembers = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => me.extend({ id: ulid }).parse(d))
-  .handler(async ({ data, context }): Promise<{ people: FedizenPerson[]; error?: Problem }> => {
+/**
+ * Creates a circle, or renames it and sets its description, with GraphQL (`createCircle` / `updateCircle`). Both name
+ * and description are always sent: Bonfire's update replaces the description with whatever it's given.
+ */
+export const saveFedizenCircle = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({
+    id: ulid.optional(),
+    title: z.string().trim().min(1).max(100),
+    summary: z.string().trim().max(500).default(''),
+  }).parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; circle: FedizenCircle } | { ok: false; error: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId, true);
+    if ('error' in c) return { ok: false, error: c.error };
+    const { saveCircle } = await import('./fedizen-circles.server');
+    const { BonfireGraphQLError } = await import('./bonfire-graphql.server');
+    try {
+      return { ok: true, circle: await saveCircle(c.token, { ...(data.id ? { id: data.id } : {}), title: data.title, summary: data.summary }) };
+    } catch (e) {
+      const status = e instanceof BonfireGraphQLError ? e.status : undefined;
+      return { ok: false, error: status ? problem(status) : 'unavailable' };
+    }
+  });
+
+/** Your saved audiences on Fedizen (named custom boundaries), for the composer. Empty when GraphQL can't answer. */
+export const getFedizenAudiences = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ audiences: import('./fedizen-circles').FedizenAudience[]; error?: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId);
-    if ('error' in c) return { people: [], error: c.error };
+    if ('error' in c) return { audiences: [], error: c.error };
+    try {
+      const { readMyAudiences } = await import('./fedizen-circles.server');
+      return { audiences: await readMyAudiences(c.token) };
+    } catch {
+      return { audiences: [], error: 'unavailable' };
+    }
+  });
+
+/**
+ * Who is in one circle, and which of them follow you. On Fedizen a circle post reaches only the members who follow you
+ * (bonfire_federate_activitypub e5489e3 `AdapterUtils.external_recipients_for_object`: "delivery stays gated on
+ * mentioned-or-following"; locally, Home shows the outboxes of people you follow). `followsYou` is null when Fedizen's
+ * relationships couldn't be read.
+ */
+export const getFedizenCircleMembers = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ id: ulid }).parse(d))
+  .handler(async ({ data, context }): Promise<{ people: FedizenPerson[]; followsYou: string[] | null; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { people: [], followsYou: null, error: c.error };
     const { fedizenGet } = await import('./fedizen.server');
     const r = await fedizenGet(c.token, `/api/v1/lists/${data.id}/accounts?limit=80`);
-    return r.status === 200 ? { people: fromAccounts(r.data as never) } : { people: [], error: problem(r.status) };
+    if (r.status !== 200) return { people: [], followsYou: null, error: problem(r.status) };
+    const people = fromAccounts(r.data as never);
+    const { followersAmong } = await import('./fedizen-circles');
+    const ids = people.map(p => p.id).filter(id => /^[A-Za-z0-9_-]{1,64}$/.test(id));
+    const chunks = Array.from({ length: Math.ceil(ids.length / 40) }, (_, i) => ids.slice(i * 40, i * 40 + 40));
+    const answers = await Promise.all(chunks.map(chunk => fedizenGet(c.token, `/api/v1/accounts/relationships?${chunk.map(id => `id%5B%5D=${id}`).join('&')}`).catch(() => null)));
+    const followsYou = answers.every(a => a?.status === 200) ? answers.flatMap((a, i) => followersAmong(a!.data, chunks[i])) : null;
+    return { people, followsYou };
   });
 
 /** Create, rename or delete a circle. */
@@ -412,14 +470,15 @@ export const changeFedizenCircle = createServerFn({ method: 'POST' }).middleware
 
 /** Add someone to a circle by handle (looked up on Fedizen), or remove them by account id. */
 export const changeFedizenCircleMember = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => me.extend({ id: ulid, add: z.string().trim().min(1).max(320).optional(), remove: ulid.optional() }).refine(v => !!v.add !== !!v.remove).parse(d))
+  .inputValidator(d => me.extend({ id: ulid, add: z.string().trim().min(1).max(320).optional(), addId: ulid.optional(), remove: ulid.optional() })
+    .refine(v => [v.add, v.addId, v.remove].filter(Boolean).length === 1).parse(d))
   .handler(async ({ data, context }): Promise<{ ok: true; person?: FedizenPerson } | { ok: false; error: Problem | 'not-found' }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId, true);
     if ('error' in c) return { ok: false, error: c.error };
     const { fedizenGet, fedizenSend } = await import('./fedizen.server');
     let person: FedizenPerson | undefined;
-    let accountId = data.remove;
+    let accountId = data.remove ?? data.addId;
     if (data.add) {
       const acct = lookupAcct(data.add);
       if (!acct) return { ok: false, error: 'not-found' };
@@ -430,7 +489,7 @@ export const changeFedizenCircleMember = createServerFn({ method: 'POST' }).midd
       if (!person) return { ok: false, error: 'not-found' };
       accountId = person.id;
     }
-    const r = await fedizenSend(c.token, data.add ? 'POST' : 'DELETE', `/api/v1/lists/${data.id}/accounts`, { account_ids: [accountId!] });
+    const r = await fedizenSend(c.token, data.remove ? 'DELETE' : 'POST', `/api/v1/lists/${data.id}/accounts`, { account_ids: [accountId!] });
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
     return { ok: true, person };
   });
@@ -684,14 +743,27 @@ export const createPostOnFedizen = createServerFn({ method: 'POST' }).middleware
     quoteId: ulid.optional(),
     text: z.string().trim().max(MAX_TEXT),
     cw: z.string().trim().max(MAX_CW).optional(),
-    visibility: z.enum(['public', 'unlisted', 'local']),
+    visibility: z.enum(['public', 'unlisted', 'local', 'saved']),
+    /** With `saved`: one of the person's saved audiences on Fedizen (getFedizenAudiences). */
+    audienceId: ulid.optional(),
     mediaIds: z.array(ulid).max(4).default([]),
     quotes: z.enum(['anyone', 'ask', 'nobody']),
-  }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty post').parse(d))
-  .handler(async ({ data, context }): Promise<{ ok: true; url?: string; id?: string } | { ok: false; error: Problem }> => {
+  }).refine(p => p.text.length > 0 || p.mediaIds.length > 0, 'empty post')
+    .refine(p => (p.visibility === 'saved') === !!p.audienceId, 'audience').refine(p => p.visibility !== 'saved' || !p.quoteId, 'no quotes to a saved audience').parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; url?: string; id?: string } | { ok: false; error: Problem | 'no-audience' }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId, true);
     if ('error' in c) return { ok: false, error: c.error };
+    // A saved audience is sent as the post's boundary, so it must be one of the person's own: checked with Fedizen first.
+    if (data.visibility === 'saved') {
+      const { readMyAudiences } = await import('./fedizen-circles.server');
+      const mine = await readMyAudiences(c.token).catch(() => null);
+      if (!mine) return { ok: false, error: 'unavailable' };
+      if (!mine.some(a => a.id === data.audienceId)) return { ok: false, error: 'no-audience' };
+    }
+    const boundary = data.visibility === 'saved' ? data.audienceId! : data.visibility;
+    // Who the audience includes is the person's own choice on Fedizen; quoting such a post isn't offered to anyone.
+    const quotes = data.visibility === 'saved' ? 'nobody' as const : data.quotes;
     const { requestBonfireGraphQL, BonfireGraphQLError } = await import('./bonfire-graphql.server');
     const { CREATE_POST_DOCUMENT } = await import('./bonfire/graphql/operations');
     const { quotePermissions } = await import('./quote-policy');
@@ -700,7 +772,7 @@ export const createPostOnFedizen = createServerFn({ method: 'POST' }).middleware
         operation: 'mutation', document: CREATE_POST_DOCUMENT, accessToken: c.token,
         variables: {
           postContent: { htmlBody: data.text, ...(data.cw ? { summary: data.cw } : {}) },
-          boundary: data.visibility, permissions: quotePermissions(data.quotes, data.visibility === 'local' ? 'local' : 'everyone'),
+          boundary, permissions: quotePermissions(quotes, data.visibility === 'local' ? 'local' : 'everyone'),
           ...(data.quoteId ? { quoteId: data.quoteId } : {}),
           ...(data.mediaIds.length ? { uploadedMedia: data.mediaIds } : {}),
         },

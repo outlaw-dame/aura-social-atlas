@@ -206,16 +206,30 @@ export const fedizen: Impl<typeof Fedizen> = {
   replyOnFedizen: (d: { statusId: string; text: string; cw?: string; visibility?: FedizenPost['visibility'] }) => {
     const r = post(d.text, { by: 'me', min: 0, replyTo: { statusId: d.statusId }, visibility: d.visibility ?? 'public', ...(d.cw ? { cw: d.cw } : {}) }); posted.unshift(r); return ok({ url: r.url });
   },
-  getFedizenCircles: () => ({ circles: circles.map(c => ({ id: c.id, title: c.title })), canWrite: true }),
-  getFedizenCircleMembers: (d: { id: string }) => ({ people: circles.find(c => c.id === d.id)?.members ?? [] }),
+  getFedizenCircles: () => ({ circles: circles.map(c => ({ id: c.id, title: c.title, ...(c.summary ? { summary: c.summary } : {}) })), canWrite: true, describable: true }),
+  // Sample: Ana and Priya follow you back, so only they would get a circle post.
+  getFedizenCircleMembers: (d: { id: string }) => {
+    const people = circles.find(c => c.id === d.id)?.members ?? [];
+    return { people, followsYou: people.filter(p => FOLLOWS_YOU.has(p.handle.replace(/^@/, ''))).map(p => p.id) };
+  },
+  saveFedizenCircle: (d: { id?: string; title: string; summary: string }) => {
+    const c = d.id ? circles.find(x => x.id === d.id) : undefined;
+    if (d.id && !c) return { ok: false as const, error: 'unavailable' as const };
+    const saved = c ?? { id: `01LABCIRCLE${String(circles.length + 1).padStart(4, '0')}`, title: d.title, members: [] };
+    saved.title = d.title; saved.summary = d.summary || undefined;
+    if (!c) circles.push(saved);
+    return ok({ circle: { id: saved.id, title: saved.title, ...(saved.summary ? { summary: saved.summary } : {}) } });
+  },
+  getFedizenAudiences: () => ({ audiences: [{ id: '01LABAUDIENCE0001', label: 'Hill walkers', description: 'People from the Saturday walks' }] }),
   changeFedizenCircle: (d: { action: 'create' | 'rename' | 'delete'; id?: string; title?: string }) => {
     if (d.action === 'delete' && d.id) { const i = circles.findIndex(c => c.id === d.id); if (i >= 0) circles.splice(i, 1); return ok({}); }
     if (d.action === 'rename' && d.id) { const c = circles.find(x => x.id === d.id); if (c && d.title) c.title = d.title; return ok({ circle: c ? { id: c.id, title: c.title } : undefined }); }
     const c = { id: `01LABCIRCLE${String(circles.length + 1).padStart(4, '0')}`, title: d.title ?? 'New circle', members: [] }; circles.push(c); return ok({ circle: { id: c.id, title: c.title } });
   },
-  changeFedizenCircleMember: (d: { id: string; add?: string; remove?: string }) => {
+  changeFedizenCircleMember: (d: { id: string; add?: string; addId?: string; remove?: string }) => {
     const c = circles.find(x => x.id === d.id); if (!c) return { ok: false as const, error: 'not-found' as const };
     if (d.remove) { c.members = c.members.filter(m => m.id !== d.remove); return ok({}); }
+    if (d.addId) { const k = (Object.keys(PEOPLE) as PersonKey[]).find(y => person(y).id === d.addId); if (!k) return { ok: false as const, error: 'not-found' as const }; if (!c.members.some(m => m.id === d.addId)) c.members.push(person(k)); return ok({}); }
     const x = d.add ? personByAcct(d.add) : undefined; const k = x ? (Object.keys(PEOPLE) as PersonKey[]).find(y => PEOPLE[y] === x) : undefined;
     if (!k) return { ok: false as const, error: 'not-found' as const };
     const m = person(k); c.members.push(m); return ok({ person: m });
@@ -272,8 +286,8 @@ export const fedizen: Impl<typeof Fedizen> = {
   getRecentHashtags: () => ({ tags: ['atlas', 'fediverse', 'space'] }),
   suggestHashtags: () => ({ tags: ['astronomy', 'space', 'fediverse'] }),
 };
-const circles: { id: string; title: string; members: FedizenPerson[] }[] = [
-  { id: '01LABCIRCLE0001', title: 'Astronomy club', members: (['ana', 'priya', 'grace', 'jonas'] as PersonKey[]).map(person) },
+const circles: { id: string; title: string; summary?: string; members: FedizenPerson[] }[] = [
+  { id: '01LABCIRCLE0001', title: 'Astronomy club', summary: 'Dark-sky nights and the hill on Thursdays', members: (['ana', 'priya', 'grace', 'jonas'] as PersonKey[]).map(person) },
   { id: '01LABCIRCLE0002', title: 'Family', members: [] },
 ];
 const requests: (FedizenPerson & { acct?: string; actor?: string })[] = [{ ...person('kenji'), acct: PEOPLE.kenji.acct, actor: actorOf('kenji') }];
@@ -333,7 +347,16 @@ export const collections: Impl<typeof Collections> = {
   },
   removeFromCollection: (d: { id: string; actorUri: string }) => { const c = collectionsList.find(x => x.id === d.id); if (c) { c.items = c.items.filter(i => (i as { actorUri?: string }).actorUri !== d.actorUri); c.itemCount = c.items.length; } return { ok: true }; },
 };
+/** Sample people who follow you back (accts), for circle reach. */
+const FOLLOWS_YOU = new Set([PEOPLE.ana.acct, PEOPLE.priya.acct]);
+
 export const fediProfile: Impl<typeof FediProfileFns> = {
+  getFediCircles: (d: { acct?: string }) => {
+    const x = d.acct ? personByAcct(d.acct) : undefined; const k = x ? (Object.keys(PEOPLE) as PersonKey[]).find(y => PEOPLE[y] === x) : undefined;
+    if (!k) return { ids: [], error: 'not-found' as const };
+    const id = person(k).id;
+    return { accountId: id, ids: circles.filter(c => c.members.some(m => m.id === id)).map(c => c.id) };
+  },
   getFediProfile: (d: { acct?: string; actor?: string }) => ({ profile: profileOf(d?.acct, d?.actor) }),
   getFediFollow: (d: { acct?: string; actor?: string }) => {
     const x = d.acct ? personByAcct(d.acct) : undefined; const k = x ? (Object.keys(PEOPLE) as PersonKey[]).find(y => PEOPLE[y] === x) : undefined;

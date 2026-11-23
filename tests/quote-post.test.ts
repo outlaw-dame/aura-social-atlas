@@ -54,8 +54,9 @@ describe('Fedizen-only posts (Bonfire "local" boundary)', () => {
   });
   test('the server accepts "local" for createPost and sends it as the boundary', () => {
     const src = require('node:fs').readFileSync('src/lib/fedizen.functions.ts', 'utf8') as string;
-    expect(src).toContain("visibility: z.enum(['public', 'unlisted', 'local'])");
-    expect(src).toContain("quotePermissions(data.quotes, data.visibility === 'local' ? 'local' : 'everyone')");
+    expect(src).toContain("visibility: z.enum(['public', 'unlisted', 'local', 'saved'])");
+    expect(src).toContain("const boundary = data.visibility === 'saved' ? data.audienceId! : data.visibility;");
+    expect(src).toContain("quotePermissions(quotes, data.visibility === 'local' ? 'local' : 'everyone')");
   });
 });
 

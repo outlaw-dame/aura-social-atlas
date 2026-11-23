@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Block, BlockFooter, BlockTitle, Button, Icon, Link, List, ListInput, ListItem, Navbar, NavRight, Page, Popup, Toggle, f7 } from 'framework7-react';
 import { pinCircle, unpinCircle, usePinnedCircles } from '@/lib/feed-types';
 import { useAtlasAuth } from '@/components/social/AuthState';
-import type { FedizenPost } from '@/lib/fedizen-feed';
+import type { FedizenCircle, FedizenPost } from '@/lib/fedizen-feed';
+import { CIRCLE_NAME_MAX, CIRCLE_SUMMARY_MAX, circleReach } from '@/lib/fedizen-circles';
 import { openTag } from '@/lib/hashtags';
 import { BoostedBy, canOpen, openAuthor } from '@/components/social/PostPeople';
 import { ArticleCard } from './ArticleAuthors';
@@ -100,7 +101,7 @@ export function MobileCircles() {
     {q.isLoading && <p className="atlas-library-note">Loading your circles…</p>}
     {q.data?.error && <p role="alert" className="atlas-library-note">{LIBRARY_PROBLEM[q.data.error]}</p>}
     {circles.length > 0 && <List strong inset dividers>
-      {circles.map(c => <ListItem key={c.id} link="#" title={c.title} onClick={() => setOpen(c)}><Icon slot="media" ios="f7:circle_grid_hex" md="material:bubble_chart" /></ListItem>)}
+      {circles.map(c => <ListItem key={c.id} link="#" title={c.title} footer={c.summary} onClick={() => setOpen(c)}><Icon slot="media" ios="f7:circle_grid_hex" md="material:bubble_chart" /></ListItem>)}
     </List>}
     {!q.isLoading && !q.data?.error && !circles.length && <div className="atlas-profile-empty">
       <div className="atlas-profile-empty-icon"><Icon ios="f7:circle_grid_hex" md="material:bubble_chart" /></div>
@@ -110,15 +111,19 @@ export function MobileCircles() {
     {!q.isLoading && !q.data?.error && (canWrite
       ? <Block><Button tonal round onClick={create} disabled={act.busy}><Icon ios="f7:plus" md="material:add" /> New circle</Button></Block>
       : <p className="atlas-library-note">{LIBRARY_PROBLEM['needs-permission']}</p>)}
-    <CirclePopup circle={open} canWrite={canWrite} onClose={() => setOpen(null)} />
+    <CirclePopup circle={open ? circles.find(c => c.id === open.id) ?? open : null} canWrite={canWrite} describable={!!q.data?.describable} onClose={() => setOpen(null)} />
   </div>;
 }
 
-function CirclePopup({ circle, canWrite, onClose }: { circle: { id: string; title: string } | null; canWrite: boolean; onClose: () => void }) {
+function CirclePopup({ circle, canWrite, describable, onClose }: { circle: FedizenCircle | null; canWrite: boolean; describable: boolean; onClose: () => void }) {
   const q = useCircleMembers(circle?.id ?? null);
   const act = useCircleActions();
   const [handle, setHandle] = useState(''), [note, setNote] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false), [title, setTitle] = useState(''), [summary, setSummary] = useState('');
   const people = q.data?.people ?? [];
+  const follows = q.data?.followsYou ? new Set(q.data.followsYou) : null;
+  const reach = circleReach(people.length, follows?.size ?? null);
+  const save = async () => { if (!circle || !title.trim()) return; const err = await act.save({ id: circle.id, title: title.trim(), summary: summary.trim() }); setNote(err); if (!err) setEditing(false); };
   const { user } = useAtlasAuth();
   const pinned = usePinnedCircles(user?.id).some(c => c.id === circle?.id);
   const add = async () => { if (!circle || !handle.trim()) return; const err = await act.addMember(circle.id, handle.trim()); setNote(err); if (!err) setHandle(''); };
@@ -126,14 +131,24 @@ function CirclePopup({ circle, canWrite, onClose }: { circle: { id: string; titl
     const err = await act.remove(circle.id);
     if (err) setNote(err); else { if (user) unpinCircle(user.id, circle.id); onClose(); }
   });
-  return <Popup opened={!!circle} onPopupClosed={() => { setNote(null); setHandle(''); onClose(); }} swipeToClose>
+  return <Popup opened={!!circle} onPopupClosed={() => { setNote(null); setHandle(''); setEditing(false); onClose(); }} swipeToClose>
     <Page>
-      <Navbar title={circle?.title ?? 'Circle'}><NavRight><Link iconOnly popupClose aria-label="Close"><Icon ios="f7:xmark" md="material:close" /></Link></NavRight></Navbar>
+      <Navbar title={circle?.title ?? 'Circle'}><NavRight>
+        {canWrite && describable && circle && !editing && <Link onClick={() => { setTitle(circle.title); setSummary(circle.summary ?? ''); setEditing(true); }}>Edit</Link>}
+        <Link iconOnly popupClose aria-label="Close"><Icon ios="f7:xmark" md="material:close" /></Link></NavRight></Navbar>
+      {editing ? <>
+        <List strong inset>
+          <ListInput label="Name" type="text" value={title} maxlength={CIRCLE_NAME_MAX} onInput={e => setTitle((e.target as HTMLInputElement).value)} />
+          <ListInput label="Description" type="textarea" resizable placeholder="What this circle is for (optional)" value={summary} maxlength={CIRCLE_SUMMARY_MAX} onInput={e => setSummary((e.target as HTMLTextAreaElement).value)} />
+        </List>
+        <Block style={{ display: 'flex', gap: 8 }}><Button fill round onClick={save} disabled={!title.trim() || act.busy}>Save</Button><Button round onClick={() => setEditing(false)}>Cancel</Button></Block>
+      </> : circle?.summary && <Block><p style={{ margin: 0 }}>{circle.summary}</p></Block>}
+      {reach && <BlockFooter>{reach}</BlockFooter>}
       {q.isLoading && <Block>Loading who’s in it…</Block>}
       {q.data?.error && <Block>{LIBRARY_PROBLEM[q.data.error]}</Block>}
       <BlockTitle>People</BlockTitle>
       <List strong inset dividers mediaList>
-        {people.map(p => <ListItem key={p.id} title={p.name} subtitle={p.handle}>
+        {people.map(p => <ListItem key={p.id} title={p.name} subtitle={p.handle} text={follows ? (follows.has(p.id) ? 'Follows you' : 'Doesn’t follow you') : undefined}>
           {p.avatar ? <img slot="media" src={p.avatar} alt="" width={40} height={40} className="atlas-avatar" style={{ objectFit: 'cover' }} referrerPolicy="no-referrer" />
             : <span slot="media" className="atlas-activity-initial" aria-hidden="true">{p.name.charAt(0)}</span>}
           {canWrite && <Link slot="after" iconOnly aria-label={`Remove ${p.name}`} onClick={async () => setNote(await act.removeMember(circle!.id, p.id))}><Icon ios="f7:minus_circle" md="material:remove_circle_outline" /></Link>}

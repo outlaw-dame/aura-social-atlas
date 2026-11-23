@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { useAtlasAuth } from './AuthState';
 import {
-  changeFedizenBlock, changeFedizenCircle, changeFedizenCircleMember, getFedizenBlocks, getFedizenCircleMembers, getFedizenCircles, getFedizenSaved, setFedizenSaved,
+  changeFedizenBlock, changeFedizenCircle, changeFedizenCircleMember, getFedizenAudiences, getFedizenBlocks, getFedizenCircleMembers, getFedizenCircles, getFedizenSaved, saveFedizenCircle, setFedizenSaved,
 } from '@/lib/fedizen.functions';
+import { getFediCircles } from '@/lib/fedi-profile.functions';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 
 /**
@@ -94,6 +95,30 @@ export function useFedizenCircles(enabled = true) {
   });
 }
 
+/** Your saved audiences on Fedizen (named custom boundaries), offered as an audience in the composer. */
+export function useFedizenAudiences(enabled = true) {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getFedizenAudiences);
+  const id = user?.id;
+  return useQuery({
+    queryKey: ['fedizen-audiences', id],
+    queryFn: () => { if (!id) throw new Error('Atlas user is not signed in.'); return read({ data: { expectedAtlasUserId: id } }); },
+    enabled: !!id && enabled, staleTime: 300_000,
+  });
+}
+
+/** Which of your circles someone is in (their profile), and their Fedizen account id to add or remove them by. */
+export function useCirclesWith(who: { acct: string; actor: string } | null) {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getFediCircles);
+  const id = user?.id;
+  return useQuery({
+    queryKey: ['fedizen-circles-with', id, who?.acct],
+    queryFn: () => { if (!id || !who) throw new Error('Nothing to read.'); return read({ data: { expectedAtlasUserId: id, acct: who.acct, actor: who.actor } }); },
+    enabled: !!id && !!who,
+  });
+}
+
 export function useCircleMembers(circleId: string | null) {
   const { user } = useAtlasAuth();
   const read = useServerFn(getFedizenCircleMembers);
@@ -109,9 +134,9 @@ export function useCircleMembers(circleId: string | null) {
 export function useCircleActions() {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();
-  const circle = useServerFn(changeFedizenCircle), member = useServerFn(changeFedizenCircleMember);
-  // Members (and so each pinned circle's feed) may have changed too.
-  const refresh = () => Promise.all(['fedizen-circles', 'fedizen-circle', 'fedizen-circle-feed'].map(k => qc.invalidateQueries({ queryKey: [k] })));
+  const circle = useServerFn(changeFedizenCircle), member = useServerFn(changeFedizenCircleMember), save = useServerFn(saveFedizenCircle);
+  // Members (and so each pinned circle's feed, and who's in which circle) may have changed too.
+  const refresh = () => Promise.all(['fedizen-circles', 'fedizen-circle', 'fedizen-circle-feed', 'fedizen-circles-with'].map(k => qc.invalidateQueries({ queryKey: [k] })));
   const run = useMutation({
     mutationFn: async (fn: (uid: string) => Promise<{ ok: boolean; error?: LibraryProblem }>) => {
       if (!user) return LIBRARY_PROBLEM['not-connected'];
@@ -124,7 +149,10 @@ export function useCircleActions() {
     create: (title: string) => run.mutateAsync(uid => circle({ data: { expectedAtlasUserId: uid, action: 'create', title } })),
     rename: (id: string, title: string) => run.mutateAsync(uid => circle({ data: { expectedAtlasUserId: uid, action: 'rename', id, title } })),
     remove: (id: string) => run.mutateAsync(uid => circle({ data: { expectedAtlasUserId: uid, action: 'delete', id } })),
+    /** With descriptions (GraphQL): create, or rename and describe. Both are always sent (Bonfire replaces the description). */
+    save: (c: { id?: string; title: string; summary: string }) => run.mutateAsync(uid => save({ data: { expectedAtlasUserId: uid, ...c } })),
     addMember: (id: string, handle: string) => run.mutateAsync(uid => member({ data: { expectedAtlasUserId: uid, id, add: handle } })),
+    addMemberById: (id: string, accountId: string) => run.mutateAsync(uid => member({ data: { expectedAtlasUserId: uid, id, addId: accountId } })),
     removeMember: (id: string, accountId: string) => run.mutateAsync(uid => member({ data: { expectedAtlasUserId: uid, id, remove: accountId } })),
   };
 }
@@ -160,4 +188,28 @@ export function useBlockActions() {
     },
   });
   return { busy: run.isPending, block: (handle: string) => run.mutateAsync({ block: handle }), unblock: (id: string) => run.mutateAsync({ unblock: id }) };
+}
+
+/**
+ * Your circles from someone's profile: which they're in, and adding or removing them (by their Fedizen account id).
+ * `ready` once Fedizen has said who they are.
+ */
+export function useProfileCircles(who: { acct: string; actor: string } | null) {
+  const circlesQ = useFedizenCircles(!!who);
+  const withQ = useCirclesWith(who);
+  const act = useCircleActions();
+  const [error, setError] = useState<string | null>(null);
+  const ids = new Set(withQ.data?.ids ?? []);
+  const accountId = withQ.data?.accountId;
+  return {
+    circles: circlesQ.data?.circles ?? [],
+    canWrite: !!circlesQ.data?.canWrite,
+    ready: !!accountId && !withQ.data?.error,
+    isIn: (circleId: string) => ids.has(circleId),
+    busy: act.busy, error,
+    toggle: async (circleId: string) => {
+      if (!accountId) return;
+      setError(ids.has(circleId) ? await act.removeMember(circleId, accountId) : await act.addMemberById(circleId, accountId));
+    },
+  };
 }

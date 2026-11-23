@@ -15,6 +15,7 @@ const AUDIENCE_ICON: Record<Audience, { ios: string; md: string }> = {
   public: { ios: 'f7:globe', md: 'material:public' }, unlisted: { ios: 'f7:moon', md: 'material:nights_stay' },
   local: { ios: 'f7:house', md: 'material:home' },
   circle: { ios: 'f7:circle_grid_hex', md: 'material:group_work' },
+  saved: { ios: 'f7:person_2', md: 'material:group' },
   private: { ios: 'f7:lock', md: 'material:lock' }, direct: { ios: 'f7:at', md: 'material:alternate_email' },
 };
 
@@ -142,6 +143,11 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
           {p.audiences.map(a => <ListItem key={a.id} radio radioIcon="end" name="atlas-audience" title={a.label} footer={a.note} checked={p.audience === a.id} onChange={() => p.setAudience(a.id)}>
             <Icon slot="media" ios={AUDIENCE_ICON[a.id].ios} md={AUDIENCE_ICON[a.id].md} />
           </ListItem>)}
+          {p.audience === 'saved' && p.savedAudiences.length > 0 && <ListItem title="Audience" smartSelect smartSelectParams={{ openIn: 'popover', closeOnSelect: true }}>
+            <select value={p.savedAudienceId ?? ''} onChange={e => p.setSavedAudienceId(e.target.value)}>
+              {p.savedAudiences.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+            </select>
+          </ListItem>}
           {p.audience === 'circle' && p.circles.length > 0 && <ListItem title="Circle" smartSelect smartSelectParams={{ openIn: 'popover', closeOnSelect: true }}>
             <select value={p.circleId ?? ''} onChange={e => p.setCircleId(e.target.value)}>
               {p.circles.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
@@ -150,7 +156,7 @@ export function ComposeSheet({ opened, onClose }: { opened: boolean; onClose: ()
         </List>
         <List strong inset>
           <ListItem link={p.quoteLock ? undefined : '#'} title="Quotes" after={p.quoteLock === 'sensitive' || p.quoteLock === 'poll' ? 'Fedizen’s default' : p.quotePolicies.find(q => q.id === quoteShown)?.short}
-            footer={p.quoteLock === 'private' ? 'Followers, circle and mentions-only posts can’t be quoted' : p.quoteLock === 'poll' ? 'Quoting a poll follows your Fedizen default' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : undefined}
+            footer={p.quoteLock === 'private' ? 'Followers, circle, saved-audience and mentions-only posts can’t be quoted' : p.quoteLock === 'poll' ? 'Quoting a poll follows your Fedizen default' : p.quoteLock === 'sensitive' ? 'Can’t be set while media is marked sensitive without a content warning' : undefined}
             onClick={p.quoteLock || p.sending ? undefined : chooseQuotes}>
             <Icon slot="media" ios="f7:quote_bubble" md="material:format_quote" />
           </ListItem>
