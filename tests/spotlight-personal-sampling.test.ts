@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { allowedSpotlightItem, type SpotlightModeration } from '../src/lib/spotlight-curation';
-import { collectPublicSpotlightCandidates, isPublicSpotlightStatus } from '../src/lib/spotlight-personal.server';
+import { collectPublicSpotlightCandidates, eligibleLocalPublicPosts } from '../src/lib/spotlight-personal.server';
 import { fromFederatedLinkCards, fromFederatedVideos, spotlightUrlKey } from '../src/lib/spotlight';
 import { fedizenGet } from '../src/lib/fedizen.server';
 
@@ -71,10 +71,26 @@ describe('owner-only bounded Spotlight source sampling', () => {
       status('private', 'writer', 'fedizen.net', { visibility: 'private' }),
       status('reply', 'writer', 'fedizen.net', { in_reply_to_id: '01P' }),
     ];
-    const local = posts.filter(isPublicSpotlightStatus);
+    const local = eligibleLocalPublicPosts(posts, policy);
     const eligible = fromFederatedLinkCards(local).filter(it => allowedSpotlightItem(it, policy));
+    expect(local).toHaveLength(1);
     expect(eligible).toHaveLength(1);
     expect(eligible[0].sourceAccounts?.[0].handle).toBe('writer');
+  });
+
+  it('removes blocked contributors before grouping two public posts sharing one URL', () => {
+    const shared = [
+      status('remote', 'remote@remote.example', 'remote.example'),
+      status('allowed', 'author', 'fedizen.net', { reblogs_count: 0, favourites_count: 0 }),
+      status('muted', 'muted', 'fedizen.net'),
+    ];
+    const screened = eligibleLocalPublicPosts(shared, { ...policy, mutedHandles: ['muted'] });
+    expect(screened).toHaveLength(1);
+    const grouped = fromFederatedLinkCards(screened);
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].shares).toBe(1);
+    expect(grouped[0].sourceAccounts?.[0].handle).toBe('author');
+    expect(allowedSpotlightItem(grouped[0], { ...policy, mutedHandles: ['muted'] })).toBe(true);
   });
 
   it('shows an eligible local source immediately, never fetching more pages', async () => {
