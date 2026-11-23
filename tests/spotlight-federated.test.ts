@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
-  combineSpotlight, fromFederatedVideos, fromMastodonLinks, spotlightUrlKey,
+  combineSpotlight, fromFederatedLinkCards, fromFederatedVideos, fromMastodonLinks, spotlightUrlKey,
   type SpotlightItem,
 } from '../src/lib/spotlight';
 import { fetchFixedFedizenJson } from '../src/lib/spotlight-federated.server';
@@ -63,6 +63,29 @@ describe('Spotlight instance scope and honest ranking signals', () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ kind: 'video', reason: 'recent', observedBy: 'fedizen.net' });
     expect(result[0].url).toBe('https://fedizen.net/post/video');
+  });
+
+  it('discovers only quality-gated and genuinely PUBLIC link previews from the sampled federation', () => {
+    const card = { url: 'https://example.org/story?utm_source=one', title: 'A substantive report',
+      description: 'A documented example report that people are discussing across multiple posts.',
+      image: 'https://example.org/cover.jpg', provider_name: 'Example Journal' };
+    const status = (id: string, extra: Record<string, unknown> = {}) => ({
+      id, visibility: 'public', card, account: { discoverable: true }, reblogs_count: 1,
+      replies_count: 1, favourites_count: 2, ...extra,
+    });
+    const result = fromFederatedLinkCards([
+      status('one'), status('two', { card: { ...card, url: 'https://example.org/story' } }),
+      status('one'), // duplicate post ID never counts twice
+      status('private', { visibility: 'private', card: { ...card, url: 'https://example.org/private' } }),
+      status('opt-out', { account: { discoverable: false }, card: { ...card, url: 'https://example.org/hidden' } }),
+      status('cw', { spoiler_text: 'Graphic', card: { ...card, url: 'https://example.org/cw' } }),
+      status('zero', { card: { ...card, url: 'https://example.org/zero' },
+        reblogs_count: 0, replies_count: 0, favourites_count: 0 }),
+      status('incomplete', { card: { url: 'https://example.org/none', title: 'Bad' } }),
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ kind: 'link', reason: 'recent', shares: 2, observedBy: 'fedizen.net' });
+    expect(result[0].url).toContain('example.org/story');
   });
 
   it('deduplicates safe tracking aliases but preserves meaningful query arguments', () => {
