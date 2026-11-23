@@ -106,7 +106,9 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
   return statuses.slice(0, 40).flatMap(value => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
     const s = value as Record<string, unknown>;
-    if (s.visibility !== 'public' || typeof s.id !== 'string' || typeof s.url !== 'string' ||
+    if (s.visibility !== 'public' || s.sensitive === true ||
+        (typeof s.spoiler_text === 'string' && s.spoiler_text.trim()) ||
+        typeof s.id !== 'string' || typeof s.url !== 'string' ||
         !httpOnly(s.url) || s.reblog) return [];
     const media = Array.isArray(s.media_attachments) ? s.media_attachments : [];
     const video = media.find(m => m && typeof m === 'object' &&
