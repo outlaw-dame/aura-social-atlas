@@ -257,18 +257,33 @@ export function htmlToParagraphs(html = ''): string[] {
 
 const isHttp = (u?: string) => !!u && /^https?:\/\//i.test(u);
 
+/** HTML tags that arrived escaped (`&lt;img src=…&gt;`), which Bridgy Fed's web posts and some feeds put in an
+ *  article's summary: once decoded they would read as markup. Only real element names count, so prose such as
+ *  "a < b" or "<3" is kept. For article summaries and bodies only, never for text a person edits (bios). */
+const ESCAPED_TAG = /<\/?(?:a|abbr|b|blockquote|br|code|div|em|figcaption|figure|h[1-6]|hr|i|img|li|ol|p|picture|pre|small|source|span|strong|sub|sup|table|tbody|td|th|thead|tr|u|ul|video)(?:\s[^<>]*)?\/?>/gi;
+const IMG_SRC = /<img\b[^>]*?\ssrc\s*=\s*["'](https:\/\/[^"'\s<>]+)["']/i;
+export const withoutEscapedTags = (text: string) => text.replace(ESCAPED_TAG, ' ').replace(/\s+/g, ' ').trim();
+/** Article text with any escaped markup taken out; lines left empty are dropped. */
+export function articleParagraphs(html = ''): string[] {
+  return htmlToParagraphs(html).map(withoutEscapedTags).filter(Boolean);
+}
+/** The first https image in an article's HTML, escaped or not: Bridgy Fed web posts carry their picture only there. */
+export function firstImageIn(html = ''): string | undefined {
+  return (html.match(IMG_SRC) ?? decode(html).match(IMG_SRC))?.[1];
+}
+
 export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticle[] {
   return nodes.map(withAuthor).flatMap(n => {
     const pc = n.objectPostContent; const title = pc?.name?.trim();
     if (!title) return [];
-    const paragraphs = htmlToParagraphs(pc?.htmlBody ?? '');
+    const paragraphs = articleParagraphs(pc?.htmlBody ?? '');
     if (paragraphs[0]?.toLowerCase() === title.toLowerCase()) paragraphs.shift();
-    const image = n.media?.find(m => m.mediaType?.startsWith('image/') && isHttp(m.url))?.url;
+    const image = n.media?.find(m => m.mediaType?.startsWith('image/') && isHttp(m.url))?.url ?? firstImageIn(pc?.htmlBody ?? '') ?? firstImageIn(pc?.summary ?? '');
     const avatar = n.subject?.profile?.icon;
     const actorUrl = n.subject?.character?.canonicalUri;
     return [{
       authorUrl: isHttp(actorUrl) && actorUrl!.startsWith('https://') ? actorUrl : undefined,
-      id: n.id, title, summary: decode(pc?.summary ?? '').trim() || paragraphs[0]?.slice(0, 220) || '', paragraphs,
+      id: n.id, title, summary: articleParagraphs(pc?.summary ?? '').join(' ') || paragraphs[0]?.slice(0, 220) || '', paragraphs,
       url: isHttp(n.canonicalUri) ? n.canonicalUri! : `https://fedizen.net/post/${n.id}`, date: n.date,
       author: n.subject?.profile?.name || n.subject?.character?.username || 'Fedizen author',
       handle: n.subject?.character?.username ? `@${n.subject.character.username.replace(/^@/, '')}` : undefined,
