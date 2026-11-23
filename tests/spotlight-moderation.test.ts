@@ -9,10 +9,15 @@ const empty: SpotlightModeration = {
   blockedHandles: [], mutedHandles: [], blockedIds: [], mutedIds: [],
   domainCoverage: 'unavailable', blockedDomains: [],
 };
-const card = (sourceAccounts: SpotlightItem['sourceAccounts'], extras: Partial<SpotlightItem> = {}): SpotlightItem => ({
+const card = (sources: SpotlightItem['sourceAccounts'], extras: Partial<SpotlightItem> = {}): SpotlightItem => ({
   id: 'source-card', source: 'Bonfire', title: 'Public article', description: 'Public summary',
   url: 'https://fedizen.net/article', provider: 'fedizen.net', kind: 'article',
-  reason: 'recent', sourceAccounts, ...extras,
+  reason: 'recent',
+  sourceAccounts: sources?.map(source => {
+    const acct = source.handle.replace(/^@/, '').split('@');
+    const host = acct.length === 2 ? acct[1] : 'fedizen.net';
+    return { ...source, actorUrl: source.actorUrl ?? `https://${host}/@test` };
+  }), ...extras,
 });
 
 describe('personal Spotlight identity and moderation gate', () => {
@@ -38,6 +43,13 @@ describe('personal Spotlight identity and moderation gate', () => {
     expect(normalizedAccount('@foo@fake.org@another.org')).toBeNull();
   });
 
+  it('rejects accounts whose short Fedizen handle disagrees with the actor origin', () => {
+    expect(allowedSpotlightItem(card([{ handle: 'alice', actorUrl: 'https://remote.example/users/alice' }]), empty)).toBe(false);
+    expect(allowedSpotlightItem(card([{ handle: 'alice', actorUrl: 'http://fedizen.net/@alice' }]), empty)).toBe(false);
+    expect(allowedSpotlightItem(card([{ handle: 'alice', actorUrl: 'https://fedizen.net:444/@alice' }]), empty)).toBe(false);
+    expect(allowedSpotlightItem(card([{ handle: 'alice', actorUrl: 'https://fedizen.net/@alice' }]), empty)).toBe(true);
+  });
+
   it('does not treat publisher identity as an excuse to bypass an author block', () => {
     expect(allowedSpotlightItem(card([{ handle: 'good@fedizen.net' }], {
       authorAccount: { acct: '@blocked@fedizen.net', name: 'Blocked', url: 'https://fedizen.net/@blocked', verifiedBy: 'fedizen' },
@@ -53,7 +65,7 @@ describe('personal Spotlight identity and moderation gate', () => {
     };
     const statuses = [
       { id: 'a', visibility: 'public', account: { acct: null }, card: preview, reblogs_count: 3 },
-      { id: 'b', visibility: 'public', account: { id: 'b', acct: 'known' }, card: preview, reblogs_count: 3 },
+      { id: 'b', visibility: 'public', account: { id: 'b', acct: 'known', url: 'https://fedizen.net/@known' }, card: preview, reblogs_count: 3 },
     ];
     const links = fromFederatedLinkCards(statuses);
     expect(links).toHaveLength(1);
