@@ -34,7 +34,7 @@ export function ThreadView({ statusId, seed }: { statusId: string; seed?: Fedize
       : !t.thread && t.loading ? <p className="text-sm text-muted-foreground" aria-live="polite">Loading the conversation…</p>
       : !t.thread ? <Problem error={t.error} retry={t.refetch} />
       : <FilterPlaceProvider place="public">
-        <ConversationThread thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} sort={t.sort} setSort={t.setSort}
+        <ConversationThread thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} capped={t.capped} sort={t.sort} setSort={t.setSort}
           replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} arrived={t.arrived} Gate={FilterGate} Content={PostContent} onOpenPost={open} />
       </FilterPlaceProvider>}
     {actions.dialog}

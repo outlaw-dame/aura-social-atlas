@@ -100,6 +100,7 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
   return {
     thread, loading: q.isLoading, refreshing: q.isFetching && !q.isLoading,
     error: q.isError ? 'unavailable' as const : q.data?.error, refetch: () => void q.refetch(), sort, setSort, signedIn: !!user,
+    /** Fedizen sent as many replies as it sends at most: there may be more on fedizen.net. */ capped: !!q.data?.capped,
     /** Posts added while the conversation was open, and when (ms). */ arrived: current?.arrived ?? EMPTY,
   };
 }

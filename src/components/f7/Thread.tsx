@@ -29,7 +29,7 @@ export function ThreadPage({ f7route, seed }: { f7route?: { params: { id?: strin
           ? 'This post isn’t available. It may have been deleted, or you may not be able to see it.'
           : <>{t.error && t.error in FEED_PROBLEM ? FEED_PROBLEM[t.error as keyof typeof FEED_PROBLEM] : FEED_PROBLEM.unavailable} <Link onClick={t.refetch}>Try again</Link></>}</Block>
       : <FilterPlaceProvider place="public">
-        <div className="atlas-proto-wrap"><ConversationThread thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} sort={t.sort} setSort={t.setSort}
+        <div className="atlas-proto-wrap"><ConversationThread thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} capped={t.capped} sort={t.sort} setSort={t.setSort}
           replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} arrived={t.arrived} Gate={MessageGate} Content={MobilePostContent} onOpenPost={p => openPost(p)} /></div>
       </FilterPlaceProvider>}
     {actions.sheet}
