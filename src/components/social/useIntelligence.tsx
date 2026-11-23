@@ -221,10 +221,14 @@ export function useAiRunner() {
 /* ── Keyword filters ─────────────────────────────────────────────────────────────────────────── */
 
 /** The person's keyword filters (Atlas keeps them; Fedizen's list has no API to read yet). */
-export function useContentFilters() {
+export function useContentFilters(strictDiscovery = false) {
   const { user } = useAtlasAuth();
   const read = useServerFn(listContentFilters);
-  return useQuery({ queryKey: filtersKey(user?.id), queryFn: () => read(), enabled: !!user, staleTime: 5 * 60_000 });
+  return useQuery({
+    queryKey: filtersKey(user?.id), queryFn: () => read(), enabled: !!user,
+    staleTime: strictDiscovery ? 30_000 : 5 * 60_000,
+    ...(strictDiscovery ? { refetchOnWindowFocus: 'always' as const, refetchInterval: 2 * 60_000 } : {}),
+  });
 }
 
 export type FilterOptions = { action: FilterAction; places: FilterPlace[]; expiresAt: string | null; exceptFollowing: boolean };
@@ -437,10 +441,11 @@ export function useShownPosts<T extends FilterablePost & { handle?: string }>(po
  */
 export function useStrictSpotlightFilters(posts: FilterablePost[]): ReadonlySet<string> {
   const env = useContext(EngineContext);
-  const q = useContentFilters();
+  const q = useContentFilters(true);
   const revision = useSyncExternalStore(env?.engine.subscribe ?? noop, env?.engine.getRevision ?? zero, zero);
   const list = q.data && 'filters' in q.data ? q.data.filters : null;
-  const ready = !!env && !!list && env.engine.hasCurrentFilters(list);
+  const ready = !!env && !!list && !q.isFetching && !q.isError &&
+    env.engine.hasCurrentFilters(list);
   useEffect(() => {
     if (!ready) return;
     for (const p of posts) env?.engine.request(p, 'public');
