@@ -100,6 +100,30 @@ export class FilterEngine {
     return unknown ? undefined : out;
   }
 
+  /** Strict discovery must not flash a card while semantic checks are
+   * pending. Unlike normal feeds, Spotlight contains no place to veil a post
+   * and no preexisting relationship trust, so unknown means HIDE.
+   */
+  hasCurrentFilters(filters: ContentFilter[]): boolean { return this.filters === filters; }
+
+  discoveryClear(p: FilterablePost, place: FilterPlace = 'public'): boolean {
+    const applicable = this.filters.filter(f => applies(f, place));
+    const semantic = applicable.filter(f => f.semantic);
+    if (semantic.length) {
+      const key = this.key(p);
+      // No semantic provider? Do not silently degrade a promised semantic hide
+      // into a plain keyword-only check for public recommendations.
+      if (!this.similar && !this.ai) return false;
+      if (this.similar && !this.near.has(key)) return false;
+      const hits = lexicalHits(this.compiled, p);
+      const nearMatches = this.near.get(key)?.all ?? [];
+      const needsJudgment = this.ai && (this.deep || hits.some(h =>
+        semantic.some(f => f.id === h.filterId)) || nearMatches.some(id => semantic.some(f => f.id === id)));
+      if (needsJudgment && !this.results.has(key)) return false;
+    }
+    return this.evaluate(p, place).state === 'clear';
+  }
+
   /** What the feed does with this post right now. Pure: call `request` (in an effect) to have the AI check it. */
   evaluate(p: FilterablePost, place: FilterPlace = 'home'): Verdict {
     if (!this.filters.length || p.mine) return { state: 'clear' };
@@ -175,7 +199,8 @@ export class FilterEngine {
           const m = byN.get(n);
           if (!m) return; // the engine failed: words (and the AI, if any) still apply
           this.near.set(key, { all: m.map(x => x.id), strong: m.filter(x => x.strong).map(x => x.id) });
-          changed ||= m.some(x => x.strong);
+          // A completed negative match must wake strict-discovery viewers too.
+          changed = true;
           // With an AI model: posts close in meaning go to it, with those filters as candidates.
           if (this.ai && this.judge && m.length && !this.results.has(key) && !this.failed.has(key) && !this.inFlight.has(key)) {
             const lexical = lexicalHits(this.compiled, p).map(h => h.filterId).filter(id => this.byId.get(id)?.semantic);
@@ -184,7 +209,7 @@ export class FilterEngine {
             if (!this.timer) this.timer = setTimeout(() => { this.timer = null; void this.flush(); }, DELAY);
           }
         });
-        if (changed && !this.ai) this.emit();
+        if (changed) this.emit();
       }
     } finally { this.nearBusy = false; }
   }
