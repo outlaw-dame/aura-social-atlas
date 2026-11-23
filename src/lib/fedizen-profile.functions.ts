@@ -86,17 +86,18 @@ export const saveMyFedizenProfileImage = createServerFn({ method: 'POST' }).midd
   });
 
 /**
- * Blocks or unblocks the whole server someone is on, for you, as Mastodon's "Block domain" (server-block.server.ts).
+ * Blocks the whole server someone is on, for you, as Mastodon's "Block domain" (server-block.server.ts). Unblocking
+ * isn't offered: Bonfire's API can't do it yet (useServerBlock).
  * Their own address must be on that server; your own server (Fedizen) can't be blocked. The answer is `unconfirmed`
  * when Fedizen took the request without saying whether it worked, which is how it always answers for servers.
  */
-export const changeFedizenServerBlock = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => z.object({ expectedAtlasUserId: z.string().uuid(), acct: z.string().regex(/^[^@\s]{1,100}@[a-z0-9.-]{3,253}$/i), on: z.boolean() }).strict().parse(d))
+export const blockFedizenServer = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: z.string().uuid(), acct: z.string().regex(/^[^@\s]{1,100}@[a-z0-9.-]{3,253}$/i), }).strict().parse(d))
   .handler(async ({ data, context }): Promise<{ ok: true; outcome: 'done' | 'unconfirmed' } | { ok: false; error: Problem | 'own-server' | 'not-found' }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     if (/@fedizen\.net$/i.test(data.acct)) return { ok: false, error: 'own-server' };
     try {
-      const [{ verifiedNativeBonfireConnection }, { serverIdFor, changeServerBlock }] = await Promise.all([
+      const [{ verifiedNativeBonfireConnection }, { serverIdFor, blockServer }] = await Promise.all([
         import('./bonfire-verified-connection.server'), import('./server-block.server'),
       ]);
       const c = await verifiedNativeBonfireConnection(data.expectedAtlasUserId, context.userId);
@@ -104,7 +105,7 @@ export const changeFedizenServerBlock = createServerFn({ method: 'POST' }).middl
       if (!hasScope(c.scope, 'write')) return { ok: false, error: 'needs-permission' };
       const server = await serverIdFor(data.acct);
       if (!server) return { ok: false, error: 'not-found' };
-      return { ok: true, outcome: await changeServerBlock(c.accessToken, server, data.on) };
+      return { ok: true, outcome: await blockServer(c.accessToken, server) };
     } catch (e) {
       return { ok: false, error: isRateLimited(e) ? 'rate-limited' : (e as { kind?: string })?.kind === 'graphql' ? 'rejected' : 'unavailable' };
     }

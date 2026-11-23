@@ -22,7 +22,18 @@ Bonfire already supports this for a person: `Bonfire.Boundaries.Blocks.block/3` 
 
 So Mastodon apps (Ivory, Phanpy, Tusky, Ice Cubes, Atlas…) can't offer or show server blocks.
 
-Today, Atlas can only reach this indirectly: `blockUser(id: <peerId>)`, with the id from `user { character { peered { peerId } } }`. That blocks the server, but then the resolver loads the id as a user and returns an error, so apps can't tell success from failure. Apps also can't list or unblock reliably.
+## A bug this also fixes: unblocking a server by id
+
+Tried live on Fedizen (v1.1.0-rc.1) on 23 Nov 2026:
+
+- **Block worked.** `blockUser(id: <peerId>)` blocked `castopod.lansdalelife.net`: the instance appeared on Settings → Blocked. The answer was still "Could not block user", because `blocked?/2` checks the id as a person.
+- **Unblock didn't.** `unblockUser(id: <peerId>)` left it there. `Blocks.block/3` has a clause for a binary id that loads it (`Needles.get`, then `Instances.get`) and blocks the Peer through its instance circle. `Blocks.unblock/3` has no such clause, so the bare id string reaches `do_mutate_blocklists(:unblock, …)`. `Circles.remove_from_circles/2` then looks for an encircle whose subject is the peer id, while the block encircled the instance's circle, so nothing is removed.
+
+Suggested fix in `bonfire_boundaries/lib/blocks.ex`: give `unblock/3` the same `is_binary` clause `block/3` has, resolving the id before `mutate/4`. The `/api/v1/domain_blocks` DELETE below resolves the host to the Peer first, so it is unaffected either way.
+
+## How Atlas does it today
+
+Atlas can only reach this indirectly: `blockUser(id: <peerId>)`, with the id from `user { character { peered { peerId } } }`. That blocks the server, but the answer is an error even when it worked, and unblocking this way doesn't work (above). Apps also can't list blocked servers.
 
 ## Proposed change
 

@@ -35,16 +35,16 @@ export function useModerationActions(s: Subject, enabled: boolean) {
     [{ text: s.statusId ? `Why are you reporting this post by ${s.name}?` : `Why are you reporting ${s.name}?`, label: true }, ...REPORT_CATEGORIES.map(c => ({ text: c.label, onClick: () => note(c.id) }))],
     [{ text: 'Cancel', strong: true }],
   ] }).open();
-  // Mastodon's "Block domain": the whole server, for you (useServerBlock). Fedizen can't tell apps which servers are
-  // blocked, so both directions are offered, and its Blocked page lists them.
+  // Mastodon's "Block domain": the whole server, for you (useServerBlock). Unblocking is on Fedizen's Blocked page:
+  // Bonfire's API can block a server but not unblock one.
   const host = serverOf(s.acct);
   const toast = (text: string) => f7.toast.create({ text, closeTimeout: 3000 }).open();
   const blockServer = () => host && s.acct && f7.dialog.create({ title: `Block ${host}?`, text: blockServerText(host), buttons: [
-    { text: 'Cancel' }, { text: 'Block', color: 'red', strong: true, onClick: async () => toast(await servers.change(s.acct!, true)) },
+    { text: 'Cancel' }, { text: 'Block', color: 'red', strong: true, onClick: async () => toast(await servers.block(s.acct!)) },
   ] }).open();
   const serverButtons = host && s.acct ? [
     { text: `Block ${host}…`, color: 'red', onClick: blockServer },
-    { text: `Unblock ${host}`, onClick: async () => toast(await servers.change(s.acct!, false)) },
+    { text: 'Unblock on Fedizen…', onClick: () => window.open(servers.blockedPage, '_blank', 'noopener') },
   ] : [];
   return {
     buttons: enabled ? [{ text: muted ? `Unmute ${s.name}` : `Mute ${s.name}`, onClick: () => void toggleMute() }, { text: 'Report…', color: 'red', onClick: report }, ...serverButtons] : [],

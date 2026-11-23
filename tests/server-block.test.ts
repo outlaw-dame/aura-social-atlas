@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { changeServerBlock, serverIdFor } from '../src/lib/server-block.server';
+import { blockServer, serverIdFor } from '../src/lib/server-block.server';
 
 // Bonfire's answers are imitated with a stubbed fetch; ids and servers are invented.
 const realFetch = globalThis.fetch;
@@ -28,10 +28,8 @@ describe('blocking a whole server through Bonfire', () => {
 
   test("Bonfire's errors for a server block say nothing (a block that worked answers \"Could not block user\")", async () => {
     answer({ data: { blockUser: { id: 'PEER1' } } });
-    expect(await changeServerBlock(token(), 'PEER1', true)).toBe('done');
+    expect(await blockServer(token(), 'PEER1')).toBe('done');
     answer({ data: { blockUser: null }, errors: [{ message: 'Could not block user' }] });
-    expect(await changeServerBlock(token(), 'PEER1', true)).toBe('unconfirmed');
-    answer({ data: { unblockUser: null }, errors: [{ message: 'not_found' }] });
-    expect(await changeServerBlock(token(), 'PEER1', false)).toBe('unconfirmed');
+    expect(await blockServer(token(), 'PEER1')).toBe('unconfirmed');
   });
 });

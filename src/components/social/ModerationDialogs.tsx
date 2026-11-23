@@ -100,13 +100,12 @@ export function ProfileMoreMenu({ name, acct, actor, enabled }: { name: string; 
         </DropdownMenuSub>}
         <DropdownMenuItem disabled={mutes.busy} onSelect={() => void mutes.mute({ acct, on: !muted })}><VolumeX />{muted ? `Unmute ${name}` : `Mute ${name}`}</DropdownMenuItem>
         <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setReporting(true)}><Flag />Report…</DropdownMenuItem>
-        {/* Mastodon's "Block domain": the whole server, for you. Fedizen can't tell apps which servers are blocked, so
-            both directions are offered; its Blocked page lists them. */}
+        {/* Mastodon's "Block domain": the whole server, for you. Unblocking happens on Fedizen's Blocked page: Bonfire's
+            API can block a server but not unblock one (useServerBlock). */}
         {host && <>
           <DropdownMenuSeparator />
           <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={servers.busy} onSelect={() => setConfirmHost(true)}><Globe2 />Block {host}…</DropdownMenuItem>
-          <DropdownMenuItem disabled={servers.busy} onSelect={async () => setServerNote(await servers.change(acct, false))}><Globe2 />Unblock {host}</DropdownMenuItem>
-          <DropdownMenuItem asChild><a href={servers.blockedPage} target="_blank" rel="noopener noreferrer"><ArrowUpRight />Blocked servers on Fedizen</a></DropdownMenuItem>
+          <DropdownMenuItem asChild><a href={servers.blockedPage} target="_blank" rel="noopener noreferrer"><ArrowUpRight />Unblock on Fedizen…</a></DropdownMenuItem>
         </>}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -116,7 +115,7 @@ export function ProfileMoreMenu({ name, acct, actor, enabled }: { name: string; 
         <AlertDialogHeader><AlertDialogTitle>Block {host}?</AlertDialogTitle><AlertDialogDescription>{blockServerText(host)}</AlertDialogDescription></AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={async () => setServerNote(await servers.change(acct, true))}>Block {host}</AlertDialogAction>
+          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={async () => setServerNote(await servers.block(acct))}>Block {host}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>}

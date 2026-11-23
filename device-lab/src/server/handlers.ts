@@ -313,7 +313,7 @@ export const fedizenProfile: Impl<typeof FedizenProfileFns> = {
   getMyFedizenProfile: () => ({ profile: labProfile, canWrite: true }),
   saveMyFedizenProfile: (d: { profile: typeof labProfile }) => { labProfile = { ...d.profile }; return { ok: true as const, profile: labProfile }; },
   // As Fedizen answers a server block that worked: taken, not confirmed.
-  changeFedizenServerBlock: () => ({ ok: true as const, outcome: 'unconfirmed' as const }),
+  blockFedizenServer: () => ({ ok: true as const, outcome: 'unconfirmed' as const }),
   // The picked picture stays in this page (an object URL); nothing is uploaded anywhere.
   saveMyFedizenProfileImage: (d: FormData) => {
     const file = d.get('file');
