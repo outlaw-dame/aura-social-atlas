@@ -73,6 +73,22 @@ describe('personal Spotlight identity and moderation gate', () => {
     expect(allowedSpotlightItem(links[0], empty)).toBe(false);
   });
 
+  it('does not promote quote previews whose secondary author cannot be evaluated', () => {
+    const status = {
+      id: 'quote', visibility: 'public',
+      account: { id: 'a', acct: 'allowed', url: 'https://fedizen.net/@allowed' },
+      url: 'https://fedizen.net/posts/quote',
+      quote: { quoted_status: { content: 'Text by a blocked account' } },
+      content: 'Quoted a blocked person', media_attachments: [{ type: 'video', url: 'https://media.example.org/a.mp4' }],
+      card: { url: 'https://example.org/article', title: 'A fully qualifying example story',
+        description: 'A fully qualifying example description for a linked article.',
+        image: 'https://example.org/preview.jpg' },
+      reblogs_count: 5,
+    };
+    expect(fromFederatedVideos([status])).toEqual([]);
+    expect(fromFederatedLinkCards([status])).toEqual([]);
+  });
+
   it('does not promote private posts even with a valid source-account handle', () => {
     expect(fromFederatedVideos([{ id: 'x', visibility: 'private', url: 'https://fedizen.net/p/x', account: { acct: 'good' }, media_attachments: [{ type: 'video', url: 'https://cdn.example.org/v.mp4' }] }])).toEqual([]);
   });
