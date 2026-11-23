@@ -2,7 +2,7 @@
  * for per-account decisions. "Provider" is a publisher, not an account origin.
  */
 import type { FilterablePost } from './content-filter';
-import type { SpotlightItem } from './spotlight';
+import { combineSpotlight, type SpotlightItem } from './spotlight';
 
 export type SpotlightModeration = {
   blockedHandles: string[];
@@ -81,4 +81,18 @@ export function spotlightFilterPost(item: SpotlightItem): FilterablePost {
     authorId: item.sourceAccounts?.[0]?.id,
     visibility: 'public',
   };
+}
+
+/** Reject blocked/unverifiable source records BEFORE coalescing equal URLs.
+ * Public trend metadata alone does not prove a contributor is safe for the
+ * viewer. Precedence applies only among records which passed moderation. */
+export function selectModeratedSpotlight(
+  shared: SpotlightItem[], viewer: SpotlightItem[], moderation: SpotlightModeration,
+): SpotlightItem[] {
+  const eligible = (items: SpotlightItem[]) => items.filter(item => allowedSpotlightItem(item, moderation));
+  return combineSpotlight(
+    eligible(shared.filter(item => item.reason === 'trending')),
+    eligible(viewer),
+    eligible(shared.filter(item => item.reason !== 'trending')),
+  );
 }

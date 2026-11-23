@@ -479,7 +479,10 @@ export function useStrictSpotlightFilters(posts: FilterablePost[]): ReadonlySet<
   const q = useContentFilters(true);
   const revision = useSyncExternalStore(env?.engine.subscribe ?? noop, env?.engine.getRevision ?? zero, zero);
   const list = q.data && 'filters' in q.data ? q.data.filters : null;
-  const ready = !!env && !!list && !q.isFetching && !q.isError &&
+  // A background revalidation keeps the last authoritative, owner-scoped rules.
+  // Edits replace the query data, while errors still fail closed. Do not hide
+  // every story every two minutes merely because a refresh is in flight.
+  const ready = !!env && !!list && !q.isError &&
     env.engine.hasCurrentFilters(list);
   useEffect(() => {
     if (!ready) return;
