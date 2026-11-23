@@ -1,6 +1,6 @@
 /** Browser-safe Spotlight types/normalizers: provider-relative links, real ActivityPub articles and media. */
 import { htmlToRich, type RichBlock } from './rich-text';
-import type { FediAuthor } from './article-author';
+import { isPublicHttpsUrl, type FediAuthor } from './article-author';
 
 export type SpotlightItem = {
   id: string; source: 'Mastodon' | 'Bonfire'; title: string; description: string; url: string;
@@ -76,7 +76,7 @@ export function fromMastodonLinks(
     }, 0);
     return [{
       id: `l:${l.url}`, source, title: l.title.trim(), description: typeof l.description === 'string' ? l.description.slice(0, 1000) : '',
-      url: l.url, image: httpOnly(l.image ?? undefined),
+      url: l.url, image: isPublicHttpsUrl(l.image ?? undefined) ? l.image ?? undefined : undefined,
       provider: (typeof l.provider_name === 'string' && l.provider_name.trim()) || hostname,
       ...linkAuthor(l, host), shares: references || undefined, kind: l.type === 'video' ? 'video' as const : 'link' as const,
       reason: 'trending' as const, observedBy: host,
@@ -115,7 +115,7 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
     const media = Array.isArray(s.media_attachments) ? s.media_attachments : [];
     const video = media.find(m => m && typeof m === 'object' &&
       (m as Record<string, unknown>).type === 'video' &&
-      httpOnly((m as Record<string, unknown>).url as string));
+      isPublicHttpsUrl((m as Record<string, unknown>).url as string));
     if (!video || !media.length) return [];
     const v = video as Record<string, unknown>;
     const text = strip(typeof s.content === 'string' ? s.content : '');
@@ -123,7 +123,7 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
     if (!title || title.length > 200) return [];
     return [{ id: `v:${s.id}`, source: 'Bonfire' as const,
       url: s.url, title, description: text.slice(0, 400),
-      image: httpOnly(v.preview_url as string) || undefined,
+      image: isPublicHttpsUrl(v.preview_url as string) ? v.preview_url as string : undefined,
       provider: observedBy, author: typeof account?.display_name === 'string' ? account.display_name : undefined,
       published: typeof s.created_at === 'string' ? s.created_at : undefined,
       kind: 'video' as const, reason: 'recent' as const, observedBy }];
@@ -151,7 +151,7 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
     if (!card || typeof card.url !== 'string' || card.url.length > 2048 ||
       typeof card.title !== 'string' || card.title.trim().length < 10 ||
       typeof card.description !== 'string' || card.description.trim().length < 30 ||
-      typeof card.image !== 'string' || !httpOnly(card.image)) continue;
+      typeof card.image !== 'string' || !isPublicHttpsUrl(card.image)) continue;
     const key = spotlightUrlKey(card.url);
     if (!key) continue;
     const rawActivity = ['reblogs_count', 'replies_count', 'favourites_count'].reduce((total, field) => {
