@@ -431,6 +431,25 @@ export function useShownPosts<T extends FilterablePost & { handle?: string }>(po
   }, [env, posts, subjects, revision]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+/** Spotlight is discovery, not a feed of messages already addressed to the
+ * reader. Until the user's filter list is loaded and the existing engine
+ * finishes relevant semantic checks, zero items may be displayed.
+ */
+export function useStrictSpotlightFilters(posts: FilterablePost[]): ReadonlySet<string> {
+  const env = useContext(EngineContext);
+  const q = useContentFilters();
+  const revision = useSyncExternalStore(env?.engine.subscribe ?? noop, env?.engine.getRevision ?? zero, zero);
+  const list = q.data && 'filters' in q.data ? q.data.filters : null;
+  const ready = !!env && !!list && env.engine.hasCurrentFilters(list);
+  useEffect(() => {
+    if (!ready) return;
+    for (const p of posts) env?.engine.request(p, 'public');
+  }, [env, posts, ready]);
+  return useMemo(() => new Set(ready
+    ? posts.filter(post => env!.engine.discoveryClear(post, 'public')).map(post => post.id)
+    : []), [ready, posts, env, revision]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 export function useShownCount(posts: (FilterablePost & { handle?: string })[]): number {
   return useShownPosts(posts).length;
 }
