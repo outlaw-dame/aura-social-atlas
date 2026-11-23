@@ -18,7 +18,6 @@ export const serverOf = (acct: string | undefined) => {
 export const blockServerText = (host: string) => `You won’t see posts or notifications from anyone on ${host}, and they won’t see yours.`;
 
 const SAID = {
-  'not-done': (host: string, on: boolean) => `Fedizen didn’t ${on ? 'block' : 'unblock'} ${host}.`,
   'not-found': (host: string) => `Fedizen doesn’t know ${host} yet.`,
   'own-server': () => 'That’s your own server.',
   'needs-permission': () => 'Reconnect Fedizen so Atlas can change your blocks.',
@@ -27,8 +26,8 @@ const SAID = {
 
 /**
  * Blocks or unblocks a whole server for the person, as Mastodon's "Block domain" (Bonfire's API offers no direct way:
- * see changeFedizenServerBlock). Bonfire answers a block that worked with an error it can't avoid, so the result is
- * often "sent" rather than "done"; both say where to check. Fedizen's Blocked page lists them.
+ * see changeFedizenServerBlock). Bonfire's answer never says whether it worked (server-block.server.ts); tried live,
+ * the block did, so a request Fedizen took is reported as done, with where to see it.
  */
 export function useServerBlock() {
   const { user } = useAtlasAuth();
@@ -44,7 +43,7 @@ export function useServerBlock() {
       if (r.ok) {
         void Promise.all(['fedizen-home', 'fedizen-foryou', 'fedizen-notifications'].map(k => qc.invalidateQueries({ queryKey: [k] })));
         return r.outcome === 'done' ? `${host} ${on ? 'blocked' : 'unblocked'}.`
-          : `Sent to Fedizen. It can’t confirm server ${on ? 'blocks' : 'unblocks'} to apps yet; its Blocked page shows them.`;
+          : `${on ? 'Blocked' : 'Unblocked'} ${host} on Fedizen. Its Blocked page lists your blocked servers.`;
       }
       return (SAID[r.error] ?? (() => 'Couldn’t reach Fedizen. Try again.'))(host, on);
     } catch {
