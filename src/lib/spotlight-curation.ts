@@ -2,7 +2,7 @@
  * for per-account decisions. "Provider" is a publisher, not an account origin.
  */
 import type { FilterablePost } from './content-filter';
-import { combineSpotlight, type SpotlightItem } from './spotlight';
+import { combineSpotlight, type BonfireArticle, type SpotlightItem } from './spotlight';
 
 export type SpotlightModeration = {
   blockedHandles: string[];
@@ -78,6 +78,37 @@ export function allowedSpotlightItem(item: SpotlightItem, moderation: SpotlightM
         domainBlocked(host, moderation.blockedDomains)) return false;
   }
   return true;
+}
+
+/** Confirm a native Article's author is a real source actor before owner
+ * moderation. GraphQL may provide a *bare* username for a remote author, and
+ * Bonfire's public byline helper maps bare names to Fedizen by default.
+ * Remote provenance is accepted only with an explicit user@host handle matching
+ * the canonical HTTPS actor host; it remains HIDDEN without owner domain-block
+ * coverage in allowedSpotlightItem(). */
+export function verifiedBonfireArticleSource(
+  article: Pick<BonfireArticle, 'handle' | 'authorUrl'>,
+  author: SpotlightItem['authorAccount'],
+): Pick<SpotlightItem, 'sourceAccounts' | 'sourceComplete'> {
+  const missing = { sourceAccounts: [], sourceComplete: false } as const;
+  const acct = author?.acct && normalizedAccount(author.acct);
+  if (!acct || !article.authorUrl) return missing;
+  const host = accountHost(acct);
+  const raw = article.handle?.replace(/^@/, '') ?? '';
+  // Bare usernames are local only if the independently verified actor host
+  // really is Fedizen. Remote actors need an explicit host in their handle.
+  if (host !== 'fedizen.net' && !/^[^@]+@[^@]+$/.test(raw)) return missing;
+  try {
+    const actor = new URL(article.authorUrl);
+    if (actor.protocol !== 'https:' || actor.username || actor.password || actor.port ||
+        actor.hostname.toLowerCase() !== host) return missing;
+    return {
+      sourceAccounts: [{ handle: acct, actorUrl: article.authorUrl }],
+      sourceComplete: true,
+    };
+  } catch {
+    return missing;
+  }
 }
 
 /** Existing Atlas keyword/semantic filter engine operates on this exact
