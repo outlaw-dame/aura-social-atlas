@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { allowedSpotlightItem, normalizedAccount, spotlightFilterPost, type SpotlightModeration } from '../src/lib/spotlight-curation';
+import { allowedSpotlightItem, normalizedAccount, selectModeratedSpotlight, spotlightFilterPost, type SpotlightModeration } from '../src/lib/spotlight-curation';
 import { readSpotlightModeration } from '../src/lib/spotlight-moderation.server';
 import { fromFederatedLinkCards, fromFederatedVideos, type SpotlightItem } from '../src/lib/spotlight';
 import { FilterEngine } from '../src/lib/filter-engine';
@@ -162,5 +162,42 @@ describe('shared Atlas filter engine in Spotlight mode', () => {
     expect(engine.discoveryClear(p)).toBe(false);
     engine.request(p, 'public');
     expect(engine.discoveryClear(p)).toBe(false);
+  });
+});
+
+describe('Spotlight authorization before same-URL selection', () => {
+  it('keeps an eligible recent story when an unverified trend has the same URL', () => {
+    const trend = card([], { id: 'unverified-trend', reason: 'trending' });
+    const safe = card([{ handle: 'allowed' }], { id: 'recent-safe', reason: 'recent' });
+    expect(selectModeratedSpotlight([trend], [safe], empty).map(x => x.id)).toEqual(['recent-safe']);
+  });
+
+  it('rejects blocked trending source, retains safe native article at same URL', () => {
+    const blocked = card([{ handle: 'blocked' }], { id: 'blocked-trend', reason: 'trending' });
+    const safe = card([{ handle: 'good' }], { id: 'safe', reason: 'recent' });
+    expect(selectModeratedSpotlight([blocked, safe], [], { ...empty, blockedHandles: ['blocked'] }).map(x => x.id))
+      .toEqual(['safe']);
+  });
+
+  it('keeps allowed trending priority while rejecting muted sources', () => {
+    const trend = card([{ handle: 'good' }], { id: 'valid-trend', reason: 'trending' });
+    const recent = card([{ handle: 'good' }], { id: 'valid-recent', reason: 'recent' });
+    const muted = card([{ handle: 'muted' }], { id: 'muted', url: 'https://fedizen.net/other' });
+    expect(selectModeratedSpotlight([trend, muted], [recent], { ...empty, mutedHandles: ['muted'] }).map(x => x.id))
+      .toEqual(['valid-trend']);
+  });
+});
+
+describe('filter engine refresh safety', () => {
+  it('keeps an equivalent refreshed filter snapshot usable without resetting rules', () => {
+    const engine = new FilterEngine();
+    const original = [rule({ text: 'spoiler', semantic: false })];
+    engine.configure({ filters: original, ai: false, deep: false });
+    const post = spotlightFilterPost(card([{ handle: 'good' }], { title: 'Includes spoiler' }));
+    expect(engine.discoveryClear(post)).toBe(false);
+    const refreshed = original.map(x => ({ ...x, places: [...x.places], expansions: [...x.expansions] }));
+    engine.configure({ filters: refreshed, ai: false, deep: false });
+    expect(engine.hasCurrentFilters(refreshed)).toBe(true);
+    expect(engine.discoveryClear(post)).toBe(false);
   });
 });
