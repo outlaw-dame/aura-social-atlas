@@ -71,10 +71,14 @@ function Carousel({ items }: { items: SpotlightItem[] }) {
 }
 
 export function Spotlight() {
-  const { items, loading: isLoading, unavailable } = useCuratedSpotlight();
+  const { items, loading: isLoading, unavailable, checking, screeningUnavailable } = useCuratedSpotlight();
   return <section aria-labelledby="spotlight-heading" className="mb-12 min-w-0 max-w-full">
     <div className="mb-5 flex items-baseline justify-between"><h2 id="spotlight-heading" className="flex items-center gap-2 font-serif text-2xl italic"><Flame className="size-5 text-accent" />Spotlight</h2></div>
-    {isLoading ? <p className="text-sm text-muted-foreground">Applying your Spotlight preferences…</p> : unavailable ? <p role="status" className="text-sm text-muted-foreground">Spotlight is paused until your account's moderation settings are available.</p> : !items.length ? <p className="text-sm text-muted-foreground">No stories have cleared your curation settings yet.</p> : <>
+    {isLoading ? <p role="status" className="text-sm text-muted-foreground">Finding public stories and verifying your moderation settings…</p>
+      : unavailable ? <p role="status" className="text-sm text-muted-foreground">Spotlight is paused until your account's moderation settings are available.</p>
+      : screeningUnavailable ? <p role="status" className="text-sm text-muted-foreground">Spotlight cannot verify all of your keyword or semantic filters right now. Your preferences remain enforced; check Settings → Intelligence and Moderation.</p>
+      : checking ? <p role="status" className="text-sm text-muted-foreground">Checking eligible stories against your keyword and semantic preferences…</p>
+      : !items.length ? <p role="status" className="text-sm text-muted-foreground">No eligible public stories were found in the available sources after applying your settings.</p> : <>
       {(() => {
         const featured = items.filter(it => it.image).slice(0, 5);
         const ids = new Set(featured.map(f => f.id));
