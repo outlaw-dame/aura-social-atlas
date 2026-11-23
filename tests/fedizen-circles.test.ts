@@ -71,6 +71,18 @@ describe("Fedizen's saved audiences", () => {
     expect(savedAudiences(options)).toEqual([{ id: '01ACL', label: 'Hill walkers', description: 'Saturday walks' }]);
     expect(savedAudiences(null)).toEqual([]);
   });
+  test("Bonfire's own system rules are never offered as audiences (seen live on Fedizen)", () => {
+    const live = [
+      { id: '01G1', label: 'People I ghosted cannot see me', custom: true },
+      { id: '01S1', label: 'People I silenced aren’t discoverable by me', custom: true },
+      { id: '01F1', label: 'People who I follow may read, interact, and reply', custom: true },
+      { id: '01A1', label: 'I may administer', custom: true },
+      { id: '01C1', label: 'Custom boundary', custom: true },
+      { id: '01S2', label: 'People who silenced me cannot discover me', custom: true },
+      { id: '01MINE', label: 'Book club', custom: true },
+    ];
+    expect(savedAudiences(live)).toEqual([{ id: '01MINE', label: 'Book club' }]);
+  });
   test('they are read from boundaries.options', async () => {
     expect(POST_AUDIENCES_DOCUMENT).toContain('boundaries { options { id label description custom } }');
     const realFetch = globalThis.fetch;

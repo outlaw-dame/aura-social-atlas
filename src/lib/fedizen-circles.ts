@@ -14,13 +14,33 @@ const text = (max: number) => z.string().max(max).nullish().transform(v => (v ??
 export const circleSchema = z.object({ id, name: text(CIRCLE_NAME_MAX * 4), summary: text(CIRCLE_SUMMARY_MAX * 8) })
   .transform(c => ({ id: c.id, title: c.name.slice(0, CIRCLE_NAME_MAX) || 'Untitled circle', ...(c.summary ? { summary: c.summary.slice(0, CIRCLE_SUMMARY_MAX) } : {}) }));
 
-/** Bonfire's audience options, keeping only the person's own named ones (presets are Atlas's own audiences already). */
+/**
+ * Names of Bonfire's per-account system rules (ACLs with `stereotype: true`, bonfire_boundaries 60fc2e7
+ * runtime_config.ex). `boundaries.options` lists them as `custom: true` with the stereotype's name as their label (seen
+ * live on Fedizen, 2026-11-22: "I may administer", "People I ghosted cannot see me"...), and nothing else in the answer
+ * tells them apart from audiences the person made. They aren't audiences: "I may administer" would make a post only
+ * its author can see. "Custom boundary" names the ACL Bonfire makes for a single post.
+ */
+export const BONFIRE_SYSTEM_RULES: ReadonlySet<string> = new Set([
+  'people who i follow may read, interact, and reply',
+  'custom boundary',
+  'i may administer',
+  'people i ghosted cannot see me',
+  "people i silenced aren't discoverable by me",
+  'people who silenced me cannot discover me',
+].map(n => n.normalize('NFKC')));
+const isSystemRule = (label: string) => BONFIRE_SYSTEM_RULES.has(label.normalize('NFKC').replace(/[’‘]/g, "'").toLowerCase());
+
+/**
+ * Bonfire's audience options, keeping only audiences the person made and named (presets are Atlas's own audiences
+ * already; system rules are left out, see BONFIRE_SYSTEM_RULES).
+ */
 export function savedAudiences(options: unknown): FedizenAudience[] {
   const list = z.array(z.object({ id: z.string(), label: z.string().nullish(), description: z.string().nullish(), custom: z.boolean().nullish() }).passthrough()).catch([]).parse(options);
   const seen = new Set<string>();
   return list.flatMap(o => {
     const label = (o.label ?? '').trim();
-    if (o.custom !== true || !/^[A-Za-z0-9_-]{1,64}$/.test(o.id) || !label || seen.has(o.id)) return [];
+    if (o.custom !== true || !/^[A-Za-z0-9_-]{1,64}$/.test(o.id) || !label || isSystemRule(label) || seen.has(o.id)) return [];
     seen.add(o.id);
     const description = (o.description ?? '').trim();
     return [{ id: o.id, label: label.slice(0, 100), ...(description ? { description: description.slice(0, 280) } : {}) }];
