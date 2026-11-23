@@ -192,10 +192,10 @@ export function useMutes(enabled = true) {
   const [error, setError] = useState<string | null>(null);
   const m = useMutation({
     mutationFn: (v: { accountId?: string; acct?: string; on: boolean }) => write({ data: { expectedAtlasUserId: user!.id, ...v } }),
-    onSuccess: r => { if (r.ok) {
+    onSuccess: async r => { if (r.ok) {
       setError(null);
       if (user) {
-        void qc.cancelQueries({ queryKey: ['spotlight-viewer', user.id] });
+        await qc.cancelQueries({ queryKey: ['spotlight-viewer', user.id] });
         qc.setQueryData(['spotlight-viewer', user.id], { items: [], moderation: null });
       }
       void qc.invalidateQueries({ queryKey: ['spotlight-viewer'] });
