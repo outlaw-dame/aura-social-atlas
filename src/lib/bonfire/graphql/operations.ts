@@ -168,3 +168,22 @@ export const UPDATE_CIRCLE_DOCUMENT = `mutation AtlasUpdateCircle($id: ID!, $cir
 export const POST_AUDIENCES_DOCUMENT = `query AtlasPostAudiences {
   boundaries { options { id label description custom } }
 }`;
+
+/**
+ * The server an account lives on, as Bonfire knows it: `character.peered.peerId` (bonfire_me me_api_graphql.ex at
+ * ef9c2a9, the commit Fedizen's v1.1.0-rc.1 pins). Local accounts have no `peered`.
+ */
+export const ACCOUNT_SERVER_DOCUMENT = `query AtlasAccountServer($username: String!) {
+  user(filter: { username: $username }) { id character { username peered { peerId canonicalUri } } }
+}`;
+
+/**
+ * Blocking a whole server for yourself. Bonfire has no API for it (no /api/v1/domain_blocks, no GraphQL field for
+ * instances), but `blockUser`/`unblockUser` hand their id to Bonfire.Boundaries.Blocks.block/unblock, which take "users
+ * or instances" and block a Peer through its instance circle (bonfire_boundaries blocks.ex). After a block the
+ * resolver loads the id as a user, which a server isn't, so success comes back as an error; only "Could not block
+ * user" means it didn't take. Until Bonfire adds Mastodon's domain_blocks (docs/upstream/bonfire-domain-blocks.md), this
+ * is the only way for an app.
+ */
+export const BLOCK_SERVER_DOCUMENT = `mutation AtlasBlockServer($id: ID!) { blockUser(id: $id) { id } }`;
+export const UNBLOCK_SERVER_DOCUMENT = `mutation AtlasUnblockServer($id: ID!) { unblockUser(id: $id) { id } }`;

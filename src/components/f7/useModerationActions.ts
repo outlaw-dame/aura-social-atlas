@@ -1,16 +1,18 @@
 import { f7 } from 'framework7-react';
 import { REPORT_CATEGORIES, useMutes, useReport, type ReportCategory } from '@/components/social/useOwnPosts';
+import { blockServerText, serverOf, useServerBlock } from '@/components/social/useServerBlock';
 
 export type Subject = { name: string; acct?: string; accountId?: string; statusId?: string };
 
 /**
- * Phone: Mute / Unmute and Report for an account (and the post it was reached from), as action-sheet buttons.
+ * Phone: Mute / Unmute, Report, and Block / Unblock their server, for an account (and the post it was reached from), as action-sheet buttons.
  * Reporting follows Mastodon's steps as phone dialogs: why, a note, then — for another server's account — whether
  * to send a copy to that server's moderators. `enabled` is false when there's nobody to act on (signed out, yourself).
  */
 export function useModerationActions(s: Subject, enabled: boolean) {
   const mutes = useMutes(enabled);
   const reporter = useReport();
+  const servers = useServerBlock();
   const muted = mutes.isMuted(s);
   const toggleMute = async () => {
     const ok = await mutes.mute({ accountId: s.accountId, acct: s.acct, on: !muted });
@@ -33,7 +35,18 @@ export function useModerationActions(s: Subject, enabled: boolean) {
     [{ text: s.statusId ? `Why are you reporting this post by ${s.name}?` : `Why are you reporting ${s.name}?`, label: true }, ...REPORT_CATEGORIES.map(c => ({ text: c.label, onClick: () => note(c.id) }))],
     [{ text: 'Cancel', strong: true }],
   ] }).open();
+  // Mastodon's "Block domain": the whole server, for you (useServerBlock). Fedizen can't tell apps which servers are
+  // blocked, so both directions are offered, and its Blocked page lists them.
+  const host = serverOf(s.acct);
+  const toast = (text: string) => f7.toast.create({ text, closeTimeout: 3000 }).open();
+  const blockServer = () => host && s.acct && f7.dialog.create({ title: `Block ${host}?`, text: blockServerText(host), buttons: [
+    { text: 'Cancel' }, { text: 'Block', color: 'red', strong: true, onClick: async () => toast(await servers.change(s.acct!, true)) },
+  ] }).open();
+  const serverButtons = host && s.acct ? [
+    { text: `Block ${host}…`, color: 'red', onClick: blockServer },
+    { text: `Unblock ${host}`, onClick: async () => toast(await servers.change(s.acct!, false)) },
+  ] : [];
   return {
-    buttons: enabled ? [{ text: muted ? `Unmute ${s.name}` : `Mute ${s.name}`, onClick: () => void toggleMute() }, { text: 'Report…', color: 'red', onClick: report }] : [],
+    buttons: enabled ? [{ text: muted ? `Unmute ${s.name}` : `Mute ${s.name}`, onClick: () => void toggleMute() }, { text: 'Report…', color: 'red', onClick: report }, ...serverButtons] : [],
   };
 }

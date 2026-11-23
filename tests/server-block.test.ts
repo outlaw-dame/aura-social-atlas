@@ -1,0 +1,33 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+import { changeServerBlock, serverIdFor } from '../src/lib/server-block.server';
+
+// Bonfire's answers are imitated with a stubbed fetch; ids and servers are invented.
+const realFetch = globalThis.fetch;
+afterEach(() => { globalThis.fetch = realFetch; });
+const answer = (body: unknown) => { globalThis.fetch = (async () => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch; };
+let n = 0;
+const token = () => `test-token-${++n}`; // a fresh account each time, so no rate-limit or read cache carries over
+
+describe('blocking a whole server through Bonfire', () => {
+  test("the server's id, only when the account's own address is on that server", async () => {
+    answer({ data: { user: { id: 'u1', character: { username: 'ann@lemmy.example', peered: { peerId: 'PEER1', canonicalUri: 'https://lemmy.example/u/ann' } } } } });
+    expect(await serverIdFor(token(), 'ann@lemmy.example')).toBe('PEER1');
+    answer({ data: { user: { id: 'u1', character: { username: 'ann@social.example', peered: { peerId: 'PEER2', canonicalUri: 'https://mastodon.social.example/users/ann' } } } } });
+    expect(await serverIdFor(token(), 'ann@social.example')).toBe('PEER2');
+    answer({ data: { user: { id: 'u1', character: { username: 'ann@lemmy.example', peered: { peerId: 'PEER3', canonicalUri: 'https://elsewhere.example/u/ann' } } } } });
+    expect(await serverIdFor(token(), 'ann@lemmy.example')).toBeNull();
+    answer({ data: { user: { id: 'u1', character: { username: 'me', peered: null } } } });
+    expect(await serverIdFor(token(), 'me@fedizen.example')).toBeNull();
+  });
+
+  test('outcomes: data is done, "Could not block user" is not done, any other error is unconfirmed', async () => {
+    answer({ data: { blockUser: { id: 'PEER1' } } });
+    expect(await changeServerBlock(token(), 'PEER1', true)).toBe('done');
+    answer({ data: { blockUser: null }, errors: [{ message: 'Could not block user' }] });
+    expect(await changeServerBlock(token(), 'PEER1', true)).toBe('not-done');
+    answer({ data: { blockUser: null }, errors: [{ message: 'not_found' }] });
+    expect(await changeServerBlock(token(), 'PEER1', true)).toBe('unconfirmed');
+    answer({ data: { unblockUser: null }, errors: [{ message: 'Could not unblock user' }] });
+    expect(await changeServerBlock(token(), 'PEER1', false)).toBe('not-done');
+  });
+});
