@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { allowedSpotlightItem, normalizedAccount, spotlightFilterPost, type SpotlightModeration } from '../src/lib/spotlight-curation';
+import { allowedSpotlightItem, normalizedAccount, selectModeratedSpotlight, spotlightFilterPost, type SpotlightModeration } from '../src/lib/spotlight-curation';
 import { readSpotlightModeration } from '../src/lib/spotlight-moderation.server';
 import { fromFederatedLinkCards, fromFederatedVideos, type SpotlightItem } from '../src/lib/spotlight';
 import { FilterEngine } from '../src/lib/filter-engine';
@@ -162,5 +162,31 @@ describe('shared Atlas filter engine in Spotlight mode', () => {
     expect(engine.discoveryClear(p)).toBe(false);
     engine.request(p, 'public');
     expect(engine.discoveryClear(p)).toBe(false);
+  });
+});
+
+describe('Spotlight source precedence after authorization', () => {
+  it('does not let an unknown-source trend hide a safe post for the same URL', () => {
+    const trend = card([], { id: 'trending', reason: 'trending' });
+    const eligible = card([{ handle: 'good@fedizen.net' }], { id: 'viewer', reason: 'recent' });
+    expect(selectModeratedSpotlight([trend], [eligible], empty).map(x => x.id)).toEqual(['viewer']);
+  });
+
+  it('does not let a blocked trending contributor displace an allowed article', () => {
+    const blocked = card([{ handle: 'blocked@fedizen.net' }], { id: 'blocked-trend', reason: 'trending' });
+    const allowed = card([{ handle: 'allowed@fedizen.net' }], { id: 'safe-article', reason: 'recent' });
+    const policy = { ...empty, blockedHandles: ['blocked'] };
+    expect(selectModeratedSpotlight([blocked, allowed], [], policy).map(x => x.id)).toEqual(['safe-article']);
+  });
+
+  it('preserves allowed trending priority and never leaks rejected cards', () => {
+    const trend = card([{ handle: 'good@fedizen.net' }], { id: 'safe-trend', reason: 'trending' });
+    const duplicate = card([{ handle: 'good@fedizen.net' }], { id: 'recent-duplicate', reason: 'recent' });
+    const rejected = card([{ handle: 'muted@fedizen.net' }], {
+      id: 'muted', url: 'https://fedizen.net/other', reason: 'recent',
+    });
+    expect(selectModeratedSpotlight([trend, rejected], [duplicate], {
+      ...empty, mutedHandles: ['muted'],
+    }).map(x => x.id)).toEqual(['safe-trend']);
   });
 });
