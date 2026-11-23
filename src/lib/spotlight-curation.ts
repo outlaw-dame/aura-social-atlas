@@ -45,7 +45,16 @@ export function allowedSpotlightItem(item: SpotlightItem, moderation: SpotlightM
   for (const source of sources) {
     const acct = normalizedAccount(source.handle);
     const host = acct && accountHost(acct);
-    if (!acct || !host || blocked.has(acct) || (source.id && bannedIds.has(source.id))) return false;
+    // Bonfire's account mapper can fall back to a short username even for a
+    // remote actor when its "acct" field is absent. Cross-check the canonical
+    // actor URL before ever classifying that user as Fedizen-local.
+    let actorHost: string | null = null;
+    try {
+      const actor = new URL(source.actorUrl ?? '');
+      if (actor.protocol === 'https:' && !actor.username && !actor.password && !actor.port) actorHost = actor.hostname.toLowerCase();
+    } catch { /* unknown actor origin is not proof of safety */ }
+    if (!acct || !host || !actorHost || actorHost !== host ||
+      blocked.has(acct) || (source.id && bannedIds.has(source.id))) return false;
     if (moderation.domainCoverage !== 'complete' && host !== 'fedizen.net') return false;
     if (domainBlocked(host, moderation.blockedDomains)) return false;
   }
