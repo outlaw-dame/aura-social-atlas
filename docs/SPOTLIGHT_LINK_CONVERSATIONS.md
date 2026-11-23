@@ -7,7 +7,8 @@
 ### What is actually implemented in this PR
 
 - Replace hardcoded `mastodon.social/api/v1/trends/links` with Fedizen's **Mastodon-compatible public trending links** response. Request and response are fixed-origin, timeout-bounded, size-bounded, non-redirecting and never carry OAuth credentials or cookies.
-- Fetch a limited sample from Fedizen's **public federated timeline**, explicitly reject all non-public status visibility, and surface attached videos as **recent videos**, not fabricated trends. This endpoint can be unavailable on a particular deployed Bonfire version; empty results are treated as unavailable, not proof there are no videos.
+- **Verified live on Fedizen:** anonymous `GET /api/v1/trends/links?limit=12` returns HTTP 200 and an empty array at this checkpoint, while anonymous `GET /api/v1/timelines/public?limit=30` returns HTTP 401. Public Spotlight must not keep calling the forbidden timeline or misreport 401 as `no media`.
+- The federated public timeline is therefore read through the **existing owner-bound delegated grant** using `fedizenGet` and its allowlisted `GET /api/v1/timelines/public?limit=20` schema, with `requireSupabaseAuth`, explicit user-ID session assertion and a POST server function to avoid shared intermediate caching. Only `visibility: public` items are accepted; sensitive and content-warned video previews are excluded. React Query cache keys include the Atlas user ID and are purged on account changes. If the grant is absent or the read fails, this source contributes no items; it must not affect public Spotlight sources.
 - Keep Bonfire's existing GraphQL **Articles feed** as **recent verified ActivityPub articles**. This is not a popularity signal.
 - Use the existing guarded ActivityPub author/PodcastEpisode/PeerTube Video resolver to recognize podcasts/videos among linked public content. A generic audio attachment, a keyword, a video GIF, or a rich link preview is **not** sufficient to label a podcast.
 - Keep provenance on each item: whether it is a Bonfire-federated source, **trending vs recent**, and **link vs Article vs PodcastEpisode vs Video**. Do not label the synthetic `history.accounts` from Bonfire's PreviewCard mapper as unique people talking. `uses` is displayed as **references**.
@@ -55,7 +56,7 @@
 
 - [ ] Demo approved for all three reading modes and multiple independent lanes, including collapse/focus and keyboard/mobile behavior.
 - [ ] Provider API contract tested on deployed Fedizen, including 200/401/403/404/429/5xx, unknown fields, missing history, pagination bounds, no private bearer in URL, and abort behavior.
-- [ ] Confirm the server's federated public timeline and trending route actually serve public data; don't silently replace federation with a single remote mastodon.social instance.
+- [x] Anonymous contract probe: Fedizen trends HTTP 200 with 0 items; public timeline HTTP 401 (owner-bound request required). Authenticated timeline response and real media fixtures remain unverified until tested with consenting Atlas sessions.
 - [ ] Content classification verified against Article, PodcastEpisode, PeerTube Video and false positives (generic MP3/GIF/thumbnail).
 - [ ] Public-link index rejects followers-only, direct, group-limited, sensitive restricted, deleted and non-discoverable posts; tests include account blocks, deletion, edited URLs and federation replay.
 - [ ] Same URL across three instances: canonical AP-ID dedup and accurate count labels. Cross-lane thread trees remain distinct.
