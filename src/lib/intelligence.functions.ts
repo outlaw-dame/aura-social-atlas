@@ -53,7 +53,14 @@ export const saveAiKey = createServerFn({ method: 'POST' }).middleware([requireS
     try {
       const { listModels } = await import('./intelligence/llm');
       const { addCredential, savedKeys } = await import('./intelligence/vault.server');
-      const { chatModels, keyHint } = await import('./intelligence/providers');
+      const { chatModels, isEmbeddingsOnly, keyHint } = await import('./intelligence/providers');
+      if (isEmbeddingsOnly(data.provider)) {
+        // A key for embeddings only: checked by embedding one word, kept with no chat models (never a main key).
+        const { embedWith } = await import('./intelligence/embeddings');
+        await embedWith(credential, ['Atlas'], 'query');
+        await addCredential(context.userId, credential, keyHint(data.key), [], { label: data.label ?? null, model: null });
+        return { status: await (await store()).status(context.userId) };
+      }
       const models = chatModels(data.provider, await listModels(credential)).slice(0, 200);
       if (!models.length) return { error: 'no-access' };
       const keyId = await addCredential(context.userId, credential, keyHint(data.key), models, { label: data.label ?? null, model: models[0] });
@@ -79,7 +86,7 @@ export const removeAiKey = createServerFn({ method: 'POST' }).middleware([requir
     const s = await st.readSettings(context.userId), keys = await savedKeys(context.userId);
     const lostMain = s.main_key === data.keyId, lostBackground = s.background_key === data.keyId;
     if (lostMain || lostBackground) {
-      const next = lostMain ? keys[0] : undefined;
+      const next = lostMain ? keys.find(k => k.models.length > 0) : undefined;
       await st.writeSettings(context.userId, {
         ...s,
         ...(lostMain ? { main_key: next?.id ?? null, model: next ? next.model ?? next.models[0] ?? null : null } : {}),
@@ -121,7 +128,7 @@ export const updateIntelligence = createServerFn({ method: 'POST' }).middleware(
     if (!current.available) return current;
     const s = await st.readSettings(context.userId), keys = current.keys;
     const pick = (choice: { key: string; model?: string }) => {
-      const k = keys.find(x => x.id === choice.key);
+      const k = keys.find(x => x.id === choice.key && x.models.length > 0);
       return k ? { key: k.id, model: choice.model && k.models.includes(choice.model) ? choice.model : k.model ?? k.models[0] ?? null } : null;
     };
     const main = data.main ? pick(data.main) : null;

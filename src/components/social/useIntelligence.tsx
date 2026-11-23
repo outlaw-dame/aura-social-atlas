@@ -13,6 +13,7 @@ import { FILTER_PLACES, lintFilters, type ContentFilter, type FilterAction, type
 import { PROVIDERS, type Credential, type ProviderId } from '@/lib/intelligence/providers';
 import type { DeviceKey, DevicePrefs } from '@/lib/intelligence/device-keys';
 import type { ImageInput } from '@/lib/intelligence/llm';
+import { EMBEDDING_INDEX_KEYS } from '@/lib/semantic/embedding-keys';
 import { useAtlasAuth } from './AuthState';
 import { forgetFilterStats, recordFiltered } from '@/lib/filter-stats';
 import { makeSimilar, useSemantic } from './useSemanticIndex';
@@ -93,6 +94,7 @@ export function useIntelligenceActions() {
         try {
           const d = await device();
           const saved = await d.saveDeviceKey(id, { provider, key, ...(account ? { account } : {}) }, label);
+          if (PROVIDERS[provider].embeddingsOnly) { await refreshDevice(); return null; }
           if (!saved.models.length) { await d.removeDeviceKey(id, saved.id); return AI_PROBLEM['no-access']; }
           if (!(await d.devicePrefs(id))) await d.setDevicePrefs(id, { keyId: saved.id, provider, model: saved.models[0] });
           await refreshDevice(); return null;
@@ -147,6 +149,17 @@ export function useAiRunner() {
   const id = user?.id ?? '';
   const active = ai?.active ?? null, ready = intelligenceReady(ai), deep = !!ai?.deepMatching;
   const backup = !!ai?.fallback, deviceList = ai?.deviceKeys;
+  /**
+   * Where semantic filters and the semantic index get embeddings: the place in use (this device or Atlas's server),
+   * or, with no chat key anywhere, a device key added for embeddings. On a device: a key added for embeddings only
+   * first, then the key in use, then the others (the server's order, roles.ts embeddingPick). One key, no backups.
+   */
+  const embedding = useMemo((): { where: 'device'; provider: ProviderId; keyId: string } | { where: 'server'; provider: ProviderId } | null => {
+    const rank = (k: DeviceKey) => (PROVIDERS[k.provider].embeddingsOnly ? 0 : k.id === active?.keyId ? 1 : 2);
+    const dev = (deviceList ?? []).filter(k => k.provider in EMBEDDING_INDEX_KEYS && k.provider !== 'cloudflare').sort((a, b) => rank(a) - rank(b))[0];
+    if (active?.where === 'device' || (!active && dev)) return dev ? { where: 'device', provider: dev.provider, keyId: dev.id } : null;
+    return ai?.embeddingProvider ? { where: 'server', provider: ai.embeddingProvider } : null;
+  }, [deviceList, active, ai?.embeddingProvider]);
   /**
    * Runs a job with the device key in use, then (with backup on) this device's other keys in the order added, each
    * with its first listed model. Throws the first key's error; Error('not-ready') when there's no device key in use.
@@ -212,20 +225,19 @@ export function useAiRunner() {
     },
     /** Embeddings with the key in use, for the semantic index; null when it fails or the provider has none. */
     embed: async (texts: string[], kind: 'query' | 'document'): Promise<{ key: string; vectors: Float32Array[] } | null> => {
-      if (!ready || !active) return null;
-      const { EMBEDDING_MODELS, embedWith } = await import('@/lib/intelligence/embeddings');
-      const m = EMBEDDING_MODELS[active.provider];
-      if (!m) return null;
-      if (active.where === 'device') {
-        try { return { key: m.key, vectors: await onDevice(c => embedWith(c, texts, kind), false) }; } catch { return null; }
+      if (!ai?.enabled || !embedding) return null;
+      if (embedding.where === 'device') {
+        const { EMBEDDING_MODELS, embedWith } = await import('@/lib/intelligence/embeddings');
+        const m = EMBEDDING_MODELS[embedding.provider];
+        const c = m ? await (await device()).deviceCredential(id, embedding.keyId) : null;
+        if (!m || !c) return null;
+        try { return { key: m.key, vectors: await embedWith(c, texts, kind) }; } catch { return null; }
       }
       const r = await embedServer({ data: { expectedAtlasUserId: id, texts, kind } }).catch(() => null);
       return r && 'vectors' in r ? { key: r.key, vectors: r.vectors.map(v => Float32Array.from(v)) } : null;
     },
     /** The provider in use, when it has an embedding model (Anthropic and Kimi don't). */
-    embeddingProvider: !ready || !active ? null
-      : active.where === 'server' ? ai?.embeddingProvider ?? null
-      : ['openai', 'google', 'mistral'].includes(active.provider) ? active.provider : null,
+    embeddingProvider: ai?.enabled ? embedding?.provider ?? null : null,
     /** Which model answers, so answers cached for one model aren't reused for another. */
     model: active ? `${active.where}:${active.provider}:${active.model}` : null,
     /** Which model checks posts against filters (background work: its own model on Atlas's server when chosen). */
@@ -238,7 +250,7 @@ export function useAiRunner() {
       }
       return translateServer({ data: { expectedAtlasUserId: id, ...req } }).catch(() => ({ error: 'unavailable' as const }));
     },
-  }), [ready, active, deep, onDevice, judgeServer, expandServer, suggestServer, describeServer, altServer, wordingsServer, embedServer, translateServer, id, ai?.embeddingProvider, ai?.background]);
+  }), [ready, active, deep, onDevice, embedding, ai?.enabled, judgeServer, expandServer, suggestServer, describeServer, altServer, wordingsServer, embedServer, translateServer, id, ai?.embeddingProvider, ai?.background]);
 }
 
 /* ── Keyword filters ─────────────────────────────────────────────────────────────────────────── */

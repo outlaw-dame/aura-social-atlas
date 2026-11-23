@@ -56,7 +56,7 @@ describe('provider calls', () => {
   };
   test('each key only goes to its own provider', () => {
     const hosts = PROVIDER_IDS.map(p => new URL(openAiBase({ provider: p, key: 'k', account: '0123456789abcdef0123456789abcdef' })).host);
-    expect(hosts).toEqual(['api.anthropic.com', 'api.openai.com', 'generativelanguage.googleapis.com', 'api.mistral.ai', 'api.moonshot.ai', 'api.cloudflare.com']);
+    expect(hosts).toEqual(['api.anthropic.com', 'api.openai.com', 'generativelanguage.googleapis.com', 'api.mistral.ai', 'api.moonshot.ai', 'api.cloudflare.com', 'api.voyageai.com', 'api.cohere.com', 'api.jina.ai', 'openrouter.ai']);
     expect(() => openAiBase({ provider: 'cloudflare', key: 'k', account: '../../evil' })).toThrow(ProviderError);
   });
   test('Anthropic: native Messages API with x-api-key and a JSON schema', async () => {

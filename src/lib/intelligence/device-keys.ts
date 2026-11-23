@@ -11,7 +11,7 @@
  * can't be read that way. Safari may also clear a site's storage after 7 days without a visit, unless Atlas is on
  * the Home Screen; the key then has to be entered again.
  */
-import { chatModels, keyHint, type Credential, type ProviderId } from './providers';
+import { chatModels, isEmbeddingsOnly, keyHint, type Credential, type ProviderId } from './providers';
 import { listModels } from './llm';
 
 const DB = 'atlas-ai', VERSION = 1;
@@ -69,7 +69,10 @@ export function deviceKeysSupported(): boolean {
 /** Checks the key with its provider from this browser (listing its models), then keeps it encrypted here, beside any
  *  other keys (from this company or others). */
 export async function saveDeviceKey(uid: string, c: Credential, label?: string | null): Promise<DeviceKey> {
-  const models = chatModels(c.provider, await listModels(c)).slice(0, 200);
+  // A key for embeddings only is checked by embedding one word and kept with no chat models.
+  const models = isEmbeddingsOnly(c.provider)
+    ? (await (await import('./embeddings')).embedWith(c, ['Atlas'], 'query'), [])
+    : chatModels(c.provider, await listModels(c)).slice(0, 200);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plain = new TextEncoder().encode(JSON.stringify({ key: c.key, ...(c.account ? { account: c.account } : {}) }));
   const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aad(uid, c.provider) }, await wrapKey(), plain);

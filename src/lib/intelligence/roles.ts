@@ -10,7 +10,7 @@
  * A key's own model is the one chosen for it, else the first its provider lists (a fast, inexpensive one).
  */
 import { EMBEDDING_MODELS } from './embeddings';
-import type { ProviderId } from './providers';
+import { isEmbeddingsOnly, type ProviderId } from './providers';
 
 export type Role = 'main' | 'background';
 export type RoleKey = { id: string; provider: ProviderId; models: string[]; model: string | null };
@@ -50,13 +50,14 @@ export function plan(role: Role, s: RoleSettings, keys: RoleKey[]): Pick[] {
 }
 
 /**
- * The key for the semantic index's embeddings: the first background key whose provider has an embedding model, else
- * the main key's. Only one, never a backup: vectors from different models can't be compared, so switching models
- * would split the index.
+ * The key for semantic filters and the semantic index (embeddings): a key added for embeddings only (Voyage, Cohere,
+ * Jina, OpenRouter — the person added it for this) first, then the background key, the other keys, and the main key
+ * last; the first whose provider has an embedding model. It needs no chat key. Only one, never a backup: vectors from
+ * different models can't be compared, so switching would split the index.
  */
 export function embeddingPick(s: RoleSettings, keys: RoleKey[]): Pick | null {
-  const main = mainPick(s, keys);
-  if (!main) return null;
-  const chain = [...plan('background', { ...s, fallback: true }, keys), main];
-  return chain.find(p => !!EMBEDDING_MODELS[p.provider]) ?? null;
+  const bgId = s.backgroundKey && keys.some(k => k.id === s.backgroundKey) ? s.backgroundKey : null;
+  const rank = (k: RoleKey) => isEmbeddingsOnly(k.provider) ? 0 : k.id === bgId ? 1 : k.id === s.mainKey ? 3 : 2;
+  const k = [...keys].filter(x => !!EMBEDDING_MODELS[x.provider]).sort((a, b) => rank(a) - rank(b))[0];
+  return k ? { keyId: k.id, provider: k.provider, model: EMBEDDING_MODELS[k.provider]!.id } : null;
 }

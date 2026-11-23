@@ -45,7 +45,7 @@ export function IntelligenceSettings() {
       <h2 className="text-base font-semibold">Providers</h2>
       <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground"><ShieldCheck className="size-4 shrink-0" />Keys on Atlas’s server are encrypted there, never shown again, and only ever sent to their own provider.</p>
       <ul className="mt-4 divide-y divide-border rounded-2xl border border-border">
-        {PROVIDER_IDS.map(id => {
+        {PROVIDER_IDS.filter(x => !PROVIDERS[x].embeddingsOnly).map(id => {
           const p = PROVIDERS[id];
           const saved: ListedKey[] = [
             ...s.keys.filter(k => k.provider === id).map(k => ({ ...k, where: 'server' as const })),
@@ -54,10 +54,30 @@ export function IntelligenceSettings() {
           return <li key={id} className="p-4">
             <div className="flex flex-wrap items-center gap-3">
               <KeyRound className="size-4 text-muted-foreground" aria-hidden="true" />
-              <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{p.product}</span><span className="block text-xs text-muted-foreground">{p.name}</span></span>
+              <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{p.product}</span>{p.name !== p.product && <span className="block text-xs text-muted-foreground">{p.name}</span>}</span>
               <Button variant="outline" size="sm" className="rounded-full" onClick={() => setAdding(adding === id ? null : id)}>{saved.length ? 'Add another key' : 'Add key'}</Button>
             </div>
             {saved.map(k => <SavedKeyRow key={`${k.where}-${k.id}`} k={k} product={p.product} active={active} busy={act.busy} />)}
+            {adding === id && <KeyForm provider={id} serverKeys={s.serverKeys} onDone={() => setAdding(null)} />}
+          </li>;
+        })}
+      </ul>
+      <h3 className="mt-6 text-sm font-semibold">For semantic filters only</h3>
+      <p id="ai-embedding-keys" className="mt-1 text-sm text-muted-foreground">These companies make embedding models, which semantic filters and search by meaning use to compare posts. Their keys aren’t used for anything else. When you have one, Atlas uses it for that.</p>
+      <ul className="mt-3 divide-y divide-border rounded-2xl border border-border">
+        {PROVIDER_IDS.filter(x => PROVIDERS[x].embeddingsOnly).map(id => {
+          const p = PROVIDERS[id];
+          const saved: ListedKey[] = [
+            ...s.keys.filter(k => k.provider === id).map(k => ({ ...k, where: 'server' as const })),
+            ...s.deviceKeys.filter(k => k.provider === id).map(k => ({ ...k, where: 'device' as const })),
+          ];
+          return <li key={id} className="p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <KeyRound className="size-4 text-muted-foreground" aria-hidden="true" />
+              <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{p.product}</span>{p.name !== p.product && <span className="block text-xs text-muted-foreground">{p.name}</span>}</span>
+              <Button variant="outline" size="sm" className="rounded-full" onClick={() => setAdding(adding === id ? null : id)}>{saved.length ? 'Add another key' : 'Add key'}</Button>
+            </div>
+            {saved.map(k => <SavedKeyRow key={`${k.where}-${k.id}`} k={k} product={p.product} active={active} busy={act.busy} embeddingsOnly />)}
             {adding === id && <KeyForm provider={id} serverKeys={s.serverKeys} onDone={() => setAdding(null)} />}
           </li>;
         })}
@@ -129,7 +149,7 @@ function KeyForm({ provider, serverKeys, onDone }: { provider: ProviderId; serve
 type ListedKey = (SavedKey & { where: 'server' }) | (DeviceKey & { where: 'device' });
 
 /** One saved key: chosen as main (radio), where it lives, its name (renamable), and Remove. */
-function SavedKeyRow({ k, product, active, busy }: { k: ListedKey; product: string; active: Intelligence['active']; busy: boolean }) {
+function SavedKeyRow({ k, product, active, busy, embeddingsOnly }: { k: ListedKey; product: string; active: Intelligence['active']; busy: boolean; embeddingsOnly?: boolean }) {
   const act = useIntelligenceActions();
   const [renaming, setRenaming] = useState(false);
   const [label, setLabel] = useState(k.label ?? '');
@@ -143,7 +163,7 @@ function SavedKeyRow({ k, product, active, busy }: { k: ListedKey; product: stri
     setRenaming(false);
   };
   return <div className="mt-3 flex flex-wrap items-center gap-3 pl-7 text-sm">
-    <input type="radio" name="ai-key" aria-label={`Use the ${name} key on ${where}`} className="size-4 accent-[var(--accent)]" checked={chosen} disabled={busy} onChange={() => void act.choose(ref)} />
+    {embeddingsOnly ? <span className="size-4" aria-hidden="true" /> : <input type="radio" name="ai-key" aria-label={`Use the ${name} key on ${where}`} className="size-4 accent-[var(--accent)]" checked={chosen} disabled={busy} onChange={() => void act.choose(ref)} />}
     {k.where === 'device' ? <Smartphone className="size-4 text-muted-foreground" aria-hidden="true" /> : <Server className="size-4 text-muted-foreground" aria-hidden="true" />}
     {renaming
       ? <form className="flex min-w-0 flex-1 gap-2" onSubmit={saveLabel}><Input autoFocus value={label} maxLength={40} onChange={e => setLabel(e.target.value)} placeholder="A name, like Work or Personal" aria-label={`Name for the ${product} key ${k.hint}`} className="h-8" /><Button type="submit" size="sm" disabled={busy}>Save</Button></form>
