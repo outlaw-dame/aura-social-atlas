@@ -8,6 +8,7 @@ import type { Similar } from '@/lib/filter-engine';
 import { localEmbed, localState, localSupported, onLocalState, startLocal, stopLocal, type LocalState } from '@/lib/semantic/local-embedder';
 import { useAtlasAuth } from './AuthState';
 import { useAiRunner } from './useIntelligence';
+import { EMBEDDING_INDEX_KEYS } from '@/lib/semantic/embedding-keys';
 
 /**
  * Atlas's semantic index (see src/lib/semantic): search by meaning over the posts you've been shown, emulating on the
@@ -58,11 +59,8 @@ export function useSemantic(): Semantic {
   }, [engine, local.status, providerModel, runner]);
 }
 
-// Index keys, mirrored from intelligence/embeddings.ts so this module stays light (that one is loaded on demand).
 const LOCAL_INDEX_KEY = 'embeddinggemma-300m:256';
-const EMBEDDING_KEYS: Record<string, string> = {
-  openai: 'openai:text-embedding-3-small:256', google: 'google:gemini-embedding-2:256', mistral: 'mistral:mistral-embed', cloudflare: 'embeddinggemma-300m:256',
-};
+const EMBEDDING_KEYS: Record<string, string> = EMBEDDING_INDEX_KEYS;
 
 /* ── Indexing the posts you're shown ───────────────────────────────────────────────────────────── */
 

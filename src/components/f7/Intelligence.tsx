@@ -25,10 +25,10 @@ export function IntelligencePage() {
   const [adding, setAdding] = useState<ProviderId | null>(null);
   const active = s?.active ?? null;
   const models = !active || !s ? [] : active.where === 'device' ? s.deviceKeys.find(k => k.provider === active.provider)?.models ?? [] : s.keys.find(k => k.id === active.keyId)?.models ?? [];
-  const saved: { ref: KeyRef; id: string; title: string; footer: string; chosen: boolean; label: string | null }[] = s ? [
+  const saved: { ref: KeyRef; id: string; title: string; footer: string; chosen: boolean; label: string | null; embeddingsOnly: boolean }[] = s ? [
     ...s.keys.map(k => ({ ...k, where: 'server' as const })), ...s.deviceKeys.map(k => ({ ...k, where: 'device' as const })),
   ].map(k => ({
-    ref: { where: k.where, keyId: k.id }, id: `${k.where}-${k.id}`, label: k.label,
+    ref: { where: k.where, keyId: k.id }, id: `${k.where}-${k.id}`, label: k.label, embeddingsOnly: !!PROVIDERS[k.provider].embeddingsOnly,
     title: PROVIDERS[k.provider].product + (k.label ? ` “${k.label}”` : ''),
     footer: `${k.where === 'device' ? 'On this device' : 'On Atlas’s server'} · key ${k.hint}`,
     chosen: active?.where === k.where && active.keyId === k.id,
@@ -50,7 +50,7 @@ export function IntelligencePage() {
         {saved.length > 0 && <>
           <BlockTitle>Your keys</BlockTitle>
           <List strong inset dividers>
-            {saved.map(k => <ListItem key={k.id} radio radioIcon="end" name="ai-key" title={k.title} footer={k.footer} checked={k.chosen} onChange={() => void act.choose(k.ref)} />)}
+            {saved.filter(k => !k.embeddingsOnly).map(k => <ListItem key={k.id} radio radioIcon="end" name="ai-key" title={k.title} footer={k.footer} checked={k.chosen} onChange={() => void act.choose(k.ref)} />)}
           </List>
           <BlockTitle>Manage keys</BlockTitle>
           <List strong inset dividers>
@@ -64,8 +64,13 @@ export function IntelligencePage() {
 
         <BlockTitle>Add a key</BlockTitle>
         <List strong inset dividers>
-          {PROVIDER_IDS.map(id => <ListItem key={id} link="#" title={PROVIDERS[id].product} footer={PROVIDERS[id].name} onClick={() => setAdding(id)} />)}
+          {PROVIDER_IDS.filter(id => !PROVIDERS[id].embeddingsOnly).map(id => <ListItem key={id} link="#" title={PROVIDERS[id].product} footer={PROVIDERS[id].name !== PROVIDERS[id].product ? PROVIDERS[id].name : undefined} onClick={() => setAdding(id)} />)}
         </List>
+        <BlockTitle>For semantic filters only</BlockTitle>
+        <List strong inset dividers>
+          {PROVIDER_IDS.filter(id => PROVIDERS[id].embeddingsOnly).map(id => <ListItem key={id} link="#" title={PROVIDERS[id].product} footer={PROVIDERS[id].name !== PROVIDERS[id].product ? PROVIDERS[id].name : undefined} onClick={() => setAdding(id)} />)}
+        </List>
+        <BlockFooter>These companies make embedding models, which semantic filters and search by meaning use to compare posts. Their keys aren’t used for anything else. When you have one, Atlas uses it for that.</BlockFooter>
         {adding && <KeyForm provider={adding} serverKeys={s.serverKeys} onDone={() => setAdding(null)} />}
 
         {active && <>

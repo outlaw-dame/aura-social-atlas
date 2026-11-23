@@ -17,7 +17,7 @@ export class ProviderError extends Error {
 
 const inBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
 /** Providers whose API a web page may call directly (CORS). Cloudflare's REST API doesn't allow it. */
-export const BROWSER_CAPABLE: Record<ProviderId, boolean> = { anthropic: true, openai: true, google: true, mistral: true, moonshot: true, cloudflare: false };
+export const BROWSER_CAPABLE: Record<ProviderId, boolean> = { anthropic: true, openai: true, google: true, mistral: true, moonshot: true, cloudflare: false, voyage: true, cohere: true, jina: true, openrouter: true };
 
 /** The OpenAI-compatible base URL for a credential (Anthropic: its OpenAI SDK compatibility layer, used for chat). */
 export function openAiBase(c: Credential): string {
@@ -31,6 +31,11 @@ export function openAiBase(c: Credential): string {
       if (!c.account || !CLOUDFLARE_ACCOUNT.test(c.account)) throw new ProviderError('bad-key');
       return `https://api.cloudflare.com/client/v4/accounts/${c.account}/ai/v1`;
     }
+    // Embeddings only (embeddings.ts); Cohere's own API is v2, not OpenAI-shaped.
+    case 'voyage': return 'https://api.voyageai.com/v1';
+    case 'cohere': return 'https://api.cohere.com/v2';
+    case 'jina': return 'https://api.jina.ai/v1';
+    case 'openrouter': return 'https://openrouter.ai/api/v1';
   }
 }
 
@@ -107,9 +112,9 @@ export function parseJsonReply(text: string): unknown {
 }
 
 /** Providers that take a JSON schema for the reply (`response_format` json_schema; Anthropic: output_config.format). */
-const SCHEMA_OUTPUT: Record<ProviderId, boolean> = { anthropic: true, openai: true, google: true, mistral: true, moonshot: true, cloudflare: false };
+const SCHEMA_OUTPUT: Record<ProviderId, boolean> = { anthropic: true, openai: true, google: true, mistral: true, moonshot: true, cloudflare: false, voyage: false, cohere: false, jina: false, openrouter: false };
 /** OpenAI's newer models and Kimi take max_completion_tokens; the others max_tokens. */
-const MAX_PARAM: Record<ProviderId, 'max_tokens' | 'max_completion_tokens'> = { anthropic: 'max_tokens', openai: 'max_completion_tokens', google: 'max_tokens', mistral: 'max_tokens', moonshot: 'max_completion_tokens', cloudflare: 'max_tokens' };
+const MAX_PARAM: Record<ProviderId, 'max_tokens' | 'max_completion_tokens'> = { anthropic: 'max_tokens', openai: 'max_completion_tokens', google: 'max_tokens', mistral: 'max_tokens', moonshot: 'max_completion_tokens', cloudflare: 'max_tokens', voyage: 'max_tokens', cohere: 'max_tokens', jina: 'max_tokens', openrouter: 'max_tokens' };
 
 /**
  * One structured answer: a system prompt, the data as JSON, and a JSON Schema for the reply. No temperature is sent:

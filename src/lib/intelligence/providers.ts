@@ -13,9 +13,16 @@
  * - Kimi / Moonshot AI (api.moonshot.ai/v1, OpenAI-compatible, Bearer key): platform.kimi.ai/docs/api/overview
  * - Cloudflare Workers AI (api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1, OpenAI-compatible, API token):
  *   developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility
+ *
+ * Embeddings only (the semantic index and semantic filters; never chat), checked November 2026:
+ * - Voyage AI (api.voyageai.com/v1/embeddings, Bearer key): docs.voyageai.com/reference/embeddings-api
+ * - Cohere (api.cohere.com/v2/embed, Bearer key): docs.cohere.com/reference/embed
+ * - Jina AI (api.jina.ai/v1/embeddings, Bearer key): jina.ai/embeddings
+ * - OpenRouter (openrouter.ai/api/v1/embeddings, Bearer key): openrouter.ai/docs/api/reference/embeddings
+ * Each accepts calls from a browser (CORS), tested from a page with a dummy key.
  */
 
-export const PROVIDER_IDS = ['anthropic', 'openai', 'google', 'mistral', 'moonshot', 'cloudflare'] as const;
+export const PROVIDER_IDS = ['anthropic', 'openai', 'google', 'mistral', 'moonshot', 'cloudflare', 'voyage', 'cohere', 'jina', 'openrouter'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 
 export type ProviderInfo = {
@@ -25,6 +32,7 @@ export type ProviderInfo = {
   /** Where to create a key. */ keyUrl: string;
   /** The key field's placeholder. */ keyPlaceholder: string;
   /** Cloudflare needs the account the token belongs to. */ needsAccount?: boolean;
+  /** Its key is used only for embeddings (semantic filters and the semantic index), never for chat. */ embeddingsOnly?: boolean;
 };
 
 export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
@@ -34,7 +42,14 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
   mistral: { id: 'mistral', name: 'Mistral AI', product: 'Le Chat', keyUrl: 'https://console.mistral.ai/api-keys', keyPlaceholder: 'Mistral API key' },
   moonshot: { id: 'moonshot', name: 'Moonshot AI', product: 'Kimi', keyUrl: 'https://platform.kimi.ai/docs/get-your-api-key', keyPlaceholder: 'sk-…' },
   cloudflare: { id: 'cloudflare', name: 'Cloudflare', product: 'Workers AI', keyUrl: 'https://dash.cloudflare.com/profile/api-tokens', keyPlaceholder: 'API token with Workers AI access', needsAccount: true },
+  voyage: { id: 'voyage', name: 'Voyage AI', product: 'Voyage', keyUrl: 'https://dashboard.voyageai.com/', keyPlaceholder: 'pa-…', embeddingsOnly: true },
+  cohere: { id: 'cohere', name: 'Cohere', product: 'Cohere Embed', keyUrl: 'https://dashboard.cohere.com/api-keys', keyPlaceholder: 'Cohere API key', embeddingsOnly: true },
+  jina: { id: 'jina', name: 'Jina AI', product: 'Jina Embeddings', keyUrl: 'https://jina.ai/api-dashboard/', keyPlaceholder: 'jina_…', embeddingsOnly: true },
+  openrouter: { id: 'openrouter', name: 'OpenRouter', product: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys', keyPlaceholder: 'sk-or-…', embeddingsOnly: true },
 };
+
+/** Providers whose keys are for embeddings only. */
+export const isEmbeddingsOnly = (p: ProviderId) => !!PROVIDERS[p].embeddingsOnly;
 
 /** A provider key and, for Cloudflare, the account it belongs to. */
 export type Credential = { provider: ProviderId; key: string; account?: string };
@@ -63,6 +78,7 @@ export const PREFERRED_MODELS: Record<ProviderId, RegExp[]> = {
   mistral: [/^mistral-small-latest$/, /^mistral-small-\d+$/, /^mistral-large-latest$/, /^mistral-large-\d+$/],
   moonshot: [/^kimi-k\d+(\.\d+)?$/, /^kimi-k[\d.]+-pro$/],
   cloudflare: [/^@cf\/meta\/llama-3\.3-70b-instruct-fp8-fast$/, /^@cf\/openai\/gpt-oss-120b$/, /^@cf\/qwen\//, /^@cf\/meta\//],
+  voyage: [], cohere: [], jina: [], openrouter: [],
 };
 
 /** Models that aren't for chat (embeddings, images, speech, moderation…), left out of the model picker. */
