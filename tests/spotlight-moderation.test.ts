@@ -203,3 +203,46 @@ describe('filter engine refresh safety', () => {
     expect(engine.discoveryClear(post)).toBe(false);
   });
 });
+
+describe('semantic discovery reconfiguration while a previous batch is in flight', () => {
+  it('restarts queued work for the new filter version without adopting stale results', async () => {
+    const engine = new FilterEngine();
+    const oldRule = rule({ id: 'old', text: 'old unsafe topic', semantic: true, kind: 'topic' });
+    const newRule = rule({ id: 'new', text: 'new unsafe topic', semantic: true, kind: 'topic' });
+    const oldPost = spotlightFilterPost(card([{ handle: 'good' }], { id: 'old-post', title: 'Public story from previous policy' }));
+    const newPost = spotlightFilterPost(card([{ handle: 'good' }], { id: 'new-post', title: 'Public story with new policy' }));
+    let startedOld!: () => void;
+    const oldStarted = new Promise<void>(resolve => { startedOld = resolve; });
+    let completeOld!: () => void;
+    const oldFinish = new Promise<{ n: number; matches: { id: string; strong: boolean }[] }[]>(resolve => {
+      completeOld = () => resolve([{ n: 0, matches: [{ id: 'old', strong: true }] }]);
+    });
+    engine.configure({ filters: [oldRule], ai: false, deep: false, scope: 'old-provider', similar: async () => {
+      startedOld();
+      return oldFinish;
+    } });
+    engine.request(oldPost, 'public');
+    await Promise.race([
+      oldStarted,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Old semantic batch never started')), 2500)),
+    ]);
+
+    let startedNew!: () => void;
+    const newStarted = new Promise<void>(resolve => { startedNew = resolve; });
+    engine.configure({ filters: [newRule], ai: false, deep: false, scope: 'new-provider', similar: async () => {
+      startedNew();
+      return [{ n: 0, matches: [] }];
+    } });
+    engine.request(newPost, 'public');
+    expect(engine.discoveryClear(newPost, 'public')).toBe(false);
+    completeOld(); // stale, incompatible result must not be used under the new rules
+
+    await Promise.race([
+      newStarted,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('New semantic queue was abandoned')), 2500)),
+    ]);
+    // The pending result is processed and the new post becomes eligible.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(engine.discoveryClear(newPost, 'public')).toBe(true);
+  });
+});
