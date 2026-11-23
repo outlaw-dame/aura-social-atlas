@@ -111,7 +111,7 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
     if (account?.discoverable === false || s.visibility !== 'public' || s.sensitive === true ||
         (typeof s.spoiler_text === 'string' && s.spoiler_text.trim()) ||
         typeof s.id !== 'string' || typeof s.url !== 'string' ||
-        !httpOnly(s.url) || s.reblog) return [];
+        !isPublicHttpsUrl(s.url) || s.reblog) return [];
     const media = Array.isArray(s.media_attachments) ? s.media_attachments : [];
     const video = media.find(m => m && typeof m === 'object' &&
       (m as Record<string, unknown>).type === 'video' &&
@@ -124,7 +124,7 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
     return [{ id: `v:${s.id}`, source: 'Bonfire' as const,
       url: s.url, title, description: text.slice(0, 400),
       image: isPublicHttpsUrl(v.preview_url as string) ? v.preview_url as string : undefined,
-      provider: observedBy, author: typeof account?.display_name === 'string' ? account.display_name : undefined,
+      provider: new URL(s.url).hostname, author: typeof account?.display_name === 'string' ? account.display_name : undefined,
       published: typeof s.created_at === 'string' ? s.created_at : undefined,
       kind: 'video' as const, reason: 'recent' as const, observedBy }];
   });
