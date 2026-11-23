@@ -225,7 +225,15 @@ export class FilterEngine {
         });
         if (changed) this.emit();
       }
-    } finally { this.nearBusy = false; }
+    } finally {
+      this.nearBusy = false;
+      // A filter/provider change can abort this generation while new posts
+      // have already queued behind its in-flight embedding request. Reclaim
+      // the queue for the CURRENT generation instead of leaving discovery
+      // permanently pending until another post happens to arrive.
+      // Old results were discarded above using the generation/version check.
+      if (this.similar && this.nearQueue.size) void this.flushNear();
+    }
   }
 
   private async flush() {
