@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent } from './fedizen-feed';
-import { allowedSpotlightItem, type SpotlightModeration } from './spotlight-curation';
+import { allowedSpotlightItem, verifiedBonfireArticleSource, type SpotlightModeration } from './spotlight-curation';
 import {
   bonfireAuthor, combineSpotlight, fromFederatedLinkCards, fromFederatedVideos, fromMastodonLinks, type SpotlightItem,
 } from './spotlight';
@@ -12,30 +12,23 @@ import { collectPublicSpotlightCandidates, eligiblePublicSpotlightPosts } from '
  * trends, which can be slow or empty. No individual OAuth grant is used. */
 export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): Promise<{ items: SpotlightItem[]; bonfireCount: number }> => {
   const { articles } = await import('./bonfire.server').then(m => m.fetchRecentArticles());
-  const recent: SpotlightItem[] = articles.slice(0, 6).map(a => {
+  // The public GraphQL projection already supplies up to 20 recent articles.
+  // Filter by owner policy AFTER sampling: the first few may all be remote
+  // and ineligible while a local, eligible author appears farther down.
+  const recent: SpotlightItem[] = articles.slice(0, 20).map(a => {
     const account = bonfireAuthor(a);
     const provider = (() => { try { return new URL(a.url).hostname || 'fedizen.net'; } catch { return 'fedizen.net'; } })();
-    // Bonfire's Article GraphQL projection exposes username and canonical actor
-    // URI separately. A bare username is NOT evidence of a local Fedizen
-    // actor: a federated author may have the same username. With no domain-
-    // block list, only a native actor whose canonical URL is on the actual
-    // instance may be safely attributed to a local account.
-    const localAuthor = (() => {
-      if (!a.authorUrl || !a.handle) return false;
-      try {
-        const actor = new URL(a.authorUrl);
-        return actor.protocol === 'https:' && actor.hostname.toLowerCase() === 'fedizen.net' &&
-          !a.handle.replace(/^@/, '').includes('@');
-      } catch { return false; }
-    })();
+    // Keep explicit actor-origin proof even for federated authors. Today
+    // remote cards remain withheld until the owner's domain-block policy is
+    // complete, but future authorization must not require rewriting cards.
+    const provenance = verifiedBonfireArticleSource(a, account);
     return {
       id: `a:${a.id}`, source: 'Bonfire', title: a.title, description: a.summary,
       url: a.url, image: a.image, provider, author: a.author,
       authorUrl: a.authorUrl, published: a.date,
       authorAccount: account, authorAccounts: account ? [account] : undefined,
       kind: 'article', reason: 'recent', observedBy: 'fedizen.net',
-      sourceAccounts: localAuthor && account?.acct ? [{ handle: account.acct, actorUrl: a.authorUrl }] : [],
-      sourceComplete: localAuthor && !!account?.acct,
+      ...provenance,
       filterText: a.paragraphs.slice(0, 4).join(' ').slice(0, 1800),
     };
   });
