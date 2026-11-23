@@ -52,6 +52,10 @@ describe('Spotlight instance scope and honest ranking signals', () => {
         content: 'Hidden', media_attachments: [{ type: 'video', url: 'https://cdn.example.org/secret.mp4' }] },
       { id: 'direct', url: 'https://fedizen.net/post/direct', visibility: 'direct',
         content: 'Hidden', media_attachments: [{ type: 'video', url: 'https://cdn.example.org/secret.mp4' }] },
+      { id: 'cw', url: 'https://fedizen.net/post/cw', visibility: 'public',
+        spoiler_text: 'Sensitive', content: 'Hidden', media_attachments: [{ type: 'video', url: 'https://cdn.example.org/cw.mp4' }] },
+      { id: 'sensitive', url: 'https://fedizen.net/post/sensitive', visibility: 'public',
+        sensitive: true, content: 'Hidden', media_attachments: [{ type: 'video', url: 'https://cdn.example.org/sensitive.mp4' }] },
     ]);
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ kind: 'video', reason: 'recent', observedBy: 'fedizen.net' });
@@ -94,11 +98,10 @@ describe('bounded Fedizen public REST transport', () => {
     expect(await fetchFixedFedizenJson('trends', make(Response.json(['x'.repeat(1024 * 1024 + 20)])))).toEqual([]);
   });
 
-  it('reports federated public timeline by its own fixed route', async () => {
-    const mock: typeof fetch = async (url) => {
-      expect(url).toBe('https://fedizen.net/api/v1/timelines/public?limit=30');
-      return Response.json([]);
-    };
-    expect(await fetchFixedFedizenJson('federated', mock)).toEqual([]);
+  it('never enables anonymous federated public reads in a shared cache', async () => {
+    let requests = 0;
+    const mock: typeof fetch = async () => { requests++; return Response.json([]); };
+    expect(await fetchFixedFedizenJson('federated' as never, mock)).toEqual([]);
+    expect(requests).toBe(0);
   });
 });
