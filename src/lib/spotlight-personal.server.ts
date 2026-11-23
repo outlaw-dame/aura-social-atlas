@@ -16,7 +16,9 @@ export function isPublicSpotlightStatus(value: unknown): boolean {
   const status = value as Record<string, unknown>;
   const account = status.account && typeof status.account === 'object' && !Array.isArray(status.account)
     ? status.account as Record<string, unknown> : null;
-  return status.visibility === 'public' && account?.discoverable !== false &&
+  // A public-looking status without a real account cannot be authenticated or
+  // screened and must never enter source aggregation (nor crash its caller).
+  return !!account && status.visibility === 'public' && account.discoverable !== false &&
     status.sensitive !== true && !(typeof status.spoiler_text === 'string' && status.spoiler_text.trim()) &&
     !status.reblog && !status.quote && !status.in_reply_to_id;
 }
