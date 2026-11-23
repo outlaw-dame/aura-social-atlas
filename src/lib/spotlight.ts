@@ -14,7 +14,7 @@ export type SpotlightItem = {
   /** Identified PUBLIC contributors, distinct from the publisher. Empty means
    * provenance is unknown and personalized Spotlight must suppress the card.
    */
-  sourceAccounts?: { id?: string; handle: string }[];
+  sourceAccounts?: { id?: string; handle: string; actorUrl?: string }[];
   /** False if any sampled public contributor had no verifiable account. */
   sourceComplete?: boolean;
   /** Sample of the public source-post text to apply the reader's filters. */
@@ -135,9 +135,13 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
       provider: new URL(s.url).hostname, author: typeof account?.display_name === 'string' ? account.display_name : undefined,
       published: typeof s.created_at === 'string' ? s.created_at : undefined,
       kind: 'video' as const, reason: 'recent' as const, observedBy,
-      sourceComplete: typeof account?.acct === 'string' && !!account.acct,
+      sourceComplete: typeof account?.acct === 'string' && !!account.acct &&
+        (isPublicHttpsUrl(account.uri as string) || isPublicHttpsUrl(account.url as string)),
       sourceAccounts: typeof account?.acct === 'string' && account.acct
-        ? [{ id: typeof account.id === 'string' ? account.id : undefined, handle: account.acct }] : [],
+        ? [{ id: typeof account.id === 'string' ? account.id : undefined,
+             handle: account.acct,
+             actorUrl: isPublicHttpsUrl(account.uri as string) ? account.uri as string :
+               isPublicHttpsUrl(account.url as string) ? account.url as string : undefined }] : [],
       filterText: text.slice(0, 1400),
     }];
   });
@@ -171,8 +175,11 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
       const count = status[field];
       return total + (typeof count === 'number' && Number.isInteger(count) && count >= 0 && count < 1e6 ? count : 0);
     }, 0);
-    const contributor = typeof account?.acct === 'string' && account.acct
-      ? { id: typeof account.id === 'string' ? account.id : undefined, handle: account.acct }
+    const actorUrl = isPublicHttpsUrl(account?.uri as string) ? account?.uri as string :
+      isPublicHttpsUrl(account?.url as string) ? account?.url as string : undefined;
+    const contributor = typeof account?.acct === 'string' && account.acct && actorUrl
+      ? { id: typeof account.id === 'string' ? account.id : undefined,
+          handle: account.acct, actorUrl }
       : null;
     const sourceText = strip(typeof status.content === 'string' ? status.content : '').slice(0, 500);
     const existing = groups.get(key);
