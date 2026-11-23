@@ -4,8 +4,8 @@ import { useServerFn } from '@tanstack/react-start';
 import { useAtlasAuth } from './AuthState';
 import { useStrictSpotlightFilters } from './useIntelligence';
 import { getSpotlight, getViewerSpotlight } from '@/lib/spotlight.functions';
-import { combineSpotlight, type SpotlightItem } from '@/lib/spotlight';
-import { allowedSpotlightItem, spotlightFilterPost } from '@/lib/spotlight-curation';
+import type { SpotlightItem } from '@/lib/spotlight';
+import { selectModeratedSpotlight, spotlightFilterPost } from '@/lib/spotlight-curation';
 
 /** Both Atlas desktop and phone reuse ONE owner-bound moderation snapshot
  * returned atomically with the sampled federated content. No public cache may
@@ -42,15 +42,7 @@ export function useCuratedSpotlight(): {
   const candidates = useMemo(() => {
     if (!identity || !policy) return [];
     const base = shared.data?.items ?? [];
-    // Authorize each source independently BEFORE URL deduplication. A public
-    // trend with no verifiable contributor must not shadow a safe, owner-bound
-    // article for the same URL (or promote a blocked contributor's preview).
-    const eligible = (items: SpotlightItem[]) => items.filter(item => allowedSpotlightItem(item, policy));
-    return combineSpotlight(
-      eligible(base.filter(item => item.reason === 'trending')),
-      eligible(viewer.data?.items ?? []),
-      eligible(base.filter(item => item.reason !== 'trending')),
-    );
+    return selectModeratedSpotlight(base, viewer.data?.items ?? [], policy);
   }, [identity, policy, shared.data, viewer.data]);
   const filterable = useMemo(() => candidates.map(spotlightFilterPost), [candidates]);
   const cleared = useStrictSpotlightFilters(filterable);
