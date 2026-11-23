@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { Block, BlockFooter, BlockTitle, Icon, Link, List, ListItem } from 'framework7-react';
-import { getSpotlight } from '@/lib/spotlight.functions';
-import type { SpotlightItem } from '@/lib/spotlight';
+import { getSpotlight, getViewerSpotlight } from '@/lib/spotlight.functions';
+import { combineSpotlight, type SpotlightItem } from '@/lib/spotlight';
+import { useAtlasAuth } from '@/components/social/AuthState';
 import type { PostArticle } from '@/lib/fedizen-feed';
 import { NetworkBadge } from '@/lib/networks';
 import { VOICE_CATEGORIES } from '@/lib/voices';
@@ -26,8 +28,21 @@ function Source({ it }: { it: SpotlightItem }) {
  * their site; verified creators open in Atlas.
  */
 export function MobileSpotlight() {
+  const { user } = useAtlasAuth();
+  const viewerFn = useServerFn(getViewerSpotlight);
   const { data, isLoading } = useQuery({ queryKey: ['spotlight'], queryFn: () => getSpotlight(), staleTime: 10 * 60_000 });
-  const items = data?.items ?? [];
+  const viewer = useQuery({
+    queryKey: ['spotlight-viewer', user?.id],
+    queryFn: () => {
+      if (!user?.id) throw new Error('Atlas session required');
+      return viewerFn({ data: { expectedAtlasUserId: user.id } });
+    },
+    enabled: !!user?.id,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const base = data?.items ?? [];
+  const items = combineSpotlight(base.filter(it => it.reason === 'trending'), viewer.data ?? [], base.filter(it => it.reason !== 'trending'));
   const featured = items.filter(it => it.image).slice(0, 5);
   const ids = new Set(featured.map(f => f.id));
   const rest = items.filter(it => !ids.has(it.id)).slice(0, 8);
