@@ -29,13 +29,14 @@ export async function collectPublicSpotlightCandidates(
   first: PublicSpotlightPage,
   moderation: SpotlightModeration,
   readNext: (cursor: string) => Promise<PublicSpotlightPage>,
+  hasEligibleAlternative = false,
 ): Promise<PublicSpotlightCandidates> {
   if (first.status !== 200 || !Array.isArray(first.data)) return { posts: [], linked: [], videos: [], pagesRead: 0 };
   const posts = first.data.slice(0, 20).filter(isPublicSpotlightStatus);
   let linked = fromFederatedLinkCards(posts);
   let videos = fromFederatedVideos(posts);
   let pagesRead = 1;
-  if (![...linked, ...videos].some(it => allowedSpotlightItem(it, moderation)) &&
+  if (!hasEligibleAlternative && ![...linked, ...videos].some(it => allowedSpotlightItem(it, moderation)) &&
       first.next && first.next.length <= 512) {
     // Fedizen's Link cursor is parsed and origin-constrained by fedizenGet;
     // only the exact /timelines/public next-page route is allowed downstream.
