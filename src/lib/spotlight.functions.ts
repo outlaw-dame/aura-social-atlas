@@ -19,9 +19,10 @@ export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): 
 
   const recent: SpotlightItem[] = articles.slice(0, 6).map(a => {
     const account = bonfireAuthor(a);
+    const provider = (() => { try { return new URL(a.url).hostname || 'fedizen.net'; } catch { return 'fedizen.net'; } })();
     return {
       id: `a:${a.id}`, source: 'Bonfire', title: a.title, description: a.summary,
-      url: a.url, image: a.image, provider: 'fedizen.net', author: a.author,
+      url: a.url, image: a.image, provider, author: a.author,
       authorUrl: a.authorUrl, published: a.date,
       authorAccount: account, authorAccounts: account ? [account] : undefined,
       kind: 'article', reason: 'recent', observedBy: 'fedizen.net',
