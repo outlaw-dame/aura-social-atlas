@@ -32,7 +32,7 @@ const THEMES: { mode: ThemeMode; label: string; icon: typeof Sun }[] = [
 function ThemeChoice() {
   const mode = useThemeMode();
   return <>
-    <div role="radiogroup" aria-label="Color theme" className="flex flex-wrap gap-3">{THEMES.map(t => <Button key={t.mode} role="radio" aria-checked={mode === t.mode} variant={mode === t.mode ? 'secondary' : 'outline'} className={mode === t.mode ? 'ring-1 ring-ring' : ''} onClick={() => setThemeMode(t.mode)}><t.icon />{t.label}</Button>)}</div>
+    <div role="group" aria-label="Color theme" className="flex flex-wrap gap-3">{THEMES.map(t => <Button key={t.mode} aria-pressed={mode === t.mode} variant={mode === t.mode ? 'secondary' : 'outline'} className={mode === t.mode ? 'ring-1 ring-ring' : ''} onClick={() => setThemeMode(t.mode)}><t.icon />{t.label}</Button>)}</div>
     <p className="mt-2 text-sm text-muted-foreground">Match device uses Dim when your device is set to dark.</p>
   </>;
 }
