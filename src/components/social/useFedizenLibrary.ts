@@ -182,8 +182,9 @@ export function useBlockActions() {
         if (!r.ok) return LIBRARY_PROBLEM[r.error];
         // Invalidate Spotlight immediately rather than flashing a newly blocked actor
         // while a stale moderation snapshot is being refreshed.
-        qc.setQueryData(['spotlight-moderation', user.id], { moderation: null });
-        await Promise.all(['spotlight-moderation', 'spotlight-viewer', 'fedizen-blocks', 'fedizen-home', 'bonfire-native-home', 'fedizen-messages', 'fedizen-saved', 'fedizen-foryou', 'fedizen-circle-feed', 'fedizen-tag-feed']
+        await qc.cancelQueries({ queryKey: ['spotlight-viewer', user.id] });
+        qc.setQueryData(['spotlight-viewer', user.id], { items: [], moderation: null });
+        await Promise.all(['spotlight-viewer', 'fedizen-blocks', 'fedizen-home', 'bonfire-native-home', 'fedizen-messages', 'fedizen-saved', 'fedizen-foryou', 'fedizen-circle-feed', 'fedizen-tag-feed']
           .map(k => qc.invalidateQueries({ queryKey: [k] })));
         return null;
       } catch { return LIBRARY_PROBLEM.unavailable; }
