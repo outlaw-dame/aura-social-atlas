@@ -61,8 +61,14 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
     if (!connected) return [];
     const response = await fedizenGet(connected.access_token, '/api/v1/timelines/public?limit=20');
     if (response.status !== 200) return [];
-    const publicPosts = response.data.filter(item =>
-      item && typeof item === 'object' && (item as Record<string, unknown>).visibility === 'public');
+    const publicPosts = response.data.filter(item => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+      const status = item as Record<string, unknown>;
+      const account = status.account && typeof status.account === 'object'
+        ? status.account as Record<string, unknown> : null;
+      return status.visibility === 'public' && account?.discoverable !== false &&
+        status.sensitive !== true && !(typeof status.spoiler_text === 'string' && status.spoiler_text.trim());
+    });
     const videos = fromFederatedVideos(publicPosts);
 
     // A podcast is accepted only after verified ActivityPub PodcastEpisode
