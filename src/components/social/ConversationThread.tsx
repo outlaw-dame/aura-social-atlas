@@ -9,6 +9,7 @@ import { isPostClick } from '@/lib/open-post';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { shortAgo } from '@/lib/feed-types';
 import { PostActionBar } from './PostActionBar';
+import { CONTEXT_REPLY_LIMIT } from '@/lib/thread-limits';
 // More (Share, the original, filters, and Edit and Delete on your own posts), as on feed cards.
 import { PostMoreMenu } from './FilterLikeThis';
 import { ArrivalNote, Face, ParticipantsStrip, ReplyModeSwitch, justArrived, useIsMePost, useMyAcct, useScrollAnchor } from './ConversationParts';
@@ -37,6 +38,8 @@ import type { useReactions } from './usePostActions';
 type Acts = { save: ReturnType<typeof useSaveToggle>; reactions: ReturnType<typeof useReactions>; onReply: (p: FedizenPost) => void };
 export type ConversationThreadProps = {
   thread: Thread; actions: Acts; loading: boolean; partial: boolean; retry: () => void;
+  /** Fedizen sent its most replies (CONTEXT_REPLY_LIMIT): the rest are only on fedizen.net. */
+  capped?: boolean;
   sort: ReplySort; setSort: (s: ReplySort) => void; replyMode: ReplyMode; setReplyMode: (m: ReplyMode) => void;
   onOpenPost: (p: FedizenPost) => void;
   /** Where the reader left off before this visit (useConversationVisit), for Atlas folds' "new". */
@@ -91,6 +94,7 @@ export function ConversationThread(props: ConversationThreadProps) {
     <ArrivalNote arrived={props.arrived} one="1 new reply" many="new replies" />
     {loading && <p className="atlas-ph-note" aria-live="polite">Loading replies…</p>}
     {partial && <p className="atlas-ph-note">Couldn’t load the rest of this conversation. <button type="button" className="atlas-ph-link" onClick={retry}>Try again</button></p>}
+    {props.capped && !loading && <p className="atlas-ph-note">Fedizen sends the first {CONTEXT_REPLY_LIMIT} replies.{t.focus.url && <> <a className="atlas-ph-link" href={t.focus.url} target="_blank" rel="noopener noreferrer">See the whole conversation on fedizen.net</a></>}</p>}
     {replyMode === 'flat'
       // Bonfire's flat mode, oldest first; each reply to anything but the post says which, in Phanpy's reply orange.
       ? <ol className="atlas-ph-replies atlas-ph-flat">{flat.slice(0, shown).map(r => <li key={keyOf(r.post)} className="atlas-ph-li" style={branchStyle(branches.get(keyOf(r.post)))}>
