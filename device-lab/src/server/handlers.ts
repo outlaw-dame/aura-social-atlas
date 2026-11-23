@@ -437,7 +437,10 @@ export const tagFeed: Impl<typeof TagFeed> = {
   })),
 };
 
-export const spotlight: Impl<typeof Spotlight> = { getSpotlight: () => ({ items: SPOTLIGHT, bonfireCount: 1 }) };
+export const spotlight: Impl<typeof Spotlight> = {
+  getSpotlight: () => ({ items: SPOTLIGHT, bonfireCount: 1 }),
+  getSpotlightTrends: () => ({ items: [] }),
+};
 export const translation: Impl<typeof Translation> = {
   getTranslationKeys: () => ({ serverKeys: true, deepl: null }),
   saveDeeplKey: () => ({ error: 'not-configured' as const }),
