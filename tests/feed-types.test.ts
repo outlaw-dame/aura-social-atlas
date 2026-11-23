@@ -67,8 +67,12 @@ describe("Feed reads are allowlisted", () => {
     await expect(fedizenGet("t", "/api/v1/statuses/01P/history")).rejects.toThrow("Unsupported Fedizen read path.");
     await expect(fedizenGet("t", "/api/v1/timelines/tag/a/b?limit=10")).rejects.toThrow("Unsupported Fedizen read path.");
     await expect(fedizenGet("t", "/api/v1/timelines/list/x?limit=40")).rejects.toThrow("Unsupported Fedizen read path.");
-    await expect(fedizenGet("t", "/api/v1/timelines/public?limit=20")).rejects.toThrow("Unsupported Fedizen read path.");
-    expect(seen).toHaveLength(5);
+    // Fedizen's federated PUBLIC timeline is explicitly allowed at one
+    // bounded page size for Spotlight. Everything else remains refused.
+    globalThis.fetch = (async (url: string) => { seen.push(url); return new Response("[]", { headers: { "content-type": "application/json" } }); }) as unknown as typeof fetch;
+    expect((await fedizenGet("t", "/api/v1/timelines/public?limit=20")).status).toBe(200);
+    await expect(fedizenGet("t", "/api/v1/timelines/public?limit=100")).rejects.toThrow("Unsupported Fedizen read path.");
+    expect(seen).toHaveLength(6);
   });
 });
 
