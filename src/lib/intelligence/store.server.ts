@@ -67,7 +67,7 @@ export type ActiveModel = { problem: AiProblem } | { credential: Credential; mod
 /* ── Backups ─────────────────────────────────────────────────────────────────────────────────── */
 
 /** Failures another key may not have: limits, outages, a key that stopped working, a model this key can't use. */
-const TRY_NEXT = new Set<AiProblem>(['rate-limited', 'unavailable', 'bad-key', 'no-access', 'bad-model', 'no-vision']);
+const TRY_NEXT = new Set<AiProblem>(['rate-limited', 'unavailable', 'bad-key', 'no-access', 'no-credit', 'bad-model', 'no-vision']);
 /** Keys a provider is limiting, and until when (per server instance). Background work leaves them alone; the
  *  person's own requests try them last. */
 const resting = new Map<string, number>();

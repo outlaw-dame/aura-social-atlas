@@ -10,7 +10,7 @@ import { FILTER_PLACES, MAX_EXPANSIONS, MAX_FILTERS, filterKind, normalizeFilter
  * (vault.server.ts); a key kept on the device only never reaches these functions (device-keys.ts).
  */
 
-export type AiProblem = 'not-configured' | 'not-ready' | 'bad-key' | 'no-access' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'browser-blocked' | 'no-vision' | 'storage';
+export type AiProblem = 'not-configured' | 'not-ready' | 'bad-key' | 'no-access' | 'no-credit' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'browser-blocked' | 'no-vision' | 'storage';
 /** A key on Atlas's server: never the key itself, only its last four characters. `model`: the one chosen for it
  *  (used when it's a backup or does background work). */
 export type SavedKey = { id: string; provider: ProviderId; label: string | null; hint: string; models: string[]; model: string | null };

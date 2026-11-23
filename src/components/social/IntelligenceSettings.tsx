@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { PROVIDERS, PROVIDER_IDS, type ProviderId } from '@/lib/intelligence/providers';
 import { BROWSER_CAPABLE } from '@/lib/intelligence/llm';
-import { intelligenceReady, useIntelligence, useIntelligenceActions, type Intelligence } from './useIntelligence';
+import { intelligenceReady, useIntelligence, whyUnavailable, useIntelligenceActions, type Intelligence } from './useIntelligence';
 import type { SavedKey } from '@/lib/intelligence.functions';
 import type { DeviceKey } from '@/lib/intelligence/device-keys';
 import { useAtlasAuth } from './AuthState';
@@ -96,10 +96,10 @@ export function IntelligenceSettings() {
     </Row>}
     {active?.where === 'server' && <BackgroundChoice s={s} busy={act.busy} onChange={act.setBackground} />}
 
-    <Row title="Assistant" detail={active?.where === 'device' ? 'Ask Atlas from Compose. Needs a key on Atlas’s server.' : 'Ask Atlas from Compose.'} id="ai-assistant">
+    <Row title="Assistant" detail={`Ask Atlas from Compose.${whyUnavailable(s, true) ? ` ${whyUnavailable(s, true)}` : ''}`} id="ai-assistant">
       <Switch aria-label="Assistant" aria-describedby="ai-assistant" checked={social.assistantEnabled && ready && active?.where === 'server'} disabled={!ready || active?.where !== 'server'} onCheckedChange={social.setAssistantEnabled} />
     </Row>
-    <Row title="Check every post against topic filters" detail="Filters normally check only posts whose words match. This also catches posts on a topic that use none of its words, but sends every public post you scroll past to your provider." id="ai-deep">
+    <Row title="Check every post against topic filters" detail={`Filters normally check only posts whose words match. This also catches posts on a topic that use none of its words, but sends every public post you scroll past to your provider.${whyUnavailable(s) ? ` ${whyUnavailable(s)}` : ''}`} id="ai-deep">
       <Switch aria-label="Check every post against topic filters" aria-describedby="ai-deep" checked={s.deepMatching} disabled={!ready || act.busy} onCheckedChange={v => void act.update({ deepMatching: v })} />
     </Row>
     <SemanticSettings />

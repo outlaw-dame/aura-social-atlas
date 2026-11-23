@@ -12,7 +12,7 @@ import { CLOUDFLARE_ACCOUNT, type Credential, type ProviderId } from './provider
 export const ANTHROPIC_VERSION = '2026-10-21';
 
 export class ProviderError extends Error {
-  constructor(public code: 'bad-key' | 'no-access' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'browser-blocked' | 'no-vision', public status?: number) { super(code); }
+  constructor(public code: 'bad-key' | 'no-access' | 'no-credit' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'browser-blocked' | 'no-vision', public status?: number) { super(code); }
 }
 
 const inBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -48,6 +48,8 @@ function headers(c: Credential): Record<string, string> {
 function failure(status: number): ProviderError {
   if (status === 401) return new ProviderError('bad-key', status);
   if (status === 403) return new ProviderError('no-access', status);
+  // OpenRouter (and others) answer 402 when the account or key has no credit left (openrouter.ai/docs/api/reference/errors-and-debugging).
+  if (status === 402) return new ProviderError('no-credit', status);
   if (status === 404) return new ProviderError('bad-model', status);
   if (status === 429) return new ProviderError('rate-limited', status);
   return new ProviderError('unavailable', status);
