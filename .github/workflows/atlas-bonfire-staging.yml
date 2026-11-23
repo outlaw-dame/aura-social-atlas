@@ -9,6 +9,12 @@ on:
     branches:
       - main
     paths:
+      - 'src/lib/spotlight.ts'
+      - 'src/lib/spotlight.functions.ts'
+      - 'src/lib/spotlight-federated.server.ts'
+      - 'src/components/social/Spotlight.tsx'
+      - 'src/components/f7/Discover.tsx'
+      - 'tests/spotlight-federated.test.ts'
       - 'src/routes/fedizen-acceptance.tsx'
       - 'src/lib/fedizen-acceptance-view.ts'
       - 'src/routeTree.gen.ts'
@@ -33,6 +39,8 @@ jobs:
       - name: Test session authorization and sanitized staging UI
         run: |
           bun test tests/auth-runtime.test.ts tests/bonfire-atlas-acceptance.test.ts tests/fedizen-acceptance-view.test.ts tests/fedizen-session-intent.test.ts tests/fedizen-callback-origin.test.ts tests/fedizen-oauth-grant.test.ts
+      - name: Test Spotlight provider boundaries and content classification
+        run: bun test tests/spotlight-federated.test.ts
       - name: Build Node server for Railway without privileged secrets
         env:
           NITRO_PRESET: node-server
