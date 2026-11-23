@@ -4,9 +4,9 @@ import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent } from './fedizen-feed';
 import { allowedSpotlightItem, type SpotlightModeration } from './spotlight-curation';
 import {
-  bonfireAuthor, combineSpotlight, fromFederatedLinkCards, fromFederatedVideos, fromMastodonLinks,
-  type SpotlightItem,
+  bonfireAuthor, combineSpotlight, fromMastodonLinks, type SpotlightItem,
 } from './spotlight';
+import { collectPublicSpotlightCandidates } from './spotlight-personal.server';
 
 /** Shared, PUBLIC Spotlight sources. These do not depend on an individual
  * user's OAuth grant and never send a request to mastodon.social.
@@ -83,16 +83,14 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
       fedizenGet(connected.access_token, '/api/v1/timelines/public?limit=20'),
     ]);
     if (!moderation || response.status !== 200) return { items: [], moderation };
-    const publicPosts = response.data.filter(item => {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
-      const status = item as Record<string, unknown>;
-      const account = status.account && typeof status.account === 'object'
-        ? status.account as Record<string, unknown> : null;
-      return status.visibility === 'public' && account?.discoverable !== false &&
-        status.sensitive !== true && !(typeof status.spoiler_text === 'string' && status.spoiler_text.trim());
-    });
-    const videos = fromFederatedVideos(publicPosts);
-    const linked = fromFederatedLinkCards(publicPosts);
+    // When a sparse first page has no candidate whose authors pass the viewer's
+    // moderation snapshot, inspect at most one older PUBLIC page. Preserve the
+    // transport's fixed-host, fixed-route, opaque-cursor bounds and 429 cooldown.
+    const { posts: publicPosts, linked, videos } = await collectPublicSpotlightCandidates(
+      response, moderation, async cursor => fedizenGet(
+        connected.access_token, `/api/v1/timelines/public?limit=20&max_id=${encodeURIComponent(cursor)}`,
+      ),
+    );
 
     // A podcast is accepted only after verified ActivityPub PodcastEpisode
     // parsing, NEVER because a status happened to mention the word podcast.
