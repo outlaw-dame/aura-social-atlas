@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { useRef } from 'react';
 import { Flame, TrendingUp, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getSpotlight } from '@/lib/spotlight.functions';
+import { getSpotlight, getViewerSpotlight } from '@/lib/spotlight.functions';
 import { NetworkBadge } from '@/lib/networks';
-import type { SpotlightItem } from '@/lib/spotlight';
+import { combineSpotlight, type SpotlightItem } from '@/lib/spotlight';
+import { useAtlasAuth } from './AuthState';
 import { AuthorCards } from './ArticleAuthors';
 
 /** Spotlight's "More from" cards (shared with feed posts). */
@@ -72,8 +74,21 @@ function Carousel({ items }: { items: SpotlightItem[] }) {
 }
 
 export function Spotlight() {
+  const { user } = useAtlasAuth();
+  const viewerFn = useServerFn(getViewerSpotlight);
   const { data, isLoading } = useQuery({ queryKey: ['spotlight'], queryFn: () => getSpotlight(), staleTime: 10 * 60_000 });
-  const items = data?.items ?? [];
+  const viewer = useQuery({
+    queryKey: ['spotlight-viewer', user?.id],
+    queryFn: () => {
+      if (!user?.id) throw new Error('Atlas session required');
+      return viewerFn({ data: { expectedAtlasUserId: user.id } });
+    },
+    enabled: !!user?.id,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const base = data?.items ?? [];
+  const items = combineSpotlight(base.filter(it => it.reason === 'trending'), viewer.data ?? [], base.filter(it => it.reason !== 'trending'));
   return <section aria-labelledby="spotlight-heading" className="mb-12 min-w-0 max-w-full">
     <div className="mb-5 flex items-baseline justify-between"><h2 id="spotlight-heading" className="flex items-center gap-2 font-serif text-2xl italic"><Flame className="size-5 text-accent" />Spotlight</h2></div>
     {isLoading ? <p className="text-sm text-muted-foreground">Gathering what people are sharing…</p> : !items.length ? <p className="text-sm text-muted-foreground">Nothing available in Spotlight right now.</p> : <>
