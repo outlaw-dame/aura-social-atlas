@@ -89,6 +89,12 @@ export function arrange(role: Role, picks: Pick[]): Pick[] {
 export async function withAi<T>(userId: string, role: Role, job: (c: Credential, model: string, deepMatching: boolean) => Promise<T>): Promise<{ value: T } | { problem: AiProblem }> {
   let s: SettingsRow, keys: KeyRow[];
   try { s = await readSettings(userId); keys = await savedKeys(userId); } catch (e) { return { problem: e instanceof VaultError ? problem(e) : 'storage' }; }
+  return runWithKeys(s, keys, id => credentialById(userId, id), role, job);
+}
+
+/** withAi's choosing and retrying, given the settings, the keys and a way to open one (separate so it can be tested
+ *  without a database). */
+export async function runWithKeys<T>(s: SettingsRow, keys: KeyRow[], open: (keyId: string) => Promise<Credential | null>, role: Role, job: (c: Credential, model: string, deepMatching: boolean) => Promise<T>): Promise<{ value: T } | { problem: AiProblem }> {
   if (!s.enabled) return { problem: 'not-ready' };
   const all = plan(role, roleSettings(s), keys);
   if (!all.length) return { problem: 'not-ready' };
@@ -97,7 +103,7 @@ export async function withAi<T>(userId: string, role: Role, job: (c: Credential,
   let first: AiProblem | null = null;
   for (const p of picks) {
     try {
-      const c = await credentialById(userId, p.keyId);
+      const c = await open(p.keyId);
       if (!c) continue;
       return { value: await job(c, p.model, s.deep_matching) };
     } catch (e) {

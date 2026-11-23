@@ -1,24 +1,19 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
-// Invented keys and settings, served by stand-ins for the database and the vault.
+// Invented keys and settings.
 const keys = [
   { id: 'k-main', provider: 'anthropic', label: null, hint: '…0001', models: ['haiku'], model: 'haiku' },
   { id: 'k-second', provider: 'anthropic', label: 'Personal', hint: '…0002', models: ['haiku'], model: 'haiku' },
   { id: 'k-bg', provider: 'openai', label: null, hint: '…0003', models: ['mini'], model: 'mini' },
 ];
-let settings: Record<string, unknown> = {};
-mock.module('@/integrations/supabase/client.server', () => ({
-  supabaseAdmin: { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: settings, error: null }) }) }) }) },
-}));
-mock.module('../src/lib/intelligence/vault.server', () => {
-  class VaultError extends Error { constructor(public code: string) { super(code); } }
-  return {
-    VaultError, vaultReady: async () => true, savedKeys: async () => keys,
-    credentialById: async (_u: string, id: string) => ({ provider: keys.find(k => k.id === id)!.provider, key: `secret-${id}` }),
-  };
-});
-const { withAi, _resetResting } = await import('../src/lib/intelligence/store.server');
+let settings: SettingsRow;
+// The store module imports the database client; this test passes its own settings and keys instead, so nothing is
+// mocked (a module mock would leak into other test files).
+const { runWithKeys, _resetResting } = await import('../src/lib/intelligence/store.server');
 const { ProviderError } = await import('../src/lib/intelligence/llm');
+type SettingsRow = import('../src/lib/intelligence/store.server').SettingsRow;
+const open = async (id: string) => ({ provider: keys.find(k => k.id === id)!.provider as 'anthropic', key: `secret-${id}` });
+const withAi = <T,>(_u: string, role: 'main' | 'background', job: (c: { key: string }) => Promise<T>) => runWithKeys(settings, keys as never, open, role, job);
 
 beforeEach(() => {
   _resetResting();
