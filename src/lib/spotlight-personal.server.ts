@@ -1,6 +1,6 @@
 /** Owner-bound public Spotlight sampling. No global cache, no private feed,
  * no unbounded scrolling, and no retry loop on Fedizen rate limits. */
-import { allowedSpotlightItem, type SpotlightModeration } from './spotlight-curation';
+import { allowedSpotlightItem, allowedSpotlightSources, type SpotlightModeration } from './spotlight-curation';
 import { fromFederatedLinkCards, fromFederatedVideos, type SpotlightItem } from './spotlight';
 
 export type PublicSpotlightPage = { status: number; data: unknown[]; next?: string };
@@ -19,6 +19,24 @@ export function isPublicSpotlightStatus(value: unknown): boolean {
   return status.visibility === 'public' && account?.discoverable !== false &&
     status.sensitive !== true && !(typeof status.spoiler_text === 'string' && status.spoiler_text.trim()) &&
     !status.reblog && !status.quote && !status.in_reply_to_id;
+}
+
+/** A provider's "local" timeline may include a remote original or mirrored
+ * activity. Verify each individual contributor BEFORE link aggregation, so a
+ * blocked remote account cannot contaminate a safe local story sharing its URL.
+ * This is also used before podcast author resolution, not just link previews. */
+export function eligibleLocalPublicPosts(values: unknown[], moderation: SpotlightModeration): unknown[] {
+  return values.slice(0, 20).filter(value => {
+    if (!isPublicSpotlightStatus(value)) return false;
+    const status = value as Record<string, unknown>;
+    const account = status.account as Record<string, unknown>;
+    const actorUrl = typeof account.uri === 'string' ? account.uri :
+      typeof account.url === 'string' ? account.url : undefined;
+    return typeof account.acct === 'string' && allowedSpotlightSources(
+      [{ handle: account.acct, id: typeof account.id === 'string' ? account.id : undefined, actorUrl }],
+      !!actorUrl, moderation,
+    );
+  });
 }
 
 /** Read at most one additional 20-status page when the first sample yields no
