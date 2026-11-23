@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { openTag } from '@/lib/hashtags';
 import { linkifyPost } from '@/components/social/PostPeople';
 import { Block, BlockTitle, Button, Icon, Link, List, ListItem, Navbar, NavRight, Page, Popup, f7 } from 'framework7-react';
@@ -10,6 +11,7 @@ import { MobileFilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
 import { useAtlasAuth } from '@/components/social/AuthState';
+import { useProfileCircles } from '@/components/social/useFedizenLibrary';
 import { useModerationActions } from './useModerationActions';
 import { PostBody } from '@/components/social/PostBody';
 
@@ -40,9 +42,18 @@ function Follow({ p }: { p: FediProfile }) {
 function ProfileMore({ p }: { p: FediProfile }) {
   const { user } = useAtlasAuth();
   const me = useIsMe(p.acct);
-  const mod = useModerationActions({ name: p.name, acct: p.acct }, !!user && !me && p.acctVerified && p.kind !== 'group');
+  const allowed = !!user && !me && p.acctVerified && p.kind !== 'group';
+  const mod = useModerationActions({ name: p.name, acct: p.acct }, allowed);
+  const circles = useProfileCircles(allowed ? { acct: p.acct, actor: p.actor } : null);
+  useEffect(() => { if (circles.error) f7.toast.show({ text: circles.error, closeTimeout: 3000 }); }, [circles.error]);
   if (!mod.buttons.length) return null;
-  return <Link iconOnly aria-label="More" onClick={() => f7.actions.create({ buttons: [mod.buttons, [{ text: 'Cancel', strong: true }]] }).open()}><Icon ios="f7:ellipsis_circle" md="material:more_vert" /></Link>;
+  // Your circles: add them to one or take them out of one (each a separate tap, as Mastodon's "Add to list").
+  const chooseCircles = () => f7.actions.create({ buttons: [
+    [{ text: 'Your circles', label: true }, ...circles.circles.map(c => ({ text: circles.isIn(c.id) ? `Remove from ${c.title}` : `Add to ${c.title}`, color: circles.isIn(c.id) ? 'red' : undefined, onClick: () => void circles.toggle(c.id) }))],
+    [{ text: 'Cancel', strong: true }],
+  ] }).open();
+  const circleButton = circles.canWrite && circles.ready && circles.circles.length > 0 ? [{ text: 'Circles…', onClick: chooseCircles }] : [];
+  return <Link iconOnly aria-label="More" onClick={() => f7.actions.create({ buttons: [[...circleButton, ...mod.buttons], [{ text: 'Cancel', strong: true }]] }).open()}><Icon ios="f7:ellipsis_circle" md="material:more_vert" /></Link>;
 }
 
 export function FediProfilePopup({ target, onClose }: { target: FediProfileTarget | null; onClose: () => void }) {

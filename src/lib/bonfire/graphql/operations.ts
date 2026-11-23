@@ -139,3 +139,32 @@ export const UPDATE_MY_PROFILE_DOCUMENT = `mutation AtlasUpdateMyProfile($profil
 export const UPDATE_MY_PROFILE_IMAGES_DOCUMENT = `mutation AtlasUpdateMyProfileImages($images: ImagesUpload) {
   updateUser(images: $images) { user { id profile { icon image } } }
 }`;
+
+/**
+ * Your own circles with their descriptions (bonfire_boundaries `boundaries_api_graphql.ex`, 60fc2e7: `my_circles`,
+ * `Circle { id name summary }`). Built-in and stereotyped circles (followers, blocked…) are left out, as REST
+ * /api/v1/lists does.
+ */
+export const MY_CIRCLES_DOCUMENT = `query AtlasMyCircles {
+  myCircles(filter: { excludeStereotypes: true, excludeBuiltIns: true }) { id name summary }
+}`;
+
+/**
+ * Creates or changes a circle. `update_circle` writes `summary` from its input every time, so leaving it out erases the
+ * description; Atlas always sends it. (REST PUT /api/v1/lists/:id goes through the same function without a summary,
+ * so it erases descriptions too: Atlas renames through this.)
+ */
+export const CREATE_CIRCLE_DOCUMENT = `mutation AtlasCreateCircle($circle: CircleInput!) {
+  createCircle(circle: $circle) { id name summary }
+}`;
+export const UPDATE_CIRCLE_DOCUMENT = `mutation AtlasUpdateCircle($id: ID!, $circle: CircleInput!) {
+  updateCircle(id: $id, circle: $circle) { id name summary }
+}`;
+
+/**
+ * Who a post can go to: Bonfire's presets and the person's own saved audiences (custom ACLs they named on Fedizen).
+ * Each `id` is usable as `createPost(boundary:)` (`boundary_options`, bonfire_boundaries 60fc2e7).
+ */
+export const POST_AUDIENCES_DOCUMENT = `query AtlasPostAudiences {
+  boundaries { options { id label description custom } }
+}`;

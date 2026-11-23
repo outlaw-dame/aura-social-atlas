@@ -562,6 +562,8 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   // People you block (Bonfire: MastoAccountController.blocks, people both ghosted and silenced). Instances aren't in it.
   { match: /^\/api\/v1\/blocks\?limit=80$/, schema: moderationListSchema },
   { match: new RegExp(`^/api/v1/lists/${ID}/accounts\\?limit=80$`), schema: accountsSchema },
+  // Which of your circles someone is in (Bonfire circles_containing_subject).
+  { match: new RegExp(`^/api/v1/accounts/${ID}/lists$`), schema: listsSchema },
   // One account by handle, to add someone to a circle. Answers a single Account, returned here as a one-item list.
   { match: new RegExp(`^/api/v1/accounts/lookup\\?acct=${ACCT}$`), schema: account.extend({ id: z.string().min(1).max(64) }), single: true },
   // People whose name or handle starts with what's typed after "@" in a reply (mention suggestions).

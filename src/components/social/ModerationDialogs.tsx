@@ -4,8 +4,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { REPORT_CATEGORIES, useMutes, useReport, useWhoReacted, type ReportCategory } from './useOwnPosts';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Ellipsis, Flag, VolumeX } from 'lucide-react';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { CircleDashed, Ellipsis, Flag, VolumeX } from 'lucide-react';
+import { useProfileCircles } from './useFedizenLibrary';
 import { ProfileHoverCard } from './ProfileHoverCard';
 
 export type ReportTarget = { name: string; acct?: string; accountId?: string; statusId?: string };
@@ -76,8 +77,9 @@ export function ReactorsDialog({ statusId, kind, onClose }: { statusId: string |
 }
 
 /** Desktop: More (…) beside Follow on a profile: Mute / Unmute and Report, for a confirmed handle that isn't yours. */
-export function ProfileMoreMenu({ name, acct, enabled }: { name: string; acct: string; enabled: boolean }) {
+export function ProfileMoreMenu({ name, acct, actor, enabled }: { name: string; acct: string; actor: string; enabled: boolean }) {
   const mutes = useMutes(enabled);
+  const circles = useProfileCircles(enabled ? { acct, actor } : null);
   const [reporting, setReporting] = useState(false);
   if (!enabled) return null;
   const muted = mutes.isMuted({ acct });
@@ -85,11 +87,17 @@ export function ProfileMoreMenu({ name, acct, enabled }: { name: string; acct: s
     <DropdownMenu>
       <DropdownMenuTrigger asChild><Button size="icon" variant="outline" className="size-9 rounded-full" aria-label="More"><Ellipsis /></Button></DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {circles.canWrite && circles.ready && circles.circles.length > 0 && <DropdownMenuSub>
+          <DropdownMenuSubTrigger><CircleDashed />Circles</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            {circles.circles.map(c => <DropdownMenuCheckboxItem key={c.id} checked={circles.isIn(c.id)} disabled={circles.busy} onSelect={e => { e.preventDefault(); void circles.toggle(c.id); }}>{c.title}</DropdownMenuCheckboxItem>)}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>}
         <DropdownMenuItem disabled={mutes.busy} onSelect={() => void mutes.mute({ acct, on: !muted })}><VolumeX />{muted ? `Unmute ${name}` : `Mute ${name}`}</DropdownMenuItem>
         <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setReporting(true)}><Flag />Report…</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-    {mutes.error && <p role="alert" className="max-w-56 text-right text-xs text-muted-foreground">{mutes.error}</p>}
+    {(mutes.error || circles.error) && <p role="alert" className="max-w-56 text-right text-xs text-muted-foreground">{mutes.error ?? circles.error}</p>}
     {reporting && <ReportDialog target={{ name, acct }} onClose={() => setReporting(false)} />}
   </>;
 }

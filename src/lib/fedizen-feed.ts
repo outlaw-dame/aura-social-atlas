@@ -446,7 +446,7 @@ export function assertFedizenSessionIntent(expectedUserId: string, authenticated
 }
 
 /** A Bonfire circle (served to Mastodon clients as a List): a named group of people you choose. */
-export type FedizenCircle = { id: string; title: string };
+export type FedizenCircle = { id: string; title: string; /** Only from GraphQL (REST lists have no description). */ summary?: string };
 /** Someone in a circle, or found by handle to add to one. */
 export type FedizenPerson = { id: string; name: string; handle: string; avatar?: string };
 

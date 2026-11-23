@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Bookmark, CircleDashed, Heart, Minus, Pin, PinOff, Plus, UsersRound } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Bookmark, CircleDashed, Heart, Minus, Pencil, Pin, PinOff, Plus, UsersRound } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { BoostedBy, canOpen, openAuthor } from './PostPeople';
 import { ProfileHoverCard } from './ProfileHoverCard';
@@ -7,7 +7,9 @@ import { pinCircle, unpinCircle, usePinnedCircles } from '@/lib/feed-types';
 import { useAtlasAuth } from './AuthState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { FedizenPost } from '@/lib/fedizen-feed';
+import { Textarea } from '@/components/ui/textarea';
+import { CIRCLE_NAME_MAX, CIRCLE_SUMMARY_MAX, circleReach } from '@/lib/fedizen-circles';
+import type { FedizenCircle, FedizenPost } from '@/lib/fedizen-feed';
 import { PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
 import { FilterGate } from './FilterGate';
@@ -108,13 +110,16 @@ export function DesktopCircles() {
   const [title, setTitle] = useState(''), [note, setNote] = useState<string | null>(null);
   const circles = q.data?.circles ?? [];
   const canWrite = !!q.data?.canWrite;
-  if (open) return <CircleView circle={open} canWrite={canWrite} onBack={() => setOpen(null)} />;
+  const describable = !!q.data?.describable;
+  // The open circle as Fedizen last answered (renamed or described since it was opened).
+  const current = open ? circles.find(c => c.id === open.id) ?? open : null;
+  if (current) return <CircleView circle={current} canWrite={canWrite} describable={describable} onBack={() => setOpen(null)} />;
   return <div className="space-y-3">
     <p className="text-xs text-muted-foreground">Circles group the people you know, so you choose who sees and replies to each post. They’re your circles on Fedizen.</p>
     {q.isLoading && <p className="text-sm text-muted-foreground">Loading your circles…</p>}
     {q.data?.error && <p role="alert" className="text-sm text-muted-foreground">{LIBRARY_PROBLEM[q.data.error]}</p>}
     {circles.map(c => <button key={c.id} type="button" onClick={() => setOpen(c)} className="flex w-full items-center gap-3 rounded-2xl border border-border p-4 text-left transition-colors hover:bg-secondary/60">
-      <CircleDashed className="size-5 shrink-0 text-accent" /><span className="min-w-0 flex-1 truncate font-semibold">{c.title}</span>
+      <CircleDashed className="size-5 shrink-0 text-accent" /><span className="min-w-0 flex-1"><span className="block truncate font-semibold">{c.title}</span>{c.summary && <span className="block truncate text-xs text-muted-foreground">{c.summary}</span>}</span>
     </button>)}
     {!q.isLoading && !q.data?.error && !circles.length && <p className="py-6 text-center text-sm text-muted-foreground">No circles yet.</p>}
     {!q.data?.error && !q.isLoading && (canWrite
@@ -127,21 +132,35 @@ export function DesktopCircles() {
   </div>;
 }
 
-function CircleView({ circle, canWrite, onBack }: { circle: { id: string; title: string }; canWrite: boolean; onBack: () => void }) {
+function CircleView({ circle, canWrite, describable, onBack }: { circle: FedizenCircle; canWrite: boolean; describable: boolean; onBack: () => void }) {
   const { user } = useAtlasAuth();
   const q = useCircleMembers(circle.id);
   const act = useCircleActions();
   const [handle, setHandle] = useState(''), [note, setNote] = useState<string | null>(null), [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false), [title, setTitle] = useState(circle.title), [summary, setSummary] = useState(circle.summary ?? '');
   const people = q.data?.people ?? [];
+  const follows = q.data?.followsYou ? new Set(q.data.followsYou) : null;
+  const reach = circleReach(people.length, follows?.size ?? null);
   return <div className="space-y-4">
     <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />All circles</button>
-    <div className="flex flex-wrap items-center gap-3"><CircleDashed className="size-6 text-accent" /><h3 className="flex-1 font-serif text-3xl">{circle.title}</h3><PinToFeeds circle={circle} /></div>
+    {editing
+      ? <form className="space-y-2" onSubmit={async e => { e.preventDefault(); const t = title.trim(); if (!t) return; const err = await act.save({ id: circle.id, title: t, summary: summary.trim() }); setNote(err); if (!err) setEditing(false); }}>
+          <Input value={title} maxLength={CIRCLE_NAME_MAX} onChange={e => setTitle(e.target.value)} aria-label="Circle name" />
+          <Textarea value={summary} maxLength={CIRCLE_SUMMARY_MAX} onChange={e => setSummary(e.target.value)} placeholder="What this circle is for (optional)" aria-label="Circle description" rows={2} />
+          <div className="flex gap-2"><Button type="submit" size="sm" className="rounded-full" disabled={!title.trim() || act.busy}>Save</Button><Button type="button" variant="ghost" size="sm" onClick={() => { setEditing(false); setTitle(circle.title); setSummary(circle.summary ?? ''); }}>Cancel</Button></div>
+        </form>
+      : <div className="flex flex-wrap items-center gap-3"><CircleDashed className="size-6 text-accent" /><h3 className="flex-1 font-serif text-3xl">{circle.title}</h3>
+          {canWrite && describable && <Button variant="ghost" size="sm" className="rounded-full" onClick={() => { setTitle(circle.title); setSummary(circle.summary ?? ''); setEditing(true); }}><Pencil />Edit</Button>}
+          <PinToFeeds circle={circle} /></div>}
+    {!editing && circle.summary && <p className="text-sm text-muted-foreground">{circle.summary}</p>}
+    {reach && <p className="text-xs text-muted-foreground">{reach}</p>}
     {q.isLoading && <p className="text-sm text-muted-foreground">Loading who’s in it…</p>}
     {q.data?.error && <p role="alert" className="text-sm text-muted-foreground">{LIBRARY_PROBLEM[q.data.error]}</p>}
     <ul className="divide-y divide-border">
       {people.map(p => <li key={p.id} className="flex items-center gap-3 py-3">
         {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" className="size-10 atlas-avatar object-cover" /> : <span className="social-avatar size-10 font-serif" aria-hidden="true">{p.name.charAt(0)}</span>}
         <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{p.name}</span><span className="block truncate text-xs text-muted-foreground">{p.handle}</span></span>
+        {follows && (follows.has(p.id) ? <span className="shrink-0 text-xs text-muted-foreground">Follows you</span> : <span className="shrink-0 text-xs text-muted-foreground" title="Fedizen sends circle posts only to members who follow you">Doesn’t follow you</span>)}
         {canWrite && <Button size="icon" variant="ghost" aria-label={`Remove ${p.name} from ${circle.title}`} onClick={async () => setNote(await act.removeMember(circle.id, p.id))}><Minus /></Button>}
       </li>)}
       {!q.isLoading && !people.length && !q.data?.error && <li className="flex items-center gap-2 py-3 text-sm text-muted-foreground"><UsersRound className="size-4" />No one in this circle yet.</li>}
