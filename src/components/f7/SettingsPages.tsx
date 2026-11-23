@@ -3,7 +3,7 @@ import { AccentPicker } from '@/components/social/AccentPicker';
 import { AvatarShapePicker } from '@/components/social/AvatarShapePicker';
 import { pushPage } from './navigation';
 import { MobileReadingSettings } from './ReadingSettings';
-import { setThemeMode, useThemeMode } from './theme-mode';
+import { setThemeMode, useThemeMode } from '@/lib/theme-mode';
 
 /**
  * Phone Settings: the same categories, in the same order, as desktop's /settings — Intelligence, Notifications,
@@ -34,9 +34,11 @@ export function AppearancePage() {
     <BlockTitle>Color theme</BlockTitle>
     <List strong inset dividers>
       <ListItem title="Light" radio radioIcon="end" name="mode" checked={mode === 'light'} onChange={() => setThemeMode('light')} />
+      <ListItem title="Dim" radio radioIcon="end" name="mode" checked={mode === 'dim'} onChange={() => setThemeMode('dim')} />
       <ListItem title="Dark" radio radioIcon="end" name="mode" checked={mode === 'dark'} onChange={() => setThemeMode('dark')} />
       <ListItem title="Match device" radio radioIcon="end" name="mode" checked={mode === 'system'} onChange={() => setThemeMode('system')} />
     </List>
+    <BlockFooter>Match device uses Dim when your device is set to dark.</BlockFooter>
     <BlockTitle>Accent color</BlockTitle>
     <Block strong inset><AccentPicker /></Block>
     <BlockFooter>Used for buttons, the podcast player and highlights.</BlockFooter>

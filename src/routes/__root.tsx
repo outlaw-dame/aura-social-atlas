@@ -14,6 +14,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SocialProvider } from "@/components/social/SocialState";
 import { AtlasAuthProvider } from "@/components/social/AuthState";
 import { ContentFilterProvider } from "@/components/social/useIntelligence";
+import { THEME_BOOT_SCRIPT } from '@/lib/theme-mode';
 
 function NotFoundComponent() {
   return (
@@ -135,8 +136,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Before anything paints: the reader's color theme on <html> (src/lib/theme-mode.ts), so it never flashes light. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <HeadContent />
       </head>
       <body>

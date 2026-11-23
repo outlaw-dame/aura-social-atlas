@@ -25,6 +25,7 @@ import { CollectionPopup } from './Collections';
 import { AccentPicker } from '@/components/social/AccentPicker';
 import { AvatarShapePicker } from '@/components/social/AvatarShapePicker';
 import { useAvatarShape } from '@/lib/avatar-shape';
+import { currentAppearance } from '@/lib/theme-mode';
 import { accentHex, useAccent } from '@/lib/accent';
 import { FediProfilePopup } from './FediProfile';
 import { MiniPlayer } from './MiniPlayer';
@@ -38,7 +39,6 @@ import { badgeText, useUnreadActivity } from '@/components/social/useNotificatio
 import { MobileFeeds } from './MobileFeeds';
 import { FollowedTagsPage, TagFeedPage } from './TagFeed';
 import { bindStack, popToRoot, postPageUrl, pushPage, showTab, tagPageUrl } from './navigation';
-import { setThemeMode, useThemeMode } from './theme-mode';
 import { ModerationPage } from './Moderation';
 import { AppearancePage, MobileSettingsList } from './SettingsPages';
 import { MobileSpotlight, MobileVoicesToKnow } from './Discover';
@@ -150,7 +150,7 @@ export default function AtlasMobileApp() {
   useEffect(registerAppServiceWorker, []);
   // A tapped notification opens Activity (public/sw.js posts this to the open app).
   useOpenActivityFromPush(useCallback(() => { try { showTab('tab-activity'); } catch { /* not ready */ } }, []));
-  const { followed, saved, canSave, toggleFollow, toggleSave, dark, toggleDark, assistantEnabled: assistantWanted } = useSocial();
+  const { followed, saved, canSave, toggleFollow, toggleSave, appearance, assistantEnabled: assistantWanted } = useSocial();
   // The assistant answers with the person's own key: only there once Intelligence is on with a key.
   const intelligence = useIntelligence();
   const assistantEnabled = assistantWanted && intelligenceReady(intelligence.data) && intelligence.data?.active?.where === 'server';
@@ -215,8 +215,6 @@ export default function AtlasMobileApp() {
     showTab('tab-discover');
     window.setTimeout(() => { const el = document.querySelector<HTMLInputElement>('#tab-discover .searchbar input'); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus(); }, 80);
   };
-  const mode = useThemeMode();
-  const setMode = setThemeMode;
   const [title, setTitle] = useState('Discover');
   // Feeds stays mounted under the other dock tabs; it counts posts as seen only while its tab is on screen.
   const [feedsShown, setFeedsShown] = useState(false);
@@ -225,20 +223,10 @@ export default function AtlasMobileApp() {
   const unread = badgeText(useUnreadActivity());
   const [network, setNetwork] = useState<string>('All networks');
 
-  useEffect(() => { setMode(dark ? 'dark' : 'light'); }, []);
-  const [systemDark, setSystemDark] = useState(false);
-  useEffect(() => {
-    const q = window.matchMedia('(prefers-color-scheme: dark)');
-    setSystemDark(q.matches);
-    const on = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    q.addEventListener('change', on);
-    return () => q.removeEventListener('change', on);
-  }, []);
-  const isDark = mode === 'system' ? systemDark : mode === 'dark';
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark);
-    if (isDark !== dark) toggleDark();
-  }, [isDark]);
+  // Dim and Dark are both Framework7's dark mode; Dim only swaps the palette (data-theme="dim", styles.css). Framework7
+  // starts from the class THEME_BOOT_SCRIPT put on <html> (no darkMode prop) and follows later changes here; the live
+  // value is read, not this render's, which is 'light' while hydrating.
+  useEffect(() => { f7ready(() => f7.setDarkMode(currentAppearance() !== 'light')); }, [appearance]);
   // Hide the floating buttons while the feed scrolls, bring them back when it settles.
   useEffect(() => {
     let t: number | undefined;
@@ -320,7 +308,7 @@ export default function AtlasMobileApp() {
     // Routed pages render inside <App>, so this context hands them the current card renderer (with today's saved
     // state, follows and so on) on every render, rather than a closure from the moment they were pushed.
     <SampleCards.Provider value={postCard}>
-    <App theme={theme} darkMode={isDark} name="Atlas" colors={{ primary: accentHex(accent) }}>
+    <App theme={theme} name="Atlas" colors={{ primary: accentHex(accent) }}>
       <Panel left cover swipe resizable={false} visibleBreakpoint={panelHeldAtStart ? 1 : undefined} className="atlas-panel">
         <Page>
           <Block className="atlas-brand" style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', fontSize: 32, marginTop: 24 }}>Atlas</Block>
