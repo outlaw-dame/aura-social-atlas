@@ -16,6 +16,12 @@ describe('blocking a whole server through Bonfire', () => {
     expect(await serverIdFor('ann@social.example')).toBe('PEER2');
     answer({ data: { user: { id: 'u1', character: { username: 'ann@lemmy.example', peered: { peerId: 'PEER3', canonicalUri: 'https://elsewhere.example/u/ann' } } } } });
     expect(await serverIdFor('ann@lemmy.example')).toBeNull();
+    answer({ data: { user: { id: 'u1', character: { username: 'ann@social.example', peered: { peerId: 'TOO_WIDE', canonicalUri: 'https://example/users/ann' } } } } });
+    expect(await serverIdFor('ann@social.example')).toBeNull();
+    for (const uri of ['http://lemmy.example/u/ann', 'https://u:p@lemmy.example/u/ann', 'https://lemmy.example:444/u/ann']) {
+      answer({ data: { user: { id: 'u1', character: { username: 'ann@lemmy.example', peered: { peerId: 'UNSAFE', canonicalUri: uri } } } } });
+      expect(await serverIdFor('ann@lemmy.example')).toBeNull();
+    }
     answer({ data: { user: { id: 'u1', character: { username: 'me', peered: null } } } });
     expect(await serverIdFor('me@fedizen.example')).toBeNull();
   });
