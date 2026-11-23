@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { allowedSpotlightItem, type SpotlightModeration } from '../src/lib/spotlight-curation';
 import { collectPublicSpotlightCandidates } from '../src/lib/spotlight-personal.server';
 import { fromFederatedLinkCards, fromFederatedVideos } from '../src/lib/spotlight';
+import { fedizenGet } from '../src/lib/fedizen.server';
 
 const policy: SpotlightModeration = {
   blockedHandles: [], mutedHandles: [], blockedIds: [], mutedIds: [],
@@ -116,6 +117,27 @@ describe('owner-only bounded Spotlight source sampling', () => {
       card: undefined, media_attachments: [{ type: 'video', url: 'https://example.org/video.mp4', preview_url: 'https://example.org/p.jpg' }],
     })]);
     expect(video).toHaveLength(1);
+  });
+
+  it('accepts exactly the fixed public next-page route and refuses arbitrary hosts or query keys', async () => {
+    const savedFetch = globalThis.fetch;
+    const requested: string[] = [];
+    try {
+      globalThis.fetch = (async (url) => {
+        requested.push(String(url));
+        return Response.json([]);
+      }) as typeof fetch;
+      const cursor = encodeURIComponent('next:opaque%');
+      const ok = await fedizenGet('spotlight-pagination-fixture', `/api/v1/timelines/public?limit=20&max_id=${cursor}`);
+      expect(ok.status).toBe(200);
+      expect(ok.data).toEqual([]);
+      expect(requested).toEqual([`https://fedizen.net/api/v1/timelines/public?limit=20&max_id=${cursor}`]);
+      await expect(fedizenGet('spotlight-pagination-fixture', '/api/v1/timelines/home?limit=999')).rejects.toThrow('Unsupported');
+      await expect(fedizenGet('spotlight-pagination-fixture', '/api/v1/timelines/public?limit=20&max_id=https://evil.example')).rejects.toThrow('Unsupported');
+      expect(requested).toHaveLength(1);
+    } finally {
+      globalThis.fetch = savedFetch;
+    }
   });
 
   it('does not label one sampled public source as a network trend', () => {
