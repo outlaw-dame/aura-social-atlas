@@ -25,6 +25,7 @@ import { AuthorWarning } from '@/components/social/ContentWarning';
 import type { CardMode } from '@/components/social/FeedPostCard';
 import { isPostClick, isStatusId, openPost } from '@/lib/open-post';
 import { PostBody } from '@/components/social/PostBody';
+import { useLiveAvatar } from '@/components/social/useLiveAvatar';
 
 /** A group's avatar in a reason chip: its picture, else its initial, as a rounded square (groups are squares). */
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
@@ -107,9 +108,9 @@ function MobileFocusDetails({ post: p }: { post: FedizenPost }) {
 }
 
 function Avatar({ post: p }: { post: FedizenPost }) {
-  const [broken, setBroken] = useState(false);
-  return p.avatar && !broken
-    ? <img className="atlas-post-avatar" src={p.avatar} alt="" width={40} height={40} referrerPolicy="no-referrer" loading="lazy" onError={() => setBroken(true)} />
+  const face = useLiveAvatar(p.avatar, p.actor);
+  return face.src
+    ? <img className="atlas-post-avatar" src={face.src} alt="" width={40} height={40} referrerPolicy="no-referrer" loading="lazy" onError={face.onError} />
     : <span className="atlas-post-avatar atlas-activity-initial" aria-hidden="true">{p.author.charAt(0)}</span>;
 }
 

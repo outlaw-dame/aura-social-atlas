@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { isPostClick, isStatusId, rememberSeed } from '@/lib/open-post';
 import { PostBody } from './PostBody';
 import { TranslationLineView, usePostTranslation } from './useTranslation';
+import { useLiveAvatar } from './useLiveAvatar';
 
 function ChipGroupFace({ name, avatar }: { name: string; avatar?: string }) {
   const [broken, setBroken] = useState(false);
@@ -68,9 +69,9 @@ export function useFeedPostActions() {
 export type FeedActions = ReturnType<typeof useFeedPostActions>;
 
 function Avatar({ post: p }: { post: FedizenPost }) {
-  const [broken, setBroken] = useState(false);
-  return p.avatar && !broken
-    ? <img src={p.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="size-10 shrink-0 atlas-avatar bg-muted object-cover ring-1 ring-border" />
+  const face = useLiveAvatar(p.avatar, p.actor);
+  return face.src
+    ? <img src={face.src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={face.onError} className="size-10 shrink-0 atlas-avatar bg-muted object-cover ring-1 ring-border" />
     : <span aria-hidden="true" className="atlas-avatar flex size-10 shrink-0 items-center justify-center bg-muted font-serif text-base">{p.author.charAt(0)}</span>;
 }
 

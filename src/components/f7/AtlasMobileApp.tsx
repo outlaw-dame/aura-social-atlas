@@ -34,7 +34,7 @@ import { GroupPopup, MobileGroups } from './Groups';
 import { OPEN_GROUP_EVENT, groupStub, type Group, type GroupTarget } from '@/lib/groups';
 import { OPEN_COLLECTION_EVENT, type Collection } from '@/lib/collections';
 import { CreatorPopup } from './CreatorPopup';
-import { MobileRecentArticles, MobileActivity, MessagesPopup } from './FedizenMobile';
+import { MobileRecentArticles, MobileActivity, MessagesPopup, FollowRequestsPage } from './FedizenMobile';
 import { badgeText, useUnreadActivity } from '@/components/social/useNotificationGroups';
 import { MobileFeeds } from './MobileFeeds';
 import { FollowedTagsPage, TagFeedPage } from './TagFeed';
@@ -493,6 +493,7 @@ const STACK_ROUTES = [
   { path: '/tag/:tag/', component: TagFeedPage },
   { path: '/post/:id/', component: ThreadPage },
   { path: '/followed-tags/', component: FollowedTagsPage },
+  { path: '/follow-requests/', component: FollowRequestsPage },
   { path: '/intelligence/', component: IntelligencePage },
   { path: '/notifications-settings/', component: NotificationSettingsPage },
   { path: '/keyword-filters/', component: KeywordFiltersPage },

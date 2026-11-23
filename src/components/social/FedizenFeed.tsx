@@ -16,6 +16,7 @@ import { newPostsLabel } from '@/lib/new-post-faces';
 import { ArrowUp, Loader2 } from 'lucide-react';
 import { useHomeTimeline } from './useHomeTimeline';
 import { useNativeNewPosts } from './useNativeNewPosts';
+import { useLiveAvatar } from './useLiveAvatar';
 
 const when = (d?: string) => d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
@@ -74,7 +75,7 @@ export function FedizenFeed() {
           </div>
         )}</div>
       <aside><h3 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><Bell className="size-3" />Activity</h3>
-        {notices.length ? <ul className="space-y-3">{notices.map(n => <li key={n.id} className="flex gap-2 text-xs">{n.avatar ? <img src={n.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-6 shrink-0 atlas-avatar object-cover" /> : <span aria-hidden="true" className="atlas-avatar flex size-6 shrink-0 items-center justify-center bg-muted font-serif text-[11px]">{n.author.charAt(0)}</span>}<span><span className="font-semibold">{n.author}</span> <span className="text-muted-foreground">{n.text}</span></span></li>)}</ul> : <p className="text-xs text-muted-foreground">No new activity.</p>}
+        {notices.length ? <ul className="space-y-3">{notices.map(n => <li key={n.id} className="flex gap-2 text-xs"><NoticeFace n={n} /><span><span className="font-semibold">{n.author}</span> <span className="text-muted-foreground">{n.text}</span></span></li>)}</ul> : <p className="text-xs text-muted-foreground">No new activity.</p>}
         {/* As the phone: Disconnect revokes Atlas's access at Fedizen, so it asks first. */}
         <AlertDialog>
           <AlertDialogTrigger asChild>
@@ -95,4 +96,11 @@ export function FedizenFeed() {
     </div>
     {actions.dialog}
   </section>;
+}
+
+function NoticeFace({ n }: { n: { avatar?: string; actor?: string; author: string } }) {
+  const face = useLiveAvatar(n.avatar, n.actor);
+  return face.src
+    ? <img src={face.src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={face.onError} className="size-6 shrink-0 atlas-avatar object-cover" />
+    : <span aria-hidden="true" className="atlas-avatar flex size-6 shrink-0 items-center justify-center bg-muted font-serif text-[11px]">{n.author.charAt(0)}</span>;
 }
