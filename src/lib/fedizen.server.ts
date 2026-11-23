@@ -529,7 +529,12 @@ const followRequestsSchema = z.array(z.unknown()).max(10_000)
  * back for limit=80 and failed the bounded schema), so these take every entry, as follow requests do. Settings shows
  * the whole list, and Muted needs every block to leave blocked people out.
  */
-const moderationListSchema = followRequestsSchema;
+// Moderation cannot silently discard an unknown account: doing so would let
+// blocked/muted actors slip through downstream discovery. Unlike follow requests,
+// fail the entire read if an account cannot be matched by a stable id/handle.
+const moderationListSchema = z.array(listedAccount.extend({
+  acct: z.string().min(1).max(320),
+})).max(10_000);
 
 const ID = '[A-Za-z0-9_-]{1,64}';
 /** A hashtag, percent-encoded (letters in any script arrive as %XX). */
