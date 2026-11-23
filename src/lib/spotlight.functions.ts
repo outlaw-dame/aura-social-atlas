@@ -40,7 +40,7 @@ export const getSpotlight = createServerFn({ method: 'GET' }).handler(async (): 
       authorUrl: a.authorUrl, published: a.date,
       authorAccount: account, authorAccounts: account ? [account] : undefined,
       kind: 'article', reason: 'recent', observedBy: 'fedizen.net',
-      sourceAccounts: localAuthor && account?.acct ? [{ handle: account.acct }] : [],
+      sourceAccounts: localAuthor && account?.acct ? [{ handle: account.acct, actorUrl: a.authorUrl }] : [],
       sourceComplete: localAuthor && !!account?.acct,
       filterText: a.paragraphs.slice(0, 4).join(' ').slice(0, 1800),
     };
@@ -106,7 +106,11 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
       const author = status.account && typeof status.account === 'object'
         ? status.account as Record<string, unknown> : null;
       if (typeof author?.acct !== 'string' || !author.acct) return [];
-      return [{ url: card.url, source: { id: typeof author.id === 'string' ? author.id : undefined, handle: author.acct }, text: status.content.slice(0, 1400) }];
+      const actorUrl = typeof author.uri === 'string' ? author.uri :
+        typeof author.url === 'string' ? author.url : undefined;
+      if (!actorUrl) return [];
+      return [{ url: card.url, source: { id: typeof author.id === 'string' ? author.id : undefined,
+        handle: author.acct, actorUrl }, text: status.content.slice(0, 1400) }];
     }).slice(0, 4);
     if (!candidates.length) return { items: combineSpotlight(linked, videos).filter(it => allowedSpotlightItem(it, moderation)), moderation };
     const { resolveAuthorsFor, mediaFor } = await import('./article-author.server');
