@@ -5,9 +5,12 @@ import { changeFedizenServerBlock } from '@/lib/fedizen-profile.functions';
 import { FEDIZEN_BLOCKED_URL } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from './AuthState';
 
-/** The server part of a handle (name@server), for accounts on other servers than Fedizen. */
+/** A handle as name@server, whether it came with a leading "@" (as profiles show it) or not. */
+export const bareAcct = (acct: string | undefined) => acct?.trim().replace(/^@/, '') ?? '';
+
+/** The server part of a handle (name@server or @name@server), for accounts on other servers than Fedizen. */
 export const serverOf = (acct: string | undefined) => {
-  const host = acct?.split('@')[1]?.toLowerCase();
+  const host = bareAcct(acct).split('@')[1]?.toLowerCase();
   return host && host !== 'fedizen.net' ? host : null;
 };
 
@@ -37,7 +40,7 @@ export function useServerBlock() {
     if (!user || !host) return 'Sign in to Atlas and connect Fedizen first.';
     setBusy(true);
     try {
-      const r = await send({ data: { expectedAtlasUserId: user.id, acct, on } });
+      const r = await send({ data: { expectedAtlasUserId: user.id, acct: bareAcct(acct), on } });
       if (r.ok) {
         void Promise.all(['fedizen-home', 'fedizen-foryou', 'fedizen-notifications'].map(k => qc.invalidateQueries({ queryKey: [k] })));
         return r.outcome === 'done' ? `${host} ${on ? 'blocked' : 'unblocked'}.`
