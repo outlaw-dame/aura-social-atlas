@@ -25,15 +25,17 @@ function Source({ it }: { it: SpotlightItem }) {
  * their site; verified creators open in Atlas.
  */
 export function MobileSpotlight() {
-  const { items, loading: isLoading, unavailable } = useCuratedSpotlight();
+  const { items, loading: isLoading, unavailable, checking, screeningUnavailable } = useCuratedSpotlight();
   const featured = items.filter(it => it.image).slice(0, 5);
   const ids = new Set(featured.map(f => f.id));
   const rest = items.filter(it => !ids.has(it.id)).slice(0, 8);
   return <>
     <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:flame" md="material:local_fire_department" /> Spotlight</span></BlockTitle>
-    {isLoading ? <Block strong inset>Applying your Spotlight preferences…</Block>
+    {isLoading ? <Block strong inset>Finding public stories and verifying your moderation settings…</Block>
       : unavailable ? <Block strong inset>Spotlight is paused until your account's moderation settings are available.</Block>
-      : !items.length ? <Block strong inset>No stories have cleared your curation settings yet.</Block>
+      : screeningUnavailable ? <Block strong inset>Spotlight cannot verify all of your keyword or semantic filters right now. Your preferences remain enforced; check Settings → Intelligence and Moderation.</Block>
+      : checking ? <Block strong inset>Checking eligible stories against your keyword and semantic preferences…</Block>
+      : !items.length ? <Block strong inset>No eligible public stories were found in the available sources after applying your settings.</Block>
       : <>
         {featured.length > 0 && <div className="atlas-spot-rail" role="region" aria-roledescription="carousel" aria-label="Featured stories">
           {featured.map((it, i) => <div key={it.id} className="atlas-spot-slide" aria-roledescription="slide" aria-label={`${i + 1} of ${featured.length}`}>
