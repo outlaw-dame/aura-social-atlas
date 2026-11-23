@@ -15,12 +15,14 @@ const asArticle = (it: SpotlightItem): PostArticle => ({
 });
 
 function Source({ it }: { it: SpotlightItem }) {
-  return <span className="atlas-spot-meta">{it.source === 'Mastodon' ? <NetworkBadge network="Mastodon" /> : <b>Bonfire</b>} · {it.provider}</span>;
+  const reason = it.reason === 'trending' ? 'Trending' : 'Recent';
+  const kind = it.kind === 'podcast' ? 'Podcast' : it.kind === 'video' ? 'Video' : it.kind === 'article' ? 'Article' : 'Link';
+  return <span className="atlas-spot-meta">{it.source === 'Mastodon' ? <NetworkBadge network="Mastodon" /> : <b>Fedizen</b>} · {reason} {kind} · {it.provider}</span>;
 }
 
 /**
- * Phone: Spotlight, as on desktop's Discover — what people across the open web are sharing (Mastodon's trending links
- * and Fedizen's articles), featured stories with pictures to swipe through, then the rest as rows. Stories open on
+ * Phone: Spotlight, as on desktop's Discover — verified content types from public links
+ * and activities known to the signed-in Bonfire instance, featured stories with pictures to swipe through, then the rest as rows. Stories open on
  * their site; verified creators open in Atlas.
  */
 export function MobileSpotlight() {
@@ -32,7 +34,7 @@ export function MobileSpotlight() {
   return <>
     <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:flame" md="material:local_fire_department" /> Spotlight</span></BlockTitle>
     {isLoading ? <Block strong inset>Gathering what people are sharing…</Block>
-      : !items.length ? <Block strong inset>Nothing trending right now.</Block>
+      : !items.length ? <Block strong inset>Nothing available in Spotlight right now.</Block>
       : <>
         {featured.length > 0 && <div className="atlas-spot-rail" role="region" aria-roledescription="carousel" aria-label="Featured stories">
           {featured.map((it, i) => <div key={it.id} className="atlas-spot-slide" aria-roledescription="slide" aria-label={`${i + 1} of ${featured.length}`}>
@@ -46,7 +48,7 @@ export function MobileSpotlight() {
             {it.image && <img slot="media" className="atlas-spot-thumb" src={it.image} alt="" width={64} height={64} loading="lazy" referrerPolicy="no-referrer" />}
           </ListItem>)}
         </List>}
-        {data && data.bonfireCount === 0 && <BlockFooter>No public Fedizen articles are trending yet — new Bonfire articles will appear here as they’re shared.</BlockFooter>}
+        {data && data.bonfireCount === 0 && <BlockFooter>No recent public ActivityPub articles are available from Fedizen right now.</BlockFooter>}
       </>}
   </>;
 }
