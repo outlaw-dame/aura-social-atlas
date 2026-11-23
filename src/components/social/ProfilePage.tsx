@@ -83,7 +83,7 @@ function EditProfileDialog({ onClose, fedizen }: { onClose: () => void; fedizen:
     <label className={`mb-1 block text-xs font-medium ${remote ? 'mt-4' : ''}`} htmlFor="profile-bio">Bio</label>
     <textarea id="profile-bio" value={bio} maxLength={bioMax} onChange={e => setBio(e.target.value)} placeholder="Tell people what you share…" className={`${field} h-28 resize-none p-3`} />
     <p className="mb-3 text-right text-[11px] text-muted-foreground">{bio.length}/{bioMax.toLocaleString()}</p>
-    {remote && <div className="grid gap-4 sm:grid-cols-2">
+    {remote && <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
       <div>
         <label className="mb-1 block text-xs font-medium" htmlFor="profile-website">Website</label>
         <input id="profile-website" value={website} maxLength={WEBSITE_MAX} inputMode="url" autoComplete="url" onChange={e => setWebsite(e.target.value)} placeholder="example.org" aria-invalid={!websiteOk} className={`${field} h-10`} />

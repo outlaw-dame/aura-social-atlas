@@ -49,7 +49,7 @@ export function FedizenFeed() {
     {f.error && <p role="alert" className="mb-4 text-sm text-destructive">{f.error}</p>}
     {actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}
     {error && displayed.source !== 'native' && <p className="mb-4 text-sm text-muted-foreground">Fedizen couldn’t send your timeline right now. <Button variant="link" size="sm" className="px-1" onClick={f.retry}>Try again</Button></p>}
-    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_240px]">
+    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-8 lg:grid-cols-[minmax(0,1fr)_240px]">
       <div ref={list} className="space-y-6">
         {/* New posts wait here until asked for (Bonfire: "Show N new activities"; Mastodon: "N new items"). */}
         {fresh && fresh.count > 0 && <div className="pointer-events-none sticky top-20 z-30 -mb-2 flex justify-center">
