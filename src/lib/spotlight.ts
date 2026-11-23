@@ -167,8 +167,12 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
       ? status.card as Record<string, unknown> : null;
     if (!card || typeof card.url !== 'string' || card.url.length > 2048 ||
       typeof card.title !== 'string' || card.title.trim().length < 10 ||
-      typeof card.description !== 'string' || card.description.trim().length < 30 ||
-      typeof card.image !== 'string' || !isPublicHttpsUrl(card.image)) continue;
+      typeof card.description !== 'string' || card.description.trim().length < 30) continue;
+    // A missing preview image must not hide an otherwise substantial public
+    // article. Keep the same URL/title/description/engagement safety gates;
+    // cards without images render in Spotlight's text list, not the carousel.
+    const previewImage = typeof card.image === 'string' && isPublicHttpsUrl(card.image)
+      ? card.image : undefined;
     const key = spotlightUrlKey(card.url);
     if (!key) continue;
     const rawActivity = ['reblogs_count', 'replies_count', 'favourites_count'].reduce((total, field) => {
@@ -198,7 +202,7 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
       item: {
         id: `f:${key}`, source: 'Bonfire', url: card.url,
         title: card.title.trim().slice(0, 200), description: card.description.trim().slice(0, 400),
-        image: card.image, provider: (typeof card.provider_name === 'string' && card.provider_name.trim())
+        image: previewImage, provider: (typeof card.provider_name === 'string' && card.provider_name.trim())
           || new URL(key).hostname,
         author, published: typeof status.created_at === 'string' ? status.created_at : undefined,
         kind: 'link', reason: 'recent', observedBy,
