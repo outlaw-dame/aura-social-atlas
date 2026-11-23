@@ -26,18 +26,19 @@ const httpOnly = (u?: string) => (u && /^https?:\/\//i.test(u) ? u : undefined);
 /** Authors with a linked fediverse account, as Mastodon's "More from" byline credits them (Mastodon
  *  has already verified these against the account's attribution domains). Mastodon shows only the first. */
 export function linkAuthor(l: Pick<MastodonLink, 'authors' | 'author_name' | 'author_url'>, instanceHost = 'mastodon.social') {
-  const accounts: FediAuthor[] = (l.authors ?? [])
-    .filter(x => x.account?.acct && httpOnly(x.account.url))
+  const available = Array.isArray(l.authors) ? l.authors.filter(x => !!x && typeof x === 'object') : [];
+  const accounts: FediAuthor[] = available
+    .filter(x => x.account && typeof x.account.acct === 'string' && httpOnly(x.account.url))
     .slice(0, 3)
     .map(x => {
       const acc = x.account!;
       const acct = acc.acct!.includes('@') ? acc.acct! : `${acc.acct}@${instanceHost}`;
       return { name: acc.display_name || acc.username || acct, acct: `@${acct.replace(/^@/, '')}`, url: acc.url!, avatar: httpOnly(acc.avatar), verifiedBy: 'mastodon' as const };
     });
-  const first = l.authors?.find(x => x.account?.acct && httpOnly(x.account.url));
+  const first = available.find(x => x.account?.acct && httpOnly(x.account.url));
   return {
-    author: first?.account?.display_name || first?.name || l.authors?.[0]?.name || l.author_name || undefined,
-    authorUrl: httpOnly(first?.url || l.authors?.[0]?.url || l.author_url),
+    author: first?.account?.display_name || first?.name || available[0]?.name || l.author_name || undefined,
+    authorUrl: httpOnly(first?.url || available[0]?.url || l.author_url),
     authorAccount: accounts[0],
     authorAccounts: accounts.length ? accounts : undefined,
   };
@@ -64,7 +65,7 @@ export function fromMastodonLinks(
   const source = options.source ?? 'Mastodon';
   const host = options.observedBy ?? (source === 'Bonfire' ? 'fedizen.net' : 'mastodon.social');
   return links.flatMap(l => {
-    if (typeof l.url !== 'string' || !/^https:\/\//i.test(l.url) ||
+    if (!l || typeof l !== 'object' || Array.isArray(l) || typeof l.url !== 'string' || !/^https:\/\//i.test(l.url) ||
         typeof l.title !== 'string' || !l.title.trim() || l.title.length > 500) return [];
     let hostname: string;
     try { hostname = new URL(l.url).hostname; } catch { return []; }
