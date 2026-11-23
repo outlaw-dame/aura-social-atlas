@@ -37,7 +37,7 @@ const filtersKey = (id?: string) => ['content-filters', id] as const;
 const device = () => import('@/lib/intelligence/device-keys');
 const tasks = () => import('@/lib/intelligence/tasks');
 
-/** Where the key in use lives, which provider and model it is, and (on Atlas's server) which saved key. */
+/** Where the key in use lives, which provider and model it is, and which saved key (on Atlas's server or here). */
 export type ActiveAi = { where: 'server' | 'device'; provider: ProviderId; model: string; keyId?: string };
 export type Intelligence = IntelligenceStatus & { deviceKeys: DeviceKey[]; devicePrefs: DevicePrefs; active: ActiveAi | null };
 
@@ -54,8 +54,8 @@ export function useIntelligence() {
   const data = useMemo((): Intelligence | undefined => {
     if (!server.data) return undefined;
     const keys = local.data?.keys ?? [], prefs = local.data?.prefs ?? null;
-    const dev = prefs && keys.find(k => k.provider === prefs.provider);
-    const active: ActiveAi | null = dev ? { where: 'device', provider: dev.provider, model: dev.models.includes(prefs.model) ? prefs.model : dev.models[0] }
+    const dev = prefs && keys.find(k => k.id === (prefs.keyId ?? prefs.provider));
+    const active: ActiveAi | null = dev ? { where: 'device', provider: dev.provider, keyId: dev.id, model: dev.models.includes(prefs.model) ? prefs.model : dev.models[0] }
       : server.data.provider && server.data.model ? { where: 'server', provider: server.data.provider, model: server.data.model, ...(server.data.mainKey ? { keyId: server.data.mainKey } : {}) } : null;
     return { ...server.data, deviceKeys: keys, devicePrefs: prefs, active };
   }, [server.data, local.data]);
@@ -69,8 +69,12 @@ const problemOf = async (e: unknown): Promise<AiProblem> => {
   const { ProviderError } = await import('@/lib/intelligence/llm');
   if (e instanceof ProviderError) return e.code;
   if (e instanceof Error && e.message === 'bad-output') return 'bad-output';
+  if (e instanceof Error && e.message === 'not-ready') return 'not-ready';
   return 'unavailable';
 };
+
+/** A saved key, on this device or on Atlas's server. */
+export type KeyRef = { where: 'device' | 'server'; keyId: string };
 
 export function useIntelligenceActions() {
   const { user } = useAtlasAuth();
@@ -88,9 +92,9 @@ export function useIntelligenceActions() {
       if (where === 'device') {
         try {
           const d = await device();
-          const saved = await d.saveDeviceKey(id, { provider, key, ...(account ? { account } : {}) });
-          if (!saved.models.length) return AI_PROBLEM['no-access'];
-          if (!(await d.devicePrefs(id))) await d.setDevicePrefs(id, { provider, model: saved.models[0] });
+          const saved = await d.saveDeviceKey(id, { provider, key, ...(account ? { account } : {}) }, label);
+          if (!saved.models.length) { await d.removeDeviceKey(id, saved.id); return AI_PROBLEM['no-access']; }
+          if (!(await d.devicePrefs(id))) await d.setDevicePrefs(id, { keyId: saved.id, provider, model: saved.models[0] });
           await refreshDevice(); return null;
         } catch (e) { return AI_PROBLEM[await problemOf(e)]; }
       }
@@ -100,18 +104,17 @@ export function useIntelligenceActions() {
         put(r.status); return null;
       } catch { return AI_PROBLEM['bad-key']; }
     }),
-    /** Removes a key: on this device by its company, on Atlas's server by its id. */
-    removeKey: (k: { where: 'device'; provider: ProviderId } | { where: 'server'; keyId: string }) => run(async () => {
-      if (k.where === 'device') { await (await device()).removeDeviceKey(id, k.provider); await refreshDevice(); return; }
+    /** Removes a key, on this device or on Atlas's server, by its id. */
+    removeKey: (k: KeyRef) => run(async () => {
+      if (k.where === 'device') { await (await device()).removeDeviceKey(id, k.keyId); await refreshDevice(); return; }
       put(await remove({ data: { expectedAtlasUserId: id, keyId: k.keyId } }));
     }),
-    /** Picks the main key: one on this device (by company), or a saved one on Atlas's server (clearing the device
-     *  choice). */
-    choose: (k: { where: 'device'; provider: ProviderId } | { where: 'server'; keyId: string }, model?: string) => run(async () => {
+    /** Picks the main key: one on this device, or a saved one on Atlas's server (clearing the device choice). */
+    choose: (k: KeyRef, model?: string) => run(async () => {
       const d = await device();
       if (k.where === 'device') {
-        const dk = (await d.deviceKeys(id)).find(x => x.provider === k.provider);
-        if (dk) await d.setDevicePrefs(id, { provider: k.provider, model: model && dk.models.includes(model) ? model : dk.models[0] });
+        const dk = (await d.deviceKeys(id)).find(x => x.id === k.keyId);
+        if (dk) await d.setDevicePrefs(id, { keyId: dk.id, provider: dk.provider, model: model && dk.models.includes(model) ? model : dk.models[0] });
       } else {
         await d.setDevicePrefs(id, null);
         put(await update({ data: { expectedAtlasUserId: id, main: { key: k.keyId, ...(model ? { model } : {}) } } }));
@@ -120,8 +123,11 @@ export function useIntelligenceActions() {
     }),
     /** Background filtering's own key and model, or null to use the main ones. */
     setBackground: (choice: { key: string; model?: string } | null) => run(async () => { put(await update({ data: { expectedAtlasUserId: id, background: choice } })); }),
-    /** A saved key's name, or the model it uses as a backup. */
-    editKey: (keyId: string, patch: { label?: string | null; model?: string }) => run(async () => { put(await edit({ data: { expectedAtlasUserId: id, keyId, ...patch } })); }),
+    /** A saved key's name, or (on Atlas's server) the model it uses as a backup. */
+    editKey: (k: KeyRef, patch: { label?: string | null; model?: string }) => run(async () => {
+      if (k.where === 'device') { if (patch.label !== undefined) await (await device()).renameDeviceKey(id, k.keyId, patch.label); await refreshDevice(); return; }
+      put(await edit({ data: { expectedAtlasUserId: id, keyId: k.keyId, ...patch } }));
+    }),
     update: (patch: { enabled?: boolean; deepMatching?: boolean; fallback?: boolean }) => run(async () => { put(await update({ data: { expectedAtlasUserId: id, ...patch } })); }),
   };
 }
@@ -140,57 +146,66 @@ export function useAiRunner() {
   const translateServer = useServerFn(translateWithAi);
   const id = user?.id ?? '';
   const active = ai?.active ?? null, ready = intelligenceReady(ai), deep = !!ai?.deepMatching;
-  const local = useCallback(async (): Promise<{ c: Credential; model: string } | AiProblem> => {
-    if (!ready || active?.where !== 'device') return 'not-ready';
-    const c = await (await device()).deviceCredential(id, active.provider);
-    return c ? { c, model: active.model } : 'not-ready';
-  }, [ready, active, id]);
+  const backup = !!ai?.fallback, deviceList = ai?.deviceKeys;
+  /**
+   * Runs a job with the device key in use, then (with backup on) this device's other keys in the order added, each
+   * with its first listed model. Throws the first key's error; Error('not-ready') when there's no device key in use.
+   */
+  const onDevice = useCallback(async <T,>(job: (c: Credential, model: string) => Promise<T>, allowBackup = true): Promise<T> => {
+    if (!ready || active?.where !== 'device' || !active.keyId) throw new Error('not-ready');
+    const others = allowBackup && backup ? (deviceList ?? []).filter(k => k.id !== active.keyId && k.models[0]).map(k => ({ id: k.id, model: k.models[0] })) : [];
+    const d = await device(), { ProviderError } = await import('@/lib/intelligence/llm');
+    let first: unknown = null;
+    for (const k of [{ id: active.keyId, model: active.model }, ...others]) {
+      const c = await d.deviceCredential(id, k.id);
+      if (!c) continue;
+      try { return await job(c, k.model); } catch (e) {
+        first ??= e;
+        if (!(e instanceof ProviderError) || !['rate-limited', 'unavailable', 'bad-key', 'no-access', 'bad-model', 'no-vision'].includes(e.code)) break;
+      }
+    }
+    throw first ?? new Error('not-ready');
+  }, [ready, active, id, backup, deviceList]);
   return useMemo(() => ({
     ready, where: active?.where ?? null,
     judge: (filters: ContentFilter[]): Judge => async posts => {
       if (active?.where === 'device') {
-        const k = await local(); if (typeof k === 'string') return null;
-        try { return await (await tasks()).judgeWith(k.c, k.model, filters, posts, deep); } catch { return null; }
+        try { return await onDevice(async (c, model) => (await tasks()).judgeWith(c, model, filters, posts, deep)); } catch { return null; }
       }
       const r = await judgeServer({ data: { posts } }); return 'error' in r ? null : r.verdicts;
     },
     /** Other wordings for a filter: kept by the server, or worked out here and then saved with the filter. */
     expand: async (f: ContentFilter): Promise<{ filters?: ContentFilter[]; expansions?: string[]; error?: AiProblem }> => {
       if (active?.where === 'device') {
-        const k = await local(); if (typeof k === 'string') return { error: k };
-        try { return { expansions: await (await tasks()).expandFilter(k.c, k.model, f) }; } catch (e) { return { error: await problemOf(e) }; }
+        try { return { expansions: await onDevice(async (c, model) => (await tasks()).expandFilter(c, model, f)) }; } catch (e) { return { error: await problemOf(e) }; }
       }
       const r = await expandServer({ data: { expectedAtlasUserId: id, id: f.id } }).catch(() => ({ error: 'unavailable' as const }));
       return 'error' in r ? { error: r.error } : { filters: r.filters };
     },
     suggest: async (filters: ContentFilter[]): Promise<Suggestions | { error: AiProblem }> => {
       if (active?.where === 'device') {
-        const k = await local(); if (typeof k === 'string') return { error: k };
-        try { return await (await tasks()).suggestFilters(k.c, k.model, filters); } catch (e) { return { error: await problemOf(e) }; }
+        try { return await onDevice(async (c, model) => (await tasks()).suggestFilters(c, model, filters)); } catch (e) { return { error: await problemOf(e) }; }
       }
       const r = await suggestServer({ data: { expectedAtlasUserId: id } }).catch(() => ({ error: 'unavailable' as const }));
       return r as Suggestions | { error: AiProblem };
     },
     describe: async (text: string): Promise<{ filter: string } | { error: AiProblem }> => {
       if (active?.where === 'device') {
-        const k = await local(); if (typeof k === 'string') return { error: k };
-        try { return { filter: await (await tasks()).describePost(k.c, k.model, text) }; } catch (e) { return { error: await problemOf(e) }; }
+        try { return { filter: await onDevice(async (c, model) => (await tasks()).describePost(c, model, text)) }; } catch (e) { return { error: await problemOf(e) }; }
       }
       return describeServer({ data: { expectedAtlasUserId: id, text } }).catch(() => ({ error: 'unavailable' as const }));
     },
     /** Alt text for an image about to be posted (the model must read images): on this device or Atlas's server. */
     altText: async (image: ImageInput, text: string): Promise<{ alt: string } | { error: AiProblem }> => {
       if (active?.where === 'device') {
-        const k = await local(); if (typeof k === 'string') return { error: k };
-        try { return { alt: await (await tasks()).writeAltText(k.c, k.model, image, text) }; } catch (e) { return { error: await problemOf(e) }; }
+        try { return { alt: await onDevice(async (c, model) => (await tasks()).writeAltText(c, model, image, text)) }; } catch (e) { return { error: await problemOf(e) }; }
       }
       return altServer({ data: { expectedAtlasUserId: id, image, text } }).catch(() => ({ error: 'unavailable' as const }));
     },
     /** Other searches meaning the same as `q` (post search): with the key on this device, or on Atlas's server. */
     searchWordings: async (q: string): Promise<string[]> => {
       if (active?.where === 'device') {
-        const k = await local(); if (typeof k === 'string') return [];
-        try { return await (await tasks()).searchWordings(k.c, k.model, q); } catch { return []; }
+        try { return await onDevice(async (c, model) => (await tasks()).searchWordings(c, model, q)); } catch { return []; }
       }
       const r = await wordingsServer({ data: { expectedAtlasUserId: id, q } }).catch(() => null);
       return r && 'terms' in r ? r.terms : [];
@@ -202,8 +217,7 @@ export function useAiRunner() {
       const m = EMBEDDING_MODELS[active.provider];
       if (!m) return null;
       if (active.where === 'device') {
-        const k = await local(); if (typeof k === 'string') return null;
-        try { return { key: m.key, vectors: await embedWith(k.c, texts, kind) }; } catch { return null; }
+        try { return { key: m.key, vectors: await onDevice(c => embedWith(c, texts, kind), false) }; } catch { return null; }
       }
       const r = await embedServer({ data: { expectedAtlasUserId: id, texts, kind } }).catch(() => null);
       return r && 'vectors' in r ? { key: r.key, vectors: r.vectors.map(v => Float32Array.from(v)) } : null;
@@ -220,12 +234,11 @@ export function useAiRunner() {
     translate: async (req: { texts: string[]; target: string; source?: string }): Promise<{ texts: string[]; detected?: string } | { error: string }> => {
       if (!ready) return { error: 'no-key' };
       if (active?.where === 'device') {
-        const k = await local(); if (typeof k === 'string') return { error: k };
-        try { return await (await tasks()).translateTexts(k.c, k.model, req); } catch (e) { return { error: await problemOf(e) }; }
+        try { return await onDevice(async (c, model) => (await tasks()).translateTexts(c, model, req)); } catch (e) { return { error: await problemOf(e) }; }
       }
       return translateServer({ data: { expectedAtlasUserId: id, ...req } }).catch(() => ({ error: 'unavailable' as const }));
     },
-  }), [ready, active, deep, local, judgeServer, expandServer, suggestServer, describeServer, altServer, wordingsServer, embedServer, translateServer, id, ai?.embeddingProvider, ai?.background]);
+  }), [ready, active, deep, onDevice, judgeServer, expandServer, suggestServer, describeServer, altServer, wordingsServer, embedServer, translateServer, id, ai?.embeddingProvider, ai?.background]);
 }
 
 /* ── Keyword filters ─────────────────────────────────────────────────────────────────────────── */

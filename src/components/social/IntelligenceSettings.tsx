@@ -8,6 +8,7 @@ import { PROVIDERS, PROVIDER_IDS, type ProviderId } from '@/lib/intelligence/pro
 import { BROWSER_CAPABLE } from '@/lib/intelligence/llm';
 import { intelligenceReady, useIntelligence, useIntelligenceActions, type Intelligence } from './useIntelligence';
 import type { SavedKey } from '@/lib/intelligence.functions';
+import type { DeviceKey } from '@/lib/intelligence/device-keys';
 import { useAtlasAuth } from './AuthState';
 import { useSocial } from './SocialState';
 import { SemanticSettings } from './SemanticSettings';
@@ -48,7 +49,7 @@ export function IntelligenceSettings() {
           const p = PROVIDERS[id];
           const saved: ListedKey[] = [
             ...s.keys.filter(k => k.provider === id).map(k => ({ ...k, where: 'server' as const })),
-            ...s.deviceKeys.filter(k => k.provider === id).map(k => ({ provider: k.provider, hint: k.hint, where: 'device' as const })),
+            ...s.deviceKeys.filter(k => k.provider === id).map(k => ({ ...k, where: 'device' as const })),
           ];
           return <li key={id} className="p-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -56,21 +57,21 @@ export function IntelligenceSettings() {
               <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{p.product}</span><span className="block text-xs text-muted-foreground">{p.name}</span></span>
               <Button variant="outline" size="sm" className="rounded-full" onClick={() => setAdding(adding === id ? null : id)}>{saved.length ? 'Add another key' : 'Add key'}</Button>
             </div>
-            {saved.map(k => <SavedKeyRow key={k.where === 'server' ? k.id : 'device'} k={k} product={p.product} active={active} busy={act.busy} />)}
+            {saved.map(k => <SavedKeyRow key={`${k.where}-${k.id}`} k={k} product={p.product} active={active} busy={act.busy} />)}
             {adding === id && <KeyForm provider={id} serverKeys={s.serverKeys} onDone={() => setAdding(null)} />}
           </li>;
         })}
       </ul>
       {active && <label className="mt-4 flex flex-wrap items-center gap-3 text-sm">
         <span className="font-semibold">Model</span>
-        <select className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm" value={active.model} disabled={act.busy} onChange={e => void act.choose(active.where === 'device' ? { where: 'device', provider: active.provider } : { where: 'server', keyId: active.keyId! }, e.target.value)}>
+        <select className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm" value={active.model} disabled={act.busy} onChange={e => void act.choose({ where: active.where, keyId: active.keyId! }, e.target.value)}>
           {activeModels.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
       </label>}
       {active && <p className="mt-2 text-xs text-muted-foreground">The first model listed is a fast, inexpensive one, which suits filters and suggestions.</p>}
     </section>
 
-    {active?.where === 'server' && s.keys.length > 1 && <Row title="Use your other keys as backup" detail="If the key in use is refusing requests, or its provider is limiting it, Atlas tries your other keys in the order you added them, each with its own model." id="ai-fallback">
+    {active && (active.where === 'server' ? s.keys : s.deviceKeys).length > 1 && <Row title="Use your other keys as backup" detail={active.where === 'device' ? 'If the key in use is refusing requests, or its provider is limiting it, Atlas tries your other keys on this device in the order you added them.' : 'If the key in use is refusing requests, or its provider is limiting it, Atlas tries your other keys in the order you added them, each with its own model.'} id="ai-fallback">
       <Switch aria-label="Use your other keys as backup" aria-describedby="ai-fallback" checked={s.fallback} disabled={act.busy} onCheckedChange={v => void act.update({ fallback: v })} />
     </Row>}
     {active?.where === 'server' && <BackgroundChoice s={s} busy={act.busy} onChange={act.setBackground} />}
@@ -102,7 +103,7 @@ function KeyForm({ provider, serverKeys, onDone }: { provider: ProviderId; serve
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const err = await act.saveKey(provider, key.trim(), p.needsAccount ? account.trim() : undefined, where, where === 'server' ? label : undefined);
+    const err = await act.saveKey(provider, key.trim(), p.needsAccount ? account.trim() : undefined, where, label);
     if (err) { setError(err); return; }
     setKey(''); onDone();
   };
@@ -114,7 +115,7 @@ function KeyForm({ provider, serverKeys, onDone }: { provider: ProviderId; serve
       <label className="flex items-start gap-2"><input type="radio" name={`where-${provider}`} className="mt-1 accent-[var(--accent)]" checked={where === 'device'} disabled={!canDevice} onChange={() => setWhere('device')} />
         <span><span className="font-medium">On this device only</span><span className="block text-xs text-muted-foreground">{canDevice ? DEVICE_KEY_NOTE : `${p.name}’s API doesn’t accept requests from a browser, so this key has to stay on Atlas’s server.`}</span></span></label>
     </fieldset>
-    {where === 'server' && <Input value={label} maxLength={40} onChange={e => setLabel(e.target.value)} placeholder="Name (optional), like Work or Personal" aria-label={`Name for this ${p.product} key (optional)`} />}
+    {<Input value={label} maxLength={40} onChange={e => setLabel(e.target.value)} placeholder="Name (optional), like Work or Personal" aria-label={`Name for this ${p.product} key (optional)`} />}
     {p.needsAccount && <Input value={account} onChange={e => setAccount(e.target.value)} placeholder="Account ID (32 characters, on your Cloudflare dashboard)" aria-label="Cloudflare account ID" spellCheck={false} autoCapitalize="off" />}
     <div className="flex gap-2">
       <Input type="password" value={key} onChange={e => setKey(e.target.value)} placeholder={p.keyPlaceholder} aria-label={`${p.product} API key`} spellCheck={false} autoCapitalize="off" autoComplete="off" data-1p-ignore data-lpignore="true" />
@@ -125,20 +126,20 @@ function KeyForm({ provider, serverKeys, onDone }: { provider: ProviderId; serve
   </form>;
 }
 
-type ListedKey = (SavedKey & { where: 'server' }) | { where: 'device'; provider: ProviderId; hint: string };
+type ListedKey = (SavedKey & { where: 'server' }) | (DeviceKey & { where: 'device' });
 
-/** One saved key: chosen as main (radio), where it lives, its name (renamable on Atlas's server), and Remove. */
+/** One saved key: chosen as main (radio), where it lives, its name (renamable), and Remove. */
 function SavedKeyRow({ k, product, active, busy }: { k: ListedKey; product: string; active: Intelligence['active']; busy: boolean }) {
   const act = useIntelligenceActions();
   const [renaming, setRenaming] = useState(false);
-  const [label, setLabel] = useState(k.where === 'server' ? k.label ?? '' : '');
+  const [label, setLabel] = useState(k.label ?? '');
   const where = k.where === 'device' ? 'this device' : 'Atlas’s server';
-  const name = k.where === 'server' && k.label ? `${product} “${k.label}”` : product;
-  const chosen = k.where === 'device' ? active?.where === 'device' && active.provider === k.provider : active?.where === 'server' && active.keyId === k.id;
-  const ref = k.where === 'device' ? { where: 'device' as const, provider: k.provider } : { where: 'server' as const, keyId: k.id };
+  const name = k.label ? `${product} “${k.label}”` : product;
+  const chosen = active?.where === k.where && active.keyId === k.id;
+  const ref = { where: k.where, keyId: k.id };
   const saveLabel = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (k.where === 'server') await act.editKey(k.id, { label: label.trim() ? label.trim().slice(0, 40) : null });
+    await act.editKey(ref, { label: label.trim() ? label.trim().slice(0, 40) : null });
     setRenaming(false);
   };
   return <div className="mt-3 flex flex-wrap items-center gap-3 pl-7 text-sm">
@@ -146,8 +147,8 @@ function SavedKeyRow({ k, product, active, busy }: { k: ListedKey; product: stri
     {k.where === 'device' ? <Smartphone className="size-4 text-muted-foreground" aria-hidden="true" /> : <Server className="size-4 text-muted-foreground" aria-hidden="true" />}
     {renaming
       ? <form className="flex min-w-0 flex-1 gap-2" onSubmit={saveLabel}><Input autoFocus value={label} maxLength={40} onChange={e => setLabel(e.target.value)} placeholder="A name, like Work or Personal" aria-label={`Name for the ${product} key ${k.hint}`} className="h-8" /><Button type="submit" size="sm" disabled={busy}>Save</Button></form>
-      : <span className="min-w-0 flex-1 text-muted-foreground">{k.where === 'server' && k.label ? <span className="font-medium text-foreground">{k.label} · </span> : null}{k.where === 'device' ? 'On this device' : 'On Atlas’s server'} · key {k.hint}</span>}
-    {k.where === 'server' && !renaming && <Button variant="ghost" size="icon" aria-label={`Name the ${name} key ${k.hint}`} disabled={busy} onClick={() => setRenaming(true)}><Pencil /></Button>}
+      : <span className="min-w-0 flex-1 text-muted-foreground">{k.label ? <span className="font-medium text-foreground">{k.label} · </span> : null}{k.where === 'device' ? 'On this device' : 'On Atlas’s server'} · key {k.hint}</span>}
+    {!renaming && <Button variant="ghost" size="icon" aria-label={`Name the ${name} key ${k.hint}`} disabled={busy} onClick={() => setRenaming(true)}><Pencil /></Button>}
     <Button variant="ghost" size="icon" aria-label={`Remove the ${name} key on ${where}`} disabled={busy} onClick={() => void act.removeKey(ref)}><Trash2 /></Button>
   </div>;
 }
