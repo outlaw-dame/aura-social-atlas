@@ -55,11 +55,6 @@ export type BonfireGraphQLRequest<T> = {
    * `variables` (JSON) and one part per file, where the variable's value is that part's name.
    */
   files?: Record<string, { blob: Blob; name: string }>;
-  /**
-   * Known error messages this operation can turn into a result (a mutation whose resolver reports success as an
-   * error). Only exact matches against `known` are passed on; nothing else from an error leaves this function.
-   */
-  knownErrors?: { known: readonly string[]; result: (matched: string[]) => T };
 };
 
 function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {
@@ -217,12 +212,6 @@ export async function requestBonfireGraphQL<T>(request: BonfireGraphQLRequest<T>
     if (obj.errors !== undefined && obj.errors !== null) {
       // Never log GraphQL errors, which can contain private data.
       // Partial data is not safe to present as a complete page.
-      if (request.knownErrors && Array.isArray(obj.errors)) {
-        const matched = obj.errors
-          .map(e => (e && typeof e === 'object' ? (e as { message?: unknown }).message : null))
-          .filter((m): m is string => typeof m === 'string' && request.knownErrors!.known.includes(m));
-        if (matched.length) return request.knownErrors.result(matched);
-      }
       throw new BonfireGraphQLError('graphql');
     }
     if (!Object.hasOwn(obj, 'data')) {

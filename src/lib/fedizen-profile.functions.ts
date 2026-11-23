@@ -88,11 +88,11 @@ export const saveMyFedizenProfileImage = createServerFn({ method: 'POST' }).midd
 /**
  * Blocks or unblocks the whole server someone is on, for you, as Mastodon's "Block domain" (server-block.server.ts).
  * Their own address must be on that server; your own server (Fedizen) can't be blocked. The answer is `unconfirmed`
- * when Fedizen took the request without saying it worked, which is how a block that worked usually comes back.
+ * when Fedizen took the request without saying whether it worked, which is how it always answers for servers.
  */
 export const changeFedizenServerBlock = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator(d => z.object({ expectedAtlasUserId: z.string().uuid(), acct: z.string().regex(/^[^@\s]{1,100}@[a-z0-9.-]{3,253}$/i), on: z.boolean() }).strict().parse(d))
-  .handler(async ({ data, context }): Promise<{ ok: true; outcome: 'done' | 'unconfirmed' } | { ok: false; error: Problem | 'not-done' | 'own-server' | 'not-found' }> => {
+  .handler(async ({ data, context }): Promise<{ ok: true; outcome: 'done' | 'unconfirmed' } | { ok: false; error: Problem | 'own-server' | 'not-found' }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     if (/@fedizen\.net$/i.test(data.acct)) return { ok: false, error: 'own-server' };
     try {
@@ -102,10 +102,9 @@ export const changeFedizenServerBlock = createServerFn({ method: 'POST' }).middl
       const c = await verifiedNativeBonfireConnection(data.expectedAtlasUserId, context.userId);
       if (c.status !== 'available') return { ok: false, error: problemOf(c.status) };
       if (!hasScope(c.scope, 'write')) return { ok: false, error: 'needs-permission' };
-      const server = await serverIdFor(c.accessToken, data.acct);
+      const server = await serverIdFor(data.acct);
       if (!server) return { ok: false, error: 'not-found' };
-      const outcome = await changeServerBlock(c.accessToken, server, data.on);
-      return outcome === 'not-done' ? { ok: false, error: 'not-done' } : { ok: true, outcome };
+      return { ok: true, outcome: await changeServerBlock(c.accessToken, server, data.on) };
     } catch (e) {
       return { ok: false, error: isRateLimited(e) ? 'rate-limited' : (e as { kind?: string })?.kind === 'graphql' ? 'rejected' : 'unavailable' };
     }
