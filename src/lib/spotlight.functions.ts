@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent } from './fedizen-feed';
 import {
-  bonfireAuthor, combineSpotlight, fromFederatedVideos, fromMastodonLinks,
+  bonfireAuthor, combineSpotlight, fromFederatedLinkCards, fromFederatedVideos, fromMastodonLinks,
   type SpotlightItem,
 } from './spotlight';
 
@@ -70,6 +70,7 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
         status.sensitive !== true && !(typeof status.spoiler_text === 'string' && status.spoiler_text.trim());
     });
     const videos = fromFederatedVideos(publicPosts);
+    const linked = fromFederatedLinkCards(publicPosts);
 
     // A podcast is accepted only after verified ActivityPub PodcastEpisode
     // parsing, NEVER because a status happened to mention the word podcast.
@@ -82,7 +83,7 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
         !/^https:\/\//i.test(card.url) || card.url.length > 2048) return [];
       return [card.url];
     }).slice(0, 4);
-    if (!candidates.length) return videos;
+    if (!candidates.length) return combineSpotlight(linked, videos);
     const { resolveAuthorsFor, mediaFor } = await import('./article-author.server');
     await resolveAuthorsFor(candidates, 2500).catch(() => new Map());
     const podcasts: SpotlightItem[] = [];
@@ -98,5 +99,5 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
         kind: 'podcast', reason: 'recent', observedBy: 'fedizen.net',
       });
     }
-    return combineSpotlight(podcasts, videos);
+    return combineSpotlight(linked, podcasts, videos);
   });
