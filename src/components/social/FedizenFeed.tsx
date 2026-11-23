@@ -74,7 +74,8 @@ export function FedizenFeed() {
             </Button>}
           </div>
         )}</div>
-      <aside><h3 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><Bell className="size-3" />Activity</h3>
+      {/* Phone and tablet widths have Activity in the header and menu; under the feed it only pushes posts away. */}
+      <aside className="hidden lg:block"><h3 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><Bell className="size-3" />Activity</h3>
         {notices.length ? <ul className="space-y-3">{notices.map(n => <li key={n.id} className="flex gap-2 text-xs"><NoticeFace n={n} /><span><span className="font-semibold">{n.author}</span> <span className="text-muted-foreground">{n.text}</span></span></li>)}</ul> : <p className="text-xs text-muted-foreground">No new activity.</p>}
         {/* As the phone: Disconnect revokes Atlas's access at Fedizen, so it asks first. */}
         <AlertDialog>

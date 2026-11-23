@@ -54,8 +54,8 @@ function PostRow({ p, save }: { p: FedizenPost; save: ReturnType<typeof useSaveT
   </article></FilterGate>;
 }
 
-/** Profile → Saved: your Fedizen bookmarks. `stories` are discovery stories saved this session, shown after. */
-export function DesktopSaved({ stories }: { stories?: React.ReactNode }) {
+/** Profile → Saved: your Fedizen bookmarks. */
+export function DesktopSaved() {
   const q = useFedizenSaved();
   const save = useSaveToggle();
   const posts = q.data?.posts ?? [];
@@ -66,12 +66,11 @@ export function DesktopSaved({ stories }: { stories?: React.ReactNode }) {
     {q.isError && <p role="alert" className="text-sm text-muted-foreground">{LIBRARY_PROBLEM.unavailable} <Button variant="link" size="sm" className="px-1" onClick={() => void q.refetch()}>Try again</Button></p>}
     {save.error && <p role="alert" className="text-sm text-destructive">{save.error}</p>}
     {posts.map(p => <PostRow key={p.id} p={p} save={save} />)}
-    {!q.isLoading && !q.data?.error && !posts.length && !stories && <div className="py-12 text-center">
+    {!q.isLoading && !q.data?.error && !posts.length && <div className="py-12 text-center">
       <Bookmark className="mx-auto mb-4 size-8 text-muted-foreground" strokeWidth={1.5} />
       <h3 className="font-serif text-2xl">Nothing saved yet</h3>
       <p className="mx-auto mt-3 max-w-sm text-sm text-muted-foreground">Save posts from your Fedizen feed, and they’ll be here.</p>
     </div>}
-    {stories}
   </div>;
 }
 

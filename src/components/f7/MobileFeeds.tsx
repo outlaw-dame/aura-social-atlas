@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { Block, BlockFooter, BlockTitle, Link, List, ListItem, Navbar, NavRight, Page, Popup, Toggle } from 'framework7-react';
 import { circleIdOf, pinCircle, unpinCircle, usePinnedCircles, type FeedKind } from '@/lib/feed-types';
 import { useAtlasAuth } from '@/components/social/AuthState';
@@ -13,9 +13,8 @@ const KEY = 'atlas-feed';
 /**
  * Phone Feeds tab: Following, For You, Articles, Local and pinned circles, as a scrollable row of tabs at the top in
  * the manner of Particle: plain names, the open one in a filled pill, and a dot before any with posts you haven't seen.
- * `following` is the extra content Following shows under your Fedizen timeline (Atlas creators you follow).
  */
-export function MobileFeeds({ following, visible = true }: { following?: ReactNode; /** Whether the Feeds dock tab is on screen. */ visible?: boolean }) {
+export function MobileFeeds({ visible = true }: { /** Whether the Feeds dock tab is on screen. */ visible?: boolean }) {
   // Pins belong to an account: until the session is restored, an empty list proves nothing.
   const { user, loading: authLoading } = useAtlasAuth();
   const pinned = usePinnedCircles(user?.id);
@@ -35,7 +34,7 @@ export function MobileFeeds({ following, visible = true }: { following?: ReactNo
       </button>)}
       {user && <button type="button" className="atlas-feed-tab-add" onClick={() => setPinning(true)} aria-label="Pin a circle to Feeds"><Icon ios="f7:plus" md="material:add" /></button>}
     </div>
-    {feed === 'following' && <><MobileFedizenFeed />{following}</>}
+    {feed === 'following' && <MobileFedizenFeed />}
     {feed === 'foryou' && <MobileForYou />}
     {feed === 'articles' && <MobileRecentArticles />}
     {feed === 'local' && <MobilePublicFedizen />}

@@ -8,8 +8,9 @@ import { useAtlasAuth } from './AuthState';
 const dead = new Set<string>();
 
 /**
- * An account's avatar that recovers when the copy Fedizen keeps is gone: servers move or delete old pictures and
- * Fedizen keeps the old address. When it fails, the account's current picture is read from its actor (once per
+ * An account's avatar that recovers when Fedizen's copy is missing or gone: servers move or delete old pictures and
+ * Fedizen keeps the old address, and for some remote accounts (Lemmy users, often) Fedizen never stored one and sends
+ * its placeholder, which Atlas drops. Either way the account's current picture is read from its actor (once per
  * account, shared by every row through the query cache); when that fails too, or there is none, `src` is undefined
  * and the caller shows the initial.
  */
@@ -17,7 +18,7 @@ export function useLiveAvatar(avatar: string | undefined, actor: string | undefi
   const { user } = useAtlasAuth();
   const [, setFailures] = useState(0);
   const read = useServerFn(getActorAvatar);
-  const needFresh = !!avatar && dead.has(avatar) && !!actor && actor.startsWith('https://') && !!user;
+  const needFresh = (!avatar || dead.has(avatar)) && !!actor && actor.startsWith('https://') && !!user;
   const fresh = useQuery({
     queryKey: ['actor-avatar', actor],
     queryFn: () => read({ data: { actor: actor! } }),

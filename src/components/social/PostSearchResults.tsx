@@ -3,7 +3,7 @@ import { useSearchPosts } from './useOwnPosts';
 import { useSeenPostsLike } from './useSemanticIndex';
 
 /**
- * Desktop: posts on Fedizen matching the search box (Mastodon v2 search, statuses), above the sample stories. Read with
+ * Desktop: posts on Fedizen matching the search box (Mastodon v2 search, statuses). Read with
  * the reader's own connection, so Fedizen decides what they may see. Shown once a search is submitted.
  */
 export function PostSearchResults({ q }: { q: string }) {
