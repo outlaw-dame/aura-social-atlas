@@ -1,9 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { Block, BlockFooter, BlockTitle, Icon, Link, List, ListItem } from 'framework7-react';
-import { getSpotlight, getViewerSpotlight } from '@/lib/spotlight.functions';
-import { combineSpotlight, type SpotlightItem } from '@/lib/spotlight';
-import { useAtlasAuth } from '@/components/social/AuthState';
+import type { SpotlightItem } from '@/lib/spotlight';
+import { useCuratedSpotlight } from '@/components/social/useCuratedSpotlight';
 import type { PostArticle } from '@/lib/fedizen-feed';
 import { NetworkBadge } from '@/lib/networks';
 import { VOICE_CATEGORIES } from '@/lib/voices';
@@ -28,28 +25,15 @@ function Source({ it }: { it: SpotlightItem }) {
  * their site; verified creators open in Atlas.
  */
 export function MobileSpotlight() {
-  const { user } = useAtlasAuth();
-  const viewerFn = useServerFn(getViewerSpotlight);
-  const { data, isLoading } = useQuery({ queryKey: ['spotlight'], queryFn: () => getSpotlight(), staleTime: 10 * 60_000 });
-  const viewer = useQuery({
-    queryKey: ['spotlight-viewer', user?.id],
-    queryFn: () => {
-      if (!user?.id) throw new Error('Atlas session required');
-      return viewerFn({ data: { expectedAtlasUserId: user.id } });
-    },
-    enabled: !!user?.id,
-    staleTime: 5 * 60_000,
-    retry: false,
-  });
-  const base = data?.items ?? [];
-  const items = combineSpotlight(base.filter(it => it.reason === 'trending'), viewer.data ?? [], base.filter(it => it.reason !== 'trending'));
+  const { items, loading: isLoading, unavailable } = useCuratedSpotlight();
   const featured = items.filter(it => it.image).slice(0, 5);
   const ids = new Set(featured.map(f => f.id));
   const rest = items.filter(it => !ids.has(it.id)).slice(0, 8);
   return <>
     <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:flame" md="material:local_fire_department" /> Spotlight</span></BlockTitle>
-    {isLoading ? <Block strong inset>Gathering what people are sharing…</Block>
-      : !items.length ? <Block strong inset>Nothing available in Spotlight right now.</Block>
+    {isLoading ? <Block strong inset>Applying your Spotlight preferences…</Block>
+      : unavailable ? <Block strong inset>Spotlight is paused until your account's moderation settings are available.</Block>
+      : !items.length ? <Block strong inset>No stories have cleared your curation settings yet.</Block>
       : <>
         {featured.length > 0 && <div className="atlas-spot-rail" role="region" aria-roledescription="carousel" aria-label="Featured stories">
           {featured.map((it, i) => <div key={it.id} className="atlas-spot-slide" aria-roledescription="slide" aria-label={`${i + 1} of ${featured.length}`}>
@@ -63,7 +47,7 @@ export function MobileSpotlight() {
             {it.image && <img slot="media" className="atlas-spot-thumb" src={it.image} alt="" width={64} height={64} loading="lazy" referrerPolicy="no-referrer" />}
           </ListItem>)}
         </List>}
-        {data && data.bonfireCount === 0 && <BlockFooter>No recent public ActivityPub articles are available from Fedizen right now.</BlockFooter>}
+
       </>}
   </>;
 }
