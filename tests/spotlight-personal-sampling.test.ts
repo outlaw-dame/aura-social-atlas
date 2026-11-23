@@ -93,6 +93,16 @@ describe('owner-only bounded Spotlight source sampling', () => {
     expect(allowedSpotlightItem(grouped[0], { ...policy, mutedHandles: ['muted'] })).toBe(true);
   });
 
+  it('fails closed, without throwing, when a public-looking entry has no usable account', () => {
+    const missing = [
+      { id: 'no-account', visibility: 'public', card: preview },
+      { id: 'null-account', visibility: 'public', account: null, card: preview },
+      { id: 'array-account', visibility: 'public', account: [], card: preview },
+      { id: 'empty-account', visibility: 'public', account: {}, card: preview },
+    ];
+    expect(eligibleLocalPublicPosts(missing, policy)).toEqual([]);
+  });
+
   it('shows an eligible local source immediately, never fetching more pages', async () => {
     let calls = 0;
     const result = await collectPublicSpotlightCandidates(
