@@ -5,6 +5,9 @@ on:
   pull_request:
     paths:
       - 'scripts/probe-fedizen-graphql.mjs'
+      - 'scripts/probe-fedizen-spotlight.mjs'
+      - 'src/lib/spotlight-federated.server.ts'
+      - 'src/lib/spotlight.functions.ts'
       - 'scripts/probe-fedizen-root-schema.mjs'
       - 'scripts/probe-fedizen-oidc.mjs'
       - 'scripts/probe-fedizen-public-client.ts'
@@ -17,6 +20,9 @@ on:
     branches: [main]
     paths:
       - 'scripts/probe-fedizen-graphql.mjs'
+      - 'scripts/probe-fedizen-spotlight.mjs'
+      - 'src/lib/spotlight-federated.server.ts'
+      - 'src/lib/spotlight.functions.ts'
       - 'scripts/probe-fedizen-root-schema.mjs'
       - 'scripts/probe-fedizen-oidc.mjs'
       - 'scripts/probe-fedizen-public-client.ts'
@@ -68,6 +74,8 @@ jobs:
       # populated Me; never print account content or bearer credentials.
       - name: Classify anonymous native Me denial without credentials
         run: node scripts/probe-fedizen-graphql.mjs --anonymous-me
+      - name: Observe real Fedizen Spotlight public REST contracts (no credentials)
+        run: node scripts/probe-fedizen-spotlight.mjs
       - name: Verify actual Atlas public GraphQL selection sets and normalization
         run: bun scripts/probe-fedizen-public-client.ts
       # Atlas's server runs on Cloudflare Workers, which send no User-Agent; Fedizen is on DreamHost. Report (never

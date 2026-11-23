@@ -375,6 +375,8 @@ const account = z.object({
   username: z.string().nullish(),
   acct: z.string().nullish(),
   avatar: z.string().nullish(),
+  // Preserve explicit opt-out from account discoverability for Spotlight.
+  discoverable: z.boolean().nullish().catch(null),
   // The actor (Bonfire gives its id as `url`; Mastodon adds `uri`), so a name opens the profile in Atlas.
   url: z.string().max(2048).nullish().catch(null),
   uri: z.string().max(2048).nullish().catch(null),
@@ -547,6 +549,10 @@ const instanceSchema = z.object({
 });
 const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v1\/timelines\/home\?limit=20$/, schema: homeSchema },
+  // The public federated timeline is not anonymous on Fedizen (live: 401).
+  // Read with this user's grant only, then explicitly retain PUBLIC items for
+  // Spotlight. Never expose an unlisted/private/DM item through discovery.
+  { match: /^\/api\/v1\/timelines\/public\?limit=20$/, schema: homeSchema },
   // The next (older) page of Home, from the cursor Fedizen's Link header gave (rel="next", max_id).
   { match: /^\/api\/v1\/timelines\/home\?limit=20&max_id=[A-Za-z0-9_\-.~=%]{1,512}$/, schema: homeSchema },
   { match: /^\/api\/v1\/notifications\?limit=20$/, schema: notificationsSchema },

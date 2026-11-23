@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { Block, BlockFooter, BlockTitle, Icon, Link, List, ListItem } from 'framework7-react';
-import { getSpotlight } from '@/lib/spotlight.functions';
-import type { SpotlightItem } from '@/lib/spotlight';
+import { getSpotlight, getViewerSpotlight } from '@/lib/spotlight.functions';
+import { combineSpotlight, type SpotlightItem } from '@/lib/spotlight';
+import { useAtlasAuth } from '@/components/social/AuthState';
 import type { PostArticle } from '@/lib/fedizen-feed';
 import { NetworkBadge } from '@/lib/networks';
 import { VOICE_CATEGORIES } from '@/lib/voices';
@@ -15,24 +17,39 @@ const asArticle = (it: SpotlightItem): PostArticle => ({
 });
 
 function Source({ it }: { it: SpotlightItem }) {
-  return <span className="atlas-spot-meta">{it.source === 'Mastodon' ? <NetworkBadge network="Mastodon" /> : <b>Bonfire</b>} · {it.provider}</span>;
+  const reason = it.reason === 'trending' ? 'Trending' : 'Recent';
+  const kind = it.kind === 'podcast' ? 'Podcast' : it.kind === 'video' ? 'Video' : it.kind === 'article' ? 'Article' : 'Link';
+  return <span className="atlas-spot-meta">{it.source === 'Mastodon' ? <NetworkBadge network="Mastodon" /> : <b>Fedizen</b>} · {reason} {kind} · {it.provider}</span>;
 }
 
 /**
- * Phone: Spotlight, as on desktop's Discover — what people across the open web are sharing (Mastodon's trending links
- * and Fedizen's articles), featured stories with pictures to swipe through, then the rest as rows. Stories open on
+ * Phone: Spotlight, as on desktop's Discover — verified content types from public links
+ * and activities known to the signed-in Bonfire instance, featured stories with pictures to swipe through, then the rest as rows. Stories open on
  * their site; verified creators open in Atlas.
  */
 export function MobileSpotlight() {
+  const { user } = useAtlasAuth();
+  const viewerFn = useServerFn(getViewerSpotlight);
   const { data, isLoading } = useQuery({ queryKey: ['spotlight'], queryFn: () => getSpotlight(), staleTime: 10 * 60_000 });
-  const items = data?.items ?? [];
+  const viewer = useQuery({
+    queryKey: ['spotlight-viewer', user?.id],
+    queryFn: () => {
+      if (!user?.id) throw new Error('Atlas session required');
+      return viewerFn({ data: { expectedAtlasUserId: user.id } });
+    },
+    enabled: !!user?.id,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const base = data?.items ?? [];
+  const items = combineSpotlight(base.filter(it => it.reason === 'trending'), viewer.data ?? [], base.filter(it => it.reason !== 'trending'));
   const featured = items.filter(it => it.image).slice(0, 5);
   const ids = new Set(featured.map(f => f.id));
   const rest = items.filter(it => !ids.has(it.id)).slice(0, 8);
   return <>
     <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:flame" md="material:local_fire_department" /> Spotlight</span></BlockTitle>
     {isLoading ? <Block strong inset>Gathering what people are sharing…</Block>
-      : !items.length ? <Block strong inset>Nothing trending right now.</Block>
+      : !items.length ? <Block strong inset>Nothing available in Spotlight right now.</Block>
       : <>
         {featured.length > 0 && <div className="atlas-spot-rail" role="region" aria-roledescription="carousel" aria-label="Featured stories">
           {featured.map((it, i) => <div key={it.id} className="atlas-spot-slide" aria-roledescription="slide" aria-label={`${i + 1} of ${featured.length}`}>
@@ -46,7 +63,7 @@ export function MobileSpotlight() {
             {it.image && <img slot="media" className="atlas-spot-thumb" src={it.image} alt="" width={64} height={64} loading="lazy" referrerPolicy="no-referrer" />}
           </ListItem>)}
         </List>}
-        {data && data.bonfireCount === 0 && <BlockFooter>No public Fedizen articles are trending yet — new Bonfire articles will appear here as they’re shared.</BlockFooter>}
+        {data && data.bonfireCount === 0 && <BlockFooter>No recent public ActivityPub articles are available from Fedizen right now.</BlockFooter>}
       </>}
   </>;
 }
