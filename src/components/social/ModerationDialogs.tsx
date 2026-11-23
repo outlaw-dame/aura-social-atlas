@@ -4,8 +4,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { REPORT_CATEGORIES, useMutes, useReport, useWhoReacted, type ReportCategory } from './useOwnPosts';
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { CircleDashed, Ellipsis, Flag, VolumeX } from 'lucide-react';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ArrowUpRight, CircleDashed, Ellipsis, Flag, Globe2, VolumeX } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { blockServerText, serverOf, useServerBlock } from './useServerBlock';
 import { useProfileCircles } from './useFedizenLibrary';
 import { ProfileHoverCard } from './ProfileHoverCard';
 
@@ -81,6 +83,9 @@ export function ProfileMoreMenu({ name, acct, actor, enabled }: { name: string; 
   const mutes = useMutes(enabled);
   const circles = useProfileCircles(enabled ? { acct, actor } : null);
   const [reporting, setReporting] = useState(false);
+  const servers = useServerBlock();
+  const host = serverOf(acct);
+  const [confirmHost, setConfirmHost] = useState(false), [serverNote, setServerNote] = useState<string | null>(null);
   if (!enabled) return null;
   const muted = mutes.isMuted({ acct });
   return <>
@@ -95,9 +100,26 @@ export function ProfileMoreMenu({ name, acct, actor, enabled }: { name: string; 
         </DropdownMenuSub>}
         <DropdownMenuItem disabled={mutes.busy} onSelect={() => void mutes.mute({ acct, on: !muted })}><VolumeX />{muted ? `Unmute ${name}` : `Mute ${name}`}</DropdownMenuItem>
         <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setReporting(true)}><Flag />Report…</DropdownMenuItem>
+        {/* Mastodon's "Block domain": the whole server, for you. Fedizen can't tell apps which servers are blocked, so
+            both directions are offered; its Blocked page lists them. */}
+        {host && <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={servers.busy} onSelect={() => setConfirmHost(true)}><Globe2 />Block {host}…</DropdownMenuItem>
+          <DropdownMenuItem disabled={servers.busy} onSelect={async () => setServerNote(await servers.change(acct, false))}><Globe2 />Unblock {host}</DropdownMenuItem>
+          <DropdownMenuItem asChild><a href={servers.blockedPage} target="_blank" rel="noopener noreferrer"><ArrowUpRight />Blocked servers on Fedizen</a></DropdownMenuItem>
+        </>}
       </DropdownMenuContent>
     </DropdownMenu>
-    {(mutes.error || circles.error) && <p role="alert" className="max-w-56 text-right text-xs text-muted-foreground">{mutes.error ?? circles.error}</p>}
+    {(mutes.error || circles.error || serverNote) && <p role="status" className="max-w-56 text-right text-xs text-muted-foreground">{serverNote ?? mutes.error ?? circles.error}</p>}
+    {host && <AlertDialog open={confirmHost} onOpenChange={setConfirmHost}>
+      <AlertDialogContent>
+        <AlertDialogHeader><AlertDialogTitle>Block {host}?</AlertDialogTitle><AlertDialogDescription>{blockServerText(host)}</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={async () => setServerNote(await servers.change(acct, true))}>Block {host}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>}
     {reporting && <ReportDialog target={{ name, acct }} onClose={() => setReporting(false)} />}
   </>;
 }
