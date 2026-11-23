@@ -375,6 +375,8 @@ const account = z.object({
   username: z.string().nullish(),
   acct: z.string().nullish(),
   avatar: z.string().nullish(),
+  // Preserve explicit opt-out from account discoverability for Spotlight.
+  discoverable: z.boolean().nullish().catch(null),
   // The actor (Bonfire gives its id as `url`; Mastodon adds `uri`), so a name opens the profile in Atlas.
   url: z.string().max(2048).nullish().catch(null),
   uri: z.string().max(2048).nullish().catch(null),
