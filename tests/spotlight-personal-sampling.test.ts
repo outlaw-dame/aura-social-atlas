@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { allowedSpotlightItem, type SpotlightModeration } from '../src/lib/spotlight-curation';
-import { collectPublicSpotlightCandidates } from '../src/lib/spotlight-personal.server';
+import { collectPublicSpotlightCandidates, eligibleLocalPublicPosts } from '../src/lib/spotlight-personal.server';
 import { fromFederatedLinkCards, fromFederatedVideos, spotlightUrlKey } from '../src/lib/spotlight';
 import { fedizenGet } from '../src/lib/fedizen.server';
 
@@ -43,6 +43,64 @@ describe('owner-only bounded Spotlight source sampling', () => {
     const eligible = result.linked.filter(it => allowedSpotlightItem(it, policy));
     expect(eligible).toHaveLength(1);
     expect(eligible[0].url).toBe('https://example.org/another-public-story');
+  });
+
+  it('does not fetch a second global page when an independently authorized local story exists', async () => {
+    let extraReads = 0;
+    const local = [status('local', 'writer', 'fedizen.net', {
+      reblogs_count: 0, replies_count: 0, favourites_count: 0,
+    })];
+    const localCards = fromFederatedLinkCards(local);
+    expect(localCards).toHaveLength(1);
+    expect(localCards.some(it => allowedSpotlightItem(it, policy))).toBe(true);
+    const result = await collectPublicSpotlightCandidates(
+      { status: 200, data: [status('remote', 'remote@remote.example', 'remote.example')], next: 'opaque' },
+      policy,
+      async () => { extraReads++; throw new Error('must not fetch if local is eligible'); },
+      true,
+    );
+    expect(extraReads).toBe(0);
+    expect(result.pagesRead).toBe(1);
+    expect(result.linked.every(it => !allowedSpotlightItem(it, policy))).toBe(true);
+  });
+
+  it('allows local public stories despite an inaccessible federated endpoint but never unsafe statuses', () => {
+    const posts = [
+      status('good', 'writer'),
+      status('remote', 'remote@remote.example', 'remote.example'),
+      status('private', 'writer', 'fedizen.net', { visibility: 'private' }),
+      status('reply', 'writer', 'fedizen.net', { in_reply_to_id: '01P' }),
+    ];
+    const local = eligibleLocalPublicPosts(posts, policy);
+    const eligible = fromFederatedLinkCards(local).filter(it => allowedSpotlightItem(it, policy));
+    expect(local).toHaveLength(1);
+    expect(eligible).toHaveLength(1);
+    expect(eligible[0].sourceAccounts?.[0].handle).toBe('writer');
+  });
+
+  it('removes blocked contributors before grouping two public posts sharing one URL', () => {
+    const shared = [
+      status('remote', 'remote@remote.example', 'remote.example'),
+      status('allowed', 'author', 'fedizen.net', { reblogs_count: 0, favourites_count: 0 }),
+      status('muted', 'muted', 'fedizen.net'),
+    ];
+    const screened = eligibleLocalPublicPosts(shared, { ...policy, mutedHandles: ['muted'] });
+    expect(screened).toHaveLength(1);
+    const grouped = fromFederatedLinkCards(screened);
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].shares).toBe(1);
+    expect(grouped[0].sourceAccounts?.[0].handle).toBe('author');
+    expect(allowedSpotlightItem(grouped[0], { ...policy, mutedHandles: ['muted'] })).toBe(true);
+  });
+
+  it('fails closed, without throwing, when a public-looking entry has no usable account', () => {
+    const missing = [
+      { id: 'no-account', visibility: 'public', card: preview },
+      { id: 'null-account', visibility: 'public', account: null, card: preview },
+      { id: 'array-account', visibility: 'public', account: [], card: preview },
+      { id: 'empty-account', visibility: 'public', account: {}, card: preview },
+    ];
+    expect(eligibleLocalPublicPosts(missing, policy)).toEqual([]);
   });
 
   it('shows an eligible local source immediately, never fetching more pages', async () => {
@@ -117,6 +175,27 @@ describe('owner-only bounded Spotlight source sampling', () => {
       card: undefined, media_attachments: [{ type: 'video', url: 'https://example.org/video.mp4', preview_url: 'https://example.org/p.jpg' }],
     })]);
     expect(video).toHaveLength(1);
+  });
+
+  it('reads only the fixed authenticated local public path with bounded schema', async () => {
+    const savedFetch = globalThis.fetch;
+    const urls: string[] = [];
+    try {
+      globalThis.fetch = (async (url, init) => {
+        urls.push(String(url));
+        expect(init?.redirect).toBe('manual');
+        expect(init?.cache).toBe('no-store');
+        expect(JSON.stringify(init?.headers)).toContain('Bearer ');
+        return Response.json([status('local', 'local')]);
+      }) as typeof fetch;
+      const result = await fedizenGet('spotlight-local-route-fixture', '/api/v1/timelines/local?limit=20');
+      expect(result.status).toBe(200);
+      expect(result.data).toHaveLength(1);
+      expect(urls).toEqual(['https://fedizen.net/api/v1/timelines/local?limit=20']);
+      await expect(fedizenGet('spotlight-local-route-fixture', '/api/v1/timelines/local?limit=200')).rejects.toThrow('Unsupported');
+      await expect(fedizenGet('spotlight-local-route-fixture', '/api/v1/timelines/local?limit=20&max_id=http://evil.example')).rejects.toThrow('Unsupported');
+      expect(urls).toHaveLength(1);
+    } finally { globalThis.fetch = savedFetch; }
   });
 
   it('accepts exactly the fixed public next-page route and refuses arbitrary hosts or query keys', async () => {

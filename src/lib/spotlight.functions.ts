@@ -4,9 +4,9 @@ import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent } from './fedizen-feed';
 import { allowedSpotlightItem, type SpotlightModeration } from './spotlight-curation';
 import {
-  bonfireAuthor, combineSpotlight, fromMastodonLinks, type SpotlightItem,
+  bonfireAuthor, combineSpotlight, fromFederatedLinkCards, fromFederatedVideos, fromMastodonLinks, type SpotlightItem,
 } from './spotlight';
-import { collectPublicSpotlightCandidates } from './spotlight-personal.server';
+import { collectPublicSpotlightCandidates, eligibleLocalPublicPosts } from './spotlight-personal.server';
 
 /** Bonfire's public, verified RECENT Article projection. It does not await
  * trends, which can be slow or empty. No individual OAuth grant is used. */
@@ -81,23 +81,32 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
     const connected = await tokenFor(context.userId);
     if (!connected) return { items: [], moderation: null };
     const { readSpotlightModeration } = await import('./spotlight-moderation.server');
-    const [moderation, response] = await Promise.all([
+    // Read the local and federated PUBLIC views concurrently. A sparse global
+    // first page (often remote actors withheld pending blocked-instance policy)
+    // must not suppress local stories that passed this viewer's own blocks.
+    const [moderation, response, local] = await Promise.all([
       readSpotlightModeration(path => fedizenGet(connected.access_token, path, { requireCompleteModeration: true })),
       fedizenGet(connected.access_token, '/api/v1/timelines/public?limit=20'),
+      fedizenGet(connected.access_token, '/api/v1/timelines/local?limit=20'),
     ]);
-    if (!moderation || response.status !== 200) return { items: [], moderation };
+    if (!moderation || (response.status !== 200 && local.status !== 200)) return { items: [], moderation };
+    const localPosts = local.status === 200 && Array.isArray(local.data)
+      ? eligibleLocalPublicPosts(local.data, moderation) : [];
+    const localLinked = fromFederatedLinkCards(localPosts);
+    const localVideos = fromFederatedVideos(localPosts);
+    const localEligible = [...localLinked, ...localVideos].some(it => allowedSpotlightItem(it, moderation));
     // When a sparse first page has no candidate whose authors pass the viewer's
     // moderation snapshot, inspect at most one older PUBLIC page. Preserve the
     // transport's fixed-host, fixed-route, opaque-cursor bounds and 429 cooldown.
     const { posts: publicPosts, linked, videos } = await collectPublicSpotlightCandidates(
       response, moderation, async cursor => fedizenGet(
         connected.access_token, `/api/v1/timelines/public?limit=20&max_id=${encodeURIComponent(cursor)}`,
-      ),
+      ), localEligible,
     );
 
     // A podcast is accepted only after verified ActivityPub PodcastEpisode
     // parsing, NEVER because a status happened to mention the word podcast.
-    const candidates = publicPosts.flatMap(value => {
+    const candidates = [...localPosts, ...publicPosts].flatMap(value => {
       const status = value as Record<string, unknown>;
       const card = status.card && typeof status.card === 'object'
         ? status.card as Record<string, unknown> : null;
@@ -116,7 +125,9 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
     if (!candidates.length) return {
       items: combineSpotlight(
         linked.filter(it => allowedSpotlightItem(it, moderation)),
+        localLinked.filter(it => allowedSpotlightItem(it, moderation)),
         videos.filter(it => allowedSpotlightItem(it, moderation)),
+        localVideos.filter(it => allowedSpotlightItem(it, moderation)),
       ), moderation,
     };
     const { resolveAuthorsFor, mediaFor } = await import('./article-author.server');
@@ -137,8 +148,10 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
     }
     return { items: combineSpotlight(
       linked.filter(it => allowedSpotlightItem(it, moderation)),
+      localLinked.filter(it => allowedSpotlightItem(it, moderation)),
       podcasts.filter(it => allowedSpotlightItem(it, moderation)),
       videos.filter(it => allowedSpotlightItem(it, moderation)),
+      localVideos.filter(it => allowedSpotlightItem(it, moderation)),
     ), moderation };
   });
 
