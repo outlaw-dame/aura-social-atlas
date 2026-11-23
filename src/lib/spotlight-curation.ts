@@ -39,7 +39,7 @@ export function domainBlocked(host: string, domains: readonly string[]): boolean
  */
 export function allowedSpotlightItem(item: SpotlightItem, moderation: SpotlightModeration): boolean {
   const sources = item.sourceAccounts ?? [];
-  if (!sources.length) return false;
+  if (item.sourceComplete === false || !sources.length) return false;
   const blocked = new Set([...moderation.blockedHandles, ...moderation.mutedHandles].map(normalizedAccount).filter(Boolean));
   const bannedIds = new Set([...moderation.blockedIds, ...moderation.mutedIds]);
   for (const source of sources) {
