@@ -59,6 +59,19 @@ describe('backup keys', () => {
     expect(one.tried).toEqual(['k-main']);
   });
 
+  test('a key out of credit (HTTP 402) rests: background work answers no-credit without asking again', async () => {
+    settings.fallback = false;
+    const first = job({ 'k-bg': 'no-credit' });
+    expect(await withAi('u', 'background', first.run)).toEqual({ problem: 'no-credit' });
+    const again = job({});
+    expect(await withAi('u', 'background', again.run)).toEqual({ problem: 'no-credit' });
+    expect(again.tried).toEqual([]);
+    // The person's own request still tries it, so adding credit shows at once.
+    settings.main_key = 'k-bg';
+    const mine = job({});
+    expect(await withAi('u', 'main', mine.run)).toEqual({ value: 'k-bg' });
+  });
+
   test('Intelligence off: nothing is sent', async () => {
     settings.enabled = false;
     const j = job({});

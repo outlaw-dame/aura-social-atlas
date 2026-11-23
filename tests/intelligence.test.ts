@@ -100,6 +100,14 @@ describe('models', () => {
     expect(defaultModel('google', ['gemini-3.8-pro', 'gemini-3.8-flash', 'gemini-3.8-flash-image'])).toBe('gemini-3.8-flash');
     expect(keyHint('sk-abcdefgh1234')).toBe('…1234');
   });
+
+  test("Google's image, world, robotics, Live-only, aqa, computer-use and Antigravity models are left out", () => {
+    // Ids as Gemini listed them for a key on staging, 23 Nov 2026.
+    const listed = ['gemini-3.8-flash', 'nano-banana-pro-preview', 'genie-4', 'gemma-4-31b-it', 'gemini-robotics-er-2-preview', 'gemini-pro-latest',
+      'gemini-nano-banana-2.1', 'gemini-flash-latest', 'gemini-3.8-live-extended-thinking', 'gemini-3.8-live', 'gemini-3.5-live-translate-preview',
+      'gemini-3.1-flash-live-preview', 'gemini-2.5-computer-use-preview-10-2025', 'aqa', 'antigravity-preview-latest', 'gemini-2.5-flash'];
+    expect(chatModels('google', listed)).toEqual(['gemini-3.8-flash', 'gemma-4-31b-it', 'gemini-pro-latest', 'gemini-flash-latest', 'gemini-2.5-flash']);
+  });
 });
 
 describe('browser calls (keys kept on the device)', () => {

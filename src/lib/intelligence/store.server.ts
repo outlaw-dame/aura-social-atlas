@@ -76,7 +76,17 @@ const TRY_NEXT = new Set<AiProblem>(['rate-limited', 'unavailable', 'bad-key', '
  *  person's own requests try them last. */
 const resting = new Map<string, number>();
 const REST_MS = 60_000;
-export const _resetResting = () => resting.clear();
+/** A key whose account is out of credit (HTTP 402; Gemini since Sep 2026) rests longer: retrying won't help until
+ *  someone adds credit, and background work (filters, the semantic index) would otherwise ask on every feed load. */
+const NO_CREDIT_REST_MS = 10 * 60_000;
+/** Rests a key after a failure that waiting may fix: a rate limit (60 s) or an account out of credit (10 min). */
+function rest(keyId: string, code: AiProblem) {
+  if (code === 'rate-limited') resting.set(keyId, Date.now() + REST_MS);
+  else if (code === 'no-credit') resting.set(keyId, Date.now() + NO_CREDIT_REST_MS);
+}
+/** Keys out of credit, so a background request for one can answer at once without asking the provider. */
+const noCredit = new Set<string>();
+export const _resetResting = () => { resting.clear(); noCredit.clear(); };
 const isResting = (keyId: string) => (resting.get(keyId) ?? 0) > Date.now();
 
 /** Puts the keys to try in order: background work skips resting keys; the person's own requests try them last. */
@@ -103,16 +113,20 @@ export async function runWithKeys<T>(s: SettingsRow, keys: KeyRow[], open: (keyI
   const all = plan(role, roleSettings(s), keys);
   if (!all.length) return { problem: 'not-ready' };
   const picks = arrange(role, all);
-  if (!picks.length) return { problem: 'rate-limited' };
+  // Background work with every key resting: say why, without asking the provider again.
+  if (!picks.length) return { problem: all.every(p => noCredit.has(p.keyId)) ? 'no-credit' : 'rate-limited' };
   let first: AiProblem | null = null;
   for (const p of picks) {
     try {
       const c = await open(p.keyId);
       if (!c) continue;
-      return { value: await job(c, p.model, s.deep_matching) };
+      const value = await job(c, p.model, s.deep_matching);
+      noCredit.delete(p.keyId);
+      return { value };
     } catch (e) {
       const code = problem(e);
-      if (code === 'rate-limited') resting.set(p.keyId, Date.now() + REST_MS);
+      rest(p.keyId, code);
+      if (code === 'no-credit') noCredit.add(p.keyId); else noCredit.delete(p.keyId);
       first ??= code;
       if (!TRY_NEXT.has(code)) break;
     }
@@ -133,20 +147,32 @@ export async function activeModel(userId: string, role: Role = 'main'): Promise<
   return { problem: 'not-ready' };
 }
 
-/** The key for the semantic index's embeddings (roles.ts embeddingPick), or why there's none. */
-export async function embeddingModel(userId: string): Promise<{ credential: Credential } | { problem: AiProblem }> {
+/**
+ * The key for the semantic index's embeddings (roles.ts embeddingPick), or why there's none. One key only, so a key
+ * resting after a rate limit or running out of credit answers that at once rather than asking the provider again.
+ */
+export async function embeddingModel(userId: string): Promise<{ credential: Credential; keyId: string } | { problem: AiProblem }> {
   const s = await readSettings(userId);
   if (!s.enabled) return { problem: 'not-ready' };
   const p = embeddingPick(roleSettings(s), await savedKeys(userId));
   if (!p) return { problem: 'bad-model' };
+  if (isResting(p.keyId)) return { problem: noCredit.has(p.keyId) ? 'no-credit' : 'rate-limited' };
   const credential = await credentialById(userId, p.keyId);
-  return credential ? { credential } : { problem: 'not-ready' };
+  return credential ? { credential, keyId: p.keyId } : { problem: 'not-ready' };
+}
+
+/** Records how an embeddings request with a key went (rests it after a limit or no credit). */
+export function noteEmbedding(keyId: string, e: unknown | null) {
+  if (e === null) { noCredit.delete(keyId); return; }
+  const code = problem(e);
+  rest(keyId, code);
+  if (code === 'no-credit') noCredit.add(keyId);
 }
 
 /** Rests a key the provider is limiting, from the streamed assistant (the AI SDK's errors carry `statusCode`). */
 export function noteFailure(keyId: string, e: unknown) {
   const status = (e as { statusCode?: unknown } | null)?.statusCode;
-  if (problem(e) === 'rate-limited' || status === 429) resting.set(keyId, Date.now() + REST_MS);
+  rest(keyId, status === 429 ? 'rate-limited' : status === 402 ? 'no-credit' : problem(e));
 }
 
 /* ── Keyword filters ─────────────────────────────────────────────────────────────────────────── */

@@ -308,7 +308,9 @@ export const embedTextsFor = createServerFn({ method: 'POST' }).middleware([requ
       const { embedWith, EMBEDDING_MODELS } = await import('./intelligence/embeddings');
       const m = EMBEDDING_MODELS[ai.credential.provider];
       if (!m) return { error: 'bad-model' };
-      const vectors = await embedWith(ai.credential, data.texts, data.kind);
+      let vectors: Float32Array[];
+      try { vectors = await embedWith(ai.credential, data.texts, data.kind); } catch (e) { (await store()).noteEmbedding(ai.keyId, e); throw e; }
+      (await store()).noteEmbedding(ai.keyId, null);
       return { key: m.key, vectors: vectors.map(v => Array.from(v)) };
     } catch (e) {
       return { error: (await store()).problem(e) };
