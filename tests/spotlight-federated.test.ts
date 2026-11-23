@@ -56,6 +56,9 @@ describe('Spotlight instance scope and honest ranking signals', () => {
         spoiler_text: 'Sensitive', content: 'Hidden', media_attachments: [{ type: 'video', url: 'https://cdn.example.org/cw.mp4' }] },
       { id: 'sensitive', url: 'https://fedizen.net/post/sensitive', visibility: 'public',
         sensitive: true, content: 'Hidden', media_attachments: [{ type: 'video', url: 'https://cdn.example.org/sensitive.mp4' }] },
+      { id: 'opt-out', url: 'https://fedizen.net/post/opt-out', visibility: 'public',
+        account: { discoverable: false }, content: 'Public but not discoverable',
+        media_attachments: [{ type: 'video', url: 'https://cdn.example.org/opt-out.mp4' }] },
     ]);
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ kind: 'video', reason: 'recent', observedBy: 'fedizen.net' });
