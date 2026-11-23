@@ -4,7 +4,7 @@ import { PROVIDERS, PROVIDER_IDS, type ProviderId } from '@/lib/intelligence/pro
 import { BROWSER_CAPABLE } from '@/lib/intelligence/llm';
 import { FILTER_PLACES, MAX_EXPANSIONS, type FilterAction, type FilterPlace } from '@/lib/content-filter';
 import { FEDIZEN_KEYWORD_FILTERS_URL } from '@/lib/fedizen-feed';
-import { AI_PROBLEM, DEFAULT_OPTIONS, intelligenceReady, useContentFilters, useFilterActions, useFilterCautions, useIntelligence, useIntelligenceActions, type FilterOptions } from '@/components/social/useIntelligence';
+import { AI_PROBLEM, DEFAULT_OPTIONS, type KeyRef, intelligenceReady, useContentFilters, useFilterActions, useFilterCautions, useIntelligence, useIntelligenceActions, type FilterOptions } from '@/components/social/useIntelligence';
 import { ACTION_LABEL, ACTION_SHORT, DURATIONS, PLACE_LABEL, downloadExport, expiresAfter, filterSummary, parseImport } from '@/components/social/filter-options';
 import { DEVICE_KEY_NOTE, keyTitle } from '@/components/social/IntelligenceSettings';
 import { useAtlasAuth } from '@/components/social/AuthState';
@@ -25,11 +25,14 @@ export function IntelligencePage() {
   const [adding, setAdding] = useState<ProviderId | null>(null);
   const active = s?.active ?? null;
   const models = !active || !s ? [] : active.where === 'device' ? s.deviceKeys.find(k => k.provider === active.provider)?.models ?? [] : s.keys.find(k => k.id === active.keyId)?.models ?? [];
-  type Ref = { where: 'device'; provider: ProviderId } | { where: 'server'; keyId: string };
-  const saved: { ref: Ref; id: string; title: string; footer: string; chosen: boolean; keyId?: string; label?: string | null }[] = s ? [
-    ...s.keys.map(k => ({ ref: { where: 'server' as const, keyId: k.id }, id: k.id, keyId: k.id, label: k.label, title: PROVIDERS[k.provider].product + (k.label ? ` “${k.label}”` : ''), footer: `On Atlas’s server · key ${k.hint}`, chosen: active?.where === 'server' && active.keyId === k.id })),
-    ...s.deviceKeys.map(k => ({ ref: { where: 'device' as const, provider: k.provider }, id: `device-${k.provider}`, title: PROVIDERS[k.provider].product, footer: `On this device · key ${k.hint}`, chosen: active?.where === 'device' && active.provider === k.provider })),
-  ] : [];
+  const saved: { ref: KeyRef; id: string; title: string; footer: string; chosen: boolean; label: string | null }[] = s ? [
+    ...s.keys.map(k => ({ ...k, where: 'server' as const })), ...s.deviceKeys.map(k => ({ ...k, where: 'device' as const })),
+  ].map(k => ({
+    ref: { where: k.where, keyId: k.id }, id: `${k.where}-${k.id}`, label: k.label,
+    title: PROVIDERS[k.provider].product + (k.label ? ` “${k.label}”` : ''),
+    footer: `${k.where === 'device' ? 'On this device' : 'On Atlas’s server'} · key ${k.hint}`,
+    chosen: active?.where === k.where && active.keyId === k.id,
+  })) : [];
   const bgKey = s?.background ? s.keys.find(k => k.id === s.background!.key) : undefined;
   return <Page>
     <Navbar title="Intelligence" backLink backLinkShowText={false} />
@@ -53,7 +56,7 @@ export function IntelligencePage() {
           <List strong inset dividers>
             {saved.map(k => <ListItem key={`manage-${k.id}`} link="#" title={k.title} footer={k.footer}
               onClick={() => f7.actions.create({ buttons: [[
-                ...(k.keyId ? [{ text: 'Name…', onClick: () => f7.dialog.prompt('A name to tell this key apart, like Work or Personal. Leave it empty for none.', 'Name key', (v: string) => void act.editKey(k.keyId!, { label: v.trim() ? v.trim().slice(0, 40) : null }), undefined, k.label ?? '') }] : []),
+                { text: 'Name…', onClick: () => f7.dialog.prompt('A name to tell this key apart, like Work or Personal. Leave it empty for none.', 'Name key', (v: string) => void act.editKey(k.ref, { label: v.trim() ? v.trim().slice(0, 40) : null }), undefined, k.label ?? '') },
                 { text: 'Remove', color: 'red', onClick: () => f7.dialog.confirm(`Remove ${k.title}?`, 'Remove key', () => void act.removeKey(k.ref)) },
               ], [{ text: 'Cancel', strong: true }]] }).open()} />)}
           </List>
@@ -68,19 +71,19 @@ export function IntelligencePage() {
         {active && <>
           <BlockTitle>Model</BlockTitle>
           <List strong inset>
-            <ListInput type="select" value={active.model} onChange={e => void act.choose(active.where === 'device' ? { where: 'device', provider: active.provider } : { where: 'server', keyId: active.keyId! }, (e.target as HTMLSelectElement).value)}>
+            <ListInput type="select" value={active.model} onChange={e => void act.choose({ where: active.where, keyId: active.keyId! }, (e.target as HTMLSelectElement).value)}>
               {models.map(m => <option key={m} value={m}>{m}</option>)}
             </ListInput>
           </List>
         </>}
 
-        {active?.where === 'server' && <>
-          {s.keys.length > 1 && <>
+        {active && (active.where === 'server' ? s.keys : s.deviceKeys).length > 1 && <>
             <List strong inset dividers>
               <ListItem title="Use your other keys as backup"><Toggle slot="after" checked={s.fallback} disabled={act.busy} onToggleChange={() => void act.update({ fallback: !s.fallback })} /></ListItem>
             </List>
-            <BlockFooter>If the key in use is refusing requests, or its provider is limiting it, Atlas tries your other keys in the order you added them.</BlockFooter>
-          </>}
+            <BlockFooter>If the key in use is refusing requests, or its provider is limiting it, Atlas tries your other keys{active.where === 'device' ? ' on this device' : ''} in the order you added them.</BlockFooter>
+        </>}
+        {active?.where === 'server' && <>
           <BlockTitle>Background filtering</BlockTitle>
           <List strong inset dividers>
             <ListInput type="select" label="Key" value={s.background?.key ?? ''} onChange={e => { const v = (e.target as HTMLSelectElement).value; void act.setBackground(v ? { key: v } : null); }}>
@@ -115,7 +118,7 @@ function KeyForm({ provider, serverKeys, onDone }: { provider: ProviderId; serve
   const [key, setKey] = useState(''), [account, setAccount] = useState(''), [label, setLabel] = useState(''), [error, setError] = useState<string | null>(null);
   const save = async () => {
     setError(null);
-    const err = await act.saveKey(provider, key.trim(), p.needsAccount ? account.trim() : undefined, where, where === 'server' ? label : undefined);
+    const err = await act.saveKey(provider, key.trim(), p.needsAccount ? account.trim() : undefined, where, label);
     if (err) { setError(err); return; }
     setKey(''); onDone();
   };
@@ -126,7 +129,7 @@ function KeyForm({ provider, serverKeys, onDone }: { provider: ProviderId; serve
       <ListItem radio radioIcon="end" name="key-where" title="On this device only" footer={canDevice ? DEVICE_KEY_NOTE : `${p.name}’s API doesn’t accept requests from a browser.`} checked={where === 'device'} disabled={!canDevice} onChange={() => setWhere('device')} />
     </List>
     <List strong inset>
- {where === 'server' && <ListInput type="text" placeholder="Name (optional), like Work" value={label} maxlength={40} onInput={e => setLabel((e.target as HTMLInputElement).value)} />}
+ {<ListInput type="text" placeholder="Name (optional), like Work" value={label} maxlength={40} onInput={e => setLabel((e.target as HTMLInputElement).value)} />}
       {p.needsAccount && <ListInput type="text" placeholder="Cloudflare account ID" value={account} onInput={e => setAccount((e.target as HTMLInputElement).value)} inputStyle={{ fontFamily: 'ui-monospace, monospace' }} />}
       <ListInput type="password" placeholder={p.keyPlaceholder} value={key} onInput={e => setKey((e.target as HTMLInputElement).value)} autocomplete="off" />
     </List>
