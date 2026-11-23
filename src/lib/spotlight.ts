@@ -106,7 +106,9 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
   return statuses.slice(0, 40).flatMap(value => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
     const s = value as Record<string, unknown>;
-    if (s.visibility !== 'public' || s.sensitive === true ||
+    const account = s.account && typeof s.account === 'object' && !Array.isArray(s.account)
+      ? s.account as Record<string, unknown> : null;
+    if (account?.discoverable === false || s.visibility !== 'public' || s.sensitive === true ||
         (typeof s.spoiler_text === 'string' && s.spoiler_text.trim()) ||
         typeof s.id !== 'string' || typeof s.url !== 'string' ||
         !httpOnly(s.url) || s.reblog) return [];
@@ -119,7 +121,6 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
     const text = strip(typeof s.content === 'string' ? s.content : '');
     const title = text.slice(0, 130) || 'Video on the fediverse';
     if (!title || title.length > 200) return [];
-    const account = s.account && typeof s.account === 'object' ? s.account as Record<string, unknown> : null;
     return [{ id: `v:${s.id}`, source: 'Bonfire' as const,
       url: s.url, title, description: text.slice(0, 400),
       image: httpOnly(v.preview_url as string) || undefined,
