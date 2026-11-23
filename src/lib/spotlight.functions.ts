@@ -110,7 +110,12 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
       return [{ url: card.url, source: { id: typeof author.id === 'string' ? author.id : undefined,
         handle: author.acct, actorUrl }, text: status.content.slice(0, 1400) }];
     }).slice(0, 4);
-    if (!candidates.length) return { items: combineSpotlight(linked, videos).filter(it => allowedSpotlightItem(it, moderation)), moderation };
+    if (!candidates.length) return {
+      items: combineSpotlight(
+        linked.filter(it => allowedSpotlightItem(it, moderation)),
+        videos.filter(it => allowedSpotlightItem(it, moderation)),
+      ), moderation,
+    };
     const { resolveAuthorsFor, mediaFor } = await import('./article-author.server');
     await resolveAuthorsFor(candidates.map(c => c.url), 2500).catch(() => new Map());
     const podcasts: SpotlightItem[] = [];
@@ -127,6 +132,10 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
         sourceAccounts: [candidate.source], sourceComplete: true, filterText: candidate.text,
       });
     }
-    return { items: combineSpotlight(linked, podcasts, videos).filter(it => allowedSpotlightItem(it, moderation)), moderation };
+    return { items: combineSpotlight(
+      linked.filter(it => allowedSpotlightItem(it, moderation)),
+      podcasts.filter(it => allowedSpotlightItem(it, moderation)),
+      videos.filter(it => allowedSpotlightItem(it, moderation)),
+    ), moderation };
   });
 
