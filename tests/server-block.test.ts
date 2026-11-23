@@ -16,6 +16,18 @@ describe('blocking a whole server through Bonfire', () => {
     expect(await serverIdFor(token(), 'ann@social.example')).toBe('PEER2');
     answer({ data: { user: { id: 'u1', character: { username: 'ann@lemmy.example', peered: { peerId: 'PEER3', canonicalUri: 'https://elsewhere.example/u/ann' } } } } });
     expect(await serverIdFor(token(), 'ann@lemmy.example')).toBeNull();
+    answer({ data: { user: { id: 'u1', character: { username: 'ann@social.example', peered: { peerId: 'PARENT', canonicalUri: 'https://example/users/ann' } } } } });
+    // The user selected social.example; the mutation must not target its
+    // parent example (a potentially far broader moderation operation).
+    expect(await serverIdFor(token(), 'ann@social.example')).toBeNull();
+    for (const uri of [
+      'http://lemmy.example/u/ann',
+      'https://admin:secret@lemmy.example/u/ann',
+      'https://lemmy.example:444/u/ann',
+    ]) {
+      answer({ data: { user: { id: 'u1', character: { username: 'ann@lemmy.example', peered: { peerId: 'UNSAFE', canonicalUri: uri } } } } });
+      expect(await serverIdFor(token(), 'ann@lemmy.example')).toBeNull();
+    }
     answer({ data: { user: { id: 'u1', character: { username: 'me', peered: null } } } });
     expect(await serverIdFor(token(), 'me@fedizen.example')).toBeNull();
   });
