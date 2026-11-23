@@ -21,9 +21,14 @@ export async function serverIdFor(acct: string): Promise<string | null> {
       const peered = serverOf.parse(data).user?.character?.peered;
       if (!peered?.canonicalUri) return null;
       let at: string;
-      try { at = new URL(peered.canonicalUri).hostname.toLowerCase(); } catch { return null; }
-      // The account's address must be on the server being blocked (or a subdomain of it, as Lemmy's and Misskey's can be).
-      return at === host || at.endsWith(`.${host}`) || host.endsWith(`.${at}`) ? peered.peerId : null;
+      try {
+        const actor = new URL(peered.canonicalUri);
+        if (actor.protocol !== 'https:' || actor.username || actor.password || actor.port) return null;
+        at = actor.hostname.toLowerCase();
+      } catch { return null; }
+      // Only this host or its subdomains; a parent-domain peer would block
+      // more accounts than the person consented to in the confirmation.
+      return at === host || at.endsWith(`.${host}`) ? peered.peerId : null;
     },
   });
 }
