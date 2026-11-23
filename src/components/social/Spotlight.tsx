@@ -14,7 +14,9 @@ function Byline({ it }: { it: SpotlightItem }) {
 }
 
 function Meta({ it }: { it: SpotlightItem }) {
-  return <p className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">{it.source === 'Mastodon' ? <NetworkBadge network="Mastodon" /> : <span className="font-medium text-accent">Bonfire</span>}<span className="truncate">· {it.provider}</span>{it.shares ? <span className="flex shrink-0 items-center gap-1">· <TrendingUp className="size-3" />{it.shares.toLocaleString()}</span> : null}</p>;
+  const reason = it.reason === 'trending' ? 'Trending' : 'Recent';
+  const kind = it.kind === 'podcast' ? 'Podcast' : it.kind === 'video' ? 'Video' : it.kind === 'article' ? 'Article' : 'Link';
+  return <p className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">{it.source === 'Mastodon' ? <NetworkBadge network="Mastodon" /> : <span className="font-medium text-accent">Fedizen</span>}<span className="truncate">· {reason} {kind} · {it.provider}</span>{it.shares ? <span className="flex shrink-0 items-center gap-1" title="Source-reported link references, not unique people">· <TrendingUp className="size-3" />{it.shares.toLocaleString()} references</span> : null}</p>;
 }
 
 /** Apple News-style lead story: one large image, then headline and summary. */
@@ -54,7 +56,7 @@ function Carousel({ items }: { items: SpotlightItem[] }) {
       {items.map((it, i) => <article key={it.id} aria-roledescription="slide" aria-label={`${i + 1} of ${items.length}`} className="w-[85%] shrink-0 snap-start sm:w-[70%] lg:w-[60%]">
         <a href={it.url} target="_blank" rel="noopener noreferrer" className="group relative block overflow-hidden rounded-2xl bg-muted">
           <img src={it.image} alt="" loading={i === 0 ? 'eager' : 'lazy'} className="aspect-[16/10] w-full object-cover transition-transform duration-700 group-hover:scale-[1.025]" />
-          <span className="social-image-label absolute bottom-4 left-4 rounded-full px-3 py-1 text-[10px] font-medium">{it.source === 'Mastodon' ? 'Trending' : 'Article'} · {it.provider}</span>
+          <span className="social-image-label absolute bottom-4 left-4 rounded-full px-3 py-1 text-[10px] font-medium">{it.reason === 'trending' ? 'Trending' : 'Recent'} {it.kind === 'podcast' ? 'Podcast' : it.kind === 'video' ? 'Video' : it.kind === 'article' ? 'Article' : 'Link'} · {it.provider}</span>
         </a>
         <div className="mt-3"><Meta it={it} /></div>
         <h3 className="mt-1.5 line-clamp-3 font-serif text-2xl leading-tight"><a href={it.url} target="_blank" rel="noopener noreferrer" className="hover:underline">{it.title}</a></h3>
@@ -74,7 +76,7 @@ export function Spotlight() {
   const items = data?.items ?? [];
   return <section aria-labelledby="spotlight-heading" className="mb-12 min-w-0 max-w-full">
     <div className="mb-5 flex items-baseline justify-between"><h2 id="spotlight-heading" className="flex items-center gap-2 font-serif text-2xl italic"><Flame className="size-5 text-accent" />Spotlight</h2></div>
-    {isLoading ? <p className="text-sm text-muted-foreground">Gathering what people are sharing…</p> : !items.length ? <p className="text-sm text-muted-foreground">Nothing trending right now.</p> : <>
+    {isLoading ? <p className="text-sm text-muted-foreground">Gathering what people are sharing…</p> : !items.length ? <p className="text-sm text-muted-foreground">Nothing available in Spotlight right now.</p> : <>
       {(() => {
         const featured = items.filter(it => it.image).slice(0, 5);
         const ids = new Set(featured.map(f => f.id));
@@ -84,7 +86,7 @@ export function Spotlight() {
           {rest.length > 0 && <ul className="mt-6 divide-y divide-border border-t border-border">{rest.map(it => <li key={it.id}><Row it={it} /></li>)}</ul>}
         </>;
       })()}
-      {data && data.bonfireCount === 0 && <p className="mt-6 text-xs text-muted-foreground">No public Fedizen articles are trending yet — new Bonfire articles will appear here as they’re shared.</p>}
+      {data && data.bonfireCount === 0 && <p className="mt-6 text-xs text-muted-foreground">No recent public ActivityPub articles are available from Fedizen right now.</p>}
     </>}
   </section>;
 }
