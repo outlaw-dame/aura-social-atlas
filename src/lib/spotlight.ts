@@ -15,6 +15,8 @@ export type SpotlightItem = {
    * provenance is unknown and personalized Spotlight must suppress the card.
    */
   sourceAccounts?: { id?: string; handle: string }[];
+  /** False if any sampled public contributor had no verifiable account. */
+  sourceComplete?: boolean;
   /** Sample of the public source-post text to apply the reader's filters. */
   filterText?: string;
   /** First verified fediverse author (kept for existing callers). */
@@ -133,6 +135,7 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
       provider: new URL(s.url).hostname, author: typeof account?.display_name === 'string' ? account.display_name : undefined,
       published: typeof s.created_at === 'string' ? s.created_at : undefined,
       kind: 'video' as const, reason: 'recent' as const, observedBy,
+      sourceComplete: typeof account?.acct === 'string' && !!account.acct,
       sourceAccounts: typeof account?.acct === 'string' && account.acct
         ? [{ id: typeof account.id === 'string' ? account.id : undefined, handle: account.acct }] : [],
       filterText: text.slice(0, 1400),
@@ -177,7 +180,7 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
       if (existing.seen.has(status.id)) continue;
       existing.seen.add(status.id);
       if (contributor) existing.item.sourceAccounts?.push(contributor);
-      else existing.item.sourceAccounts = []; // unknown sharer: do not certify this link
+      else existing.item.sourceComplete = false; // never restored by later sharers
       existing.item.filterText = [existing.item.filterText, sourceText].filter(Boolean).join(' ').slice(0, 1800);
       existing.activity = Math.max(existing.activity, rawActivity);
       continue;
@@ -192,7 +195,7 @@ export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedize
           || new URL(key).hostname,
         author, published: typeof status.created_at === 'string' ? status.created_at : undefined,
         kind: 'link', reason: 'recent', observedBy,
-        sourceAccounts: contributor ? [contributor] : [],
+        sourceAccounts: contributor ? [contributor] : [], sourceComplete: !!contributor,
         filterText: sourceText,
       },
     });
