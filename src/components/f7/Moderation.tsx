@@ -44,8 +44,8 @@ export function ModerationPage() {
           footer={blockedFooter} onClick={() => { if (user) pushPage('/blocked-people/'); }}>
           <Icon slot="media" ios="f7:nosign" md="material:block" />
         </ListItem>
-        {m.signedIn && <ListItem link="#" title="Muted people" after={m.loading ? '…' : m.readError ? undefined : String(m.people.length)}
-          footer={m.readError ?? 'Their posts leave your feeds. They can still follow you and won’t know.'} onClick={() => pushPage('/muted-people/')}>
+        {m.signedIn && <ListItem link={m.connected ? '#' : undefined} title="Muted people" after={m.loading ? '…' : m.readError || !m.connected ? undefined : String(m.people.length)}
+          footer={m.readError ?? (m.connected ? 'Their posts leave your feeds. They can still follow you and won’t know.' : LIBRARY_PROBLEM['not-connected'])} onClick={() => { if (m.connected) pushPage('/muted-people/'); }}>
           <Icon slot="media" ios="f7:speaker_slash" md="material:volume_off" />
         </ListItem>}
       </List>

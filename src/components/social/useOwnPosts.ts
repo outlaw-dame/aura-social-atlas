@@ -208,6 +208,8 @@ export function useMutes(enabled = true) {
     people: q.data?.people ?? [], loading: q.isLoading, readError: q.data?.error && q.data.error !== 'not-connected' ? problem(q.data.error) : null,
     mute: async (v: { accountId?: string; acct?: string; on: boolean }) => { if (!user) return false; const r = await m.mutateAsync(v).catch(() => null); return !!r?.ok; },
     busy: m.isPending, error, signedIn: !!user,
+    /** False once Fedizen says the account isn't connected (the list is then empty, not "nobody muted"). */
+    connected: q.data?.error !== 'not-connected',
     /** Whether this account is in the muted list (by Fedizen id, else handle). */
     isMuted: (a: { accountId?: string; acct?: string }) => (q.data?.people ?? []).some(p => (a.accountId && p.id === a.accountId) || (!!a.acct && sameAcct(p.handle, a.acct))),
   };
