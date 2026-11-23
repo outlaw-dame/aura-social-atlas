@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { changeFedizenServerBlock } from '@/lib/fedizen-profile.functions';
 import { FEDIZEN_BLOCKED_URL } from '@/lib/fedizen-feed';
@@ -32,6 +32,17 @@ const SAID = {
   'rate-limited': () => 'Fedizen is busy. Try again in a minute.',
 } as Record<string, (host: string, on: boolean) => string>;
 
+/** Invalidate all personalized Spotlight cards synchronously after an
+ * accepted server moderation change. No old source may remain visible while
+ * the server confirms the next owner-specific block/mute snapshot. */
+export async function revokeSpotlightAfterServerBlock(qc: QueryClient, accountId: string): Promise<void> {
+  await qc.cancelQueries({ queryKey: ['spotlight-viewer', accountId] });
+  qc.setQueryData(['spotlight-viewer', accountId], { items: [], moderation: null });
+  // Do not delay the mutation UI while unrelated feed requests revalidate.
+  void Promise.allSettled(['spotlight-viewer', 'fedizen-home', 'fedizen-foryou', 'fedizen-notifications']
+    .map(k => qc.invalidateQueries({ queryKey: [k] })));
+}
+
 /**
  * Blocks or unblocks a whole server for the person, as Mastodon's "Block domain" (Bonfire's API offers no direct way:
  * see changeFedizenServerBlock). Bonfire answers a block that worked with an error it can't avoid, so the result is
@@ -53,10 +64,7 @@ export function useServerBlock() {
         // ordinary query invalidation retains the previous successful snapshot
         // while refetching, potentially displaying a newly blocked source.
         // Revoke that snapshot immediately, before any asynchronous refresh.
-        await qc.cancelQueries({ queryKey: ['spotlight-viewer', user.id] });
-        qc.setQueryData(['spotlight-viewer', user.id], { items: [], moderation: null });
-        void Promise.allSettled(['spotlight-viewer', 'fedizen-home', 'fedizen-foryou', 'fedizen-notifications']
-          .map(k => qc.invalidateQueries({ queryKey: [k] })));
+        await revokeSpotlightAfterServerBlock(qc, user.id);
         return r.outcome === 'done' ? `${host} ${on ? 'blocked' : 'unblocked'}.`
           : `Fedizen's response could not confirm ${on ? 'blocking' : 'unblocking'} ${host}. Check its Blocked page.`;
       }
