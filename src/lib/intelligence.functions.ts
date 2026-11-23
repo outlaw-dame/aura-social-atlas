@@ -11,16 +11,29 @@ import { FILTER_PLACES, MAX_EXPANSIONS, MAX_FILTERS, filterKind, normalizeFilter
  */
 
 export type AiProblem = 'not-configured' | 'not-ready' | 'bad-key' | 'no-access' | 'rate-limited' | 'unavailable' | 'bad-output' | 'bad-model' | 'browser-blocked' | 'no-vision' | 'storage';
-export type SavedKey = { provider: ProviderId; hint: string; models: string[] };
+/** A key on Atlas's server: never the key itself, only its last four characters. `model`: the one chosen for it
+ *  (used when it's a backup or does background work). */
+export type SavedKey = { id: string; provider: ProviderId; label: string | null; hint: string; models: string[]; model: string | null };
 export type IntelligenceStatus = {
   /** Atlas's Intelligence tables exist (settings and filters can be kept). */ available: boolean;
   /** The server can keep keys (its encryption secret is set). */ serverKeys: boolean;
-  enabled: boolean; provider: ProviderId | null; model: string | null; deepMatching: boolean; keys: SavedKey[];
+  enabled: boolean;
+  /** The main key: its company, model and id (the assistant, alt text, translation, writing filters). */
+  provider: ProviderId | null; model: string | null; mainKey: string | null;
+  /** Background filtering's own key and model; null means it uses the main ones. */
+  background: { key: string; provider: ProviderId; model: string } | null;
+  /** Try the person's other keys when the one in use is refusing or limited. */
+  fallback: boolean;
+  /** Whose embedding model the semantic index uses with server keys (Anthropic and Kimi have none). */
+  embeddingProvider: ProviderId | null;
+  deepMatching: boolean; keys: SavedKey[];
 };
 
 const store = () => import('./intelligence/store.server');
 const Provider = z.enum(PROVIDER_IDS);
 const Uid = z.string().uuid();
+const Label = z.string().trim().min(1).max(40);
+const Model = z.string().min(1).max(200);
 
 function sameSession(expected: string, actual: string) {
   if (expected !== actual) throw new Error('Atlas session changed. Sign in again before continuing.');
@@ -30,7 +43,7 @@ export const getIntelligence = createServerFn({ method: 'GET' }).middleware([req
 
 /** Checks a key with its provider (by listing its models), then keeps it, encrypted. */
 export const saveAiKey = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, provider: Provider, key: z.string().trim().regex(API_KEY), account: z.string().trim().toLowerCase().regex(CLOUDFLARE_ACCOUNT).optional() }).parse(d))
+  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, provider: Provider, key: z.string().trim().regex(API_KEY), account: z.string().trim().toLowerCase().regex(CLOUDFLARE_ACCOUNT).optional(), label: Label.optional() }).parse(d))
   .handler(async ({ data, context }): Promise<{ status: IntelligenceStatus } | { error: AiProblem }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     if (data.provider === 'cloudflare' && !data.account) return { error: 'bad-key' };
@@ -39,54 +52,87 @@ export const saveAiKey = createServerFn({ method: 'POST' }).middleware([requireS
     const credential = { provider: data.provider, key: data.key, ...(data.provider === 'cloudflare' ? { account: data.account } : {}) };
     try {
       const { listModels } = await import('./intelligence/llm');
-      const { storeCredential } = await import('./intelligence/vault.server');
+      const { addCredential, savedKeys } = await import('./intelligence/vault.server');
       const { chatModels, keyHint } = await import('./intelligence/providers');
       const models = chatModels(data.provider, await listModels(credential)).slice(0, 200);
       if (!models.length) return { error: 'no-access' };
-      await storeCredential(context.userId, credential, keyHint(data.key), models);
-      // The first key saved becomes the one Atlas uses, with its suggested model.
-      const s = await (await store()).readSettings(context.userId);
-      if (!s.provider) {
-        const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-        await supabaseAdmin.from('atlas_ai_settings').upsert({ user_id: context.userId, enabled: s.enabled, provider: data.provider, model: models[0], deep_matching: s.deep_matching, updated_at: new Date().toISOString() });
-      }
-      return { status: await (await store()).status(context.userId) };
+      const keyId = await addCredential(context.userId, credential, keyHint(data.key), models, { label: data.label ?? null, model: models[0] });
+      // The first key saved (or the first since the main one was removed) becomes the main key.
+      const st = await store();
+      const s = await st.readSettings(context.userId), keys = await savedKeys(context.userId);
+      if (!keys.some(k => k.id === s.main_key)) await st.writeSettings(context.userId, { ...s, main_key: keyId, model: models[0] }, keys);
+      return { status: await st.status(context.userId) };
     } catch (e) {
       return { error: (await store()).problem(e) };
     }
   });
 
+/** Removes one saved key. If it was the main key, the oldest remaining key becomes main; background work that used it
+ *  goes back to the main key. */
 export const removeAiKey = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, provider: Provider }).parse(d))
+  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, keyId: Uid }).parse(d))
   .handler(async ({ data, context }) => {
     sameSession(data.expectedAtlasUserId, context.userId);
-    const { forgetCredential } = await import('./intelligence/vault.server');
-    await forgetCredential(context.userId, data.provider);
-    const s = await (await store()).readSettings(context.userId);
-    if (s.provider === data.provider) {
-      const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-      await supabaseAdmin.from('atlas_ai_settings').update({ provider: null, model: null, updated_at: new Date().toISOString() }).eq('user_id', context.userId);
+    const { forgetKey, savedKeys } = await import('./intelligence/vault.server');
+    await forgetKey(context.userId, data.keyId);
+    const st = await store();
+    const s = await st.readSettings(context.userId), keys = await savedKeys(context.userId);
+    const lostMain = s.main_key === data.keyId, lostBackground = s.background_key === data.keyId;
+    if (lostMain || lostBackground) {
+      const next = lostMain ? keys[0] : undefined;
+      await st.writeSettings(context.userId, {
+        ...s,
+        ...(lostMain ? { main_key: next?.id ?? null, model: next ? next.model ?? next.models[0] ?? null : null } : {}),
+        ...(lostBackground || (next && s.background_key === next.id) ? { background_key: null, background_model: null } : {}),
+      }, keys);
     }
+    return st.status(context.userId);
+  });
+
+/** Names a saved key ("Work", "Personal") or sets the model it uses as a backup. */
+export const updateAiKey = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, keyId: Uid, label: Label.nullable().optional(), model: Model.optional() }).parse(d))
+  .handler(async ({ data, context }) => {
+    sameSession(data.expectedAtlasUserId, context.userId);
+    const { savedKeys, updateKeyDetails } = await import('./intelligence/vault.server');
+    const key = (await savedKeys(context.userId)).find(k => k.id === data.keyId);
+    if (key) await updateKeyDetails(context.userId, key.id, {
+      ...(data.label !== undefined ? { label: data.label } : {}),
+      ...(data.model && key.models.includes(data.model) ? { model: data.model } : {}),
+    });
     return (await store()).status(context.userId);
   });
 
-/** Turns Intelligence on or off, and picks the provider, model and how thoroughly filters check posts. */
+/**
+ * Turns Intelligence on or off and chooses which key and model do what: `main` (the person's own requests),
+ * `background` (filtering as feeds load; null goes back to the main key), backups, and how thoroughly filters check.
+ * A key must be the person's own and a model one that key lists.
+ */
 export const updateIntelligence = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, enabled: z.boolean().optional(), provider: Provider.optional(), model: z.string().max(200).optional(), deepMatching: z.boolean().optional() }).parse(d))
+  .inputValidator(d => z.object({
+    expectedAtlasUserId: Uid, enabled: z.boolean().optional(), deepMatching: z.boolean().optional(), fallback: z.boolean().optional(),
+    main: z.object({ key: Uid, model: Model.optional() }).optional(),
+    background: z.object({ key: Uid, model: Model.optional() }).nullable().optional(),
+  }).parse(d))
   .handler(async ({ data, context }) => {
     sameSession(data.expectedAtlasUserId, context.userId);
-    const current = await (await store()).status(context.userId);
+    const st = await store();
+    const current = await st.status(context.userId);
     if (!current.available) return current;
-    const provider = data.provider ?? current.provider;
-    const key = current.keys.find(k => k.provider === provider);
-    // A model must be one this key lists; switching provider without a model takes that provider's suggested one.
-    const model = key ? (data.model && key.models.includes(data.model) ? data.model : data.provider || !current.model ? key.models[0] : current.model) : null;
-    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-    await supabaseAdmin.from('atlas_ai_settings').upsert({
-      user_id: context.userId, enabled: data.enabled ?? current.enabled, provider: key ? provider : null, model: model ?? null,
-      deep_matching: data.deepMatching ?? current.deepMatching, updated_at: new Date().toISOString(),
-    });
-    return (await store()).status(context.userId);
+    const s = await st.readSettings(context.userId), keys = current.keys;
+    const pick = (choice: { key: string; model?: string }) => {
+      const k = keys.find(x => x.id === choice.key);
+      return k ? { key: k.id, model: choice.model && k.models.includes(choice.model) ? choice.model : k.model ?? k.models[0] ?? null } : null;
+    };
+    const main = data.main ? pick(data.main) : null;
+    const background = data.background ? pick(data.background) : null;
+    await st.writeSettings(context.userId, {
+      ...s,
+      enabled: data.enabled ?? s.enabled, deep_matching: data.deepMatching ?? s.deep_matching, fallback: data.fallback ?? s.fallback,
+      ...(main ? { main_key: main.key, model: main.model } : {}),
+      ...(data.background === null ? { background_key: null, background_model: null } : background ? { background_key: background.key, background_model: background.model } : {}),
+    }, keys);
+    return st.status(context.userId);
   });
 
 /* ── Keyword filters ─────────────────────────────────────────────────────────────────────────── */
@@ -176,12 +222,12 @@ export const expandContentFilter = createServerFn({ method: 'POST' }).middleware
   .handler(async ({ data, context }): Promise<{ filters: ContentFilter[] } | { error: AiProblem }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     try {
-      const ai = await (await store()).activeModel(context.userId);
-      if ('problem' in ai) return { error: ai.problem };
       const f = (await (await store()).filtersOf(context.userId)).find(x => x.id === data.id);
       if (!f) return { filters: await (await store()).filtersOf(context.userId) };
       const { expandFilter } = await import('./intelligence/tasks');
-      const expansions = await expandFilter(ai.credential, ai.model, f);
+      const r = await (await store()).withAi(context.userId, 'main', (c, model) => expandFilter(c, model, f));
+      if ('problem' in r) return { error: r.problem };
+      const expansions = r.value;
       const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
       await supabaseAdmin.from('atlas_content_filters').update({ expansions }).eq('id', f.id).eq('user_id', context.userId);
       return { filters: await (await store()).filtersOf(context.userId) };
@@ -203,10 +249,11 @@ export const judgeFilteredPosts = createServerFn({ method: 'POST' }).middleware(
   .inputValidator(d => JudgeInput.parse(d))
   .handler(async ({ data, context }): Promise<{ verdicts: { n: number; matches: string[] }[] } | { error: AiProblem }> => {
     try {
-      const ai = await (await store()).activeModel(context.userId);
-      if ('problem' in ai) return { error: ai.problem };
       const { judgeWith } = await import('./intelligence/tasks');
-      return { verdicts: await judgeWith(ai.credential, ai.model, await (await store()).filtersOf(context.userId), data.posts, ai.deepMatching) };
+      const filters = await (await store()).filtersOf(context.userId);
+      // Background work: its own key when the person chose one, and never the main key as a backup.
+      const r = await (await store()).withAi(context.userId, 'background', (c, model, deep) => judgeWith(c, model, filters, data.posts, deep));
+      return 'problem' in r ? { error: r.problem } : { verdicts: r.value };
     } catch (e) {
       return { error: (await store()).problem(e) };
     }
@@ -218,12 +265,11 @@ export const suggestContentFilters = createServerFn({ method: 'POST' }).middlewa
   .handler(async ({ data, context }) => {
     sameSession(data.expectedAtlasUserId, context.userId);
     try {
-      const ai = await (await store()).activeModel(context.userId);
-      if ('problem' in ai) return { error: ai.problem };
       const filters = await (await store()).filtersOf(context.userId);
       if (!filters.length) return { suggestions: [], cautions: [] };
       const { suggestFilters } = await import('./intelligence/tasks');
-      return await suggestFilters(ai.credential, ai.model, filters);
+      const r = await (await store()).withAi(context.userId, 'main', (c, model) => suggestFilters(c, model, filters));
+      return 'problem' in r ? { error: r.problem } : r.value;
     } catch (e) {
       return { error: (await store()).problem(e) };
     }
@@ -236,10 +282,9 @@ export const describePostForFilter = createServerFn({ method: 'POST' }).middlewa
   .handler(async ({ data, context }): Promise<{ filter: string } | { error: AiProblem }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     try {
-      const ai = await (await store()).activeModel(context.userId);
-      if ('problem' in ai) return { error: ai.problem };
       const { describePost } = await import('./intelligence/tasks');
-      return { filter: await describePost(ai.credential, ai.model, data.text) };
+      const r = await (await store()).withAi(context.userId, 'main', (c, model) => describePost(c, model, data.text));
+      return 'problem' in r ? { error: r.problem } : { filter: r.value };
     } catch (e) {
       return { error: (await store()).problem(e) };
     }
@@ -251,7 +296,7 @@ export const embedTextsFor = createServerFn({ method: 'POST' }).middleware([requ
   .handler(async ({ data, context }): Promise<{ key: string; vectors: number[][] } | { error: AiProblem }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     try {
-      const ai = await (await store()).activeModel(context.userId);
+      const ai = await (await store()).embeddingModel(context.userId);
       if ('problem' in ai) return { error: ai.problem };
       const { embedWith, EMBEDDING_MODELS } = await import('./intelligence/embeddings');
       const m = EMBEDDING_MODELS[ai.credential.provider];
@@ -269,10 +314,9 @@ export const searchWordingsFor = createServerFn({ method: 'POST' }).middleware([
   .handler(async ({ data, context }): Promise<{ terms: string[] } | { error: AiProblem }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     try {
-      const ai = await (await store()).activeModel(context.userId);
-      if ('problem' in ai) return { error: ai.problem };
       const { searchWordings } = await import('./intelligence/tasks');
-      return { terms: await searchWordings(ai.credential, ai.model, data.q) };
+      const r = await (await store()).withAi(context.userId, 'main', (c, model) => searchWordings(c, model, data.q));
+      return 'problem' in r ? { error: r.problem } : { terms: r.value };
     } catch (e) {
       return { error: (await store()).problem(e) };
     }
@@ -309,10 +353,9 @@ export const altTextForImage = createServerFn({ method: 'POST' }).middleware([re
   .handler(async ({ data, context }): Promise<{ alt: string } | { error: AiProblem }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     try {
-      const ai = await (await store()).activeModel(context.userId);
-      if ('problem' in ai) return { error: ai.problem };
       const { writeAltText } = await import('./intelligence/tasks');
-      return { alt: await writeAltText(ai.credential, ai.model, data.image, data.text) };
+      const r = await (await store()).withAi(context.userId, 'main', (c, model) => writeAltText(c, model, data.image, data.text));
+      return 'problem' in r ? { error: r.problem } : { alt: r.value };
     } catch (e) {
       return { error: (await store()).problem(e) };
     }

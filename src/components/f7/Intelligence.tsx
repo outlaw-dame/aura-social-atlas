@@ -6,7 +6,7 @@ import { FILTER_PLACES, MAX_EXPANSIONS, type FilterAction, type FilterPlace } fr
 import { FEDIZEN_KEYWORD_FILTERS_URL } from '@/lib/fedizen-feed';
 import { AI_PROBLEM, DEFAULT_OPTIONS, intelligenceReady, useContentFilters, useFilterActions, useFilterCautions, useIntelligence, useIntelligenceActions, type FilterOptions } from '@/components/social/useIntelligence';
 import { ACTION_LABEL, ACTION_SHORT, DURATIONS, PLACE_LABEL, downloadExport, expiresAfter, filterSummary, parseImport } from '@/components/social/filter-options';
-import { DEVICE_KEY_NOTE } from '@/components/social/IntelligenceSettings';
+import { DEVICE_KEY_NOTE, keyTitle } from '@/components/social/IntelligenceSettings';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { countLabel, totalLabel, useFilteredCounts } from '@/lib/filter-stats';
 import { useSocial } from '@/components/social/SocialState';
@@ -24,8 +24,13 @@ export function IntelligencePage() {
   const ready = intelligenceReady(s);
   const [adding, setAdding] = useState<ProviderId | null>(null);
   const active = s?.active ?? null;
-  const models = active && s ? (active.where === 'device' ? s.deviceKeys : s.keys).find(k => k.provider === active.provider)?.models ?? [] : [];
-  const saved = s ? [...s.keys.map(k => ({ ...k, where: 'server' as const })), ...s.deviceKeys.map(k => ({ ...k, where: 'device' as const }))] : [];
+  const models = !active || !s ? [] : active.where === 'device' ? s.deviceKeys.find(k => k.provider === active.provider)?.models ?? [] : s.keys.find(k => k.id === active.keyId)?.models ?? [];
+  type Ref = { where: 'device'; provider: ProviderId } | { where: 'server'; keyId: string };
+  const saved: { ref: Ref; id: string; title: string; footer: string; chosen: boolean; keyId?: string; label?: string | null }[] = s ? [
+    ...s.keys.map(k => ({ ref: { where: 'server' as const, keyId: k.id }, id: k.id, keyId: k.id, label: k.label, title: PROVIDERS[k.provider].product + (k.label ? ` “${k.label}”` : ''), footer: `On Atlas’s server · key ${k.hint}`, chosen: active?.where === 'server' && active.keyId === k.id })),
+    ...s.deviceKeys.map(k => ({ ref: { where: 'device' as const, provider: k.provider }, id: `device-${k.provider}`, title: PROVIDERS[k.provider].product, footer: `On this device · key ${k.hint}`, chosen: active?.where === 'device' && active.provider === k.provider })),
+  ] : [];
+  const bgKey = s?.background ? s.keys.find(k => k.id === s.background!.key) : undefined;
   return <Page>
     <Navbar title="Intelligence" backLink backLinkShowText={false} />
     {!user ? <><Block strong inset>Sign in to Atlas to use Intelligence.</Block><MobileTranslationSettings /></>
@@ -42,13 +47,15 @@ export function IntelligencePage() {
         {saved.length > 0 && <>
           <BlockTitle>Your keys</BlockTitle>
           <List strong inset dividers>
-            {saved.map(k => <ListItem key={`${k.provider}-${k.where}`} radio radioIcon="end" name="ai-key" title={PROVIDERS[k.provider].product}
-              footer={`${k.where === 'device' ? 'On this device' : 'On Atlas’s server'} · key ${k.hint}`} checked={active?.provider === k.provider && active.where === k.where}
-              onChange={() => void act.choose(k.provider, k.where)} />)}
+            {saved.map(k => <ListItem key={k.id} radio radioIcon="end" name="ai-key" title={k.title} footer={k.footer} checked={k.chosen} onChange={() => void act.choose(k.ref)} />)}
           </List>
+          <BlockTitle>Manage keys</BlockTitle>
           <List strong inset dividers>
-            {saved.map(k => <ListItem key={`rm-${k.provider}-${k.where}`} link="#" title={`Remove ${PROVIDERS[k.provider].product} key`} footer={k.where === 'device' ? 'On this device' : 'On Atlas’s server'}
-              onClick={() => f7.dialog.confirm(`Remove this ${PROVIDERS[k.provider].product} key?`, 'Remove key', () => void act.removeKey(k.provider, k.where))} />)}
+            {saved.map(k => <ListItem key={`manage-${k.id}`} link="#" title={k.title} footer={k.footer}
+              onClick={() => f7.actions.create({ buttons: [[
+                ...(k.keyId ? [{ text: 'Name…', onClick: () => f7.dialog.prompt('A name to tell this key apart, like Work or Personal. Leave it empty for none.', 'Name key', (v: string) => void act.editKey(k.keyId!, { label: v.trim() ? v.trim().slice(0, 40) : null }), undefined, k.label ?? '') }] : []),
+                { text: 'Remove', color: 'red', onClick: () => f7.dialog.confirm(`Remove ${k.title}?`, 'Remove key', () => void act.removeKey(k.ref)) },
+              ], [{ text: 'Cancel', strong: true }]] }).open()} />)}
           </List>
         </>}
 
@@ -61,10 +68,30 @@ export function IntelligencePage() {
         {active && <>
           <BlockTitle>Model</BlockTitle>
           <List strong inset>
-            <ListInput type="select" value={active.model} onChange={e => void act.choose(active.provider, active.where, (e.target as HTMLSelectElement).value)}>
+            <ListInput type="select" value={active.model} onChange={e => void act.choose(active.where === 'device' ? { where: 'device', provider: active.provider } : { where: 'server', keyId: active.keyId! }, (e.target as HTMLSelectElement).value)}>
               {models.map(m => <option key={m} value={m}>{m}</option>)}
             </ListInput>
           </List>
+        </>}
+
+        {active?.where === 'server' && <>
+          {s.keys.length > 1 && <>
+            <List strong inset dividers>
+              <ListItem title="Use your other keys as backup"><Toggle slot="after" checked={s.fallback} disabled={act.busy} onToggleChange={() => void act.update({ fallback: !s.fallback })} /></ListItem>
+            </List>
+            <BlockFooter>If the key in use is refusing requests, or its provider is limiting it, Atlas tries your other keys in the order you added them.</BlockFooter>
+          </>}
+          <BlockTitle>Background filtering</BlockTitle>
+          <List strong inset dividers>
+            <ListInput type="select" label="Key" value={s.background?.key ?? ''} onChange={e => { const v = (e.target as HTMLSelectElement).value; void act.setBackground(v ? { key: v } : null); }}>
+              <option value="">Same as main</option>
+              {s.keys.map(k => <option key={k.id} value={k.id}>{keyTitle(k)}</option>)}
+            </ListInput>
+            {bgKey && <ListInput type="select" label="Model" value={s.background!.model} onChange={e => void act.setBackground({ key: bgKey.id, model: (e.target as HTMLSelectElement).value })}>
+              {bgKey.models.map(m => <option key={m} value={m}>{m}</option>)}
+            </ListInput>}
+          </List>
+          <BlockFooter>Keyword filters check posts as your feeds load. A separate key, or a smaller model, keeps that from using up what your main key needs.</BlockFooter>
         </>}
 
         <BlockTitle>Features</BlockTitle>
@@ -85,10 +112,10 @@ function KeyForm({ provider, serverKeys, onDone }: { provider: ProviderId; serve
   const p = PROVIDERS[provider];
   const canDevice = BROWSER_CAPABLE[provider];
   const [where, setWhere] = useState<'server' | 'device'>(serverKeys ? 'server' : 'device');
-  const [key, setKey] = useState(''), [account, setAccount] = useState(''), [error, setError] = useState<string | null>(null);
+  const [key, setKey] = useState(''), [account, setAccount] = useState(''), [label, setLabel] = useState(''), [error, setError] = useState<string | null>(null);
   const save = async () => {
     setError(null);
-    const err = await act.saveKey(provider, key.trim(), p.needsAccount ? account.trim() : undefined, where);
+    const err = await act.saveKey(provider, key.trim(), p.needsAccount ? account.trim() : undefined, where, where === 'server' ? label : undefined);
     if (err) { setError(err); return; }
     setKey(''); onDone();
   };
@@ -99,6 +126,7 @@ function KeyForm({ provider, serverKeys, onDone }: { provider: ProviderId; serve
       <ListItem radio radioIcon="end" name="key-where" title="On this device only" footer={canDevice ? DEVICE_KEY_NOTE : `${p.name}’s API doesn’t accept requests from a browser.`} checked={where === 'device'} disabled={!canDevice} onChange={() => setWhere('device')} />
     </List>
     <List strong inset>
+ {where === 'server' && <ListInput type="text" placeholder="Name (optional), like Work" value={label} maxlength={40} onInput={e => setLabel((e.target as HTMLInputElement).value)} />}
       {p.needsAccount && <ListInput type="text" placeholder="Cloudflare account ID" value={account} onInput={e => setAccount((e.target as HTMLInputElement).value)} inputStyle={{ fontFamily: 'ui-monospace, monospace' }} />}
       <ListInput type="password" placeholder={p.keyPlaceholder} value={key} onInput={e => setKey((e.target as HTMLInputElement).value)} autocomplete="off" />
     </List>

@@ -19,8 +19,11 @@ export type Database = {
           ciphertext: string
           created_at: string
           hint: string
+          id: string
           iv: string
           key_id: string
+          label: string | null
+          model: string | null
           models: Json
           provider: string
           updated_at: string
@@ -30,8 +33,11 @@ export type Database = {
           ciphertext: string
           created_at?: string
           hint: string
+          id?: string
           iv: string
           key_id: string
+          label?: string | null
+          model?: string | null
           models?: Json
           provider: string
           updated_at?: string
@@ -41,8 +47,11 @@ export type Database = {
           ciphertext?: string
           created_at?: string
           hint?: string
+          id?: string
           iv?: string
           key_id?: string
+          label?: string | null
+          model?: string | null
           models?: Json
           provider?: string
           updated_at?: string
@@ -52,24 +61,36 @@ export type Database = {
       }
       atlas_ai_settings: {
         Row: {
+          background_key: string | null
+          background_model: string | null
           deep_matching: boolean
           enabled: boolean
+          fallback: boolean
+          main_key: string | null
           model: string | null
           provider: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          background_key?: string | null
+          background_model?: string | null
           deep_matching?: boolean
           enabled?: boolean
+          fallback?: boolean
+          main_key?: string | null
           model?: string | null
           provider?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          background_key?: string | null
+          background_model?: string | null
           deep_matching?: boolean
           enabled?: boolean
+          fallback?: boolean
+          main_key?: string | null
           model?: string | null
           provider?: string | null
           updated_at?: string

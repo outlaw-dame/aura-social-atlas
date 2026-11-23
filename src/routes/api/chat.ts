@@ -42,8 +42,11 @@ export const Route = createFileRoute("/api/chat")({
         const provider = createOpenAICompatible({ name: ai.credential.provider, baseURL: openAiBase(ai.credential), apiKey: ai.credential.key });
         const model = provider.chatModel(ai.model);
 
+        const { noteFailure } = await import("@/lib/intelligence/store.server");
         const result = streamText({
           model,
+          // A key the provider is limiting rests a minute, so the next request starts with the person's backup key.
+          onError: ({ error }) => noteFailure(ai.keyId, error),
           system: SYSTEM_PROMPT,
           messages: await convertToModelMessages(messages as UIMessage[]),
           stopWhen: stepCountIs(50),
