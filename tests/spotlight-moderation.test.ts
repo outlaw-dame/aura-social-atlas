@@ -73,6 +73,21 @@ describe('personal Spotlight identity and moderation gate', () => {
     expect(allowedSpotlightItem(links[0], empty)).toBe(false);
   });
 
+  it('suppresses reply-based Spotlight cards when the parent author cannot be checked', () => {
+    const reply = {
+      id: 'reply', visibility: 'public', in_reply_to_id: 'unknown-parent',
+      account: { id: 'a', acct: 'allowed', url: 'https://fedizen.net/@allowed' },
+      url: 'https://fedizen.net/posts/reply', content: 'I am replying to a blocked author',
+      media_attachments: [{ type: 'video', url: 'https://media.example.org/a.mp4' }],
+      card: { url: 'https://example.org/article', title: 'A substantial source report',
+        description: 'A description long enough to qualify as a good public card.',
+        image: 'https://example.org/preview.jpg' },
+      reblogs_count: 5,
+    };
+    expect(fromFederatedVideos([reply])).toEqual([]);
+    expect(fromFederatedLinkCards([reply])).toEqual([]);
+  });
+
   it('does not promote quote previews whose secondary author cannot be evaluated', () => {
     const status = {
       id: 'quote', visibility: 'public',
