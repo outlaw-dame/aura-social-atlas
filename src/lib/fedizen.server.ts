@@ -559,6 +559,9 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   // Read with this user's grant only, then explicitly retain PUBLIC items for
   // Spotlight. Never expose an unlisted/private/DM item through discovery.
   { match: /^\/api\/v1\/timelines\/public\?limit=20$/, schema: homeSchema },
+  // Exactly one optional older public page for owner-bound Spotlight sampling.
+  // Never accept an arbitrary URL, hostname, cursor length or private feed.
+  { match: /^\/api\/v1\/timelines\/public\?limit=20&max_id=[A-Za-z0-9_\-.~=%]{1,512}$/, schema: homeSchema },
   // The next (older) page of Home, from the cursor Fedizen's Link header gave (rel="next", max_id).
   { match: /^\/api\/v1\/timelines\/home\?limit=20&max_id=[A-Za-z0-9_\-.~=%]{1,512}$/, schema: homeSchema },
   { match: /^\/api\/v1\/notifications\?limit=20$/, schema: notificationsSchema },
