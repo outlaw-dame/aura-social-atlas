@@ -27,7 +27,7 @@ export const AI_PROBLEM: Record<AiProblem, string> = {
   'rate-limited': 'The provider is limiting requests on this key. Try again in a minute.',
   unavailable: 'The provider didn’t answer. Try again.',
   'bad-output': 'The model’s answer couldn’t be used. Try again, or choose another model.',
-  'bad-model': 'That model isn’t available to this key. Choose another.',
+  'bad-model': 'That model isn’t available to this key, or can’t do this. Choose another in Settings → Intelligence.',
   'browser-blocked': 'This provider doesn’t accept requests straight from a browser. Keep this key on Atlas’s server instead.',
   'no-vision': 'Your AI model can’t read images. Choose one that can in Settings → Intelligence.',
   storage: 'Atlas couldn’t save that. Try again.',

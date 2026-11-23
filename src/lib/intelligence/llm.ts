@@ -177,10 +177,21 @@ export async function completeJson(c: Credential, model: string, task: { system:
     r = await call(`${openAiBase(c)}/chat/completions`, c, { body: SCHEMA_OUTPUT[c.provider] ? withSchema : base, timeout: 60_000 }) as typeof r;
   } catch (e) {
     // Some models on a provider don't take a schema; ask once more with the format in the prompt only.
-    if (!(e instanceof ProviderError) || e.status !== 400 || !SCHEMA_OUTPUT[c.provider]) throw e;
-    r = await call(`${openAiBase(c)}/chat/completions`, c, { body: { ...base, messages: [{ role: 'system', content: `${task.system}\nReply with JSON only, matching this JSON Schema: ${JSON.stringify(task.schema)}` }, base.messages[1]] }, timeout: 60_000 }) as typeof r;
+    if (!(e instanceof ProviderError) || e.status !== 400 || !SCHEMA_OUTPUT[c.provider]) throw refusedModel(e);
+    try {
+      r = await call(`${openAiBase(c)}/chat/completions`, c, { body: { ...base, messages: [{ role: 'system', content: `${task.system}\nReply with JSON only, matching this JSON Schema: ${JSON.stringify(task.schema)}` }, base.messages[1]] }, timeout: 60_000 }) as typeof r;
+    } catch (e2) { throw refusedModel(e2); }
   }
   return parseJsonReply(r.choices?.[0]?.message?.content ?? '');
+}
+
+/**
+ * A plain text request refused as invalid (400) means the model can't take chat requests at all, e.g. Gemini's
+ * Live API-only models (seen on staging, 23 Nov 2026: `gemini-3.8-live` answers 400 INVALID_ARGUMENT): ask the person
+ * to choose another model rather than to try again.
+ */
+function refusedModel(e: unknown): unknown {
+  return e instanceof ProviderError && e.status === 400 ? new ProviderError('bad-model', 400) : e;
 }
 
 /** An image for a model to look at: base64 data, and its type (Atlas sends JPEG, PNG or GIF). */
