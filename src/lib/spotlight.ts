@@ -130,6 +130,61 @@ export function fromFederatedVideos(statuses: unknown[], observedBy = 'fedizen.n
   });
 }
 
+/** Ranked-but-NOT-trending links sampled from Fedizen's owner-authorized,
+ * PUBLIC federated timeline. Requires a substantive preview plus independent
+ * evidence of discussion (multiple posts or engagement). A 20-post sample is
+ * never portrayed as a complete network trend, or a count of unique people.
+ */
+export function fromFederatedLinkCards(statuses: unknown[], observedBy = 'fedizen.net'): SpotlightItem[] {
+  const groups = new Map<string, { item: SpotlightItem; seen: Set<string>; activity: number }>();
+  for (const value of statuses.slice(0, 40)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+    const status = value as Record<string, unknown>;
+    const account = status.account && typeof status.account === 'object' && !Array.isArray(status.account)
+      ? status.account as Record<string, unknown> : null;
+    if (status.visibility !== 'public' || status.sensitive === true ||
+      account?.discoverable === false || status.reblog ||
+      (typeof status.spoiler_text === 'string' && status.spoiler_text.trim()) ||
+      typeof status.id !== 'string') continue;
+    const card = status.card && typeof status.card === 'object' && !Array.isArray(status.card)
+      ? status.card as Record<string, unknown> : null;
+    if (!card || typeof card.url !== 'string' || card.url.length > 2048 ||
+      typeof card.title !== 'string' || card.title.trim().length < 10 ||
+      typeof card.description !== 'string' || card.description.trim().length < 30 ||
+      typeof card.image !== 'string' || !httpOnly(card.image)) continue;
+    const key = spotlightUrlKey(card.url);
+    if (!key) continue;
+    const rawActivity = ['reblogs_count', 'replies_count', 'favourites_count'].reduce((total, field) => {
+      const count = status[field];
+      return total + (typeof count === 'number' && Number.isInteger(count) && count >= 0 && count < 1e6 ? count : 0);
+    }, 0);
+    const existing = groups.get(key);
+    if (existing) {
+      if (existing.seen.has(status.id)) continue;
+      existing.seen.add(status.id);
+      existing.activity = Math.max(existing.activity, rawActivity);
+      continue;
+    }
+    const author = typeof account?.display_name === 'string' ? account.display_name : undefined;
+    groups.set(key, {
+      seen: new Set([status.id]), activity: rawActivity,
+      item: {
+        id: `f:${key}`, source: 'Bonfire', url: card.url,
+        title: card.title.trim().slice(0, 200), description: card.description.trim().slice(0, 400),
+        image: card.image, provider: (typeof card.provider_name === 'string' && card.provider_name.trim())
+          || new URL(key).hostname,
+        author, published: typeof status.created_at === 'string' ? status.created_at : undefined,
+        kind: 'link', reason: 'recent', observedBy,
+      },
+    });
+  }
+  return [...groups.values()]
+    .filter(group => group.seen.size >= 2 || group.activity >= 3)
+    .sort((a, b) => b.activity - a.activity || b.seen.size - a.seen.size)
+    .slice(0, 8)
+    .map(({ item, seen }) => ({ ...item, shares: seen.size }));
+}
+
 /** A story can arrive as a trending link and a native article; display one
  * entity rather than adding overlapping cross-instance share counters.
  * Do not collapse distinct query URLs unless they have explicitly-safe tracking parameters.
