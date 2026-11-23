@@ -196,7 +196,9 @@ describe('filter engine refresh safety', () => {
     const post = spotlightFilterPost(card([{ handle: 'good' }], { title: 'Includes spoiler' }));
     expect(engine.discoveryClear(post)).toBe(false);
     const refreshed = original.map(x => ({ ...x, places: [...x.places], expansions: [...x.expansions] }));
+    const before = engine.getRevision();
     engine.configure({ filters: refreshed, ai: false, deep: false });
+    expect(engine.getRevision()).toBeGreaterThan(before);
     expect(engine.hasCurrentFilters(refreshed)).toBe(true);
     expect(engine.discoveryClear(post)).toBe(false);
   });
