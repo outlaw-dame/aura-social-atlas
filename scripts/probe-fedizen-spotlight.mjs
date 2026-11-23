@@ -56,7 +56,7 @@ async function observe([path, kind]) {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload))
       return { check: kind, status: 'unavailable', http: status, category: 'non-object' };
     const raw = typeof payload.version === 'string' ? payload.version : '';
-    const version = raw.match(/\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,4}(?:[-.][A-Za-z0-9]{1,18})?/);
+    const version = raw.match(/\b\d{1,3}\.\d{1,3}\.\d{1,4}(?:[-.][A-Za-z0-9]{1,18})?/);
     return { check: kind, status: 'readable', http: status,
       reportedCompatibilityVersion: version ? version[0] : 'not-reported',
       // A public version string cannot identify which feed preset the running
