@@ -1,0 +1,41 @@
+name: Relay checks
+
+# relay/ is an optional, separately deployed package (its own dependencies and test preload), so the app's test run
+# leaves it out (bunfig.toml pathIgnorePatterns). This runs its tests and type check on their own.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'relay/**'
+      - 'bunfig.toml'
+      - '.github/workflows/relay.yml'
+  pull_request:
+    paths:
+      - 'relay/**'
+      - 'bunfig.toml'
+      - '.github/workflows/relay.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - run: bun run typecheck
+      - name: Tests (network and DNS disabled by test-preload.ts)
+        run: bun test src
