@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import {
   addContentFilters, deleteContentFilter, describePostForFilter, expandContentFilter, followingAmong, getIntelligence, judgeFilteredPosts,
-  listContentFilters, removeAiKey, saveAiKey, suggestContentFilters, altTextForImage, embedTextsFor, searchWordingsFor, updateContentFilter, updateIntelligence,
+  listContentFilters, removeAiKey, saveAiKey, updateAiKey, suggestContentFilters, altTextForImage, embedTextsFor, searchWordingsFor, updateContentFilter, updateIntelligence,
   type AiProblem, type IntelligenceStatus,
 } from '@/lib/intelligence.functions';
 import { getFedizenStatus } from '@/lib/fedizen.functions';
@@ -37,8 +37,8 @@ const filtersKey = (id?: string) => ['content-filters', id] as const;
 const device = () => import('@/lib/intelligence/device-keys');
 const tasks = () => import('@/lib/intelligence/tasks');
 
-/** Where the key in use lives, and which provider and model it is. */
-export type ActiveAi = { where: 'server' | 'device'; provider: ProviderId; model: string };
+/** Where the key in use lives, which provider and model it is, and (on Atlas's server) which saved key. */
+export type ActiveAi = { where: 'server' | 'device'; provider: ProviderId; model: string; keyId?: string };
 export type Intelligence = IntelligenceStatus & { deviceKeys: DeviceKey[]; devicePrefs: DevicePrefs; active: ActiveAi | null };
 
 /** Intelligence settings: whether it's on, saved keys (last four characters only, on the server or this device), and
@@ -56,7 +56,7 @@ export function useIntelligence() {
     const keys = local.data?.keys ?? [], prefs = local.data?.prefs ?? null;
     const dev = prefs && keys.find(k => k.provider === prefs.provider);
     const active: ActiveAi | null = dev ? { where: 'device', provider: dev.provider, model: dev.models.includes(prefs.model) ? prefs.model : dev.models[0] }
-      : server.data.provider && server.data.model ? { where: 'server', provider: server.data.provider, model: server.data.model } : null;
+      : server.data.provider && server.data.model ? { where: 'server', provider: server.data.provider, model: server.data.model, ...(server.data.mainKey ? { keyId: server.data.mainKey } : {}) } : null;
     return { ...server.data, deviceKeys: keys, devicePrefs: prefs, active };
   }, [server.data, local.data]);
   return { data, isLoading: server.isLoading || local.isLoading };
@@ -75,7 +75,7 @@ const problemOf = async (e: unknown): Promise<AiProblem> => {
 export function useIntelligenceActions() {
   const { user } = useAtlasAuth();
   const qc = useQueryClient();
-  const save = useServerFn(saveAiKey), remove = useServerFn(removeAiKey), update = useServerFn(updateIntelligence);
+  const save = useServerFn(saveAiKey), remove = useServerFn(removeAiKey), update = useServerFn(updateIntelligence), edit = useServerFn(updateAiKey);
   const [busy, setBusy] = useState(false);
   const id = user?.id ?? '';
   const put = (s: IntelligenceStatus) => { qc.setQueryData(statusKey(user?.id), s); void qc.invalidateQueries({ queryKey: filtersKey(user?.id) }); };
@@ -84,7 +84,7 @@ export function useIntelligenceActions() {
   return {
     busy,
     /** Null when saved, else what went wrong. The key itself isn't kept anywhere in the page afterwards. */
-    saveKey: (provider: ProviderId, key: string, account: string | undefined, where: 'server' | 'device') => run(async (): Promise<string | null> => {
+    saveKey: (provider: ProviderId, key: string, account: string | undefined, where: 'server' | 'device', label?: string) => run(async (): Promise<string | null> => {
       if (where === 'device') {
         try {
           const d = await device();
@@ -95,28 +95,34 @@ export function useIntelligenceActions() {
         } catch (e) { return AI_PROBLEM[await problemOf(e)]; }
       }
       try {
-        const r = await save({ data: { expectedAtlasUserId: id, provider, key, ...(account ? { account } : {}) } });
+        const r = await save({ data: { expectedAtlasUserId: id, provider, key, ...(account ? { account } : {}), ...(label?.trim() ? { label: label.trim().slice(0, 40) } : {}) } });
         if ('error' in r) return AI_PROBLEM[r.error];
         put(r.status); return null;
       } catch { return AI_PROBLEM['bad-key']; }
     }),
-    removeKey: (provider: ProviderId, where: 'server' | 'device') => run(async () => {
-      if (where === 'device') { await (await device()).removeDeviceKey(id, provider); await refreshDevice(); return; }
-      put(await remove({ data: { expectedAtlasUserId: id, provider } }));
+    /** Removes a key: on this device by its company, on Atlas's server by its id. */
+    removeKey: (k: { where: 'device'; provider: ProviderId } | { where: 'server'; keyId: string }) => run(async () => {
+      if (k.where === 'device') { await (await device()).removeDeviceKey(id, k.provider); await refreshDevice(); return; }
+      put(await remove({ data: { expectedAtlasUserId: id, keyId: k.keyId } }));
     }),
-    /** Picks the key in use: one on this device, or one on Atlas's server (clearing the device choice). */
-    choose: (provider: ProviderId, where: 'server' | 'device', model?: string) => run(async () => {
+    /** Picks the main key: one on this device (by company), or a saved one on Atlas's server (clearing the device
+     *  choice). */
+    choose: (k: { where: 'device'; provider: ProviderId } | { where: 'server'; keyId: string }, model?: string) => run(async () => {
       const d = await device();
-      if (where === 'device') {
-        const k = (await d.deviceKeys(id)).find(x => x.provider === provider);
-        if (k) await d.setDevicePrefs(id, { provider, model: model && k.models.includes(model) ? model : k.models[0] });
+      if (k.where === 'device') {
+        const dk = (await d.deviceKeys(id)).find(x => x.provider === k.provider);
+        if (dk) await d.setDevicePrefs(id, { provider: k.provider, model: model && dk.models.includes(model) ? model : dk.models[0] });
       } else {
         await d.setDevicePrefs(id, null);
-        put(await update({ data: { expectedAtlasUserId: id, provider, ...(model ? { model } : {}) } }));
+        put(await update({ data: { expectedAtlasUserId: id, main: { key: k.keyId, ...(model ? { model } : {}) } } }));
       }
       await refreshDevice();
     }),
-    update: (patch: { enabled?: boolean; deepMatching?: boolean }) => run(async () => { put(await update({ data: { expectedAtlasUserId: id, ...patch } })); }),
+    /** Background filtering's own key and model, or null to use the main ones. */
+    setBackground: (choice: { key: string; model?: string } | null) => run(async () => { put(await update({ data: { expectedAtlasUserId: id, background: choice } })); }),
+    /** A saved key's name, or the model it uses as a backup. */
+    editKey: (keyId: string, patch: { label?: string | null; model?: string }) => run(async () => { put(await edit({ data: { expectedAtlasUserId: id, keyId, ...patch } })); }),
+    update: (patch: { enabled?: boolean; deepMatching?: boolean; fallback?: boolean }) => run(async () => { put(await update({ data: { expectedAtlasUserId: id, ...patch } })); }),
   };
 }
 
@@ -203,9 +209,13 @@ export function useAiRunner() {
       return r && 'vectors' in r ? { key: r.key, vectors: r.vectors.map(v => Float32Array.from(v)) } : null;
     },
     /** The provider in use, when it has an embedding model (Anthropic and Kimi don't). */
-    embeddingProvider: ready && active && ['openai', 'google', 'mistral', 'cloudflare'].includes(active.provider) && !(active.where === 'device' && active.provider === 'cloudflare') ? active.provider : null,
+    embeddingProvider: !ready || !active ? null
+      : active.where === 'server' ? ai?.embeddingProvider ?? null
+      : ['openai', 'google', 'mistral'].includes(active.provider) ? active.provider : null,
     /** Which model answers, so answers cached for one model aren't reused for another. */
     model: active ? `${active.where}:${active.provider}:${active.model}` : null,
+    /** Which model checks posts against filters (background work: its own model on Atlas's server when chosen). */
+    judgeModel: !active ? null : active.where === 'server' && ai?.background ? `server:${ai.background.provider}:${ai.background.model}` : `${active.where}:${active.provider}:${active.model}`,
     /** Translation (lib/translation) with the key in use: on this device or Atlas's server. */
     translate: async (req: { texts: string[]; target: string; source?: string }): Promise<{ texts: string[]; detected?: string } | { error: string }> => {
       if (!ready) return { error: 'no-key' };
@@ -215,7 +225,7 @@ export function useAiRunner() {
       }
       return translateServer({ data: { expectedAtlasUserId: id, ...req } }).catch(() => ({ error: 'unavailable' as const }));
     },
-  }), [ready, active, deep, local, judgeServer, expandServer, suggestServer, describeServer, altServer, wordingsServer, embedServer, translateServer, id]);
+  }), [ready, active, deep, local, judgeServer, expandServer, suggestServer, describeServer, altServer, wordingsServer, embedServer, translateServer, id, ai?.embeddingProvider, ai?.background]);
 }
 
 /* ── Keyword filters ─────────────────────────────────────────────────────────────────────────── */
@@ -347,7 +357,7 @@ export function ContentFilterProvider({ children }: { children: ReactNode }) {
   const fedizen = useQuery({ queryKey: ['fedizen-status', user?.id], queryFn: () => statusFn(), enabled: !!user, staleTime: 60_000 });
   const list = useMemo(() => (user && filters.data && 'filters' in filters.data ? filters.data.filters : []), [user, filters.data]);
   useEffect(() => {
-    engine.configure({ filters: list, ai: runner.ready, deep: !!ai?.deepMatching, scope: `${user?.id}:${runner.where}:${semantic.model ?? ''}`, judge: runner.judge(list), similar, following });
+    engine.configure({ filters: list, ai: runner.ready, deep: !!ai?.deepMatching, scope: `${user?.id}:${runner.judgeModel ?? runner.where}:${semantic.model ?? ''}`, judge: runner.judge(list), similar, following });
   }, [engine, list, runner, ai?.deepMatching, user?.id, following, similar, semantic.model]);
   const env = useMemo(() => ({ engine, me: fedizen.data?.handle ?? null, product: ai?.active ? PROVIDERS[ai.active.provider].product : null, following, account: user?.id ?? null }), [engine, fedizen.data?.handle, ai?.active, following, user?.id]);
   return <EngineContext.Provider value={env}>{children}</EngineContext.Provider>;

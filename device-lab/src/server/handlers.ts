@@ -371,12 +371,32 @@ export const fediProfile: Impl<typeof FediProfileFns> = {
 };
 
 const filters: ContentFilter[] = [];
-const aiStatus: IntelligenceStatus = { available: true, serverKeys: true, enabled: false, provider: null, model: null, deepMatching: false, keys: [] };
+// Invented sample keys (hints only; there are no keys): two companies, one with a name, so Settings → Intelligence
+// shows the main key, backups and background filtering. Intelligence stays off, so nothing calls a provider.
+const SAMPLE_KEYS: IntelligenceStatus['keys'] = [
+  { id: '00000000-0000-4000-8000-0000000000a1', provider: 'anthropic', label: 'Work', hint: '…a1b2', models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'], model: 'claude-haiku-5-5' },
+  { id: '00000000-0000-4000-8000-0000000000a2', provider: 'openai', label: null, hint: '…c3d4', models: ['gpt-6-mini', 'gpt-6'], model: 'gpt-6-mini' },
+];
+const aiStatus: IntelligenceStatus = {
+  available: true, serverKeys: true, enabled: false, provider: 'anthropic', model: 'claude-haiku-5-5', mainKey: SAMPLE_KEYS[0].id,
+  background: null, fallback: true, embeddingProvider: 'openai', deepMatching: false, keys: SAMPLE_KEYS,
+};
+const pickKey = (c: { key: string; model?: string }) => { const k = SAMPLE_KEYS.find(x => x.id === c.key); return k ? { k, model: c.model && k.models.includes(c.model) ? c.model : k.model ?? k.models[0] } : null; };
 export const intelligence: Impl<typeof Intelligence> = {
   getIntelligence: () => aiStatus,
   saveAiKey: () => ({ error: 'not-configured' as const }),
   removeAiKey: () => aiStatus,
-  updateIntelligence: (d: { deepMatching?: boolean }) => { if (d.deepMatching != null) aiStatus.deepMatching = d.deepMatching; return aiStatus; },
+  updateAiKey: (d: { keyId: string; label?: string | null }) => { const k = SAMPLE_KEYS.find(x => x.id === d.keyId); if (k && d.label !== undefined) k.label = d.label; return aiStatus; },
+  updateIntelligence: (d: { deepMatching?: boolean; fallback?: boolean; enabled?: boolean; main?: { key: string; model?: string }; background?: { key: string; model?: string } | null }) => {
+    if (d.deepMatching != null) aiStatus.deepMatching = d.deepMatching;
+    if (d.fallback != null) aiStatus.fallback = d.fallback;
+    const m = d.main && pickKey(d.main);
+    if (m) Object.assign(aiStatus, { mainKey: m.k.id, provider: m.k.provider, model: m.model });
+    if (d.background === null) aiStatus.background = null;
+    const b = d.background && pickKey(d.background);
+    if (b) aiStatus.background = { key: b.k.id, provider: b.k.provider, model: b.model };
+    return aiStatus;
+  },
   listContentFilters: () => ({ filters }),
   // In the real functions' shapes: words plus options in; the whole list back.
   addContentFilters: (d: { texts: string[]; action: ContentFilter['action']; places: ContentFilter['places']; expiresAt: string | null; exceptFollowing: boolean }) => {

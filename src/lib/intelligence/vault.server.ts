@@ -79,44 +79,78 @@ export async function openRow(userId: string, row: Row): Promise<{ credential: C
   }
 }
 
-/** The decrypted key for one provider, or null when there's none. Re-encrypts rows made with a previous secret. */
-export async function credentialFor(userId: string, provider: ProviderId): Promise<Credential | null> {
-  const { data, error } = await supabaseAdmin.from('atlas_ai_keys').select('provider, ciphertext, iv, key_id').eq('user_id', userId).eq('provider', provider).maybeSingle();
+/** A saved AI key as the settings page may see it: never the key itself, only its last four characters. */
+export type KeyRow = { id: string; provider: ProviderId; label: string | null; hint: string; models: string[]; model: string | null };
+
+/** The decrypted key with this id, or null when the person has none by that id. Re-encrypts rows made with a
+ *  previous secret. */
+export async function credentialById(userId: string, keyId: string): Promise<Credential | null> {
+  const { data, error } = await supabaseAdmin.from('atlas_ai_keys').select('id, provider, ciphertext, iv, key_id').eq('user_id', userId).eq('id', keyId).neq('provider', 'deepl').maybeSingle();
   if (error) throw new VaultError('storage');
   if (!data) return null;
   const { credential, stale } = await openRow(userId, data);
   if (stale) {
     const sealed = await sealCredential(userId, credential);
-    await supabaseAdmin.from('atlas_ai_keys').update({ ...sealed, updated_at: new Date().toISOString() }).eq('user_id', userId).eq('provider', provider);
+    await supabaseAdmin.from('atlas_ai_keys').update({ ...sealed, updated_at: new Date().toISOString() }).eq('user_id', userId).eq('id', keyId);
   }
   return credential;
 }
 
-/** What the settings page may show about saved AI keys: which providers, the key's last four characters, the models.
- *  A DeepL key isn't an AI provider's: serviceKey reads it. */
-export async function savedKeys(userId: string) {
-  const { data, error } = await supabaseAdmin.from('atlas_ai_keys').select('provider, hint, models, updated_at').eq('user_id', userId).neq('provider', 'deepl');
+/** The person's AI keys, oldest first (the order backups are tried in). A DeepL key isn't an AI provider's:
+ *  serviceKey reads it. */
+export async function savedKeys(userId: string): Promise<KeyRow[]> {
+  const { data, error } = await supabaseAdmin.from('atlas_ai_keys').select('id, provider, label, hint, models, model, created_at').eq('user_id', userId).neq('provider', 'deepl').order('created_at');
   if (error) throw new VaultError('storage');
-  return (data ?? []).map(r => ({ provider: r.provider as ProviderId, hint: r.hint, models: Array.isArray(r.models) ? (r.models as string[]) : [], updatedAt: r.updated_at }));
+  return (data ?? []).map(r => ({
+    id: r.id as string, provider: r.provider as ProviderId, label: (r.label as string | null) ?? null, hint: r.hint as string,
+    models: Array.isArray(r.models) ? (r.models as string[]) : [], model: (r.model as string | null) ?? null,
+  }));
 }
 
 /** A non-AI service's key (DeepL), decrypted, and its hint; null when there's none. */
 export async function serviceKey(userId: string, service: 'deepl'): Promise<{ key: string; hint: string } | null> {
-  const { data, error } = await supabaseAdmin.from('atlas_ai_keys').select('provider, ciphertext, iv, key_id, hint').eq('user_id', userId).eq('provider', service).maybeSingle();
+  const { data, error } = await supabaseAdmin.from('atlas_ai_keys').select('id, provider, ciphertext, iv, key_id, hint').eq('user_id', userId).eq('provider', service).maybeSingle();
   if (error) throw new VaultError('storage');
   if (!data) return null;
   const { credential, stale } = await openRow(userId, data);
-  if (stale) await storeCredential(userId, { provider: service, key: credential.key }, data.hint, []);
+  if (stale) await storeServiceKey(userId, service, credential.key, data.hint);
   return { key: credential.key, hint: data.hint };
 }
 
-export async function storeCredential(userId: string, c: Sealable, hint: string, models: string[]) {
+/** Keeps a new AI key (its own row: a person may have several from one company). Returns its id. */
+export async function addCredential(userId: string, c: Sealable & { provider: ProviderId }, hint: string, models: string[], extra: { label?: string | null; model?: string | null }): Promise<string> {
   const sealed = await sealCredential(userId, c);
-  const { error } = await supabaseAdmin.from('atlas_ai_keys').upsert({ user_id: userId, provider: c.provider, ...sealed, hint, models, updated_at: new Date().toISOString() });
+  const { data, error } = await supabaseAdmin.from('atlas_ai_keys').insert({
+    user_id: userId, provider: c.provider, ...sealed, hint, models, label: extra.label ?? null, model: extra.model ?? null, updated_at: new Date().toISOString(),
+  }).select('id').single();
+  if (error || !data) throw new VaultError('storage');
+  return data.id as string;
+}
+
+/** Changes a saved AI key's name or model (never the key itself: a new key is a new row). */
+export async function updateKeyDetails(userId: string, keyId: string, patch: { label?: string | null; model?: string | null }) {
+  const { error } = await supabaseAdmin.from('atlas_ai_keys').update({ ...patch, updated_at: new Date().toISOString() }).eq('user_id', userId).eq('id', keyId).neq('provider', 'deepl');
   if (error) throw new VaultError('storage');
 }
 
-export async function forgetCredential(userId: string, provider: KeyService) {
-  const { error } = await supabaseAdmin.from('atlas_ai_keys').delete().eq('user_id', userId).eq('provider', provider);
+/** Keeps the DeepL key, replacing the one there was. */
+export async function storeServiceKey(userId: string, service: 'deepl', key: string, hint: string) {
+  const sealed = await sealCredential(userId, { provider: service, key });
+  const { data: existing, error: readError } = await supabaseAdmin.from('atlas_ai_keys').select('id').eq('user_id', userId).eq('provider', service).maybeSingle();
+  if (readError) throw new VaultError('storage');
+  const row = { ...sealed, hint, models: [], updated_at: new Date().toISOString() };
+  const { error } = existing
+    ? await supabaseAdmin.from('atlas_ai_keys').update(row).eq('user_id', userId).eq('id', existing.id)
+    : await supabaseAdmin.from('atlas_ai_keys').insert({ user_id: userId, provider: service, ...row });
+  if (error) throw new VaultError('storage');
+}
+
+export async function forgetKey(userId: string, keyId: string) {
+  const { error } = await supabaseAdmin.from('atlas_ai_keys').delete().eq('user_id', userId).eq('id', keyId).neq('provider', 'deepl');
+  if (error) throw new VaultError('storage');
+}
+
+export async function forgetServiceKey(userId: string, service: 'deepl') {
+  const { error } = await supabaseAdmin.from('atlas_ai_keys').delete().eq('user_id', userId).eq('provider', service);
   if (error) throw new VaultError('storage');
 }

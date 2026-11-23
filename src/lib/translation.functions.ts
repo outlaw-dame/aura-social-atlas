@@ -55,12 +55,12 @@ export const saveDeeplKey = createServerFn({ method: 'POST' }).middleware([requi
   .handler(async ({ data, context }): Promise<{ ok: true } | { error: TranslateProblem }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     try {
-      const { vaultReady, storeCredential } = await import('./intelligence/vault.server');
+      const { vaultReady, storeServiceKey } = await import('./intelligence/vault.server');
       if (!(await vaultReady())) return { error: 'not-configured' };
       const { deeplUsage } = await import('./translation/deepl.server');
       await deeplUsage(data.key);
       const { keyHint } = await import('./intelligence/providers');
-      await storeCredential(context.userId, { provider: 'deepl', key: data.key }, keyHint(data.key), []);
+      await storeServiceKey(context.userId, 'deepl', data.key, keyHint(data.key));
       return { ok: true };
     } catch (e) {
       return { error: await problemOf(e) };
@@ -72,8 +72,8 @@ export const removeDeeplKey = createServerFn({ method: 'POST' }).middleware([req
   .handler(async ({ data, context }): Promise<{ ok: true } | { error: TranslateProblem }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     try {
-      const { forgetCredential } = await import('./intelligence/vault.server');
-      await forgetCredential(context.userId, 'deepl');
+      const { forgetServiceKey } = await import('./intelligence/vault.server');
+      await forgetServiceKey(context.userId, 'deepl');
       return { ok: true };
     } catch (e) {
       return { error: await problemOf(e) };
@@ -103,10 +103,10 @@ export const translateWithAi = createServerFn({ method: 'POST' }).middleware([re
     sameSession(data.expectedAtlasUserId, context.userId);
     try {
       const store = await import('./intelligence/store.server');
-      const ai = await store.activeModel(context.userId);
-      if ('problem' in ai) return { error: ai.problem === 'not-ready' ? 'no-key' : 'unavailable' };
       const { translateTexts } = await import('./intelligence/tasks');
-      return await translateTexts(ai.credential, ai.model, { texts: data.texts, target: data.target, ...(data.source ? { source: data.source } : {}) });
+      const r = await store.withAi(context.userId, 'main', (c, model) => translateTexts(c, model, { texts: data.texts, target: data.target, ...(data.source ? { source: data.source } : {}) }));
+      if ('problem' in r) return { error: r.problem === 'not-ready' ? 'no-key' : 'unavailable' };
+      return r.value;
     } catch (e) {
       return { error: await problemOf(e) };
     }
