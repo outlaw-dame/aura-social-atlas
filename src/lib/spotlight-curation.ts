@@ -129,6 +129,17 @@ export function spotlightFilterPost(item: SpotlightItem): FilterablePost {
   };
 }
 
+/** Whether to show an initial loading message instead of an actual result.
+ * Trends are deliberately NOT an input: failing/slow optional news cannot
+ * hold the entire view in its loading state. Owner moderation is mandatory. */
+export function spotlightInitialLoading(input: {
+  signedIn: boolean; hasItems: boolean; moderationUnavailable: boolean;
+  viewerPending: boolean; articlesPending: boolean;
+}): boolean {
+  return input.signedIn && !input.hasItems && !input.moderationUnavailable &&
+    (input.viewerPending || input.articlesPending);
+}
+
 /** Reject blocked/unverifiable source records BEFORE coalescing equal URLs.
  * Public trend metadata alone does not prove a contributor is safe for the
  * viewer. Precedence applies only among records which passed moderation. */
