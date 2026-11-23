@@ -113,7 +113,10 @@ export class FilterEngine {
       const key = this.key(p);
       // No semantic provider? Do not silently degrade a promised semantic hide
       // into a plain keyword-only check for public recommendations.
-      if (!this.similar && !this.ai) return false;
+      // A contextual AI model with deep matching explicitly enabled can act
+      // without the local semantic index. Otherwise absence of a similarity
+      // engine is not evidence that an unseen topic is safe.
+      if (!this.similar && (!this.ai || !this.deep)) return false;
       if (this.similar && !this.near.has(key)) return false;
       const hits = lexicalHits(this.compiled, p);
       const nearMatches = this.near.get(key)?.all ?? [];
