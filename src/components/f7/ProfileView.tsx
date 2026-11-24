@@ -20,7 +20,7 @@ const sections = ['Activity', 'Featured', 'Media', 'Collections', 'Saved', 'Like
 type Section = (typeof sections)[number];
 const emptySections: Record<Section, { ios: string; md: string; title: string; detail: string }> = {
   Activity: { ios: 'f7:square_pencil', md: 'material:edit_note', title: 'No activity yet', detail: 'Your public posts, quote posts, replies and boosts on Fedizen will appear here.' },
-  Featured: { ios: 'f7:star', md: 'material:star_outline', title: 'Nothing featured yet', detail: 'Feature hashtags from Edit profile, and people from their profiles, to show them here.' },
+  Featured: { ios: 'f7:star', md: 'material:star_outline', title: 'Nothing featured yet', detail: 'Feature hashtags from a hashtag’s page or from Edit profile, and people from their profiles, to show them here.' },
   Media: { ios: 'f7:photo_on_rectangle', md: 'material:photo_library', title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
   Collections: { ios: 'f7:square_stack_3d_up', md: 'material:collections_bookmark', title: 'No collections yet', detail: '' },
   Saved: { ios: 'f7:bookmark', md: 'material:bookmark_border', title: 'Nothing saved yet', detail: 'Posts you save on Fedizen. Each keeps the audience its author chose.' },
@@ -91,7 +91,7 @@ export function EditProfileSheet({ opened, onClose }: { opened: boolean; onClose
           onInput={(e: any) => setWebsite(e.target.value)} errorMessage="Enter a web address, like example.org." errorMessageForce={!websiteOk} />}
         {remote && <ListInput type="text" label="Location" floatingLabel value={location} maxlength={LOCATION_MAX} onInput={(e: any) => setLocation(e.target.value)} />}
         <ListInput type="text" label="Featured hashtags" floatingLabel placeholder="#design #openweb" value={tags}
-          onInput={(e: any) => setTags(e.target.value)} info={remote ? 'Separate with spaces. Kept in Atlas: Fedizen has no featured hashtags.' : 'Separate with spaces, like on Mastodon.'} />
+          onInput={(e: any) => setTags(e.target.value)} info={remote ? 'Separate with spaces. Kept in Atlas: Fedizen can’t save featured hashtags yet.' : 'Separate with spaces, like on Mastodon.'} />
       </List>
       <Block style={{ display: 'flex', gap: 8 }}>
         <Button tonal style={{ flex: 1 }} onClick={onClose}>Cancel</Button>

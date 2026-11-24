@@ -615,6 +615,17 @@ html[data-nav="deck"] .atlas-fab { top: calc(var(--atlas-bottom-y, 50%) + var(--
 .atlas-fedi-acct .icon { font-size: 14px; margin-left: 4px; color: var(--f7-theme-color); }
 .atlas-fedi-stats { display: flex; gap: 16px; font-size: 14px; margin: 4px 0 8px; } .atlas-fedi-stats span { opacity: .75; } .atlas-fedi-stats b { opacity: 1; }
 .atlas-fedi-note { margin: 0; font-size: 12px; opacity: .6; }
+/* Featured hashtags on a profile (phone): tiles that scroll sideways, the picked one filled with the reader's accent. */
+.atlas-featured-tags { display: flex; gap: 8px; overflow-x: auto; padding: 0 16px 4px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.atlas-featured-tags::-webkit-scrollbar { display: none; }
+.atlas-featured-tags button { flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 96px; padding: 10px 14px; border-radius: 18px; scroll-snap-align: start;
+  border: 1px solid var(--f7-list-item-border-color, rgba(0,0,0,.12)); background: var(--f7-list-strong-bg-color, var(--card)); color: inherit; text-align: left; font: inherit; width: auto; }
+.atlas-featured-tags button.is-on { background: var(--accent); border-color: transparent; color: var(--accent-foreground, #fff); }
+.atlas-featured-name { font: italic 400 19px/1.15 'Instrument Serif', serif; }
+.atlas-featured-detail { font-size: 11px; opacity: .65; }
+.atlas-featured-tags button.is-on .atlas-featured-detail { opacity: .85; }
+.atlas-featured-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.atlas-featured-title .link { font-size: 15px; font-weight: 500; }
 .atlas-fedi-bio p, .atlas-fedi-post p { line-height: 1.5; }
 .atlas-fedi-post h2 { margin: 0 0 4px; font: 400 22px/1.2 'Instrument Serif', serif; }
 .atlas-fedi-post img { width: 100%; border-radius: 12px; margin-top: 8px; }

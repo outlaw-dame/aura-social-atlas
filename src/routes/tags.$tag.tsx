@@ -5,7 +5,7 @@ import type { FedizenPost } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { FEED_PROBLEM, useTagFeed, useTagFeedOlder } from '@/components/social/useFeeds';
 import { OlderPosts } from '@/components/social/OlderPosts';
-import { FollowTagButton } from '@/components/social/FollowedHashtags';
+import { FeatureTagButton, FollowTagButton } from '@/components/social/FollowedHashtags';
 import { useTagFollowState } from '@/components/social/useTagFollow';
 import { StandaloneDesktopHosts } from '@/components/social/DesktopHosts';
 import { useFedizen } from '@/components/social/useFedizen';
@@ -54,7 +54,7 @@ function TagBody({ tag }: { tag: string }) {
   // Only once the list of tags you follow has arrived, so it never offers Follow for a tag you already follow.
   const feedOk = personal && !fedizen.isError && !fedizen.data?.error;
   const action = !feedOk ? null
-    : followState.known ? <FollowTagButton tag={norm} following={followState.following} />
+    : followState.known ? <div className="flex items-start gap-2"><FeatureTagButton tag={norm} /><FollowTagButton tag={norm} following={followState.following} /></div>
     : followState.failed ? <p role="alert" className="text-xs text-muted-foreground">Couldn’t check whether you follow this. <button type="button" className="underline" onClick={followState.retry}>Try again</button></p>
     : null;
   if (personal) return <TagShell tag={tag} action={action}>

@@ -19,7 +19,7 @@ import { activityLabel, DEFAULT_ACTIVITY_FILTER, profileSections, type ActivityF
    Saved is the owner-only tab, like Bluesky's private Likes. */
 const empty: Record<ProfileSection, { icon: typeof PenLine; title: string; detail: string }> = {
   Activity: { icon: PenLine, title: 'No activity yet', detail: 'Your public posts, quote posts, replies and boosts on Fedizen will appear here.' },
-  Featured: { icon: Star, title: 'Nothing featured yet', detail: 'Feature hashtags from Edit profile, and people from their profiles, to show them here.' },
+  Featured: { icon: Star, title: 'Nothing featured yet', detail: 'Feature hashtags from a hashtag’s page or from Edit profile, and people from their profiles, to show them here.' },
   Media: { icon: Image, title: 'No media yet', detail: 'Photos and videos you share will appear here.' },
   Collections: { icon: Image, title: 'No collections yet', detail: '' },
   Saved: { icon: Bookmark, title: 'Nothing saved yet', detail: 'Posts you save on Fedizen. Each keeps the audience its author chose.' },
@@ -45,7 +45,7 @@ const field = 'w-full rounded-xl border border-border bg-background px-3 text-sm
 
 function EditProfileDialog({ onClose, fedizen }: { onClose: () => void; fedizen: ReturnType<typeof useMyFedizenProfile> | null }) {
   const { profile, updateProfile } = useAtlasAuth();
-  // With Fedizen connected, name, bio, website and location are your Fedizen profile; featured hashtags stay Atlas's.
+  // With Fedizen connected, name, bio, website and location are your Fedizen profile; featured hashtags stay Atlas's (Fedizen reads them but can't save them yet).
   const remote = fedizen?.profile ?? null;
   const [name, setName] = useState(remote?.name ?? '');
   const [bio, setBio] = useState(remote ? remote.bio : profile?.bio ?? '');
@@ -96,7 +96,7 @@ function EditProfileDialog({ onClose, fedizen }: { onClose: () => void; fedizen:
     </div>}
     <label className={`mb-1 block text-xs font-medium ${remote ? 'mt-4' : ''}`} htmlFor="profile-tags">Featured hashtags</label>
     <input id="profile-tags" value={tags} onChange={e => setTags(e.target.value)} placeholder="#design #openweb" className={`${field} h-10`} />
-    <p className="mt-1 text-[11px] text-muted-foreground">Separate with spaces, like on Mastodon.{remote ? ' Kept in Atlas: Fedizen has no featured hashtags.' : ''}</p>
+    <p className="mt-1 text-[11px] text-muted-foreground">Separate with spaces, like on Mastodon.{remote ? ' Kept in Atlas: Fedizen can’t save featured hashtags yet.' : ''}</p>
     {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
     <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={saving || (!!remote && (!name.trim() || !websiteOk))} onClick={save}>{saving ? 'Saving…' : 'Save'}</Button></div>
   </Dialog>;

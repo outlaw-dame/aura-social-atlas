@@ -53,7 +53,47 @@ export type FediProfile = {
   posts: FediProfilePost[];
   /** Why posts are missing, when the server keeps its outbox private. */
   postsHidden?: boolean;
+  /** Hashtags they feature on their profile (Mastodon's featured tags), with how often and when they last used each
+   *  when their server says. */
+  featured?: FeaturedTag[];
 };
+
+/** A hashtag someone features on their profile (Mastodon FeaturedTag, or a Hashtag in their actor's featuredTags). */
+export type FeaturedTag = { name: string; url?: string; count?: number; last?: string };
+const MAX_FEATURED = 12;
+const tagName = (v: unknown) => { const t = typeof v === 'string' ? v.trim().replace(/^#/, '') : ''; return /^[\p{L}\p{N}_]{1,100}$/u.test(t) ? t : null; };
+
+/** Mastodon's GET /api/v1/accounts/:id/featured_tags (FeaturedTag: name, url, statuses_count, last_status_at). */
+export function featuredFromMastodon(list: unknown): FeaturedTag[] {
+  if (!Array.isArray(list)) return [];
+  const out: FeaturedTag[] = [];
+  for (const x of list) {
+    if (!isObj(x)) continue;
+    const name = tagName(x.name);
+    if (!name || out.some(t => t.name.toLowerCase() === name.toLowerCase())) continue;
+    // statuses_count is a string in Mastodon's entity (cast from an integer), a number in some others.
+    const raw = typeof x.statuses_count === 'number' ? x.statuses_count : typeof x.statuses_count === 'string' && /^\d{1,9}$/.test(x.statuses_count) ? Number(x.statuses_count) : undefined;
+    const last = str(x.last_status_at);
+    out.push({ name, ...(isPublicHttpsUrl(str(x.url)) ? { url: str(x.url) } : {}), ...(raw != null && raw >= 0 ? { count: Math.floor(raw) } : {}), ...(last && !Number.isNaN(Date.parse(last)) ? { last } : {}) });
+    if (out.length >= MAX_FEATURED) break;
+  }
+  return out;
+}
+
+/** An actor's featuredTags collection (Mastodon's /collections/tags): Hashtag objects with a name and an href. */
+export function featuredFromCollection(c: unknown): FeaturedTag[] {
+  if (!isObj(c)) return [];
+  const items = list(c.orderedItems ?? c.items ?? (isObj(c.first) ? (c.first.orderedItems ?? c.first.items) : undefined));
+  const out: FeaturedTag[] = [];
+  for (const x of items) {
+    if (!isObj(x) || !list(x.type).includes('Hashtag')) continue;
+    const name = tagName(x.name);
+    if (!name || out.some(t => t.name.toLowerCase() === name.toLowerCase())) continue;
+    out.push({ name, ...(isPublicHttpsUrl(str(x.href)) ? { url: str(x.href) } : {}) });
+    if (out.length >= MAX_FEATURED) break;
+  }
+  return out;
+}
 
 /** What a tag passes to open someone: their actor id when known, else their handle. */
 export type FediProfileTarget = { actor?: string; acct?: string; name?: string };

@@ -1,4 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { TagText, hashtagLabel } from '@/lib/hashtags';
+import { featuredDetail } from '@/lib/featured-tags';
+import type { FeaturedTag } from '@/lib/fedi-profile';
 import { openTag } from '@/lib/hashtags';
 import { linkifyPost } from '@/components/social/PostPeople';
 import { Block, BlockTitle, Button, Icon, Link, List, ListItem, Navbar, NavRight, Page, Popup, f7 } from 'framework7-react';
@@ -61,6 +64,8 @@ function ProfileMore({ p }: { p: FediProfile }) {
 export function FediProfilePopup({ target, onClose }: { target: FediProfileTarget | null; onClose: () => void }) {
   const q = useFediProfile(target);
   const p = q.data?.profile;
+  const [tag, setTag] = useState<string | null>(null);
+  useEffect(() => setTag(null), [target]);
   // Opening one of their posts pushes its conversation: the profile closes so it shows.
   useEffect(() => { if (!target) return; const on = () => onClose(); window.addEventListener(OPEN_POST_EVENT, on); return () => window.removeEventListener(OPEN_POST_EVENT, on); }, [target, onClose]);
   return <Popup opened={!!target} onPopupClosed={onClose} swipeToClose className="atlas-fedi-popup">
@@ -86,7 +91,8 @@ export function FediProfilePopup({ target, onClose }: { target: FediProfileTarge
         </List>}
         {p.bio.length > 0 && <Block className="atlas-fedi-bio">{p.bio.map((t, i) => <p key={i}>{linkifyPost(t, undefined, tag => { onClose(); openTag(tag); })}</p>)}</Block>}
         {p.fields.length > 0 && <List strong inset dividers>{p.fields.map(f => <ListItem key={f.name} header={f.name} title={f.value} />)}</List>}
-        <MobileProfilePosts p={p} onTag={tag => { onClose(); openTag(tag); }} />
+        {p.featured && <MobileFeaturedTags tags={p.featured} selected={tag} onSelect={setTag} />}
+        <MobileProfilePosts p={p} tag={tag} onClearTag={() => setTag(null)} onTag={t => { onClose(); openTag(t); }} />
         <Block><Link external target="_blank" href={p.url}>View on {p.host}</Link></Block>
       </>}
     </Page>
@@ -97,8 +103,8 @@ export function FediProfilePopup({ target, onClose }: { target: FediProfileTarge
  * Phone: their posts — the ones Fedizen has as feed cards you can act on, and the newest from their own server that
  * Fedizen hasn't received yet, read-only with that server's counts. Older posts load as you near the end.
  */
-function MobileProfilePosts({ p, onTag }: { p: FediProfile; onTag: (tag: string) => void }) {
-  const posts = useProfilePosts(p);
+function MobileProfilePosts({ p, onTag, tag, onClearTag }: { p: FediProfile; onTag: (tag: string) => void; tag: string | null; onClearTag: () => void }) {
+  const posts = useProfilePosts(p, tag);
   const actions = useMobilePostActions();
   const end = useRef<HTMLDivElement>(null);
   const { hasMore, loadMore } = posts;
@@ -110,13 +116,15 @@ function MobileProfilePosts({ p, onTag }: { p: FediProfile; onTag: (tag: string)
     return () => io.disconnect();
   }, [hasMore, loadMore]);
   return <>
-    <BlockTitle>{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</BlockTitle>
+    {tag
+      ? <BlockTitle className="atlas-featured-title"><span>Posts with <TagText tag={tag} mark /></span><Link onClick={onClearTag}>All posts</Link></BlockTitle>
+      : <BlockTitle>{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</BlockTitle>}
     {actions.error && <Block><p role="alert" className="atlas-fedi-note">{actions.error}</p></Block>}
     <FilterPlaceProvider place="account">{posts.items.map(x => x.kind === 'fedizen'
       ? <MobilePostCard key={`f-${x.post.id}`} post={x.post} actions={actions} />
       : <OriginPost key={`o-${x.post.id}`} post={x.post} host={p.host} onTag={onTag} />)}</FilterPlaceProvider>
     {posts.loading && !posts.items.length && <Block>Loading their posts…</Block>}
-    {!posts.loading && !posts.items.length && <Block>{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</Block>}
+    {!posts.loading && !posts.items.length && <Block>{tag ? 'No public posts with this hashtag that Atlas can see.' : p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</Block>}
     {posts.hasMore && <div ref={end} className="atlas-older">
       {posts.loadingMore ? <span>Loading older posts…</span> : <Link onClick={posts.loadMore}>{posts.moreFailed ? 'Couldn’t load older posts. Try again' : 'Load older posts'}</Link>}
     </div>}
@@ -135,4 +143,22 @@ function OriginPost({ post, host, onTag }: { post: FediProfilePost; host: string
     <p className="atlas-fedi-note">{[day(post.date), counts].filter(Boolean).join(' · ')}</p>
     <p className="atlas-fedi-note">Not on Fedizen yet · <Link external target="_blank" href={post.url}>Open on {host}</Link></p>
   </Block></MobileFilterGate>;
+}
+
+/** Phone: the hashtags someone features, as a row of tiles that scrolls sideways; picking one shows their posts with it. */
+function MobileFeaturedTags({ tags, selected, onSelect }: { tags: FeaturedTag[]; selected: string | null; onSelect: (tag: string | null) => void }) {
+  return <>
+    <BlockTitle>Featured hashtags</BlockTitle>
+    <div className="atlas-featured-tags" role="list">
+      {tags.map(t => {
+        const on = selected?.toLowerCase() === t.name.toLowerCase();
+        const detail = featuredDetail(t);
+        return <button key={t.name} type="button" role="listitem" aria-pressed={on} className={on ? 'is-on' : undefined}
+          aria-label={`${hashtagLabel(t.name)}${detail ? `, ${detail}` : ''}${on ? ', showing posts with it' : ''}`} onClick={() => onSelect(on ? null : t.name)}>
+          <span className="atlas-featured-name"><TagText tag={t.name} /></span>
+          {detail && <span className="atlas-featured-detail">{detail}</span>}
+        </button>;
+      })}
+    </div>
+  </>;
 }

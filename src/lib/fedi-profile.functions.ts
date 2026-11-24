@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent, hasScope, lookupAcct } from './fedizen-feed';
-import type { FediProfile } from './fedi-profile';
+import type { FediProfile, FediProfilePost } from './fedi-profile';
 import type { FedizenPost } from './fedizen-feed';
 
 /**
@@ -139,4 +139,17 @@ export const getProfilePosts = createServerFn({ method: 'GET' }).middleware([req
     if (!r || r.status !== 200) return { posts: [], accountId: id, error: r ? problem(r.status) : 'unavailable' };
     // Link previews' creators within a short budget: a profile shouldn't wait on other servers.
     return { posts: await withArticleAuthors(fromStatuses(r.data as never), 800, t.access_token), accountId: id, ...(r.next ? { next: r.next } : {}) };
+  });
+
+/**
+ * Someone's public posts with one of their featured hashtags, from their own server (Mastodon's `statuses?tagged=`).
+ * Public data: no account needed. Fedizen's account statuses can't be filtered by hashtag (Bonfire rc.1 ignores
+ * `tagged`), so the profile also keeps the posts it already has from Fedizen that use the tag.
+ */
+export const getFediTaggedPosts = createServerFn({ method: 'GET' })
+  .inputValidator(d => z.object({ actor: actorInput, acct: acctInput, tag: z.string().regex(/^[\p{L}\p{N}_]{1,100}$/u) }).parse(d))
+  .handler(async ({ data }): Promise<{ posts: FediProfilePost[]; error?: 'unavailable' }> => {
+    const { taggedPostsOf } = await import('./fedi-profile.server');
+    const posts = await taggedPostsOf(data.actor, data.acct, data.tag).catch(() => null);
+    return posts ? { posts } : { posts: [], error: 'unavailable' };
   });

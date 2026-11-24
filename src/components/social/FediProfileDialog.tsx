@@ -17,6 +17,8 @@ import { AuthorWarning } from '@/components/social/ContentWarning';
 import { ProfileMoreMenu } from './ModerationDialogs';
 import { useAtlasAuth } from './AuthState';
 import { PostBody } from './PostBody';
+import { FeaturedTags } from './FeaturedTags';
+import { TagText } from '@/lib/hashtags';
 
 /**
  * Desktop: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -58,6 +60,8 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
   const navigate = useNavigate();
   const onTag = (tag: string) => { onClose(); void navigate({ to: '/tags/$tag', params: { tag } }); };
   const p = q.data?.profile;
+  const [tag, setTag] = useState<string | null>(null);
+  useEffect(() => setTag(null), [target]);
   // Opening one of their posts shows its conversation: the profile steps aside.
   useEffect(() => { if (!target) return; const on = () => onClose(); window.addEventListener(OPEN_POST_EVENT, on); return () => window.removeEventListener(OPEN_POST_EVENT, on); }, [target, onClose]);
   return <Dialog open={!!target} onOpenChange={o => { if (!o) onClose(); }}>
@@ -97,7 +101,8 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
             {n(p.following) && <span><b>{n(p.following)}</b> <span className="text-muted-foreground">following</span></span>}
             {n(p.followers) && <span><b>{n(p.followers)}</b> <span className="text-muted-foreground">followers</span></span>}
           </p>
-          <ProfilePosts p={p} onTag={onTag} />
+          {p.featured && <FeaturedTags tags={p.featured} selected={tag} onSelect={setTag} />}
+          <ProfilePosts p={p} onTag={onTag} tag={tag} onClearTag={() => setTag(null)} />
           <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">View on {p.host}<ArrowUpRight className="size-3" /></a>
         </div>
       </>}
@@ -110,8 +115,8 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
  * the newest ones Fedizen hasn't received yet, with that server's counts and a link to it. Older posts load as you near
  * the end.
  */
-function ProfilePosts({ p, onTag }: { p: FediProfile; onTag: (tag: string) => void }) {
-  const posts = useProfilePosts(p);
+function ProfilePosts({ p, onTag, tag, onClearTag }: { p: FediProfile; onTag: (tag: string) => void; tag: string | null; onClearTag: () => void }) {
+  const posts = useProfilePosts(p, tag);
   const actions = useFeedPostActions();
   const end = useRef<HTMLDivElement>(null);
   const { hasMore, loadMore } = posts;
@@ -124,7 +129,12 @@ function ProfilePosts({ p, onTag }: { p: FediProfile; onTag: (tag: string) => vo
   }, [hasMore, loadMore]);
   const title = p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts';
   return <section className="mt-6" aria-label={`Recent posts by ${p.name}`}>
-    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
+    {tag
+      ? <h3 className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <span>Posts with <span className="normal-case tracking-normal text-accent"><TagText tag={tag} mark /></span></span>
+          <button type="button" onClick={onClearTag} className="text-[11px] font-medium normal-case tracking-normal text-accent hover:underline">All posts</button>
+        </h3>
+      : <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>}
     {actions.error && <p role="alert" className="mt-2 text-sm text-destructive">{actions.error}</p>}
     <FilterPlaceProvider place="account">
       <div className="mt-4 space-y-6">
@@ -134,7 +144,7 @@ function ProfilePosts({ p, onTag }: { p: FediProfile; onTag: (tag: string) => vo
       </div>
     </FilterPlaceProvider>
     {posts.loading && !posts.items.length && <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Loading their posts…</p>}
-    {!posts.loading && !posts.items.length && <p className="mt-4 text-sm text-muted-foreground">{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</p>}
+    {!posts.loading && !posts.items.length && <p className="mt-4 text-sm text-muted-foreground">{tag ? 'No public posts with this hashtag that Atlas can see.' : p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</p>}
     {posts.hasMore && <div ref={end} className="mt-4 flex justify-center">
       {posts.loadingMore ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />Loading older posts…</span>
         : <Button type="button" variant="ghost" size="sm" onClick={posts.loadMore}>{posts.moreFailed ? 'Couldn’t load older posts. Try again' : 'Load older posts'}</Button>}
