@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { ArrowUpRight, Ban, Globe2, Plus, Search, TextSearch, VolumeX } from 'lucide-react';
+import { ArrowUpRight, Ban, Globe2, Plus, Search, Sparkles, TextSearch, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FEDIZEN_BLOCKED_URL } from '@/lib/fedizen-feed';
 import { KeywordFilters } from './KeywordFilters';
+import { ModerationSuggestions } from './ModerationSuggestions';
 import { LIBRARY_PROBLEM, useBlockActions, useFedizenBlocks } from './useFedizenLibrary';
 import { useAtlasAuth } from './AuthState';
 import { useMutes } from './useOwnPosts';
@@ -17,8 +18,8 @@ import type { FedizenPerson } from '@/lib/fedizen-feed';
  * context. Blocked instances have no client API yet, so that list opens Fedizen's page.
  */
 
-function Section({ icon: Icon, title, detail, children }: { icon: typeof Ban; title: string; detail: string; children: React.ReactNode }) {
-  return <section className="border-t border-border py-7">
+function Section({ icon: Icon, title, detail, children, id }: { icon: typeof Ban; title: string; detail: string; children: React.ReactNode; id?: string }) {
+  return <section id={id} className="scroll-mt-20 border-t border-border py-7">
     <h2 className="flex items-center gap-2 text-base font-semibold"><Icon className="size-4 text-accent" />{title}</h2>
     <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
     <div className="mt-4">{children}</div>
@@ -36,6 +37,10 @@ export function ModerationPage() {
   const people = q.data?.people ?? [];
   const canWrite = !!q.data?.canWrite;
   return <div className="mt-6">
+    <Section id="suggestions" icon={Sparkles} title="Suggestions" detail="Filters to add or change, and accounts to look at, from your AI model.">
+      <ModerationSuggestions />
+    </Section>
+
     <Section icon={TextSearch} title="Keyword filters" detail="Hide posts about things you’d rather not see, in every Atlas feed.">
       <KeywordFilters />
     </Section>

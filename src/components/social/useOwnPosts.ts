@@ -11,6 +11,7 @@ import {
   muteFedizenAccount, reportOnFedizen, searchFedizenPosts, suggestHashtags, getRecentHashtags, voteOnFedizenPoll,
 } from '@/lib/fedizen.functions';
 import type { FediPoll, FedizenPost } from '@/lib/fedizen-feed';
+import { recordSignal } from '@/lib/moderation-signals';
 
 /** Every feed that can show a post: after an edit or delete they all read Fedizen again. */
 const FEEDS = ['fedizen-home', 'bonfire-native-home', 'fedizen-saved', 'fedizen-foryou', 'fedizen-tag-feed', 'fedizen-circle-feed', 'fedizen-search-posts'];
@@ -234,7 +235,16 @@ export function useReport() {
     onSuccess: r => setError(r.ok ? null : r.error === 'not-found' ? 'Fedizen couldn’t find that account.' : problem(r.error)),
     onError: () => setError(problem('unavailable')),
   });
-  return { report: async (v: Parameters<typeof m.mutateAsync>[0]) => { if (!user) return false; const r = await m.mutateAsync(v).catch(() => null); return !!r?.ok; }, busy: m.isPending, error };
+  return {
+    report: async (v: Parameters<typeof m.mutateAsync>[0]) => {
+      if (!user) return false;
+      const r = await m.mutateAsync(v).catch(() => null);
+      // Noted on this device for Intelligence's account suggestions (Fedizen's API can't list a person's reports).
+      if (r?.ok && v.acct) recordSignal(user.id, 'reported', v.acct, `report:${Date.now()}`);
+      return !!r?.ok;
+    },
+    busy: m.isPending, error,
+  };
 }
 
 /** Who liked or boosted a post, read when asked for. */

@@ -16,6 +16,8 @@ import type { ImageInput } from '@/lib/intelligence/llm';
 import { EMBEDDING_INDEX_KEYS } from '@/lib/semantic/embedding-keys';
 import { useAtlasAuth } from './AuthState';
 import { forgetFilterStats, recordFiltered } from '@/lib/filter-stats';
+import { acctKey, recordSignal } from '@/lib/moderation-signals';
+import { useFedizenBlocks } from './useFedizenLibrary';
 import { makeSimilar, useSemantic } from './useSemanticIndex';
 
 export const AI_PROBLEM: Record<AiProblem, string> = {
@@ -150,6 +152,7 @@ export function useIntelligenceActions() {
 /* ── Running AI tasks with whichever key is in use ───────────────────────────────────────────── */
 
 type Suggestions = import('@/lib/intelligence/tasks').FilterSuggestions;
+type ModerationContext = import('@/lib/intelligence/tasks').ModerationContext;
 
 /** The AI tasks, routed to Atlas's server (key kept there) or run in this browser (key kept on this device). */
 export function useAiRunner() {
@@ -208,11 +211,11 @@ export function useAiRunner() {
       const r = await expandServer({ data: { expectedAtlasUserId: id, id: f.id } }).catch(() => ({ error: 'unavailable' as const }));
       return 'error' in r ? { error: r.error } : { filters: r.filters };
     },
-    suggest: async (filters: ContentFilter[]): Promise<Suggestions | { error: AiProblem }> => {
+    suggest: async (filters: ContentFilter[], context?: ModerationContext): Promise<Suggestions | { error: AiProblem }> => {
       if (active?.where === 'device') {
-        try { return await onDevice(async (c, model) => (await tasks()).suggestFilters(c, model, filters)); } catch (e) { return { error: await problemOf(e) }; }
+        try { return await onDevice(async (c, model) => (await tasks()).suggestFilters(c, model, filters, context)); } catch (e) { return { error: await problemOf(e) }; }
       }
-      const r = await suggestServer({ data: { expectedAtlasUserId: id } }).catch(() => ({ error: 'unavailable' as const }));
+      const r = await suggestServer({ data: { expectedAtlasUserId: id, context } }).catch(() => ({ error: 'unavailable' as const }));
       return r as Suggestions | { error: AiProblem };
     },
     describe: async (text: string): Promise<{ filter: string } | { error: AiProblem }> => {
@@ -334,7 +337,7 @@ export function useFilterActions() {
       const p = await widenOne(f);
       return p ? AI_PROBLEM[p] : null;
     },
-    suggest: () => runner.suggest(current()),
+    suggest: (context?: ModerationContext) => runner.suggest(current(), context),
     describe: (text: string) => runner.describe(text),
   };
 }
@@ -350,7 +353,8 @@ export function useFilterCautions(filters: ContentFilter[]) {
 
 /* ── Applying filters in every feed ──────────────────────────────────────────────────────────── */
 
-type FilterEnv = { engine: FilterEngine; me: string | null; product: string | null ; following: FollowLookup; /** Atlas account, for filter counts. */ account: string | null };
+type FilterEnv = { engine: FilterEngine; me: string | null; product: string | null ; following: FollowLookup; /** Atlas account, for filter counts. */ account: string | null;
+  /** With Intelligence on: where to note moderation signals, and who the person blocks (acctKey form). */ signals: { account: string; blocked: ReadonlySet<string> } | null };
 const EngineContext = createContext<FilterEnv | null>(null);
 const PlaceContext = createContext<FilterPlace>('home');
 
@@ -398,11 +402,15 @@ export function ContentFilterProvider({ children }: { children: ReactNode }) {
   const similar = useMemo(() => (user ? makeSimilar(user.id, semantic) : undefined), [user, semantic]);
   const statusFn = useServerFn(getFedizenStatus);
   const fedizen = useQuery({ queryKey: ['fedizen-status', user?.id], queryFn: () => statusFn(), enabled: !!user, staleTime: 60_000 });
+  // With Intelligence on, who the person blocks, so posts boosting or answering them are noted for Suggestions.
+  const blocks = useFedizenBlocks(runner.ready);
+  const blocked = useMemo(() => new Set((blocks.data?.people ?? []).map(p => acctKey(p.handle)).filter((a): a is string => !!a)), [blocks.data]);
   const list = useMemo(() => (user && filters.data && 'filters' in filters.data ? filters.data.filters : []), [user, filters.data]);
   useEffect(() => {
     engine.configure({ filters: list, ai: runner.ready, deep: !!ai?.deepMatching, scope: `${user?.id}:${runner.judgeModel ?? runner.where}:${semantic.model ?? ''}`, judge: runner.judge(list), similar, following });
   }, [engine, list, runner, ai?.deepMatching, user?.id, following, similar, semantic.model]);
-  const env = useMemo(() => ({ engine, me: fedizen.data?.handle ?? null, product: ai?.active ? PROVIDERS[ai.active.provider].product : null, following, account: user?.id ?? null }), [engine, fedizen.data?.handle, ai?.active, following, user?.id]);
+  const env = useMemo(() => ({ engine, me: fedizen.data?.handle ?? null, product: ai?.active ? PROVIDERS[ai.active.provider].product : null, following, account: user?.id ?? null,
+    signals: runner.ready && user ? { account: user.id, blocked } : null }), [engine, fedizen.data?.handle, ai?.active, following, user, runner.ready, blocked]);
   return <EngineContext.Provider value={env}>{children}</EngineContext.Provider>;
 }
 
@@ -444,6 +452,18 @@ export function usePostFilter(post: FilterablePost & { handle?: string }): { ver
   useEffect(() => {
     if (verdict.state === 'filtered' && env?.account) recordFiltered(env.account, verdict.filter.id, subject.statusId ?? subject.id);
   }, [verdict, env?.account, subject.statusId, subject.id]);
+  // With Intelligence on, what this post says about its accounts, for Suggestions (lib/moderation-signals).
+  useEffect(() => {
+    const s = env?.signals;
+    if (!s || subject.mine) return;
+    const p = subject as typeof subject & { acct?: string; booster?: { acct?: string }; replyTo?: { post?: { acct?: string } } };
+    const ref = p.statusId ?? p.id, author = p.acct ?? p.handle;
+    if (verdict.state === 'filtered') recordSignal(s.account, 'caught', author, ref, verdict.filter.id);
+    const authorKey = acctKey(author);
+    if (p.booster?.acct && authorKey && s.blocked.has(authorKey)) recordSignal(s.account, 'boosts-blocked', p.booster.acct, ref);
+    const parent = acctKey(p.replyTo?.post?.acct);
+    if (parent && s.blocked.has(parent)) recordSignal(s.account, 'replies-blocked', author, ref);
+  }, [verdict, env?.signals, subject]);
   return { verdict, place, product: env?.product ?? null };
 }
 

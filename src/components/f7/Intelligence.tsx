@@ -157,9 +157,6 @@ export function KeywordFiltersPage() {
   const counts = useFilteredCounts(user?.id);
   const cautions = useFilterCautions(filters);
   const [text, setText] = useState(''), [options, setOptions] = useState<FilterOptions>(DEFAULT_OPTIONS), [duration, setDuration] = useState(0), [note, setNote] = useState<string | null>(null);
-  const [suggested, setSuggested] = useState<{ text: string; reason: string }[] | null>(null), [thinking, setThinking] = useState(false);
-  // Notes on filters already there, each with the words it had when asked (a note stops applying once they change).
-  const [notes, setNotes] = useState<{ filterId: string; issue: string; replacement?: string; asked: string }[]>([]);
   const add = async (texts: string[], how: FilterOptions) => { if (texts.length) setNote(await act.add(texts, how)); };
   const file = useRef<HTMLInputElement>(null);
   const importText = async (v: string) => {
@@ -210,12 +207,7 @@ export function KeywordFiltersPage() {
         </List>}
 
         <List strong inset dividers>
-          {ai && filters.length > 0 && <ListItem link="#" title={thinking ? 'Thinking…' : 'Suggest filters'} onClick={async () => {
-            setThinking(true); const r = await act.suggest(); setThinking(false);
-            if ('error' in r) { setNote(AI_PROBLEM[r.error]); return; }
-            setSuggested(r.suggestions);
-            setNotes(r.cautions.map(c => ({ ...c, asked: filters.find(f => f.id === c.filterId)?.text ?? '' })));
-          }} />}
+          {ai && <ListItem link="#" title="Suggestions" footer="Filters to add or change, and accounts to look at" onClick={() => pushPage('/moderation-suggestions/')} />}
           <ListItem link="#" title="Paste a list" footer="From Fedizen’s Safety settings, one per line" onClick={importList} />
           <ListItem link="#" title="Import a file" footer="Mastodon’s filter export, or a text list" onClick={() => file.current?.click()} />
           {filters.length > 0 && <ListItem link="#" title="Export" footer="In Mastodon’s format" onClick={() => downloadExport(filters)} />}
@@ -223,24 +215,6 @@ export function KeywordFiltersPage() {
           {!ai && <ListItem link="#" title="Check filters in context" footer="With Intelligence" onClick={() => pushPage('/intelligence/')} />}
         </List>
 
-        {suggested && <>
-          <BlockTitle>Suggested</BlockTitle>
-          <List strong inset dividers>
-            {suggested.map(s => { const have = filters.some(f => f.text.toLowerCase() === s.text.toLowerCase());
-              return <ListItem key={s.text} title={s.text} footer={s.reason}>
-                <Link slot="after" onClick={() => void add([s.text], DEFAULT_OPTIONS)} className={have ? 'disabled' : ''}>{have ? 'Added' : 'Add'}</Link>
-              </ListItem>; })}
-            {!suggested.length && <ListItem title="Your filters already cover their topics well." />}
-          </List>
-        </>}
-        {notes.some(n => filters.find(f => f.id === n.filterId)?.text === n.asked) && <>
-          <BlockTitle>About your filters</BlockTitle>
-          <List strong inset dividers>
-            {notes.filter(n => filters.find(f => f.id === n.filterId)?.text === n.asked).map(n => <ListItem key={n.filterId + n.issue} title={n.asked} footer={n.issue}>
-              {n.replacement && <Link slot="after" onClick={async () => setNote(await act.update(n.filterId, { text: n.replacement! }))}>Change to “{n.replacement}”</Link>}
-            </ListItem>)}
-          </List>
-        </>}
       </>}
   </Page>;
 }
