@@ -9,7 +9,7 @@ const keys = [
 let settings: SettingsRow;
 // The store module imports the database client; this test passes its own settings and keys instead, so nothing is
 // mocked (a module mock would leak into other test files).
-const { runWithKeys, _resetResting } = await import('../src/lib/intelligence/store.server');
+const { runWithKeys, _resetResting, noteFailure } = await import('../src/lib/intelligence/store.server');
 const { ProviderError } = await import('../src/lib/intelligence/llm');
 type SettingsRow = import('../src/lib/intelligence/store.server').SettingsRow;
 const open = async (id: string) => ({ provider: keys.find(k => k.id === id)!.provider as 'anthropic', key: `secret-${id}` });
@@ -70,6 +70,14 @@ describe('backup keys', () => {
     settings.main_key = 'k-bg';
     const mine = job({});
     expect(await withAi('u', 'main', mine.run)).toEqual({ value: 'k-bg' });
+  });
+
+  test('streamed HTTP 402 also marks the key out of credit for background work', async () => {
+    settings.fallback = false;
+    noteFailure('k-bg', { statusCode: 402 });
+    const j = job({});
+    expect(await withAi('u', 'background', j.run)).toEqual({ problem: 'no-credit' });
+    expect(j.tried).toEqual([]);
   });
 
   test('Intelligence off: nothing is sent', async () => {
