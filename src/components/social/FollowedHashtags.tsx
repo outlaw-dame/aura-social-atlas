@@ -3,6 +3,8 @@ import { Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TagText, hashtagLabel } from '@/lib/hashtags';
 import { useFollowedTagList, useTagFollow } from './useTagFollow';
+import { Star } from 'lucide-react';
+import { useFeatureTag } from './useFeatureTag';
 
 const NEEDS: Record<string, string> = {
   'not-connected': 'Connect Fedizen to follow hashtags.',
@@ -45,3 +47,17 @@ export function FollowTagButton({ tag, following }: { tag: string; following: bo
     {f.error && <p role="alert" className="text-xs text-destructive">{f.error}</p>}
   </div>;
 }
+
+/** Desktop: Feature / Featured on a hashtag's page — it shows on your profile's Featured tab. */
+export function FeatureTagButton({ tag }: { tag: string }) {
+  const f = useFeatureTag(tag);
+  if (!f.available) return null;
+  return <div className="flex flex-col items-end gap-1">
+    <Button variant="ghost" size="sm" className="rounded-full" aria-pressed={f.featured} disabled={f.busy} onClick={() => void f.toggle()}
+      title={f.featured ? 'Remove from your profile' : 'Show on your profile'}>
+      <Star className={f.featured ? 'fill-current text-accent' : ''} />{f.featured ? 'Featured' : 'Feature'}
+    </Button>
+    {f.error && <p role="alert" className="max-w-56 text-right text-xs text-destructive">{f.error}</p>}
+  </div>;
+}
+

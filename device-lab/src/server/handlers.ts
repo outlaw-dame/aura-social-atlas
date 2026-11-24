@@ -147,6 +147,15 @@ function profileOf(acct?: string, actor?: string): FediProfile | null {
     bio: x.bio, fields: x.fields ?? [], joined: x.joined, followers: x.followers, following: x.following, postCount: x.posts,
     kind: x.kind ?? 'person', locked: !!x.locked,
     posts: theirs.map(p => ({ id: p.id, url: p.url, date: p.date, paragraphs: p.paragraphs, ...(p.image ? { image: p.image } : {}) })) as FediProfile['posts'],
+    // Sample featured hashtags: the tags they use most in the sample posts, with counts from them.
+    ...(() => {
+      const counts = new Map<string, { n: number; last?: string }>();
+      for (const p of ALL_POSTS.filter((p, i, a) => a.findIndex(y => y.id === p.id) === i && p.acct === x.acct)) for (const t of p.tags ?? []) {
+        const c = counts.get(t) ?? { n: 0 }; c.n++; if (!c.last || (p.date && p.date > c.last)) c.last = p.date; counts.set(t, c);
+      }
+      const featured = [...counts].sort((a, b) => b[1].n - a[1].n).slice(0, 4).map(([name, c]) => ({ name, count: c.n, ...(c.last ? { last: c.last } : {}) }));
+      return featured.length ? { featured } : {};
+    })(),
   };
 }
 
@@ -368,6 +377,8 @@ export const fediProfile: Impl<typeof FediProfileFns> = {
   },
   getFediProfile: (d: { acct?: string; actor?: string }) => ({ profile: profileOf(d?.acct, d?.actor) }),
   getActorAvatar: (d: { actor: string }) => ({ avatar: profileOf(undefined, d?.actor)?.avatar ?? null }),
+  // Their sample posts with a hashtag, as their own server would answer `statuses?tagged=`.
+  getFediTaggedPosts: (d: { acct: string; tag: string }) => ({ posts: (profileOf(d.acct)?.posts ?? []).filter(p => p.paragraphs.some(t => t.toLowerCase().includes(`#${d.tag.toLowerCase()}`))) }),
   // Their sample posts as "Fedizen" has them, so profile posts carry actions in the Lab too. One page.
   getProfilePosts: (d: { acct: string }) => {
     const x = personByAcct(d.acct); const k = x ? (Object.keys(PEOPLE) as PersonKey[]).find(y => PEOPLE[y] === x) : undefined;

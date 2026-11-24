@@ -64,7 +64,8 @@ describe("The Follow button never guesses", () => {
     expect(phone).toContain("const canFollow = feedOk && state.known;");
     expect(phone).toContain("state.failed");
     const desk = readFileSync("src/routes/tags.$tag.tsx", "utf8");
-    expect(desk).toMatch(/followState\.known \? <FollowTagButton/);
+    // Feature sits beside Follow, under the same condition.
+    expect(desk).toMatch(/followState\.known \? <div[^>]*><FeatureTagButton tag=\{norm\} \/><FollowTagButton/);
     expect(desk).toContain("followState.retry");
   });
 });

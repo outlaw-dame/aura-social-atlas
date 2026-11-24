@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { getFediFollow, getFediProfile, getProfilePosts, setFediFollow, type FollowState } from '@/lib/fedi-profile.functions';
+import { getFediFollow, getFediProfile, getFediTaggedPosts, getProfilePosts, setFediFollow, type FollowState } from '@/lib/fedi-profile.functions';
 import type { FediProfile } from '@/lib/fedi-profile';
 import { mergeProfilePosts } from '@/lib/profile-posts';
 import { getFedizenStatus } from '@/lib/fedizen.functions';
@@ -83,9 +83,15 @@ export function useFediFollow(acct: string | undefined, actor: string | undefine
  * its server didn't confirm, only the origin's posts. Older Fedizen pages load as the reader nears the end, and stay
  * cached while the profile is reopened.
  */
-export function useProfilePosts(p: FediProfile | undefined) {
+export function useProfilePosts(p: FediProfile | undefined, tag?: string | null) {
   const { user } = useAtlasAuth();
-  const read = useServerFn(getProfilePosts);
+  const read = useServerFn(getProfilePosts), readTagged = useServerFn(getFediTaggedPosts);
+  // One of their featured hashtags picked: their server's posts with it, and the Fedizen posts already here that use it.
+  const tagged = useQuery({
+    queryKey: ['fedi-tagged', p?.actor, tag],
+    queryFn: () => readTagged({ data: { actor: p!.actor, acct: p!.acct, tag: tag! } }),
+    enabled: !!p && !!tag, staleTime: 5 * 60_000,
+  });
   const id = user?.id;
   const enabled = !!id && !!p?.acctVerified && p.kind !== 'group';
   const q = useInfiniteQuery({
@@ -100,9 +106,13 @@ export function useProfilePosts(p: FediProfile | undefined) {
   const error = pages[0]?.error;
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = q;
   const loadMore = useCallback(() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage(); }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-  const items = mergeProfilePosts(enabled && !error ? fedizen : [], p?.posts ?? [], !!q.hasNextPage);
+  const t = tag?.toLowerCase();
+  const uses = (x: { tags?: string[]; paragraphs: string[] }) => !!t && ((x.tags ?? []).some(n => n.toLowerCase() === t) || x.paragraphs.some(par => new RegExp(`(^|[^\\p{L}\\p{N}_])#${t}(?![\\p{L}\\p{N}_])`, 'iu').test(par)));
+  const items = t
+    ? mergeProfilePosts(enabled && !error ? fedizen.filter(uses) : [], tagged.data?.posts.length ? tagged.data.posts : (p?.posts ?? []).filter(uses), !!q.hasNextPage)
+    : mergeProfilePosts(enabled && !error ? fedizen : [], p?.posts ?? [], !!q.hasNextPage);
   return {
-    items, loading: enabled && q.isLoading,
+    items, loading: (enabled && q.isLoading) || (!!t && tagged.isLoading),
     /** Fedizen couldn't be asked (not connected, not found…): the origin's posts are shown alone. */
     fedizenError: enabled ? error : undefined,
     hasMore: !!q.hasNextPage, loadingMore: q.isFetchingNextPage, moreFailed: !!pages[pages.length - 1]?.error && pages.length > 1,

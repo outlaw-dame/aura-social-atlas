@@ -1,6 +1,6 @@
 import { actorFromWebfinger, isPublicHttpsUrl, normalizeHost, parseHandle } from './article-author';
 import { PODCAST_ACCEPT, dohLookup, fetchActor, safeFetch, type Lookup } from './article-author.server';
-import { claimedAcct, cleanText, podcastDetails, postsFromOutbox, profileFromActor, type FediProfile, type FediProfileTarget } from './fedi-profile';
+import { claimedAcct, cleanText, featuredFromCollection, featuredFromMastodon, podcastDetails, postsFromOutbox, profileFromActor, type FediProfile, type FediProfilePost, type FediProfileTarget } from './fedi-profile';
 import { htmlToParagraphs } from './spotlight';
 import { mfmSourceOf, mfmToRich } from './mfm';
 
@@ -73,6 +73,9 @@ async function build(target: FediProfileTarget, remaining: () => number, f: Fetc
   const link = (k: string) => { const v = actor[k]; const u = typeof v === 'string' ? v : isObj(v) ? String(v.id ?? '') : ''; return isPublicHttpsUrl(u) && sameHost(u, id) ? u : undefined; };
 
   const profile: FediProfile = { ...base, acctVerified: false, posts: [] };
+  // Their account in their own server's Mastodon API, asked once and only if it is this actor (banner, featured tags).
+  let account: Promise<Record<string, unknown> | null> | null = null;
+  const masto = () => (account ??= mastodonAccountOf(actor, id, f, l).catch(() => null));
   const work = Promise.all([
     // The handle is theirs only if their handle's server points WebFinger back at this actor.
     (async () => { const a = claimedAcct(actor); profile.acctVerified = !!a && (await webfingerActor(a, f, l)) === id; })(),
@@ -90,8 +93,20 @@ async function build(target: FediProfileTarget, remaining: () => number, f: Fetc
     // Asked only of the actor's own server, and kept only if that account is this actor.
     (async () => {
       if (profile.header) return;
-      const header = await bannerFromMastodonApi(actor, id, f, l);
+      const header = bannerOf(await masto());
       if (header) profile.header = header;
+    })(),
+    // Featured hashtags: from their server's Mastodon API (with how often and when each was used), else from the
+    // actor's featuredTags collection (names only). Only from the actor's own server.
+    (async () => {
+      const a = await masto();
+      if (a) {
+        const list = featuredFromMastodon(await getJson(`https://${new URL(id).host}/api/v1/accounts/${encodeURIComponent(String(a.id))}/featured_tags`, 'application/json', f, l));
+        if (list.length) { profile.featured = list; return; }
+      }
+      const u = link('featuredTags'); if (!u) return;
+      const tags = featuredFromCollection(await getJson(u, AP, f, l));
+      if (tags.length) profile.featured = tags;
     })(),
     (async () => {
       const u = link('outbox'); if (!u) { profile.postsHidden = true; return; }
@@ -119,15 +134,23 @@ async function build(target: FediProfileTarget, remaining: () => number, f: Fetc
 /** An actor's banner from its own server's Mastodon API (`/api/v1/accounts/lookup`), when its actor lacks one. The
  *  account must be this actor: its id is the actor id's last segment (Bonfire) or its url/uri is the actor id. */
 export async function bannerFromMastodonApi(actor: Record<string, unknown>, id: string, f: FetchLike, l: Lookup): Promise<string | undefined> {
+  return bannerOf(await mastodonAccountOf(actor, id, f, l));
+}
+function bannerOf(a: Record<string, unknown> | null): string | undefined {
+  const header = a && typeof a.header === 'string' ? a.header : undefined;
+  return header && isPublicHttpsUrl(header) && header.length <= 2048 && !/\/missing\.png$/.test(header) ? header : undefined;
+}
+
+/** The actor's account in its own server's Mastodon API (`/api/v1/accounts/lookup`), only if it is this actor: its id
+ *  is the actor id's last segment (Bonfire) or its url/uri is the actor id. */
+async function mastodonAccountOf(actor: Record<string, unknown>, id: string, f: FetchLike, l: Lookup): Promise<Record<string, unknown> | null> {
   const user = typeof actor.preferredUsername === 'string' ? actor.preferredUsername.replace(/^@/, '') : '';
-  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(user)) return undefined;
+  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(user)) return null;
   const host = new URL(id).host;
   const a = await getJson(`https://${host}/api/v1/accounts/lookup?acct=${encodeURIComponent(user)}`, 'application/json', f, l);
-  if (!isObj(a)) return undefined;
+  if (!isObj(a) || typeof a.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(a.id)) return null;
   const last = new URL(id).pathname.split('/').filter(Boolean).pop();
-  const same = (typeof a.id === 'string' && a.id === last) || a.uri === id || a.url === id;
-  const header = typeof a.header === 'string' ? a.header : undefined;
-  return same && header && isPublicHttpsUrl(header) && header.length <= 2048 && !/\/missing\.png$/.test(header) ? header : undefined;
+  return a.id === last || a.uri === id || a.url === id ? a : null;
 }
 
 type MastoAccount = {
@@ -175,21 +198,12 @@ export async function profileFromMastodonApi(target: FediProfileTarget, f: Fetch
     const fields = (Array.isArray(a.fields) ? a.fields : []).filter(isObj)
       .map(x => ({ name: cleanText(s(x.name) ?? '', 60), value: cleanText(htmlToParagraphs(s(x.value) ?? '').join(' '), 200) }))
       .filter(x => x.name && x.value).slice(0, 8);
-    const [verified, statuses] = await Promise.all([
+    const [verified, statuses, featured] = await Promise.all([
       webfingerActor(acct, f, l).then(id => id === actor).catch(() => false),
       getJson(`https://${h}/api/v1/accounts/${encodeURIComponent(s(a.id)!)}/statuses?limit=10&exclude_reblogs=true`, 'application/json', f, l).catch(() => null),
+      getJson(`https://${h}/api/v1/accounts/${encodeURIComponent(s(a.id)!)}/featured_tags`, 'application/json', f, l).then(featuredFromMastodon).catch(() => []),
     ]);
-    const posts = (Array.isArray(statuses) ? statuses as MastoStatus[] : []).filter(isObj)
-      .filter(p => !p.reblog && (p.visibility === 'public' || p.visibility === 'unlisted'))
-      .flatMap(p => {
-        const url = s(p.url) ?? s(p.uri);
-        if (!s(p.id) || !url || !isPublicHttpsUrl(url)) return [];
-        const paragraphs = htmlToParagraphs(s(p.content) ?? '').map(t => cleanText(t, 1200)).filter(Boolean);
-        const image = ((Array.isArray(p.media_attachments) ? p.media_attachments : []) as { type?: unknown; preview_url?: unknown }[]).filter(m => m.type === 'image').map(m => picture(m.preview_url)).find(Boolean);
-        const cw = cleanText(s(p.spoiler_text) ?? '', 300);
-        if (!paragraphs.length && !image) return [];
-        return [{ id: s(p.id)!, url, ...(s(p.created_at) ? { date: s(p.created_at) } : {}), paragraphs, ...(cw ? { cw } : {}), ...(image ? { image } : {}), ...(p.sensitive === true && image ? { sensitive: true } : {}) }];
-      }).slice(0, 10);
+    const posts = postsFromMastodonStatuses(statuses).slice(0, 10);
     return {
       actor, acct: `@${acct}`, acctVerified: verified, url: s(a.url) && isPublicHttpsUrl(s(a.url)) ? s(a.url)! : actor, host: normalizeHost(h), name: name || user,
       ...(picture(a.avatar) ? { avatar: picture(a.avatar) } : {}), ...(picture(a.header) ? { header: picture(a.header) } : {}),
@@ -197,10 +211,48 @@ export async function profileFromMastodonApi(target: FediProfileTarget, f: Fetch
       fields, ...(created && !Number.isNaN(Date.parse(created)) ? { joined: created } : {}),
       followers: n(a.followers_count), following: n(a.following_count), postCount: n(a.statuses_count),
       kind: a.group === true ? 'group' : a.bot === true ? 'bot' : 'person', locked: a.locked === true,
-      posts, ...(Array.isArray(statuses) ? {} : { postsHidden: true }),
+      posts, ...(Array.isArray(statuses) ? {} : { postsHidden: true }), ...(featured.length ? { featured } : {}),
     };
   }
   return null;
+}
+
+/** Public and unlisted posts from a Mastodon API status list (no boosts), as a profile shows them. */
+function postsFromMastodonStatuses(statuses: unknown): FediProfilePost[] {
+  return (Array.isArray(statuses) ? statuses as MastoStatus[] : []).filter(isObj)
+    .filter(p => !p.reblog && (p.visibility === 'public' || p.visibility === 'unlisted'))
+    .flatMap(p => {
+      const url = s(p.url) ?? s(p.uri);
+      if (!s(p.id) || !url || !isPublicHttpsUrl(url)) return [];
+      const paragraphs = htmlToParagraphs(s(p.content) ?? '').map(t => cleanText(t, 1200)).filter(Boolean);
+      const image = ((Array.isArray(p.media_attachments) ? p.media_attachments : []) as { type?: unknown; preview_url?: unknown }[]).filter(m => m.type === 'image').map(m => picture(m.preview_url)).find(Boolean);
+      const cw = cleanText(s(p.spoiler_text) ?? '', 300);
+      if (!paragraphs.length && !image) return [];
+      const uri = s(p.uri);
+      const counts = { replies: n(p.replies_count), boosts: n(p.reblogs_count), likes: n(p.favourites_count) };
+      return [{
+        // The ActivityPub id, so a post Fedizen also has is shown once (lib/profile-posts).
+        id: uri && isPublicHttpsUrl(uri) ? uri : s(p.id)!, url, ...(s(p.created_at) ? { date: s(p.created_at) } : {}), paragraphs,
+        ...(cw ? { cw } : {}), ...(image ? { image } : {}), ...(p.sensitive === true && image ? { sensitive: true } : {}),
+        ...(counts.replies != null || counts.boosts != null || counts.likes != null ? { counts } : {}),
+      }];
+    });
+}
+
+/**
+ * Someone's public posts with a hashtag, from their own server's Mastodon API (`statuses?tagged=`), for the featured
+ * hashtag picked on their profile. Only the server the actor lives on is asked, and only about this actor's account.
+ */
+export async function taggedPostsOf(actorId: string, acct: string, tag: string, f: FetchLike = fetch, l: Lookup = dohLookup): Promise<FediProfilePost[] | null> {
+  if (!isPublicHttpsUrl(actorId) || !/^[\p{L}\p{N}_]{1,100}$/u.test(tag)) return null;
+  // The username from the actor document, else from the handle (servers that sign every fetch won't send the actor);
+  // either way the account found must be this actor.
+  const actor = await fetchActor(actorId, f, l).catch(() => null) ?? { preferredUsername: parseHandle(acct)?.split('@')[0] };
+  const a = await mastodonAccountOf(actor, actorId, f, l).catch(() => null);
+  if (!a) return null;
+  const host = new URL(actorId).host;
+  const list = await getJson(`https://${host}/api/v1/accounts/${encodeURIComponent(String(a.id))}/statuses?tagged=${encodeURIComponent(tag)}&limit=20&exclude_reblogs=true`, 'application/json', f, l).catch(() => null);
+  return Array.isArray(list) ? postsFromMastodonStatuses(list) : null;
 }
 
 async function withReferencedObjects(page: Record<string, unknown>, actorId: string, f: FetchLike, l: Lookup): Promise<Record<string, unknown>> {

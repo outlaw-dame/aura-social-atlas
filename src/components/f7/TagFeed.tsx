@@ -1,4 +1,4 @@
-import { Block, BlockFooter, Button, Card, CardContent, CardFooter, Link, List, ListItem, Navbar, NavRight, Page } from 'framework7-react';
+import { Block, BlockFooter, Button, Card, CardContent, CardFooter, Icon, Link, List, ListItem, Navbar, NavRight, Page } from 'framework7-react';
 import { useQuery } from '@tanstack/react-query';
 import { getTagFeed } from '@/lib/tag-feed.functions';
 import { NetworkBadge } from '@/lib/networks';
@@ -16,6 +16,7 @@ import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { MobileFilterGate } from './FilterGate';
 import { gatedTagPost } from '@/lib/tag-post';
+import { useFeatureTag } from '@/components/social/useFeatureTag';
 
 /**
  * Phone: a hashtag's feed, opened from a hashtag in a post or a followed-tag line. It's a page pushed onto the main
@@ -29,6 +30,7 @@ export function TagFeedPage({ f7route }: { f7route?: { params: { tag?: string } 
   const q = useTagFeed(tag);
   const actions = useMobilePostActions();
   const follow = useTagFollow();
+  const feature = useFeatureTag(tag);
   const state = useTagFollowState(tag);
   const following = state.following;
   // Follow / Following at the top right, as Mastodon and Ivory put it, once Fedizen has answered for this account —
@@ -37,14 +39,18 @@ export function TagFeedPage({ f7route }: { f7route?: { params: { tag?: string } 
   const canFollow = feedOk && state.known;
   return <Page className="atlas-tag-page">
       <Navbar title={tag ?? ''} backLink backLinkShowText={false}>
-        {canFollow && <NavRight>
-          <Button small round fill={!following} tonal={following} className="atlas-follow-tag" aria-pressed={following} disabled={!!follow.busy} onClick={() => void follow.toggle(tag!, !following)}>
+        {(canFollow || feature.available) && <NavRight>
+          {feature.available && <Link iconOnly aria-pressed={feature.featured} aria-label={feature.featured ? `Remove ${tag} from your profile` : `Feature ${tag} on your profile`} onClick={() => void feature.toggle()}>
+            <Icon ios={feature.featured ? 'f7:star_fill' : 'f7:star'} md={feature.featured ? 'material:star' : 'material:star_border'} />
+          </Link>}
+          {canFollow && <Button small round fill={!following} tonal={following} className="atlas-follow-tag" aria-pressed={following} disabled={!!follow.busy} onClick={() => void follow.toggle(tag!, !following)}>
             {following ? 'Following' : 'Follow'}
-          </Button>
+          </Button>}
         </NavRight>}
       </Navbar>
       {tag && <>
         {follow.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{follow.error}</p></Block>}
+        {feature.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{feature.error}</p></Block>}
         {feedOk && state.failed && <Block strong inset><p role="alert" style={{ margin: 0 }}>Couldn’t check whether you follow this hashtag. <Link onClick={state.retry}>Try again</Link></p></Block>}
         {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
         {/* As desktop's /tags/$tag: only signed out, or not connected, does it fall back to public posts from

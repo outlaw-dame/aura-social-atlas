@@ -126,6 +126,24 @@ describe("Profiles shown inside Atlas", () => {
     expect(p.posts.map(x => x.paragraphs[0])).toEqual(["hi"]);
   });
 
+  test("featured hashtags: from their server's Mastodon API when it's this actor, else the actor's featuredTags", async () => {
+    const lookup = "https://blog.example.org/api/v1/accounts/lookup?acct=jane";
+    const viaApi = net({
+      [JANE]: { body: jane({ featuredTags: `${JANE}/collections/tags` }) },
+      [lookup]: { type: "application/json", body: { id: "2", username: "jane", uri: JANE } },
+      "https://blog.example.org/api/v1/accounts/2/featured_tags": { type: "application/json", body: [{ id: "9", name: "poetry", statuses_count: "12", last_status_at: "2026-11-01" }] },
+    });
+    expect((await loadFediProfile({ actor: JANE }, 2000, viaApi.fetchImpl, dns))!.featured).toEqual([{ name: "poetry", count: 12, last: "2026-11-01" }]);
+    _clearFediProfileCache();
+    // Another account's answer isn't trusted; the actor's own collection is used.
+    const viaActor = net({
+      [JANE]: { body: jane({ featuredTags: `${JANE}/collections/tags` }) },
+      [lookup]: { type: "application/json", body: { id: "77", username: "jane", uri: "https://blog.example.org/users/someone-else" } },
+      [`${JANE}/collections/tags`]: { body: { type: "Collection", items: [{ type: "Hashtag", name: "#essays", href: "https://blog.example.org/tags/essays" }] } },
+    });
+    expect((await loadFediProfile({ actor: JANE }, 2000, viaActor.fetchImpl, dns))!.featured).toEqual([{ name: "essays", url: "https://blog.example.org/tags/essays" }]);
+  });
+
   test("a handle whose WebFinger points elsewhere is shown but not marked verified", async () => {
     const { fetchImpl } = net({
       [JANE]: { body: jane() },
