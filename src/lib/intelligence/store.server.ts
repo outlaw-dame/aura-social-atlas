@@ -172,7 +172,9 @@ export function noteEmbedding(keyId: string, e: unknown | null) {
 /** Rests a key the provider is limiting, from the streamed assistant (the AI SDK's errors carry `statusCode`). */
 export function noteFailure(keyId: string, e: unknown) {
   const status = (e as { statusCode?: unknown } | null)?.statusCode;
-  rest(keyId, status === 429 ? 'rate-limited' : status === 402 ? 'no-credit' : problem(e));
+  const code = status === 429 ? 'rate-limited' : status === 402 ? 'no-credit' : problem(e);
+  rest(keyId, code);
+  if (code === 'no-credit') noCredit.add(keyId);
 }
 
 /* ── Keyword filters ─────────────────────────────────────────────────────────────────────────── */
