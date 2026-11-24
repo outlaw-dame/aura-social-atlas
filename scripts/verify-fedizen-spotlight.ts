@@ -61,12 +61,19 @@ async function main() {
   assert(cards.length > 0, 'no-eligible-spotlight-card-for-live-acceptance');
 }
 
-main().catch(error => {
+async function selfTest() {
+  const policy = await readSpotlightModeration(async () => ({ status: 200, data: [] }));
+  assert(policy && policy.domainCoverage === 'unavailable', 'self-test-failed');
+  console.log(JSON.stringify({ check: 'spotlight-acceptance-self-test', status: 'passed' }));
+}
+
+(process.argv.includes('--self-test') ? selfTest() : main()).catch(error => {
   // Only these static, internal stage identifiers can leave the workflow.
   const allowed = new Set([
     'missing-protected-test-grant', 'owner-grant-mismatch',
     'incomplete-owner-block-mute-policy', 'unexpected-domain-coverage',
     'public-source-unavailable', 'no-eligible-spotlight-card-for-live-acceptance',
+    'self-test-failed',
   ]);
   const stage = error instanceof Error && allowed.has(error.message)
     ? error.message : 'unavailable';
