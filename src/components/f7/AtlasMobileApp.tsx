@@ -39,6 +39,7 @@ import { MobileImportPage } from './ImportPage';
 import { AppearancePage, MobileSettingsList } from './SettingsPages';
 import { MobileSpotlight, MobileVoicesToKnow } from './Discover';
 import { IntelligencePage, KeywordFilterPage, KeywordFiltersPage } from './Intelligence';
+import { MobileModerationSuggestionsPage } from './ModerationSuggestions';
 import { intelligenceReady, useIntelligence } from '@/components/social/useIntelligence';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { Spotlight } from '@/components/social/Spotlight';
@@ -395,6 +396,7 @@ const STACK_ROUTES = [
   { path: '/keyword-filters/:id/', component: KeywordFilterPage },
   { path: '/appearance/', component: AppearancePage },
   { path: '/moderation/', component: ModerationPage },
+  { path: '/moderation-suggestions/', component: MobileModerationSuggestionsPage },
   { path: '/blocked-people/', component: BlockedPeoplePage },
   { path: '/muted-people/', component: MutedPeoplePage },
   { path: '/import/', component: MobileImportPage },

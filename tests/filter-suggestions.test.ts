@@ -34,4 +34,21 @@ describe('Suggest filters', () => {
     await suggestFilters({ provider: 'google', key: 'invented-key' }, 'gemini-4-hydrogen', filters);
     expect((sent as { max_tokens?: number }).max_tokens).toBeGreaterThan(3000 + 10_000);
   });
+  test('accounts only from those the person\'s moderation noticed, never already blocked or muted', async () => {
+    reply(JSON.stringify({ ...body, accounts: [
+      { acct: '@Noticed@spam.example', action: 'mute', reason: 'Five posts hidden by your crypto filters.' },
+      { acct: 'invented@elsewhere.example', action: 'block', reason: 'Made up.' },
+      { acct: 'blocked@spam.example', action: 'block', reason: 'Already blocked.' },
+    ] }));
+    const r = await suggestFilters({ provider: 'google', key: 'invented-key' }, 'gemini-4-hydrogen', filters, {
+      blocked: ['blocked@spam.example'], muted: [],
+      noticed: [
+        { acct: 'noticed@spam.example', caught: 5, filters: [filters[1].id], boostsBlocked: 0, repliesBlocked: 0, reported: false },
+        { acct: 'blocked@spam.example', caught: 3, filters: [], boostsBlocked: 0, repliesBlocked: 0, reported: false },
+      ],
+    });
+    expect(r.accounts).toEqual([{ acct: 'noticed@spam.example', action: 'mute', reason: 'Five posts hidden by your crypto filters.' }]);
+    const input = JSON.parse((sent as { messages: { content: string }[] }).messages[1].content);
+    expect(input.noticed_accounts[0]).toMatchObject({ acct: 'noticed@spam.example', posts_your_filters_caught: 5, caught_by: ['nft'] });
+  });
 });

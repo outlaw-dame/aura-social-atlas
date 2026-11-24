@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { completeJson, noteBadOutput } from './llm';
 import type { Credential } from './providers';
 import { MAX_EXPANSIONS, normalizeFilterText, type ContentFilter } from '../content-filter';
+import { MAX_CONTEXT_HANDLES, MAX_NOTICED } from '../moderation-signals';
 
 /** A reply that parsed but doesn't fit its schema: logged by where it went wrong (paths and codes, no values). */
 function unusable(error: z.ZodError | null, why?: string): Error {
@@ -82,31 +83,52 @@ export async function expandFilter(c: Credential, model: string, f: ContentFilte
 
 /* ── Suggestions from the filters in place ───────────────────────────────────────────────────── */
 
-const SUGGEST_SYSTEM = `You review someone's content filters and suggest improvements, based only on the filters they already have.
+const SUGGEST_SYSTEM = `You review someone's moderation on a social network and suggest improvements, based only on what is given: their content filters, the accounts they block and mute (handles, name@server), and accounts their own moderation has noticed.
 ${FILTER_NOTE}
-Suggest up to 8 new filters that cover what their filters are evidently trying to keep out but would miss: related topics, the hashtags those conversations use, and topics their words hint at. Prefer one topic filter over many near-duplicate words. Never suggest something they already filter.
+Suggest up to 8 new filters that cover what their filters, blocks and mutes are evidently trying to keep out but would miss: related topics, the hashtags those conversations use, and topics their words hint at. Blocked and muted handles can hint at topics too (a name or server about one subject, many accounts of one kind). Prefer one topic filter over many near-duplicate words. Never suggest something they already filter.
 Also point out existing filters likely to catch the wrong posts (too short, a word with common unrelated senses, a wildcard that runs into unrelated words) or to miss posts (too narrow a spelling). Use the filter's id. For each:
 - issue: what goes wrong, written to the person in everyday words, without filter jargon (never "topic filter", "wildcard", "kind" or "semantic"). Example: "Also hides ordinary posts about pets, and misses fandom posts that never say fur."
 - replacement: the filter to use instead (a word, phrase, #hashtag, or a few words naming the subject, e.g. "furry fandom"), or "" when it should simply be removed or nothing better fits.
-Keep every reason and issue under 20 words, plain and specific.`;
+Then review the noticed accounts (only those; never name any other account). For each: how many of their posts the person's filters caught in 30 days and which filters, how often they boosted or replied to someone the person blocks, and whether the person reported them. Suggest blocking or muting only where the evidence is clear: "mute" when they mostly post what the person filters out, "block" when they keep amplifying blocked accounts or were reported. Skip weak cases. Give a reason in everyday words that cites the evidence, e.g. "Five of their posts were hidden by your crypto filters this month."
+Keep every reason and issue under 25 words, plain and specific.`;
 
 const SUGGEST_SCHEMA = {
-  type: 'object', additionalProperties: false, required: ['suggestions', 'cautions'],
+  type: 'object', additionalProperties: false, required: ['suggestions', 'cautions', 'accounts'],
   properties: {
     suggestions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['filter', 'reason'], properties: { filter: { type: 'string' }, reason: { type: 'string' } } } },
     cautions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'issue', 'replacement'], properties: { id: { type: 'string' }, issue: { type: 'string' }, replacement: { type: 'string' } } } },
+    accounts: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['acct', 'action', 'reason'], properties: { acct: { type: 'string' }, action: { type: 'string', enum: ['block', 'mute'] }, reason: { type: 'string' } } } },
   },
 };
-const SuggestReply = z.object({ suggestions: z.array(z.object({ filter: z.string(), reason: z.string() })), cautions: z.array(z.object({ id: z.string(), issue: z.string(), replacement: z.string().optional() })) });
+const SuggestReply = z.object({
+  suggestions: z.array(z.object({ filter: z.string(), reason: z.string() })),
+  cautions: z.array(z.object({ id: z.string(), issue: z.string(), replacement: z.string().optional() })),
+  accounts: z.array(z.object({ acct: z.string(), action: z.enum(['block', 'mute']), reason: z.string() })).optional(),
+});
 
 /** A caution about one filter, and (when the model offers one) the wording to change it to. */
 export type FilterCaution = { filterId: string; issue: string; replacement?: string };
-export type FilterSuggestions = { suggestions: { text: string; reason: string }[]; cautions: FilterCaution[] };
+/** An account the model suggests blocking or muting, with why. Only ever one of the noticed accounts it was given. */
+export type AccountSuggestion = { acct: string; action: 'block' | 'mute'; reason: string };
+export type FilterSuggestions = { suggestions: { text: string; reason: string }[]; cautions: FilterCaution[]; accounts: AccountSuggestion[] };
 
-export async function suggestFilters(c: Credential, model: string, filters: ContentFilter[]): Promise<FilterSuggestions> {
+/** What else the person's moderation says, sent with their filters (lib/moderation-signals; acctKey handles). */
+export type ModerationContext = {
+  blocked: string[]; muted: string[];
+  noticed: { acct: string; caught: number; filters: string[]; boostsBlocked: number; repliesBlocked: number; reported: boolean }[];
+};
+
+export async function suggestFilters(c: Credential, model: string, filters: ContentFilter[], context?: ModerationContext): Promise<FilterSuggestions> {
+  const byId = new Map(filters.map(f => [f.id, f.text]));
+  const noticed = (context?.noticed ?? []).slice(0, MAX_NOTICED);
   const reply = SuggestReply.safeParse(await completeJson(c, model, {
-    system: SUGGEST_SYSTEM, schemaName: 'filter_suggestions', schema: SUGGEST_SCHEMA, maxTokens: 3000,
-    input: { filters: filters.map(f => ({ id: f.id, filter: f.text, kind: f.kind, action: f.action })) },
+    system: SUGGEST_SYSTEM, schemaName: 'moderation_suggestions', schema: SUGGEST_SCHEMA, maxTokens: 4000,
+    input: {
+      filters: filters.map(f => ({ id: f.id, filter: f.text, kind: f.kind, action: f.action })),
+      blocked: (context?.blocked ?? []).slice(0, MAX_CONTEXT_HANDLES),
+      muted: (context?.muted ?? []).slice(0, MAX_CONTEXT_HANDLES),
+      noticed_accounts: noticed.map(n => ({ acct: n.acct, posts_your_filters_caught: n.caught, caught_by: n.filters.map(id => byId.get(id)).filter(Boolean), boosted_blocked_accounts: n.boostsBlocked, replied_to_blocked_accounts: n.repliesBlocked, you_reported: n.reported })),
+    },
   }));
   if (!reply.success) throw unusable(reply.error);
   const have = new Set(filters.map(f => f.text.toLowerCase())), ids = new Set(filters.map(f => f.id));
@@ -116,6 +138,14 @@ export async function suggestFilters(c: Credential, model: string, filters: Cont
     const t = normalizeFilterText(s.filter);
     if (t && !have.has(t.toLowerCase())) { have.add(t.toLowerCase()); suggestions.push({ text: t, reason: clip(s.reason) }); }
   }
+  // Only accounts the person's own moderation noticed, each once, and never one already blocked or muted.
+  const allowed = new Set(noticed.map(n => n.acct)), done = new Set([...(context?.blocked ?? []), ...(context?.muted ?? [])]);
+  const accounts: AccountSuggestion[] = [];
+  for (const a of reply.data.accounts ?? []) {
+    const k = a.acct.trim().replace(/^@/, '').toLowerCase();
+    if (!allowed.has(k) || done.has(k) || accounts.some(x => x.acct === k)) continue;
+    accounts.push({ acct: k, action: a.action, reason: clip(a.reason) });
+  }
   return {
     suggestions: suggestions.slice(0, 8),
     cautions: reply.data.cautions.filter(x => ids.has(x.id)).map(x => {
@@ -123,6 +153,7 @@ export async function suggestFilters(c: Credential, model: string, filters: Cont
       const to = normalizeFilterText(x.replacement ?? '')?.slice(0, 120);
       return { filterId: x.id, issue: clip(x.issue), ...(to && to.toLowerCase() !== own ? { replacement: to } : {}) };
     }).slice(0, 20),
+    accounts: accounts.slice(0, 20),
   };
 }
 

@@ -11,7 +11,6 @@ import { ACTION_LABEL, DURATIONS, PLACE_LABEL, downloadExport, expiresAfter, fil
 import { useAtlasAuth } from './AuthState';
 import { countLabel, totalLabel, useFilteredCounts } from '@/lib/filter-stats';
 
-type Suggestions = import('@/lib/intelligence/tasks').FilterSuggestions;
 /** Something that may be wrong with a filter, and the words to change it to when there's a better choice. */
 type Caution = { issue: string; replacement?: string };
 
@@ -28,8 +27,8 @@ export function KeywordFilters() {
   const cautions = useFilterCautions(filters);
   const counts = useFilteredCounts(user?.id);
   const [text, setText] = useState(''), [options, setOptions] = useState<FilterOptions>(DEFAULT_OPTIONS), [duration, setDuration] = useState(0), [more, setMore] = useState(false);
-  const [note, setNote] = useState<string | null>(null), [busy, setBusy] = useState(false), [thinking, setThinking] = useState(false);
-  const [suggested, setSuggested] = useState<(Suggestions & { asked: Map<string, string> }) | null>(null), [importing, setImporting] = useState(false), [pasted, setPasted] = useState('');
+  const [note, setNote] = useState<string | null>(null), [busy, setBusy] = useState(false);
+  const [importing, setImporting] = useState(false), [pasted, setPasted] = useState('');
   const file = useRef<HTMLInputElement>(null);
 
   if (!user) return <p className="text-sm text-muted-foreground">Sign in to Atlas to keep keyword filters.</p>;
@@ -45,10 +44,6 @@ export function KeywordFilters() {
     for (const g of groups) await add(g.texts, g.options);
     setPasted(''); setImporting(false);
   };
-  const aiCautions = new Map<string, Caution[]>();
-  // A caution is about the words the filter had when asked; once they're changed it no longer applies.
-  for (const c of suggested?.cautions ?? []) if (filters.find(f => f.id === c.filterId)?.text === suggested?.asked.get(c.filterId)) aiCautions.set(c.filterId, [...(aiCautions.get(c.filterId) ?? []), { issue: c.issue, replacement: c.replacement }]);
-
   return <div>
     <form className="flex flex-wrap gap-2" onSubmit={async e => { e.preventDefault(); await add([text], { ...options, expiresAt: expiresAfter(DURATIONS[duration].ms) }); setText(''); }}>
       <Input className="min-w-56 flex-1" value={text} onChange={e => setText(e.target.value)} maxLength={200} placeholder="A word, phrase, #hashtag or topic" aria-label="New keyword filter" />
@@ -62,33 +57,17 @@ export function KeywordFilters() {
 
     {q.isLoading ? <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
       : <>{filters.length > 0 && <p className="mt-4 text-sm text-muted-foreground">{totalLabel(filters, counts)}</p>}<ul className="mt-2 divide-y divide-border">
-          {filters.map(f => <FilterRow key={f.id} filter={f} ai={ai} count={counts.get(f.id) ?? 0} cautions={[...(cautions.get(f.id) ?? []).map(issue => ({ issue })), ...(aiCautions.get(f.id) ?? [])]} />)}
+          {filters.map(f => <FilterRow key={f.id} filter={f} ai={ai} count={counts.get(f.id) ?? 0} cautions={(cautions.get(f.id) ?? []).map(issue => ({ issue }))} />)}
           {!filters.length && <li className="py-3 text-sm text-muted-foreground">No keyword filters yet.</li>}
         </ul></>}
 
     <div className="mt-4 flex flex-wrap gap-2">
-      {ai && filters.length > 0 && <Button variant="outline" className="rounded-full" disabled={thinking} onClick={async () => {
-        setThinking(true); setNote(null);
-        const r = await act.suggest();
-        setThinking(false);
-        if ('error' in r) setNote(AI_PROBLEM[r.error]); else setSuggested({ ...r, asked: new Map(filters.map(f => [f.id, f.text])) });
-      }}><Sparkles />{thinking ? 'Thinking…' : 'Suggest filters'}</Button>}
+      {ai && <Button asChild variant="outline" className="rounded-full"><a href="#suggestions"><Sparkles />Suggestions</a></Button>}
       <Button variant="ghost" className="rounded-full" onClick={() => setImporting(v => !v)}><Upload />Import</Button>
       {filters.length > 0 && <Button variant="ghost" className="rounded-full" onClick={() => downloadExport(filters)}><Download />Export</Button>}
       {!ai && <Button asChild variant="ghost" className="rounded-full"><Link to="/settings/intelligence"><Sparkles />Check filters in context</Link></Button>}
     </div>
 
-    {suggested && <section className="mt-4 rounded-2xl border border-border p-4" aria-label="Suggested filters">
-      {suggested.suggestions.length
-        ? <ul className="space-y-3">{suggested.suggestions.map(s => { const have = filters.some(f => f.text.toLowerCase() === s.text.toLowerCase());
-            return <li key={s.text} className="flex items-start gap-3">
-              <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{s.text}</span><span className="block text-xs text-muted-foreground">{s.reason}</span></span>
-              <Button size="sm" variant="outline" className="rounded-full" disabled={busy || have} onClick={() => void add([s.text], DEFAULT_OPTIONS)}>{have ? 'Added' : 'Add'}</Button>
-            </li>; })}</ul>
-        : <p className="text-sm text-muted-foreground">Your filters already cover their topics well.</p>}
-      {aiCautions.size > 0 && <p className="mt-3 text-xs text-muted-foreground">{aiCautions.size === 1 ? 'One of your filters has a note under it' : `${aiCautions.size} of your filters have notes under them`}, above.</p>}
-      <Button variant="ghost" size="sm" className="mt-3" onClick={() => setSuggested(null)}>Done</Button>
-    </section>}
 
     {importing && <section className="mt-4 rounded-2xl border border-border p-4" aria-label="Import filters">
       <p className="text-sm text-muted-foreground">Paste your list from Fedizen’s Safety settings, one per line, or a filter export from Mastodon (Preferences → Import and export). If you bring them over from Fedizen, remove them there: it matches words without context, so it would still hide posts Atlas lets through.</p>
