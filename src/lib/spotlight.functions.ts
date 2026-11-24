@@ -84,7 +84,7 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
       fedizenGet(connected.access_token, '/api/v1/timelines/local?limit=20'),
       // Off by default. An unrecognized schema, incomplete provider snapshot,
       // mismatched bearer owner or native keyword rule never enables remote cards.
-      readOwnerNativeModeration(connected.access_token, connected.account_handle),
+      readOwnerNativeModeration(connected.access_token, connected.account_handle ?? ''),
     ]);
     const moderation = mergeVerifiedOwnerModeration(restPolicy, nativePolicy);
     if (!moderation || (response.status !== 200 && local.status !== 200)) return { items: [], moderation };
