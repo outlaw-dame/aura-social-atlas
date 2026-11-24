@@ -51,6 +51,10 @@ The provider MUST guarantee `complete: true` covers the *effective* owner policy
 
 For now **nonempty `rejectKeywords` or `warnKeywords` suppress remote Spotlight promotion** even with `complete: true`: Bonfire's actual keyword regex/word-boundary semantics and the Spotlight warn/reveal UX must be verified before any remote content can pass those rules. An invalid/missing keyword array is rejected entirely. This restriction is intentional, not a complete native keyword implementation. Native policies are not written to a public cache, Supabase service role or the discovery gateway.
 
+### Manual live provider acceptance
+
+The repository's protected workflow `.github/workflows/fedizen-spotlight-acceptance.yml` supports a manual `require_native_policy` boolean input (default false). With false it observes present-day REST moderation without trying to promote remote domain coverage. **After the Bonfire extension is deployed**, choose true from `main` under the existing `fedizen-integration` environment; the workflow uses only the disposable consenting test account's delegated read-only token. It requires a complete, owner-matching GraphQL snapshot, merges it with the mandatory strict REST account block/mute snapshot and verifies that domain coverage is complete **only** when native reject and warn keyword lists are empty. When either native keyword list is nonempty the test verifies continued withholding of remote recommendations. The workflow never logs domains, keywords, account handles, tokens or post text. A green result does not replace two-owner policy isolation and native word/warn UX acceptance.
+
 ### Activation gates (must all be proven)
 
 1. Fedizen's running, version-pinned provider implements the authenticated `viewerModeration` resolver in its actual deployed GraphQL schema, with owner and effective-instance scope documented and independently tested.

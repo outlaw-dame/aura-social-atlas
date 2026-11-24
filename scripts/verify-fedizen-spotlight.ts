@@ -7,6 +7,7 @@
  */
 import { verifyFedizenReadGrant, fedizenGet } from '../src/lib/fedizen.server';
 import { readSpotlightModeration } from '../src/lib/spotlight-moderation.server';
+import { readOwnerNativeModeration, mergeVerifiedOwnerModeration } from '../src/lib/spotlight-native-moderation.server';
 import { normalizedAccount, allowedSpotlightItem } from '../src/lib/spotlight-curation';
 import { eligiblePublicSpotlightPosts } from '../src/lib/spotlight-personal.server';
 import { fromFederatedLinkCards, fromFederatedVideos } from '../src/lib/spotlight';
@@ -25,15 +26,28 @@ async function main() {
   const expectedAccount = normalizedAccount(expected);
   assert(actualAccount && expectedAccount && actualAccount === expectedAccount, 'owner-grant-mismatch');
 
+  const requireNative = process.env.FEDIZEN_TEST_EXPECT_NATIVE_POLICY === 'true';
   const policyStarted = performance.now();
-  const moderation = await readSpotlightModeration(path =>
-    fedizenGet(token, path, { requireCompleteModeration: true }));
+  const [restPolicy, nativePolicy] = await Promise.all([
+    readSpotlightModeration(path =>
+      fedizenGet(token, path, { requireCompleteModeration: true })),
+    // Manual, protected opt-in only. This explicitly forces the *test* read,
+    // without enabling the native capability in the deployed Atlas service.
+    requireNative ? readOwnerNativeModeration(token, expected, {}, true) : Promise.resolve(null),
+  ]);
+  assert(restPolicy, 'incomplete-owner-block-mute-policy');
+  if (requireNative) assert(nativePolicy, 'incomplete-native-owner-policy');
+  const moderation = mergeVerifiedOwnerModeration(restPolicy, nativePolicy);
   assert(moderation, 'incomplete-owner-block-mute-policy');
-  const policyMs = duration(policyStarted);
-  // Do not accept the empty blocked-domain list as complete. That requires a
-  // verified provider-native owner endpoint (Atlas issue #239).
-  assert(moderation.domainCoverage === 'unavailable', 'unexpected-domain-coverage');
-  console.log(JSON.stringify({ check: 'owner-moderation', status: 'complete-account-lists', elapsedMs: policyMs, remoteDomains: 'not-authorized' }));
+  const shouldPromote = !!nativePolicy && !nativePolicy.rejectKeywords.length && !nativePolicy.warnKeywords.length;
+  assert(moderation.domainCoverage === (shouldPromote ? 'complete' : 'unavailable'), 'unexpected-domain-coverage');
+  console.log(JSON.stringify({
+    check: 'owner-moderation', status: 'complete-account-lists',
+    elapsedMs: duration(policyStarted),
+    // Never serialize blocked domains or native keyword strings to CI logs.
+    nativePolicy: !requireNative ? 'not-requested' : 'verified',
+    remoteDomains: shouldPromote ? 'complete' : 'withheld',
+  }));
 
   const feedStarted = performance.now();
   const [local, federated] = await Promise.all([
@@ -73,7 +87,7 @@ async function selfTest() {
   // Only these static, internal stage identifiers can leave the workflow.
   const allowed = new Set([
     'missing-protected-test-grant', 'owner-grant-mismatch',
-    'incomplete-owner-block-mute-policy', 'unexpected-domain-coverage',
+    'incomplete-owner-block-mute-policy', 'incomplete-native-owner-policy', 'unexpected-domain-coverage',
     'public-source-unavailable', 'no-eligible-spotlight-card-for-live-acceptance',
     'self-test-failed',
   ]);

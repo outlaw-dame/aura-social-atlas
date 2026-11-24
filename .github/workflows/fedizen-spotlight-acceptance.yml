@@ -2,10 +2,18 @@ name: Fedizen Spotlight protected owner moderation acceptance
 
 on:
   workflow_dispatch:
+    inputs:
+      require_native_policy:
+        description: 'Require deployed Bonfire viewerModeration owner policy (only after provider acceptance)'
+        type: boolean
+        default: false
+        required: true
   pull_request:
     paths:
       - 'scripts/verify-fedizen-spotlight.ts'
       - 'src/lib/spotlight-moderation.server.ts'
+      - 'src/lib/spotlight-native-moderation.server.ts'
+      - 'tests/spotlight-native-moderation.test.ts'
       - 'src/lib/spotlight-personal.server.ts'
       - 'src/lib/fedizen.server.ts'
       - 'tests/spotlight-moderation.test.ts'
@@ -27,7 +35,7 @@ jobs:
           bun-version: '1.3.4'
       - run: bun install --frozen-lockfile --ignore-scripts
       - name: Validate strict Spotlight policy and cursor tests
-        run: bun test tests/spotlight-moderation.test.ts tests/fedizen-read.test.ts
+        run: bun test tests/spotlight-moderation.test.ts tests/fedizen-read.test.ts tests/spotlight-native-moderation.test.ts
       - name: Import and execute the live acceptance program without credentials
         run: bun scripts/verify-fedizen-spotlight.ts --self-test
 
@@ -50,4 +58,5 @@ jobs:
         env:
           FEDIZEN_TEST_READ_TOKEN: ${{ secrets.FEDIZEN_TEST_READ_TOKEN }}
           FEDIZEN_TEST_EXPECTED_HANDLE: ${{ secrets.FEDIZEN_TEST_EXPECTED_HANDLE }}
+          FEDIZEN_TEST_EXPECT_NATIVE_POLICY: ${{ inputs.require_native_policy }}
         run: bun scripts/verify-fedizen-spotlight.ts
