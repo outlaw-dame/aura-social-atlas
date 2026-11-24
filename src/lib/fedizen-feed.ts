@@ -26,7 +26,7 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
   return have.has(needed) || (needed.includes(':') && have.has(needed.split(':')[0]));
 }
 
-export type FedizenPost = { /** Deleted, or gone from the conversation, while it was open: kept as a placeholder so its replies keep their place (thread-live.ts). */ tombstone?: boolean; id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; /** Native Home only: the status id of a card shown before its details were read (bonfire-private.server); read afterwards, never used for actions. */ statusRef?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; /** Its formatting (rich-text.ts), when it has any: bold, code, quotes, Misskey's MFM… */ rich?: RichBlock[]; /** Its custom emoji, by shortcode. */ emojis?: EmojiMap; url: string; date?: string; image?: string; /** The image's width and height (from Fedizen's media meta), to reserve its space before it loads. */ imageSize?: { w: number; h: number }; /** The author marked its media sensitive. */ sensitive?: boolean; boostedBy?: string;
+export type FedizenPost = { /** Deleted, or gone from the conversation, while it was open: kept as a placeholder so its replies keep their place (thread-live.ts). */ tombstone?: boolean; id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; /** Native Home only: the status id of a card shown before its details were read (bonfire-private.server); read afterwards, never used for actions. */ statusRef?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; /** Its formatting (rich-text.ts), when it has any: bold, code, quotes, Misskey's MFM… */ rich?: RichBlock[]; /** Its custom emoji, by shortcode. */ emojis?: EmojiMap; url: string; /** Its ActivityPub id, to match it with the same post read from its author's server. */ uri?: string; date?: string; image?: string; /** The image's width and height (from Fedizen's media meta), to reserve its space before it loads. */ imageSize?: { w: number; h: number }; /** The author marked its media sensitive. */ sensitive?: boolean; boostedBy?: string;
   /** The author's actor and full handle, to open their profile in Atlas. */ actor?: string; acct?: string;
   /** Who boosted it (boostedBy is their name), to show their avatar and open their profile. */ booster?: FediPerson;
   /** The people the post mentions, as Fedizen resolved them: "@name" in the text opens theirs. */ mentions?: FediMention[];
@@ -130,7 +130,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
     const o = s.reblog ?? s;
     return {
       id: s.id, statusId: o.id, bookmarked: o.bookmarked === true || s.bookmarked === true, author: name(o.account), handle: `@${o.account?.acct ?? ''}`, avatar: avatarOf(o.account),
-      paragraphs: htmlToParagraphs(o.content ?? ''), url: http(o.url) ?? http(o.uri) ?? FEDIZEN, date: o.created_at,
+      paragraphs: htmlToParagraphs(o.content ?? ''), url: http(o.url) ?? http(o.uri) ?? FEDIZEN, ...(http(o.uri) ? { uri: http(o.uri) } : {}), date: o.created_at,
       ...(() => { const r = htmlToRich(o.content); return r ? { rich: r } : {}; })(),
       ...(() => { const e = emojiMap(o.emojis); return e ? { emojis: e } : {}; })(),
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),

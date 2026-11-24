@@ -1,11 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { openTag } from '@/lib/hashtags';
 import { linkifyPost } from '@/components/social/PostPeople';
 import { Block, BlockTitle, Button, Icon, Link, List, ListItem, Navbar, NavRight, Page, Popup, f7 } from 'framework7-react';
-import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
+import type { FediProfile, FediProfilePost, FediProfileTarget } from '@/lib/fedi-profile';
+import { OPEN_POST_EVENT } from '@/lib/open-post';
+import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
 import { followLabels } from '@/lib/follow-labels';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
-import { FOLLOW_PROBLEM, useFediFollow, useFediProfile, useIsMe } from '@/components/social/useFediProfile';
+import { FOLLOW_PROBLEM, useFediFollow, useFediProfile, useIsMe, useProfilePosts } from '@/components/social/useFediProfile';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { MobileFilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
@@ -59,6 +61,8 @@ function ProfileMore({ p }: { p: FediProfile }) {
 export function FediProfilePopup({ target, onClose }: { target: FediProfileTarget | null; onClose: () => void }) {
   const q = useFediProfile(target);
   const p = q.data?.profile;
+  // Opening one of their posts pushes its conversation: the profile closes so it shows.
+  useEffect(() => { if (!target) return; const on = () => onClose(); window.addEventListener(OPEN_POST_EVENT, on); return () => window.removeEventListener(OPEN_POST_EVENT, on); }, [target, onClose]);
   return <Popup opened={!!target} onPopupClosed={onClose} swipeToClose className="atlas-fedi-popup">
     <Page>
       <Navbar title={p?.name ?? target?.name ?? 'Profile'}><NavRight>{p && <ProfileMore p={p} />}<Link iconOnly popupClose aria-label="Close profile"><Icon ios="f7:xmark" md="material:close" /></Link></NavRight></Navbar>
@@ -82,16 +86,53 @@ export function FediProfilePopup({ target, onClose }: { target: FediProfileTarge
         </List>}
         {p.bio.length > 0 && <Block className="atlas-fedi-bio">{p.bio.map((t, i) => <p key={i}>{linkifyPost(t, undefined, tag => { onClose(); openTag(tag); })}</p>)}</Block>}
         {p.fields.length > 0 && <List strong inset dividers>{p.fields.map(f => <ListItem key={f.name} header={f.name} title={f.value} />)}</List>}
-        <BlockTitle>{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</BlockTitle>
-        <FilterPlaceProvider place="account">{p.posts.map(post => <MobileFilterGate key={post.id} post={post}><Block strong inset className="atlas-fedi-post">
-          {post.title && <h2>{post.title}</h2>}
-          <AuthorWarning cw={post.cw} phone><PostBody post={post} onTag={tag => { onClose(); openTag(tag); }} />
-          <SensitiveMedia sensitive={post.sensitive} cta="Tap to view">{post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia></AuthorWarning>
-          <p className="atlas-fedi-note">{day(post.date)} · <Link external target="_blank" href={post.url}>Original</Link></p>
-        </Block></MobileFilterGate>)}</FilterPlaceProvider>
-        {!p.posts.length && <Block>{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</Block>}
+        <MobileProfilePosts p={p} onTag={tag => { onClose(); openTag(tag); }} />
         <Block><Link external target="_blank" href={p.url}>View on {p.host}</Link></Block>
       </>}
     </Page>
   </Popup>;
+}
+
+/**
+ * Phone: their posts — the ones Fedizen has as feed cards you can act on, and the newest from their own server that
+ * Fedizen hasn't received yet, read-only with that server's counts. Older posts load as you near the end.
+ */
+function MobileProfilePosts({ p, onTag }: { p: FediProfile; onTag: (tag: string) => void }) {
+  const posts = useProfilePosts(p);
+  const actions = useMobilePostActions();
+  const end = useRef<HTMLDivElement>(null);
+  const { hasMore, loadMore } = posts;
+  useEffect(() => {
+    const el = end.current;
+    if (!el || !hasMore || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) loadMore(); }, { rootMargin: '0px 0px 800px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, loadMore]);
+  return <>
+    <BlockTitle>{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</BlockTitle>
+    {actions.error && <Block><p role="alert" className="atlas-fedi-note">{actions.error}</p></Block>}
+    <FilterPlaceProvider place="account">{posts.items.map(x => x.kind === 'fedizen'
+      ? <MobilePostCard key={`f-${x.post.id}`} post={x.post} actions={actions} />
+      : <OriginPost key={`o-${x.post.id}`} post={x.post} host={p.host} onTag={onTag} />)}</FilterPlaceProvider>
+    {posts.loading && !posts.items.length && <Block>Loading their posts…</Block>}
+    {!posts.loading && !posts.items.length && <Block>{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</Block>}
+    {posts.hasMore && <div ref={end} className="atlas-older">
+      {posts.loadingMore ? <span>Loading older posts…</span> : <Link onClick={posts.loadMore}>{posts.moreFailed ? 'Couldn’t load older posts. Try again' : 'Load older posts'}</Link>}
+    </div>}
+    {actions.sheet}
+  </>;
+}
+
+/** A post from their own server that Fedizen hasn't received yet: read-only, with that server's counts. */
+function OriginPost({ post, host, onTag }: { post: FediProfilePost; host: string; onTag: (tag: string) => void }) {
+  const c = post.counts;
+  const counts = [c?.replies != null ? `${n(c.replies)} replies` : '', c?.boosts != null ? `${n(c.boosts)} boosts` : '', c?.likes != null ? `${n(c.likes)} likes` : ''].filter(Boolean).join(' · ');
+  return <MobileFilterGate post={post}><Block strong inset className="atlas-fedi-post">
+    {post.title && <h2>{post.title}</h2>}
+    <AuthorWarning cw={post.cw} phone><PostBody post={post} onTag={onTag} />
+    <SensitiveMedia sensitive={post.sensitive} cta="Tap to view">{post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}</SensitiveMedia></AuthorWarning>
+    <p className="atlas-fedi-note">{[day(post.date), counts].filter(Boolean).join(' · ')}</p>
+    <p className="atlas-fedi-note">Not on Fedizen yet · <Link external target="_blank" href={post.url}>Open on {host}</Link></p>
+  </Block></MobileFilterGate>;
 }

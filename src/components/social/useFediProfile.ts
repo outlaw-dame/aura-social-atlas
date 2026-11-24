@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useState } from 'react';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { getFediFollow, getFediProfile, setFediFollow, type FollowState } from '@/lib/fedi-profile.functions';
+import { getFediFollow, getFediProfile, getProfilePosts, setFediFollow, type FollowState } from '@/lib/fedi-profile.functions';
+import type { FediProfile } from '@/lib/fedi-profile';
+import { mergeProfilePosts } from '@/lib/profile-posts';
 import { getFedizenStatus } from '@/lib/fedizen.functions';
 import { fullAcct } from '@/lib/fedizen-feed';
 import { OPEN_FEDI_PROFILE_EVENT, type FediProfileTarget } from '@/lib/fedi-profile';
@@ -72,5 +74,38 @@ export function useFediFollow(acct: string | undefined, actor: string | undefine
   return {
     signedIn: !!id, state, canFollow: !!q.data?.canWrite && !!state, busy: m.isPending || q.isLoading,
     toggle: () => m.mutate(state !== 'following' && state !== 'requested'), error,
+  };
+}
+
+/**
+ * A profile's posts as the reader's Fedizen has them (so they can be acted on), merged with the newest ones from the
+ * account's own server that Fedizen hasn't received yet (lib/profile-posts). Signed out, not connected, or for a handle
+ * its server didn't confirm, only the origin's posts. Older Fedizen pages load as the reader nears the end, and stay
+ * cached while the profile is reopened.
+ */
+export function useProfilePosts(p: FediProfile | undefined) {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getProfilePosts);
+  const id = user?.id;
+  const enabled = !!id && !!p?.acctVerified && p.kind !== 'group';
+  const q = useInfiniteQuery({
+    queryKey: ['fedizen-account-posts', id, p?.actor],
+    queryFn: ({ pageParam }) => read({ data: { expectedAtlasUserId: id!, acct: p!.acct, actor: p!.actor, ...(pageParam ?? {}) } }),
+    initialPageParam: undefined as { accountId: string; max: string } | undefined,
+    getNextPageParam: last => (last.accountId && last.next && !last.error ? { accountId: last.accountId, max: last.next } : undefined),
+    enabled, staleTime: 60_000,
+  });
+  const pages = q.data?.pages ?? [];
+  const fedizen = pages.flatMap(pg => pg.posts);
+  const error = pages[0]?.error;
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = q;
+  const loadMore = useCallback(() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage(); }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const items = mergeProfilePosts(enabled && !error ? fedizen : [], p?.posts ?? [], !!q.hasNextPage);
+  return {
+    items, loading: enabled && q.isLoading,
+    /** Fedizen couldn't be asked (not connected, not found…): the origin's posts are shown alone. */
+    fedizenError: enabled ? error : undefined,
+    hasMore: !!q.hasNextPage, loadingMore: q.isFetchingNextPage, moreFailed: !!pages[pages.length - 1]?.error && pages.length > 1,
+    loadMore,
   };
 }
