@@ -13,9 +13,9 @@ import { fromFederatedLinkCards, fromFederatedVideos } from '../src/lib/spotligh
 
 const token = process.env.FEDIZEN_TEST_READ_TOKEN;
 const expected = process.env.FEDIZEN_TEST_EXPECTED_HANDLE;
-const assert = (ok: unknown, stage: string): asserts ok => {
+function assert(ok: unknown, stage: string): asserts ok {
   if (!ok) throw new Error(stage);
-};
+}
 const duration = (start: number) => Math.round(performance.now() - start);
 
 async function main() {
