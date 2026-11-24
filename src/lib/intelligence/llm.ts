@@ -152,6 +152,30 @@ const SCHEMA_OUTPUT: Record<ProviderId, boolean> = { anthropic: true, openai: tr
 const MAX_PARAM: Record<ProviderId, 'max_tokens' | 'max_completion_tokens'> = { anthropic: 'max_tokens', openai: 'max_completion_tokens', google: 'max_tokens', mistral: 'max_tokens', moonshot: 'max_completion_tokens', cloudflare: 'max_tokens', voyage: 'max_tokens', cohere: 'max_tokens', jina: 'max_tokens', openrouter: 'max_tokens' };
 
 /**
+ * Room for reasoning on top of the answer. Gemini's and OpenAI's thinking models count their reasoning against the
+ * output limit (Gemini's maxOutputTokens, OpenAI's max_completion_tokens), so a 3,000-token answer limit could be used
+ * up before any answer is written, leaving it cut off or empty. Only tokens used are billed.
+ */
+const REASONING_ROOM: Partial<Record<ProviderId, number>> = { google: 12_000, openai: 12_000, moonshot: 8_000 };
+
+/** A reply's text: a string, or (some OpenAI-compatible layers) a list of parts. */
+function replyText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) return content.map(p => (p && typeof p === 'object' && typeof (p as { text?: unknown }).text === 'string' ? (p as { text: string }).text : '')).join('');
+  return '';
+}
+
+/**
+ * One line on the server when a reply can't be used, so "The model's answer couldn't be used" can be traced: where,
+ * the provider and model, why the model stopped, and the reply's shape (length, how it starts), never its text.
+ */
+export function noteBadOutput(where: string, detail: Record<string, string | number | boolean | undefined>) {
+  if (inBrowser()) return;
+  console.warn(JSON.stringify({ event: 'ai.bad_output', where, ...detail }));
+}
+const shapeOf = (text: string) => ({ length: text.length, starts: text.trimStart().slice(0, 1).replace(/[^{\[`"a-zA-Z]/, '?') || 'empty' });
+
+/**
  * One structured answer: a system prompt, the data as JSON, and a JSON Schema for the reply. No temperature is sent:
  * recent Claude and OpenAI reasoning models reject anything but their default.
  */
@@ -169,10 +193,10 @@ export async function completeJson(c: Credential, model: string, task: { system:
   const base = {
     model,
     messages: [{ role: 'system', content: `${task.system}\nReply with JSON only.` }, { role: 'user', content: user }],
-    [MAX_PARAM[c.provider]]: max,
+    [MAX_PARAM[c.provider]]: max + (REASONING_ROOM[c.provider] ?? 0),
   };
   const withSchema = { ...base, response_format: { type: 'json_schema', json_schema: { name: task.schemaName, schema: task.schema, strict: true } } };
-  let r: { choices?: { message?: { content?: string | null } }[] };
+  let r: { choices?: { message?: { content?: unknown }; finish_reason?: unknown }[] };
   try {
     r = await call(`${openAiBase(c)}/chat/completions`, c, { body: SCHEMA_OUTPUT[c.provider] ? withSchema : base, timeout: 60_000 }) as typeof r;
   } catch (e) {
@@ -182,7 +206,15 @@ export async function completeJson(c: Credential, model: string, task: { system:
       r = await call(`${openAiBase(c)}/chat/completions`, c, { body: { ...base, messages: [{ role: 'system', content: `${task.system}\nReply with JSON only, matching this JSON Schema: ${JSON.stringify(task.schema)}` }, base.messages[1]] }, timeout: 60_000 }) as typeof r;
     } catch (e2) { throw refusedModel(e2); }
   }
-  return parseJsonReply(r.choices?.[0]?.message?.content ?? '');
+  const choice = r.choices?.[0], text = replyText(choice?.message?.content);
+  try {
+    const out = parseJsonReply(text);
+    // Gemini's OpenAI layer has been seen wrapping the object in an array; every schema here is an object.
+    return Array.isArray(out) && out.length === 1 && out[0] && typeof out[0] === 'object' && !Array.isArray(out[0]) ? out[0] : out;
+  } catch (e) {
+    noteBadOutput('completeJson', { provider: c.provider, model: model.slice(0, 120), finish: typeof choice?.finish_reason === 'string' ? choice.finish_reason.slice(0, 40) : undefined, ...shapeOf(text) });
+    throw e;
+  }
 }
 
 /**
@@ -220,11 +252,11 @@ export async function describeImageText(c: Credential, model: string, task: { sy
     } catch (e) { throw vision(e); }
     return (r.content ?? []).filter(b => b.type === 'text').map(b => b.text ?? '').join('').trim();
   }
-  let r: { choices?: { message?: { content?: string | null } }[] };
+  let r: { choices?: { message?: { content?: unknown }; finish_reason?: unknown }[] };
   try {
     r = await call(`${openAiBase(c)}/chat/completions`, c, {
       body: {
-        model, [MAX_PARAM[c.provider]]: max,
+        model, [MAX_PARAM[c.provider]]: max + (REASONING_ROOM[c.provider] ?? 0),
         messages: [{ role: 'system', content: task.system }, { role: 'user', content: [
           { type: 'text', text: task.prompt },
           { type: 'image_url', image_url: { url: `data:${task.image.mediaType};base64,${task.image.data}` } },
@@ -233,5 +265,5 @@ export async function describeImageText(c: Credential, model: string, task: { sy
       timeout: 60_000,
     }) as typeof r;
   } catch (e) { throw vision(e); }
-  return (r.choices?.[0]?.message?.content ?? '').trim();
+  return replyText(r.choices?.[0]?.message?.content).trim();
 }

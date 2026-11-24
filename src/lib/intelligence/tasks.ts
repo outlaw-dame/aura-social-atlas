@@ -6,9 +6,16 @@
  */
 import type { ImageInput } from './llm';
 import { z } from 'zod';
-import { completeJson } from './llm';
+import { completeJson, noteBadOutput } from './llm';
 import type { Credential } from './providers';
 import { MAX_EXPANSIONS, normalizeFilterText, type ContentFilter } from '../content-filter';
+
+/** A reply that parsed but doesn't fit its schema: logged by where it went wrong (paths and codes, no values). */
+function unusable(error: z.ZodError | null, why?: string): Error {
+  const issues = error?.issues.slice(0, 5).map(i => `${i.path.join('.').slice(0, 60)}:${i.code}`).join(' ') ?? why;
+  noteBadOutput('schema', { issues });
+  return new Error('bad-output');
+}
 
 export const MAX_JUDGE_POSTS = 16;
 
@@ -41,7 +48,7 @@ export async function judgePosts(c: Credential, model: string, filters: ContentF
     schema: JUDGE_SCHEMA,
     input: { check_all: checkAll, filters: filters.map(f => ({ id: f.id, filter: f.text, kind: f.kind })), posts },
   }));
-  if (!reply.success) throw new Error('bad-output');
+  if (!reply.success) throw unusable(reply.error);
   const out = new Map<number, string[]>();
   for (const v of reply.data.verdicts) if (nums.has(v.post)) out.set(v.post, [...new Set(v.matches.filter(id => ids.has(id)))]);
   return out;
@@ -61,7 +68,7 @@ const ExpandReply = z.object({ wordings: z.array(z.string()) });
 
 export async function expandFilter(c: Credential, model: string, f: ContentFilter): Promise<string[]> {
   const reply = ExpandReply.safeParse(await completeJson(c, model, { system: EXPAND_SYSTEM, schemaName: 'filter_wordings', schema: EXPAND_SCHEMA, input: { filter: f.text, kind: f.kind }, maxTokens: 2000 }));
-  if (!reply.success) throw new Error('bad-output');
+  if (!reply.success) throw unusable(reply.error);
   const own = f.text.toLowerCase(), seen = new Set<string>([own]);
   const out: string[] = [];
   for (const w of reply.data.wordings) {
@@ -78,26 +85,30 @@ export async function expandFilter(c: Credential, model: string, f: ContentFilte
 const SUGGEST_SYSTEM = `You review someone's content filters and suggest improvements, based only on the filters they already have.
 ${FILTER_NOTE}
 Suggest up to 8 new filters that cover what their filters are evidently trying to keep out but would miss: related topics, the hashtags those conversations use, and topics their words hint at. Prefer one topic filter over many near-duplicate words. Never suggest something they already filter.
-Also point out existing filters likely to catch the wrong posts (too short, a word with common unrelated senses, a wildcard that runs into unrelated words) or to miss posts (too narrow a spelling), saying briefly what to change. Use the filter's id.
-Keep every reason under 20 words, plain and specific.`;
+Also point out existing filters likely to catch the wrong posts (too short, a word with common unrelated senses, a wildcard that runs into unrelated words) or to miss posts (too narrow a spelling). Use the filter's id. For each:
+- issue: what goes wrong, written to the person in everyday words, without filter jargon (never "topic filter", "wildcard", "kind" or "semantic"). Example: "Also hides ordinary posts about pets, and misses fandom posts that never say fur."
+- replacement: the filter to use instead (a word, phrase, #hashtag, or a few words naming the subject, e.g. "furry fandom"), or "" when it should simply be removed or nothing better fits.
+Keep every reason and issue under 20 words, plain and specific.`;
 
 const SUGGEST_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['suggestions', 'cautions'],
   properties: {
     suggestions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['filter', 'reason'], properties: { filter: { type: 'string' }, reason: { type: 'string' } } } },
-    cautions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'issue'], properties: { id: { type: 'string' }, issue: { type: 'string' } } } },
+    cautions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'issue', 'replacement'], properties: { id: { type: 'string' }, issue: { type: 'string' }, replacement: { type: 'string' } } } },
   },
 };
-const SuggestReply = z.object({ suggestions: z.array(z.object({ filter: z.string(), reason: z.string() })), cautions: z.array(z.object({ id: z.string(), issue: z.string() })) });
+const SuggestReply = z.object({ suggestions: z.array(z.object({ filter: z.string(), reason: z.string() })), cautions: z.array(z.object({ id: z.string(), issue: z.string(), replacement: z.string().optional() })) });
 
-export type FilterSuggestions = { suggestions: { text: string; reason: string }[]; cautions: { filterId: string; issue: string }[] };
+/** A caution about one filter, and (when the model offers one) the wording to change it to. */
+export type FilterCaution = { filterId: string; issue: string; replacement?: string };
+export type FilterSuggestions = { suggestions: { text: string; reason: string }[]; cautions: FilterCaution[] };
 
 export async function suggestFilters(c: Credential, model: string, filters: ContentFilter[]): Promise<FilterSuggestions> {
   const reply = SuggestReply.safeParse(await completeJson(c, model, {
     system: SUGGEST_SYSTEM, schemaName: 'filter_suggestions', schema: SUGGEST_SCHEMA, maxTokens: 3000,
     input: { filters: filters.map(f => ({ id: f.id, filter: f.text, kind: f.kind, action: f.action })) },
   }));
-  if (!reply.success) throw new Error('bad-output');
+  if (!reply.success) throw unusable(reply.error);
   const have = new Set(filters.map(f => f.text.toLowerCase())), ids = new Set(filters.map(f => f.id));
   const clip = (s: string) => s.trim().slice(0, 200);
   const suggestions: FilterSuggestions['suggestions'] = [];
@@ -107,7 +118,11 @@ export async function suggestFilters(c: Credential, model: string, filters: Cont
   }
   return {
     suggestions: suggestions.slice(0, 8),
-    cautions: reply.data.cautions.filter(x => ids.has(x.id)).map(x => ({ filterId: x.id, issue: clip(x.issue) })).slice(0, 20),
+    cautions: reply.data.cautions.filter(x => ids.has(x.id)).map(x => {
+      const own = filters.find(f => f.id === x.id)?.text.toLowerCase();
+      const to = normalizeFilterText(x.replacement ?? '')?.slice(0, 120);
+      return { filterId: x.id, issue: clip(x.issue), ...(to && to.toLowerCase() !== own ? { replacement: to } : {}) };
+    }).slice(0, 20),
   };
 }
 
@@ -169,7 +184,7 @@ const SearchReply = z.object({ searches: z.array(z.string()) });
 /** Up to four other searches for posts meaning the same as `q`. */
 export async function searchWordings(c: Credential, model: string, q: string): Promise<string[]> {
   const reply = SearchReply.safeParse(await completeJson(c, model, { system: SEARCH_SYSTEM, schemaName: 'related_searches', schema: SEARCH_SCHEMA, input: { search: q }, maxTokens: 600 }));
-  if (!reply.success) throw new Error('bad-output');
+  if (!reply.success) throw unusable(reply.error);
   const seen = new Set([q.trim().toLowerCase()]);
   const out: string[] = [];
   for (const s of reply.data.searches) {
@@ -201,7 +216,8 @@ export async function translateTexts(c: Credential, model: string, req: { texts:
     // Room for the translation (often longer than the original) and the JSON around it.
     maxTokens: Math.min(16_000, 1000 + Math.ceil(chars * 1.5)),
   }));
-  if (!reply.success || reply.data.translations.length !== req.texts.length) throw new Error('bad-output');
+  if (!reply.success) throw unusable(reply.error);
+  if (reply.data.translations.length !== req.texts.length) throw unusable(null, 'translations: wrong count');
   const detected = reply.data.detected && /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/i.test(reply.data.detected) ? reply.data.detected.toLowerCase() : undefined;
   return { texts: reply.data.translations, ...(detected ? { detected } : {}) };
 }

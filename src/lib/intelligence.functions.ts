@@ -194,19 +194,28 @@ export const addContentFilters = createServerFn({ method: 'POST' }).middleware([
     }
   });
 
-/** Changes a filter: what it does, where and until when, whether it's checked in context, its wordings. */
+/**
+ * Changes a filter: its words, what it does, where and until when, whether it's checked in context, its wordings.
+ * New words replace the filter's kind and drop its wordings (they were other ways of saying the old words); a filter
+ * checked in context gets new ones. Words another filter already has are refused (`taken`).
+ */
 export const updateContentFilter = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator(d => z.object({
-    expectedAtlasUserId: Uid, id: Uid, semantic: z.boolean().optional(), expansions: Wordings.optional(),
+    expectedAtlasUserId: Uid, id: Uid, text: z.string().max(400).optional(), semantic: z.boolean().optional(), expansions: Wordings.optional(),
     action: Options.action.optional(), places: Options.places.optional(), expiresAt: Options.expiresAt.optional(), exceptFollowing: Options.exceptFollowing.optional(),
   }).parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }): Promise<{ filters: ContentFilter[]; taken?: boolean }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-    const own = (await (await store()).filtersOf(context.userId)).find(f => f.id === data.id);
+    const all = await (await store()).filtersOf(context.userId);
+    const own = all.find(f => f.id === data.id);
+    const text = data.text !== undefined ? normalizeFilterText(data.text)?.slice(0, 200) : undefined;
+    const renamed = !!own && !!text && text !== own.text;
+    if (renamed && all.some(f => f.id !== data.id && f.text.toLowerCase() === text.toLowerCase())) return { filters: all, taken: true };
     const patch = {
+      ...(renamed ? { text, kind: filterKind(text), expansions: [] } : {}),
       ...(data.action ? { action: data.action } : {}), ...(data.semantic !== undefined ? { semantic: data.semantic } : {}),
-      ...(data.expansions && own ? { expansions: cleanWordings(data.expansions, own.text) } : {}),
+      ...(data.expansions && own ? { expansions: cleanWordings(data.expansions, renamed ? text : own.text) } : {}),
       ...(data.places ? { places: data.places } : {}), ...(data.expiresAt !== undefined ? { expires_at: data.expiresAt } : {}),
       ...(data.exceptFollowing !== undefined ? { except_following: data.exceptFollowing } : {}),
     };

@@ -149,7 +149,7 @@ export function useIntelligenceActions() {
 
 /* ── Running AI tasks with whichever key is in use ───────────────────────────────────────────── */
 
-type Suggestions = { suggestions: { text: string; reason: string }[]; cautions: { filterId: string; issue: string }[] };
+type Suggestions = import('@/lib/intelligence/tasks').FilterSuggestions;
 
 /** The AI tasks, routed to Atlas's server (key kept there) or run in this browser (key kept on this device). */
 export function useAiRunner() {
@@ -316,10 +316,15 @@ export function useFilterActions() {
         return null;
       } catch { return AI_PROBLEM.storage; }
     },
-    update: async (filterId: string, patch: Partial<FilterOptions> & { semantic?: boolean; expansions?: string[] }) => {
-      const r = await change({ data: { expectedAtlasUserId: id, id: filterId, ...patch } });
-      put(r.filters);
-      if (patch.semantic) void widen(r.filters, new Set([filterId]));
+    /** Changes a filter; new words drop its old wordings and ask for new ones. Says why it couldn't, if it couldn't. */
+    update: async (filterId: string, patch: Partial<FilterOptions> & { text?: string; semantic?: boolean; expansions?: string[] }): Promise<string | null> => {
+      try {
+        const r = await change({ data: { expectedAtlasUserId: id, id: filterId, ...patch } });
+        put(r.filters);
+        if (r.taken) return 'Another filter already has those words.';
+        if (patch.semantic || patch.text !== undefined) void widen(r.filters, new Set([filterId]));
+        return null;
+      } catch { return AI_PROBLEM.storage; }
     },
     remove: async (filterId: string) => { put((await del({ data: { expectedAtlasUserId: id, id: filterId } })).filters); forgetFilterStats(id, filterId); },
     /** Re-asks for a filter's other wordings. */
