@@ -35,6 +35,9 @@ export function ModerationPage() {
       {/* As in iOS Settings → Blocked Contacts: each list is a row with its count and opens on its own page, so a
           long one never buries the rest. */}
       <List strong inset dividers>
+        <ListItem link="#" title="Suggestions" footer="Filters to add or change, and accounts to look at, from your AI model." onClick={() => pushPage('/moderation-suggestions/')}>
+          <Icon slot="media" ios="f7:sparkles" md="material:auto_awesome" />
+        </ListItem>
         <ListItem link="#" title="Keyword filters" after={list.length ? String(list.length) : undefined}
           footer={list.length ? `Caught ${caught} post${caught === 1 ? '' : 's'} in the last ${STATS_DAYS} days` : 'Hide posts about things you’d rather not see, in every Atlas feed.'}
           onClick={() => pushPage('/keyword-filters/')}>

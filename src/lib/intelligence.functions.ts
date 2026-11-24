@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { API_KEY, CLOUDFLARE_ACCOUNT, PROVIDER_IDS, type ProviderId } from './intelligence/providers';
 import { FILTER_PLACES, MAX_EXPANSIONS, MAX_FILTERS, filterKind, normalizeFilterText, type ContentFilter } from './content-filter';
+import { MAX_CONTEXT_HANDLES, MAX_NOTICED } from './moderation-signals';
 
 /**
  * Intelligence: opt-in AI in Atlas with the person's own key. Off until they turn it on, and nothing is sent to an AI
@@ -280,16 +281,30 @@ export const judgeFilteredPosts = createServerFn({ method: 'POST' }).middleware(
     }
   });
 
-/** Suggestions from the filters in place: what they'd miss, and which ones catch the wrong posts. */
+const Handle = z.string().max(320);
+/** The person's blocks, mutes and the accounts their moderation noticed (moderation-signals), from their browser. */
+const ModerationInput = z.object({
+  blocked: z.array(Handle).max(MAX_CONTEXT_HANDLES), muted: z.array(Handle).max(MAX_CONTEXT_HANDLES),
+  noticed: z.array(z.object({
+    acct: Handle, caught: z.number().int().min(0).max(100_000), filters: z.array(Uid).max(MAX_FILTERS),
+    boostsBlocked: z.number().int().min(0).max(100_000), repliesBlocked: z.number().int().min(0).max(100_000), reported: z.boolean(),
+  })).max(MAX_NOTICED),
+});
+
+/**
+ * Suggestions for the person's moderation: new filters and notes on current ones (from their filters, blocks and
+ * mutes), and accounts to block or mute, only from those their own moderation noticed. Nothing is changed here.
+ */
 export const suggestContentFilters = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => z.object({ expectedAtlasUserId: Uid }).parse(d))
+  .inputValidator(d => z.object({ expectedAtlasUserId: Uid, context: ModerationInput.optional() }).parse(d))
   .handler(async ({ data, context }) => {
     sameSession(data.expectedAtlasUserId, context.userId);
     try {
       const filters = await (await store()).filtersOf(context.userId);
-      if (!filters.length) return { suggestions: [], cautions: [] };
+      const ctx = data.context;
+      if (!filters.length && !ctx?.blocked.length && !ctx?.muted.length && !ctx?.noticed.length) return { suggestions: [], cautions: [], accounts: [] };
       const { suggestFilters } = await import('./intelligence/tasks');
-      const r = await (await store()).withAi(context.userId, 'main', (c, model) => suggestFilters(c, model, filters));
+      const r = await (await store()).withAi(context.userId, 'main', (c, model) => suggestFilters(c, model, filters, ctx));
       return 'problem' in r ? { error: r.problem } : r.value;
     } catch (e) {
       return { error: (await store()).problem(e) };
