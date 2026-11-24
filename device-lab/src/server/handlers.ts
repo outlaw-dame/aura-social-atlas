@@ -260,6 +260,8 @@ export const fedizen: Impl<typeof Fedizen> = {
   getFollowedTags: () => ({ tags: [...followedTags], names: [...followedTags], full: true }),
   setTagFollow: (d: { tag: string; on: boolean }) => { if (d.on) followedTags.add(d.tag.toLowerCase()); else followedTags.delete(d.tag.toLowerCase()); return ok({ following: d.on }); },
   getFedizenTagFeed: (d: { tag: string }) => ({ posts: shown(byTag(d.tag)) }),
+  // Local: the sample posts by Fedizen's own members (one page; the Lab has no older pages).
+  getFedizenLocal: () => ({ posts: shown(ALL_POSTS.filter((p, i, a) => a.findIndex(y => y.id === p.id) === i && /@fedizen\.net$/.test(p.handle) && !p.boostedBy)).slice(0, 20) }),
   getCircleFeed: (d: { id: string }) => {
     const c = circles.find(x => x.id === d.id); if (!c) return { posts: [], error: 'not-found' as const };
     const accts = new Set(c.members.map(m => m.handle.replace(/^@/, '')));

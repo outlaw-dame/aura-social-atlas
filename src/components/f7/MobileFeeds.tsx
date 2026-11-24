@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Block, BlockFooter, BlockTitle, Link, List, ListItem, Navbar, NavRight, Page, Popup, Toggle } from 'framework7-react';
 import { circleIdOf, pinCircle, unpinCircle, usePinnedCircles, type FeedKind } from '@/lib/feed-types';
 import { useAtlasAuth } from '@/components/social/AuthState';
-import { FEED_PROBLEM, useCircleFeed, useFeedTabs, useForYou } from '@/components/social/useFeeds';
+import { FEED_PROBLEM, useCircleFeed, useCircleFeedOlder, useFeedTabs, useForYou, useForYouOlder, useLocalFeed } from '@/components/social/useFeeds';
+import { MobileOlderPosts } from './MobileOlderPosts';
+import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { useFedizenCircles } from '@/components/social/useFedizenLibrary';
 import { MobileFedizenFeed, MobilePublicFedizen, MobileRecentArticles } from './FedizenMobile';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
@@ -37,7 +39,7 @@ export function MobileFeeds({ visible = true }: { /** Whether the Feeds dock tab
     {feed === 'following' && <MobileFedizenFeed />}
     {feed === 'foryou' && <MobileForYou />}
     {feed === 'articles' && <MobileRecentArticles />}
-    {feed === 'local' && <MobilePublicFedizen />}
+    {feed === 'local' && <MobileLocalFeed />}
     {circleId && <MobileCircleFeed id={circleId} title={pinned.find(c => c.id === circleId)?.title ?? 'Circle'} />}
     <PinCirclesPopup opened={pinning} onClose={() => setPinning(false)} />
   </>;
@@ -48,6 +50,7 @@ function MobileForYou() {
   const q = useForYou(true);
   const actions = useMobilePostActions();
   const d = q.data;
+  const older = useForYouOlder(d);
   return <>
     {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
     {!user ? <Block strong inset>Sign in to Atlas and connect Fedizen for your For You feed.</Block>
@@ -55,7 +58,7 @@ function MobileForYou() {
       : q.isError ? <Block strong inset>{FEED_PROBLEM.unavailable} <Link onClick={() => void q.refetch()}>Try again</Link></Block>
       : d?.error ? <Block strong inset>{FEED_PROBLEM[d.error]}</Block>
       : !d?.posts.length ? <Block strong inset>Nothing here yet. Follow people and hashtags, or join groups, and their posts will gather here.</Block>
-      : d.posts.map(p => <MobilePostCard key={p.url} post={p} actions={actions} reasons={p.reasons} />)}
+      : <>{d.posts.map(p => <MobilePostCard key={p.url} post={p} actions={actions} reasons={p.reasons} />)}<MobileOlderPosts older={older} actions={actions} /></>}
     {d && !d.error && d.missing.length > 0 && <BlockFooter>Some of For You couldn’t load ({d.missing.map(m => (m === 'following' ? 'people you follow' : m === 'tags' ? 'followed hashtags' : 'your groups')).join(', ')}).</BlockFooter>}
     {actions.sheet}
   </>;
@@ -65,13 +68,32 @@ function MobileCircleFeed({ id, title }: { id: string; title: string }) {
   const { user } = useAtlasAuth();
   const q = useCircleFeed(id);
   const actions = useMobilePostActions();
+  const older = useCircleFeedOlder(id, q.data);
   return <>
     {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
     {q.isLoading ? <Block strong inset>Loading posts from {title}…</Block>
       : q.isError ? <Block strong inset>{FEED_PROBLEM.unavailable} <Link onClick={() => void q.refetch()}>Try again</Link></Block>
       : q.data?.error ? <Block strong inset>{FEED_PROBLEM[q.data.error]}{q.data.error === 'not-found' && user && <> <Link onClick={() => unpinCircle(user.id, id)}>Unpin it</Link></>}</Block>
       : !q.data?.posts.length ? <Block strong inset>No recent posts from the people in {title}.</Block>
-      : q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}
+      : <>{q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}<MobileOlderPosts older={older} actions={actions} /></>}
+    {actions.sheet}
+  </>;
+}
+
+/**
+ * Local: Fedizen's own members' public posts. Connected, read through the person's account, so every post can be
+ * acted on and older posts load as they scroll; otherwise the public feed, which needs no account.
+ */
+function MobileLocalFeed() {
+  const { user } = useAtlasAuth();
+  const { q, older, connected } = useLocalFeed();
+  const actions = useMobilePostActions();
+  if (!user || (!connected && !q.isLoading)) return <MobilePublicFedizen />;
+  return <>
+    {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
+    {q.isLoading ? <Block strong inset>Loading Local…</Block>
+      : !q.data?.posts.length ? <Block strong inset>No public posts on Fedizen yet.</Block>
+      : <FilterPlaceProvider place="public">{q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}<MobileOlderPosts older={older} actions={actions} /></FilterPlaceProvider>}
     {actions.sheet}
   </>;
 }

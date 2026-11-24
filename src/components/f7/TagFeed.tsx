@@ -8,7 +8,8 @@ import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { useFedizen } from '@/components/social/useFedizen';
-import { FEED_PROBLEM, useTagFeed } from '@/components/social/useFeeds';
+import { FEED_PROBLEM, useTagFeed, useTagFeedOlder } from '@/components/social/useFeeds';
+import { MobileOlderPosts } from './MobileOlderPosts';
 import { useFollowedTagList, useTagFollow, useTagFollowState } from '@/components/social/useTagFollow';
 import { hashtagLabel, openTag, TagText } from '@/lib/hashtags';
 import { pushPage, tagPageUrl } from './navigation';
@@ -28,6 +29,7 @@ export function TagFeedPage({ f7route }: { f7route?: { params: { tag?: string } 
   const tag = raw ? decodeURIComponent(raw) : null;
   const { user } = useAtlasAuth();
   const q = useTagFeed(tag);
+  const older = useTagFeedOlder(tag, q.data);
   const actions = useMobilePostActions();
   const follow = useTagFollow();
   const feature = useFeatureTag(tag);
@@ -61,7 +63,7 @@ export function TagFeedPage({ f7route }: { f7route?: { params: { tag?: string } 
           : q.data?.error === 'not-connected' ? <><Block strong inset><p style={{ marginTop: 0 }}>{FEED_PROBLEM['not-connected']}</p><ConnectFedizen /></Block><PublicTagPosts tag={tag} /></>
           : q.data?.error ? <Block strong inset><p style={{ marginTop: 0 }}>{FEED_PROBLEM[q.data.error]}</p><ConnectFedizen /></Block>
           : !q.data?.posts.length ? <Block strong inset>No posts you can see are tagged {tag} yet.</Block>
-          : <FilterPlaceProvider place="public">{q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} inTag={tag} />)}</FilterPlaceProvider>}
+          : <FilterPlaceProvider place="public">{q.data.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} inTag={tag} />)}<MobileOlderPosts older={older} actions={actions} inTag={tag} /></FilterPlaceProvider>}
         {actions.sheet}
       </>}
     </Page>;

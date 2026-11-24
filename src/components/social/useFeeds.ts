@@ -1,7 +1,8 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useQueries, useQuery, type InfiniteData } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { getCircleFeed, getFedizenHome, getFedizenTagFeed, getFollowedTags, getForYou } from '@/lib/fedizen.functions';
+import { getCircleFeed, getFedizenHome, getFedizenLocal, getFedizenTagFeed, getFollowedTags, getForYou, type ForYouCursors } from '@/lib/fedizen.functions';
+import { useOlderPages } from './useOlderPages';
 import type { NativeBonfireSnapshot } from '@/lib/bonfire-private.functions';
 import { mergeNativeBonfirePages, selectBonfireHome } from '@/lib/bonfire-native-presentation';
 import { getFedizenPublic, getRecentArticles } from '@/lib/bonfire.functions';
@@ -108,6 +109,10 @@ export function useFeedTabs(active: FeedKind | null, { nativeFollowing = false }
   const forYou = useForYou(!!uid);
   const articles = useQuery({ queryKey: ['bonfire-articles'], queryFn: () => getRecentArticles(), staleTime: 5 * 60_000 });
   const local = useQuery({ queryKey: ['fedizen-public'], queryFn: () => getFedizenPublic(), staleTime: 60_000 });
+  // Connected, Local shows Fedizen's local timeline read through the person's account (useLocalFeed): its dot follows
+  // that. This only observes the query the view starts.
+  const localMine = useQuery<{ posts: FedizenPost[]; error?: unknown }>({ queryKey: ['fedizen-local', uid], enabled: false });
+  const localPosts = localMine.data && !localMine.data.error ? localMine.data.posts : local.data?.posts;
   const circles = useQueries({ queries: pinned.map(c => ({
     queryKey: ['fedizen-circle-feed', uid, c.id],
     queryFn: () => { if (!uid) throw new Error('Nothing to read.'); return circle({ data: { expectedAtlasUserId: uid, id: c.id } }); },
@@ -115,7 +120,7 @@ export function useFeedTabs(active: FeedKind | null, { nativeFollowing = false }
   })) });
   const newest: Record<string, string | undefined> = {
     following: newestOf(followingPosts), foryou: newestOf(forYou.data?.posts),
-    articles: newestOf(articles.data?.articles), local: newestOf(local.data?.posts),
+    articles: newestOf(articles.data?.articles), local: newestOf(localPosts),
     ...Object.fromEntries(pinned.map((c, i) => [circleFeed(c.id), newestOf(circles[i]?.data?.posts)])),
   };
   const key = JSON.stringify(newest);
@@ -131,3 +136,47 @@ export function useFeedTabs(active: FeedKind | null, { nativeFollowing = false }
     ...pinned.map(c => ({ id: circleFeed(c.id), label: c.title, circle: true, isNew: !!uid && circleFeed(c.id) !== active && hasNew(seen[circleFeed(c.id)], newest[circleFeed(c.id)]) })),
   ];
 }
+
+/* ── Older pages, below each feed's first ─────────────────────────────────────────────────────── */
+
+/** For You further down: the next pages of Home and of the followed hashtags it drew from. */
+export function useForYouOlder(d: { posts: FedizenPost[]; next?: ForYouCursors; error?: unknown } | undefined) {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getForYou);
+  const id = user?.id;
+  return useOlderPages(['fedizen-foryou', id], d?.posts ?? EMPTY, d?.next, (older: ForYouCursors) => read({ data: { expectedAtlasUserId: id!, older } }), !!id && !!d && !d.error);
+}
+
+/** A hashtag's feed further down. */
+export function useTagFeedOlder(tag: string | null, d: { posts: FedizenPost[]; next?: string; error?: unknown } | undefined) {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getFedizenTagFeed);
+  const id = user?.id;
+  return useOlderPages(['fedizen-tag-feed', id, tag], d?.posts ?? EMPTY, d?.next, (max: string) => read({ data: { expectedAtlasUserId: id!, tag: tag!, max } }), !!id && !!tag && !!d && !d.error);
+}
+
+/** A pinned circle's feed further down. */
+export function useCircleFeedOlder(circleId: string | null, d: { posts: FedizenPost[]; next?: string; error?: unknown } | undefined) {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getCircleFeed);
+  const id = user?.id;
+  return useOlderPages(['fedizen-circle-feed', id, circleId], d?.posts ?? EMPTY, d?.next, (max: string) => read({ data: { expectedAtlasUserId: id!, id: circleId!, max } }), !!id && !!circleId && !!d && !d.error);
+}
+
+/**
+ * Local as the person reads it through their Fedizen connection (each post can be acted on), with older pages. Signed
+ * out or not connected (`error`), views show the public feed instead.
+ */
+export function useLocalFeed() {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getFedizenLocal);
+  const id = user?.id;
+  const q = useQuery({
+    queryKey: ['fedizen-local', id],
+    queryFn: () => read({ data: { expectedAtlasUserId: id! } }),
+    enabled: !!id, staleTime: q => (q.state.data?.error ? 0 : 60_000),
+  });
+  const older = useOlderPages(['fedizen-local', id], q.data?.posts ?? EMPTY, q.data?.next, (max: string) => read({ data: { expectedAtlasUserId: id!, max } }), !!id && !!q.data && !q.data.error);
+  return { q, older, connected: !!id && !!q.data && !q.data.error };
+}
+const EMPTY: FedizenPost[] = [];
