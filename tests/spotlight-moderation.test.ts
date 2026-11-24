@@ -130,6 +130,57 @@ describe('complete, failure-closed moderation list reads', () => {
   });
 });
 
+describe('paginated owner moderation completeness', () => {
+  it('accepts an unpaginated large Bonfire account list without discarding owner policy', async () => {
+    const large = Array.from({ length: 2319 }, (_, i) => ({
+      id: `block-${i}`, acct: `blocked${i}@fedizen.net`,
+    }));
+    const snapshot = await readSpotlightModeration(async path => ({
+      status: 200, data: path.includes('/blocks?') ? large : [],
+    }));
+    expect(snapshot?.blockedIds).toHaveLength(2319);
+    expect(allowedSpotlightItem(card([{ id: 'block-2318', handle: 'blocked2318' }]), snapshot!)).toBe(false);
+    expect(allowedSpotlightItem(card([{ handle: 'safe' }]), snapshot!)).toBe(true);
+  });
+
+  it('combines every page before approving the owner snapshot', async () => {
+    const requested: string[] = [];
+    const snapshot = await readSpotlightModeration(async path => {
+      requested.push(path);
+      if (path.startsWith('/api/v1/mutes?')) return { status: 200, data: [] };
+      const page = path.includes('max_id=') ? 1 : 0;
+      return {
+        status: 200,
+        data: Array.from({ length: 80 }, (_, i) => ({
+          id: `b-${page * 80 + i}`,
+          acct: `blocked${page * 80 + i}@fedizen.net`,
+        })),
+        ...(page === 0 ? { next: 'older-1' } : {}),
+      };
+    });
+    expect(snapshot?.blockedIds).toHaveLength(160);
+    expect(requested).toContain('/api/v1/blocks?limit=80&max_id=older-1');
+    expect(allowedSpotlightItem(card([{ id: 'b-159', handle: 'blocked159' }]), snapshot!)).toBe(false);
+  });
+
+  it('never declares a partial or untrusted page chain complete', async () => {
+    const first = [{ id: 'a', acct: 'a@fedizen.net' }];
+    const one = (next: string) => readSpotlightModeration(async path => ({
+      status: 200, data: first, ...(path.startsWith('/api/v1/blocks?') ? { next } : {}),
+    }));
+    expect(await one('https://evil.example/private')).toBeNull();
+    expect(await one('duplicate')).toBeNull();
+    expect(await readSpotlightModeration(async path => ({
+      status: path.includes('max_id=') ? 429 : 200,
+      data: first, ...(path === '/api/v1/blocks?limit=80' ? { next: 'older' } : {}),
+    }))).toBeNull();
+    expect(await readSpotlightModeration(async path => ({
+      status: 200, data: path.includes('max_id=') ? [{ id: 'x' }] : first,
+      ...(path === '/api/v1/blocks?limit=80' ? { next: 'older' } : {}),
+    }))).toBeNull();
+  });
+});
+
 const rule = (opts: Partial<ContentFilter> = {}): ContentFilter => ({
   id: 'rule', text: 'spoiler', kind: 'word', action: 'hide', semantic: false,
   expansions: [], places: ['public'], expiresAt: null, exceptFollowing: false,
