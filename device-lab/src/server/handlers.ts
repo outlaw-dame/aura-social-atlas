@@ -243,6 +243,8 @@ export const fedizen: Impl<typeof Fedizen> = {
   changeFedizenBlock: (d: { block?: string; unblock?: string }) => {
     if (d.unblock) { const i = blocked.findIndex(b => b.id === d.unblock); if (i >= 0) blocked.splice(i, 1); return ok({}); }
     const x = d.block ? personByAcct(d.block) : undefined; const k = x ? (Object.keys(PEOPLE) as PersonKey[]).find(y => PEOPLE[y] === x) : undefined;
+    // The Lab's invented accounts on *.example (Suggestions' sample answer) can be blocked too.
+    if (!k && d.block && /@[a-z0-9.-]+\.example$/i.test(d.block)) { const h = d.block.replace(/^@/, ''); const b = { id: `acct-${h}`, name: h.split('@')[0], handle: `@${h}`, avatar: undefined }; blocked.push(b); return ok({ person: b }); }
     if (!k) return { ok: false as const, error: 'not-found' as const }; const b = person(k); blocked.push(b); return ok({ person: b });
   },
   getForYou: () => ({ posts: FOR_YOU.map(p => ({ ...seen(p), reasons: p.reasons })), tags: [...followedTags], groups: Object.keys(memberships), missing: [] }),
@@ -379,7 +381,8 @@ export const fediProfile: Impl<typeof FediProfileFns> = {
 
 const filters: ContentFilter[] = [];
 // Invented sample keys (hints only; there are no keys): two companies, one with a name, so Settings → Intelligence
-// shows the main key, backups and background filtering. Intelligence stays off, so nothing calls a provider.
+// shows the main key, backups and background filtering. Turning Intelligence on in the Lab calls no provider: the
+// AI answers below are written for the Lab (Suggestions) or say the model isn't ready.
 const SAMPLE_KEYS: IntelligenceStatus['keys'] = [
   { id: '00000000-0000-4000-8000-0000000000a1', provider: 'anthropic', label: 'Work', hint: '…a1b2', models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'], model: 'claude-haiku-5-5' },
   { id: '00000000-0000-4000-8000-0000000000a2', provider: 'openai', label: null, hint: '…c3d4', models: ['gpt-6-mini', 'gpt-6'], model: 'gpt-6-mini' },
@@ -389,6 +392,29 @@ const aiStatus: IntelligenceStatus = {
   background: null, fallback: true, embeddingProvider: 'openai', deepMatching: false, keys: SAMPLE_KEYS,
 };
 const pickKey = (c: { key: string; model?: string }) => { const k = SAMPLE_KEYS.find(x => x.id === c.key); return k ? { k, model: c.model && k.models.includes(c.model) ? c.model : k.model ?? k.models[0] } : null; };
+/**
+ * Suggestions' answer in the Lab, written here (no model is asked), from the sample filters and blocks so every part
+ * of the page shows: filters to add, a filter to change with words to change to, and accounts to review — the ones
+ * the app noticed on this device, else two invented *.example accounts. The bench labels all of it as sample.
+ */
+function labSuggestions(context?: { blocked: string[]; muted: string[]; noticed: { acct: string; caught: number }[] }) {
+  const have = new Set(filters.map(f => f.text.toLowerCase()));
+  const spam = (context?.blocked ?? []).some(h => h.endsWith('spam.example'));
+  const suggestions = [
+    ...(spam ? [{ text: 'crypto giveaways', reason: 'Sample: many accounts you block on spam.example post giveaways.' }, { text: '#airdrop', reason: 'Sample: the hashtag those giveaway posts use.' }] : []),
+    { text: 'spoilers', reason: 'Sample: a topic often filtered alongside what you filter.' },
+  ].filter(x => !have.has(x.text.toLowerCase()));
+  const wild = filters.find(f => f.text.endsWith('*')) ?? filters.find(f => f.text.length <= 4);
+  const cautions = wild ? [{ filterId: wild.id, issue: `Sample: “${wild.text}” also hides ordinary posts that share those letters.`, replacement: `${wild.text.replace(/\*$/, '')} fandom` }] : [];
+  const done = new Set([...(context?.blocked ?? []), ...(context?.muted ?? [])]);
+  const noticed = (context?.noticed ?? []).map(n => ({ acct: n.acct, action: 'mute' as const, reason: `Sample: ${n.caught} of their posts were hidden by your filters this month.` }));
+  const invented = [
+    { acct: 'prizebot@deals.example', action: 'block' as const, reason: 'Sample: boosted accounts you block 6 times this month.' },
+    { acct: 'hottakes@news.example', action: 'mute' as const, reason: 'Sample: 4 of their posts were hidden by your filters this month.' },
+  ];
+  return { suggestions, cautions, accounts: (noticed.length ? noticed : invented).filter(a => !done.has(a.acct)) };
+}
+
 export const intelligence: Impl<typeof Intelligence> = {
   getIntelligence: () => aiStatus,
   saveAiKey: () => ({ error: 'not-configured' as const }),
@@ -397,6 +423,7 @@ export const intelligence: Impl<typeof Intelligence> = {
   updateIntelligence: (d: { deepMatching?: boolean; fallback?: boolean; enabled?: boolean; main?: { key: string; model?: string }; background?: { key: string; model?: string } | null }) => {
     if (d.deepMatching != null) aiStatus.deepMatching = d.deepMatching;
     if (d.fallback != null) aiStatus.fallback = d.fallback;
+    if (d.enabled != null) aiStatus.enabled = d.enabled;
     const m = d.main && pickKey(d.main);
     if (m) Object.assign(aiStatus, { mainKey: m.k.id, provider: m.k.provider, model: m.model });
     if (d.background === null) aiStatus.background = null;
@@ -414,11 +441,22 @@ export const intelligence: Impl<typeof Intelligence> = {
     }
     return { filters };
   },
-  updateContentFilter: (d: { id: string } & Partial<ContentFilter>) => { const { id, ...patch } = d; const f = filters.find(x => x.id === id); if (f) Object.assign(f, patch); return { filters }; },
+  // As the real function: new words set the kind again and drop the old wordings; another filter's words are refused.
+  updateContentFilter: (d: { id: string; text?: string } & Partial<Omit<ContentFilter, 'text'>>) => {
+    const { id, text: raw, ...patch } = d; const f = filters.find(x => x.id === id);
+    if (!f) return { filters };
+    const text = raw !== undefined ? normalizeFilterText(raw) : undefined;
+    if (raw !== undefined && !text) throw new Error('Invalid filter text');
+    if (text && text !== f.text) {
+      if (filters.some(x => x.id !== id && x.text.toLowerCase() === text.toLowerCase())) return { filters, taken: true as const };
+      Object.assign(f, { text, kind: filterKind(text), expansions: [] });
+    }
+    Object.assign(f, patch); return { filters };
+  },
   deleteContentFilter: (d: { id: string }) => { const i = filters.findIndex(x => x.id === d.id); if (i >= 0) filters.splice(i, 1); return { filters }; },
-  expandContentFilter: () => ({ error: 'not-ready' as const }),
+  expandContentFilter: () => ({ filters }),
   judgeFilteredPosts: () => ({ error: 'not-ready' as const }),
-  suggestContentFilters: () => ({ error: 'not-ready' as const }),
+  suggestContentFilters: (d: { context?: { blocked: string[]; muted: string[]; noticed: { acct: string; caught: number }[] } }) => labSuggestions(d?.context),
   describePostForFilter: () => ({ error: 'not-ready' as const }),
   embedTextsFor: () => ({ error: 'not-ready' as const }),
   searchWordingsFor: () => ({ error: 'not-ready' as const }),

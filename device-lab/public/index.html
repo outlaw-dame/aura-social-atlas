@@ -113,7 +113,7 @@ tbody tr.running { background: var(--accent-soft); }
   <header>
     <h1>Atlas <em>Device</em> Lab</h1>
     <p>Atlas’s own phone app, built from the repository, running on sample data. Pick a device: the app reads that device’s user agent, screen and posture with its own device profile, then sets Framework7’s navigation and, on wide screens, the desktop-style Discover layout to match. Everything in it is the app’s real code; only Fedizen and Atlas’s server are stood in for.</p>
-    <p class="note">Sample data: the people, posts, messages and notifications are written for the Lab, and the groups directory is fedizen.net’s public list as captured on 7 November 2026. Likes, saves, joins, follows and posts change the sample data until the page reloads; nothing is sent anywhere.</p>
+    <p class="note">Sample data: the people, posts, messages and notifications are written for the Lab, and the groups directory is fedizen.net’s public list as captured on 7 November 2026. Likes, saves, joins, follows and posts change the sample data until the page reloads; nothing is sent anywhere. Intelligence can be turned on, but no AI model is asked: Settings → Moderation → Suggestions shows an answer written for the Lab, every line marked “Sample”, and its accounts on *.example are invented.</p>
     <div class="meta" id="build-meta"><span>device-lab build</span></div>
   </header>
 
@@ -198,7 +198,7 @@ tbody tr.running { background: var(--accent-soft); }
 <script src="presets.js?v=g19"></script>
 <script>
 /* Bumped on every publish so browsers (and iOS home-screen apps) never show a cached app.html. */
-var LAB_V = 'r1';
+var LAB_V = 'r2';
 
 (function () {
   'use strict';
