@@ -176,6 +176,15 @@ describe('Blocked and muted people: Bonfire sends the whole list whatever limit 
       expect(result.failure).toBe('mismatch');
       expect(result.data).toEqual([]);
     });
+    test(`${route}: strict Spotlight cursor pages reject malformed entries`, async () => {
+      const page = `${route}&max_id=older-1`;
+      globalThis.fetch = mock(async () => new Response(JSON.stringify([acct(1), { display_name: 'missing id' }]), { status: 200 })) as typeof fetch;
+      const strict = await fedizenGet('sentinel', page, { requireCompleteModeration: true });
+      expect(strict.status).toBe(502);
+      const userFacing = await fedizenGet('sentinel', page);
+      expect(userFacing.status).toBe(200);
+      expect(userFacing.data).toHaveLength(1);
+    });
     test(`${route}: Spotlight accepts a complete large moderation list`, async () => {
       const complete = Array.from({ length: 150 }, (_, i) => acct(i));
       globalThis.fetch = mock(async () => new Response(JSON.stringify(complete), { status: 200 })) as typeof fetch;
