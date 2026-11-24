@@ -28,6 +28,8 @@ jobs:
       - run: bun install --frozen-lockfile --ignore-scripts
       - name: Validate strict Spotlight policy and cursor tests
         run: bun test tests/spotlight-moderation.test.ts tests/fedizen-read.test.ts
+      - name: Import and execute the live acceptance program without credentials
+        run: bun scripts/verify-fedizen-spotlight.ts --self-test
 
   # No private bearer may be injected into PR, fork, push or scheduled runs.
   # Only a manually-approved main-branch run may read the two protected test secrets.
