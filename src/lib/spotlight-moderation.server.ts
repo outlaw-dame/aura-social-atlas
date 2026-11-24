@@ -43,7 +43,7 @@ async function completeAccounts(
       (cursor === undefined ? '' : `&max_id=${encodeURIComponent(cursor)}`);
     let result: Awaited<ReturnType<Reader>>;
     try { result = await read(path); } catch { return null; }
-    if (result.status !== 200) return null;
+    if (Date.now() >= deadline || result.status !== 200) return null;
     const parsed = parseAccounts(result.data);
     if (!parsed || accounts.ids.length + parsed.ids.length > MAX_ENTRIES) return null;
     accounts.ids.push(...parsed.ids);
