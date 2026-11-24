@@ -249,7 +249,8 @@ export const getFedizenHomePage = createServerFn({ method: 'GET' }).middleware([
     if (!t) return { posts: [], error: 'not-connected' };
     const r = await fedizenGet(t.access_token, `/api/v1/timelines/home?limit=20&max_id=${cursor}`).catch(() => null);
     if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
-    return { posts: await withArticleAuthors(fromStatuses(r.data as never), 2000, t.access_token), ...(r.next ? { next: r.next } : {}) };
+    // A page the reader hasn't reached yet: link previews' creators within a short budget, so it never waits long.
+    return { posts: await withArticleAuthors(fromStatuses(r.data as never), 800, t.access_token), ...(r.next ? { next: r.next } : {}) };
   });
 
 /**
@@ -287,6 +288,22 @@ type Problem = 'not-connected' | 'needs-permission' | 'expired' | 'unavailable';
 const me = z.object({ expectedAtlasUserId: z.string().uuid() });
 const ulid = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 const problem = (status: number): Problem => (status === 401 ? 'expired' : status === 403 ? 'needs-permission' : 'unavailable');
+/** An older page's cursor (from Fedizen's Link header, sent back as it came). */
+const cursorInput = z.string().min(1).max(512);
+
+/**
+ * One page of a Fedizen timeline: the first, or an older one by `max` (the cursor Fedizen's Link header gave). Link
+ * previews' creators are found within `budget` on the first page and a shorter one on older pages, which the reader
+ * hasn't reached yet and shouldn't wait on.
+ */
+async function timelinePage(token: string, path: string, max: string | undefined): Promise<{ status: number; posts: FedizenPost[]; next?: string }> {
+  const { fedizenGet, PAGE_CURSOR } = await import('./fedizen.server');
+  const cursor = max ? encodeURIComponent(max) : undefined;
+  if (cursor && !PAGE_CURSOR.test(cursor)) return { status: 400, posts: [] };
+  const r = await fedizenGet(token, `${path}${cursor ? `&max_id=${cursor}` : ''}`).catch(() => null);
+  if (!r || r.status !== 200) return { status: r?.status ?? 0, posts: [] };
+  return { status: 200, posts: await withArticleAuthors(fromStatuses(r.data as never), cursor ? 800 : 2000, token), ...(r.next ? { next: r.next } : {}) };
+}
 
 /** The connection for a personal read or write; writes need a grant that includes `write`. */
 async function connection(userId: string, write = false): Promise<{ error: 'not-connected' | 'needs-permission' } | { token: string }> {
@@ -546,11 +563,12 @@ export const changeFedizenBlock = createServerFn({ method: 'POST' }).middleware(
  * fails is left out and named in `missing`, so the rest still shows.
  */
 export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => me.parse(d))
-  .handler(async ({ data, context }): Promise<{ posts: ForYouPost[]; tags: string[]; groups: string[]; missing: ('following' | 'tags' | 'groups')[]; error?: Problem }> => {
+  .inputValidator(d => me.extend({ older: forYouCursors.optional() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: ForYouPost[]; tags: string[]; groups: string[]; missing: ('following' | 'tags' | 'groups')[]; next?: ForYouCursors; error?: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId);
     if ('error' in c) return { posts: [], tags: [], groups: [], missing: [], error: c.error };
+    if (data.older) return olderForYou(c.token, data.older);
     const [{ fedizenGet }, { joinedGroups, popularInGroups }, { rankForYou, fromGroupPost }] = await Promise.all([import('./fedizen.server'), import('./groups.server'), import('./feed-types')]);
     const missing: ('following' | 'tags' | 'groups')[] = [];
     const [home, followed, joined] = await Promise.all([
@@ -566,7 +584,7 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
       Promise.all(tags.map(async tag => {
         // One tag that can't be read leaves the others, and the rest of For You, untouched.
         const r = await fedizenGet(c.token, `/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=10`).catch(() => null);
-        return { tag, ok: r?.status === 200, posts: r?.status === 200 ? fromStatuses(r.data as never) : [] };
+        return { tag, ok: r?.status === 200, posts: r?.status === 200 ? fromStatuses(r.data as never) : [], next: r?.status === 200 ? r.next : undefined };
       })),
       joined ? popularInGroups(joined.groups.map(g => g.id)).catch(() => null) : Promise.resolve(null),
     ]);
@@ -598,8 +616,45 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
     for (let i = 0; i < posts.length; i += 8) hydrated.push(...await Promise.all(posts.slice(i, i + 8).map(hydrate)));
     // Credits and players for the links in them, as on Following.
     const withAuthors = await withArticleAuthors(hydrated);
-    return { posts: withAuthors as ForYouPost[], tags, groups: (joined?.groups ?? []).map(g => g.name), missing };
+    const next = forYouNext(home.status === 200 ? home.next : undefined, tagFeeds);
+    return { posts: withAuthors as ForYouPost[], tags, groups: (joined?.groups ?? []).map(g => g.name), missing, ...(next ? { next } : {}) };
   });
+
+/** Where For You's sources continue: Home's cursor and each followed hashtag's (Fedizen's Link headers). */
+const forYouCursors = z.object({
+  home: cursorInput.optional(),
+  tags: z.record(z.string().regex(/^[\p{L}\p{N}_]{1,100}$/u), cursorInput).refine(t => Object.keys(t).length <= 4).optional(),
+});
+export type ForYouCursors = z.infer<typeof forYouCursors>;
+function forYouNext(home: string | undefined, tags: { tag: string; next?: string }[]): ForYouCursors | undefined {
+  const t = Object.fromEntries(tags.flatMap(x => (x.next ? [[x.tag, x.next]] : [])));
+  return home || Object.keys(t).length ? { ...(home ? { home } : {}), ...(Object.keys(t).length ? { tags: t } : {}) } : undefined;
+}
+
+/**
+ * For You further down: the next page of Home and of each followed hashtag it drew from, ranked the same way. Groups'
+ * popular posts are a ranked set of the last 7 days, not a timeline, so they come only with the first page.
+ */
+async function olderForYou(token: string, older: ForYouCursors): Promise<{ posts: ForYouPost[]; tags: string[]; groups: string[]; missing: ('following' | 'tags' | 'groups')[]; next?: ForYouCursors; error?: Problem }> {
+  const [{ fedizenGet, PAGE_CURSOR }, { rankForYou }] = await Promise.all([import('./fedizen.server'), import('./feed-types')]);
+  const at = (c: string) => { const e = encodeURIComponent(c); return PAGE_CURSOR.test(e) ? e : null; };
+  const missing: ('following' | 'tags' | 'groups')[] = [];
+  const homeCursor = older.home ? at(older.home) : null;
+  const tagEntries = Object.entries(older.tags ?? {}).flatMap(([tag, c]) => { const e = at(c); return e ? [[tag, e] as const] : []; });
+  const [home, tagFeeds] = await Promise.all([
+    homeCursor ? fedizenGet(token, `/api/v1/timelines/home?limit=20&max_id=${homeCursor}`).catch(() => null) : Promise.resolve(null),
+    Promise.all(tagEntries.map(async ([tag, c]) => {
+      const r = await fedizenGet(token, `/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=10&max_id=${c}`).catch(() => null);
+      return { tag, ok: r?.status === 200, posts: r?.status === 200 ? fromStatuses(r.data as never) : [], next: r?.status === 200 ? r.next : undefined };
+    })),
+  ]);
+  if (home?.status === 401) return { posts: [], tags: [], groups: [], missing: [], error: 'expired' };
+  if (homeCursor && home?.status !== 200) missing.push('following');
+  if (tagFeeds.some(t => !t.ok)) missing.push('tags');
+  const posts = rankForYou({ following: home?.status === 200 ? fromStatuses(home.data as never) : [], tags: tagFeeds.map(({ tag, posts }) => ({ tag, posts })), groups: [] });
+  const next = forYouNext(home?.status === 200 ? home.next : undefined, tagFeeds);
+  return { posts: await withArticleAuthors(posts, 800, token) as ForYouPost[], tags: tagFeeds.map(t => t.tag), groups: [], missing, ...(next ? { next } : {}) };
+}
 
 /** The hashtags the person follows on Fedizen (lowercase, no "#"), for marking posts that use them. */
 export const getFollowedTags = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
@@ -633,29 +688,40 @@ export const setTagFollow = createServerFn({ method: 'POST' }).middleware([requi
 /** A hashtag's feed as the person sees it on Fedizen: the posts using it that they may see and act on (Bonfire applies
  *  each post's audience to their account). */
 export const getFedizenTagFeed = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => me.extend({ tag: z.string().regex(/^[\p{L}\p{N}_]{1,100}$/u) }).parse(d))
-  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; error?: Problem }> => {
+  .inputValidator(d => me.extend({ tag: z.string().regex(/^[\p{L}\p{N}_]{1,100}$/u), max: cursorInput.optional() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; next?: string; error?: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId);
     if ('error' in c) return { posts: [], error: c.error };
-    const { fedizenGet } = await import('./fedizen.server');
-    const r = await fedizenGet(c.token, `/api/v1/timelines/tag/${encodeURIComponent(data.tag)}?limit=20`).catch(() => null);
-    if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
-    return { posts: await withArticleAuthors(fromStatuses(r.data as never), 2000, c.token) };
+    const r = await timelinePage(c.token, `/api/v1/timelines/tag/${encodeURIComponent(data.tag)}?limit=20`, data.max);
+    if (r.status !== 200) return { posts: [], error: r.status ? problem(r.status) : 'unavailable' };
+    return { posts: r.posts, ...(r.next ? { next: r.next } : {}) };
+  });
+
+/** Fedizen's Local timeline (its own members' public posts) as the person reads it, so each post can be acted on;
+ *  older pages by the Link cursor. Signed out or not connected, Feeds shows the public GraphQL feed instead. */
+export const getFedizenLocal = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({ max: cursorInput.optional() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; next?: string; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const c = await connection(context.userId);
+    if ('error' in c) return { posts: [], error: c.error };
+    const r = await timelinePage(c.token, '/api/v1/timelines/local?limit=20', data.max);
+    if (r.status !== 200) return { posts: [], error: r.status ? problem(r.status) : 'unavailable' };
+    return { posts: r.posts, ...(r.next ? { next: r.next } : {}) };
   });
 
 /** A circle's feed: posts from the people in it (Bonfire serves circles as Mastodon lists). */
 export const getCircleFeed = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
-  .inputValidator(d => me.extend({ id: ulid }).parse(d))
-  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; error?: Problem | 'not-found' }> => {
+  .inputValidator(d => me.extend({ id: ulid, max: cursorInput.optional() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; next?: string; error?: Problem | 'not-found' }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId);
     if ('error' in c) return { posts: [], error: c.error };
-    const { fedizenGet } = await import('./fedizen.server');
-    const r = await fedizenGet(c.token, `/api/v1/timelines/list/${data.id}?limit=20`);
+    const r = await timelinePage(c.token, `/api/v1/timelines/list/${data.id}?limit=20`, data.max);
     if (r.status === 404) return { posts: [], error: 'not-found' };
-    if (r.status !== 200) return { posts: [], error: problem(r.status) };
-    return { posts: await withArticleAuthors(fromStatuses(r.data as never), 2000, c.token) };
+    if (r.status !== 200) return { posts: [], error: r.status ? problem(r.status) : 'unavailable' };
+    return { posts: r.posts, ...(r.next ? { next: r.next } : {}) };
   });
 
 

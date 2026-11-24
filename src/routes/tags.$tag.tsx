@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowUpRight, Link2, MessageCircle, RefreshCw, Star } from 'lucide-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from '@/components/social/AuthState';
-import { FEED_PROBLEM, useTagFeed } from '@/components/social/useFeeds';
+import { FEED_PROBLEM, useTagFeed, useTagFeedOlder } from '@/components/social/useFeeds';
+import { OlderPosts } from '@/components/social/OlderPosts';
 import { FollowTagButton } from '@/components/social/FollowedHashtags';
 import { useTagFollowState } from '@/components/social/useTagFollow';
 import { StandaloneDesktopHosts } from '@/components/social/DesktopHosts';
@@ -57,7 +58,7 @@ function TagBody({ tag }: { tag: string }) {
     : followState.failed ? <p role="alert" className="text-xs text-muted-foreground">Couldn’t check whether you follow this. <button type="button" className="underline" onClick={followState.retry}>Try again</button></p>
     : null;
   if (personal) return <TagShell tag={tag} action={action}>
-    <FedizenTagPosts posts={fedizen.data?.posts ?? []} tag={tag} failed={fedizen.isError} problem={fedizen.data?.error} retry={() => void fedizen.refetch()} />
+    <FedizenTagPosts data={fedizen.data} norm={norm} tag={tag} failed={fedizen.isError} problem={fedizen.data?.error} retry={() => void fedizen.refetch()} />
   </TagShell>;
   return <PublicTagPage tag={tag} />;
 }
@@ -73,13 +74,15 @@ function TagShell({ tag, action, children }: { tag: string; action?: React.React
   </main>;
 }
 
-function FedizenTagPosts({ posts, tag, failed, problem, retry }: { posts: FedizenPost[]; tag: string; failed: boolean; problem?: keyof typeof FEED_PROBLEM; retry: () => void }) {
+function FedizenTagPosts({ data, norm, tag, failed, problem, retry }: { data: { posts: FedizenPost[]; next?: string; error?: keyof typeof FEED_PROBLEM } | undefined; norm: string; tag: string; failed: boolean; problem?: keyof typeof FEED_PROBLEM; retry: () => void }) {
   const actions = useFeedPostActions();
+  const older = useTagFeedOlder(norm, data);
+  const posts = data?.posts ?? [];
   if (failed || problem === 'unavailable') return <p className="text-sm text-muted-foreground">{FEED_PROBLEM.unavailable} <button type="button" className="underline" onClick={retry}>Try again</button></p>;
   if (problem) return <Reconnect message={FEED_PROBLEM[problem]} tag={tag} />;
   return <>
     {actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}
-    {posts.length ? <div className="space-y-6"><FilterPlaceProvider place="public">{posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} inTag={tag.replace(/^#/, '').toLowerCase()} />)}</FilterPlaceProvider></div>
+    {posts.length ? <div className="space-y-6"><FilterPlaceProvider place="public">{posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} inTag={norm} />)}<OlderPosts older={older} actions={actions} inTag={norm} /></FilterPlaceProvider></div>
       : <p className="text-sm text-muted-foreground">No posts you can see are tagged {tag} yet.</p>}
     {actions.dialog}
   </>;

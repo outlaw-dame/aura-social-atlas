@@ -7,7 +7,9 @@ import { FedizenFeed } from './FedizenFeed';
 import { PublicFedizenFeed } from './PublicFedizenFeed';
 import { RecentArticles } from './RecentArticles';
 import { FeedPostCard, useFeedPostActions } from './FeedPostCard';
-import { FEED_PROBLEM, useCircleFeed, useFeedTabs, useForYou } from './useFeeds';
+import { FEED_PROBLEM, useCircleFeed, useCircleFeedOlder, useFeedTabs, useForYou, useForYouOlder, useLocalFeed } from './useFeeds';
+import { OlderPosts } from './OlderPosts';
+import { FilterPlaceProvider } from './useIntelligence';
 import { useFedizenCircles } from './useFedizenLibrary';
 import { useAtlasAuth } from './AuthState';
 
@@ -41,7 +43,7 @@ export function FeedsView() {
     {feed === 'following' && <FedizenFeed />}
     {feed === 'foryou' && <ForYouFeed />}
     {feed === 'articles' && <RecentArticles />}
-    {feed === 'local' && <PublicFedizenFeed />}
+    {feed === 'local' && <LocalFeed />}
     {circleId && <CircleFeed id={circleId} title={pinned.find(c => c.id === circleId)?.title ?? 'Circle'} />}
   </div>;
 }
@@ -78,6 +80,7 @@ function ForYouFeed() {
   const q = useForYou(true);
   const actions = useFeedPostActions();
   const d = q.data;
+  const older = useForYouOlder(d);
   const sub = d ? [d.tags.length ? `#${d.tags.join(' #')}` : null, d.groups.length ? `${d.groups.length} group${d.groups.length === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ') || 'People you follow' : '';
   return <section className="mb-12"><Head title="For You" sub={sub} />
     {!user ? <p className="text-sm text-muted-foreground">Sign in to Atlas and connect Fedizen for your For You feed.</p>
@@ -87,7 +90,7 @@ function ForYouFeed() {
       : <>
         {actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}
         {d && d.missing.length > 0 && <p role="status" className="mb-4 text-xs text-muted-foreground">Some of For You couldn’t load ({d.missing.map(m => (m === 'following' ? 'people you follow' : m === 'tags' ? 'followed hashtags' : 'your groups')).join(', ')}).</p>}
-        <div className="space-y-6">{d?.posts.length ? d.posts.map(p => <FeedPostCard key={p.url} post={p} actions={actions} reasons={p.reasons} />)
+        <div className="space-y-6">{d?.posts.length ? <>{d.posts.map(p => <FeedPostCard key={p.url} post={p} actions={actions} reasons={p.reasons} />)}<OlderPosts older={older} actions={actions} /></>
           : <p className="text-sm text-muted-foreground">Nothing here yet. Follow people and hashtags, or join groups, and their posts will gather here.</p>}</div>
       </>}
     {actions.dialog}
@@ -98,11 +101,30 @@ function CircleFeed({ id, title }: { id: string; title: string }) {
   const { user } = useAtlasAuth();
   const q = useCircleFeed(id);
   const actions = useFeedPostActions();
+  const older = useCircleFeedOlder(id, q.data);
   return <section className="mb-12"><Head title={title} sub="Circle" />
     {q.isLoading ? <p className="text-sm text-muted-foreground">Loading posts from {title}…</p>
       : q.isError ? <p className="text-sm text-muted-foreground">{FEED_PROBLEM.unavailable} <Button variant="link" size="sm" className="px-1" onClick={() => void q.refetch()}><RotateCw />Try again</Button></p>
       : q.data?.error ? <p className="text-sm text-muted-foreground">{FEED_PROBLEM[q.data.error]}{q.data.error === 'not-found' && user && <> <Button variant="link" size="sm" className="px-1" onClick={() => unpinCircle(user.id, id)}>Unpin it</Button></>}</p>
-      : <>{actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}<div className="space-y-6">{q.data?.posts.length ? q.data.posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} />) : <p className="text-sm text-muted-foreground">No recent posts from the people in {title}.</p>}</div></>}
+      : <>{actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}<div className="space-y-6">{q.data?.posts.length ? <>{q.data.posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} />)}<OlderPosts older={older} actions={actions} /></> : <p className="text-sm text-muted-foreground">No recent posts from the people in {title}.</p>}</div></>}
+    {actions.dialog}
+  </section>;
+}
+
+/**
+ * Local: Fedizen's own members' public posts. Connected, read through the person's account, so every post can be
+ * acted on and older posts load as they scroll; otherwise the public feed, which needs no account.
+ */
+function LocalFeed() {
+  const { user } = useAtlasAuth();
+  const { q, older, connected } = useLocalFeed();
+  const actions = useFeedPostActions();
+  if (!user || (!connected && !q.isLoading)) return <PublicFedizenFeed />;
+  return <section className="mb-12"><Head title="Local" sub="Fedizen" />
+    {actions.error && <p role="alert" className="mb-4 text-sm text-destructive">{actions.error}</p>}
+    {q.isLoading ? <p className="text-sm text-muted-foreground">Loading Local…</p>
+      : <div className="space-y-6"><FilterPlaceProvider place="public">{q.data?.posts.length ? <>{q.data.posts.map(p => <FeedPostCard key={p.id} post={p} actions={actions} />)}<OlderPosts older={older} actions={actions} /></>
+        : <p className="text-sm text-muted-foreground">No public posts on Fedizen yet.</p>}</FilterPlaceProvider></div>}
     {actions.dialog}
   </section>;
 }
