@@ -1043,7 +1043,7 @@ export const getFedizenPoll = createServerFn({ method: 'GET' }).middleware([requ
  */
 export const getFedizenThread = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.extend({ statusId }).parse(d))
-  .handler(async ({ data, context }): Promise<{ post: FedizenPost | null; ancestors: FedizenPost[]; descendants: FedizenPost[]; capped?: true; error?: Problem | 'not-found' }> => {
+  .handler(async ({ data, context }): Promise<{ post: FedizenPost | null; ancestors: FedizenPost[]; descendants: FedizenPost[]; capped?: true; slow?: true; error?: Problem | 'not-found' }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const empty = { post: null, ancestors: [], descendants: [] };
     const c = await connection(context.userId);
@@ -1053,7 +1053,9 @@ export const getFedizenThread = createServerFn({ method: 'GET' }).middleware([re
       fedizenGet(c.token, `/api/v1/statuses/${data.statusId}`).catch(() => null),
       fedizenGet(c.token, `/api/v1/statuses/${data.statusId}/context`).catch(() => null),
     ]);
-    if (!one || one.status !== 200) return { ...empty, error: !one ? 'unavailable' : one.status === 404 ? 'not-found' : problem(one.status) };
+    // `slow`: Fedizen didn't answer within fedizenGet's time limit (or couldn't be reached), rather than refusing.
+    const slow = (r: Awaited<ReturnType<typeof fedizenGet>> | null) => !r || r.failure === 'unreachable';
+    if (!one || one.status !== 200) return { ...empty, error: !one ? 'unavailable' : one.status === 404 ? 'not-found' : problem(one.status), ...(slow(one) ? { slow: true as const } : {}) };
     const [post] = fromStatuses(one.data as never);
     if (!post) return { ...empty, error: 'not-found' };
     // The post alone still opens when its conversation can't be read.
@@ -1063,7 +1065,7 @@ export const getFedizenThread = createServerFn({ method: 'GET' }).middleware([re
     // Fedizen sends at most CONTEXT_REPLY_LIMIT replies and no way to ask for more: say so when it may have stopped there.
     const { CONTEXT_REPLY_LIMIT } = await import('./thread-limits');
     const capped = raw.descendants.length >= CONTEXT_REPLY_LIMIT;
-    return { post: all[0], ancestors: all.slice(1, 1 + n), descendants: all.slice(1 + n), ...(capped ? { capped: true as const } : {}), ...(ctx?.status === 200 ? {} : { error: 'unavailable' as const }) };
+    return { post: all[0], ancestors: all.slice(1, 1 + n), descendants: all.slice(1 + n), ...(capped ? { capped: true as const } : {}), ...(ctx?.status === 200 ? {} : { error: 'unavailable' as const, ...(slow(ctx) ? { slow: true as const } : {}) }) };
   });
 
 /** People asking to follow you: a locked account approves each one (Mastodon /follow_requests). */
