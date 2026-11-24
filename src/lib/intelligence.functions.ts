@@ -210,6 +210,8 @@ export const updateContentFilter = createServerFn({ method: 'POST' }).middleware
     const all = await (await store()).filtersOf(context.userId);
     const own = all.find(f => f.id === data.id);
     const text = data.text !== undefined ? normalizeFilterText(data.text)?.slice(0, 200) : undefined;
+    // A blank/invalid rename must not silently return success while leaving the original filter unchanged.
+    if (data.text !== undefined && !text) throw new Error('Invalid filter text');
     const renamed = !!own && !!text && text !== own.text;
     if (renamed && all.some(f => f.id !== data.id && f.text.toLowerCase() === text.toLowerCase())) return { filters: all, taken: true };
     const patch = {
@@ -219,7 +221,10 @@ export const updateContentFilter = createServerFn({ method: 'POST' }).middleware
       ...(data.places ? { places: data.places } : {}), ...(data.expiresAt !== undefined ? { expires_at: data.expiresAt } : {}),
       ...(data.exceptFollowing !== undefined ? { except_following: data.exceptFollowing } : {}),
     };
-    if (own && Object.keys(patch).length) await supabaseAdmin.from('atlas_content_filters').update(patch).eq('id', data.id).eq('user_id', context.userId);
+    if (own && Object.keys(patch).length) {
+      const { error } = await supabaseAdmin.from('atlas_content_filters').update(patch).eq('id', data.id).eq('user_id', context.userId);
+      if (error) throw new Error('Content filter update failed');
+    }
     return { filters: await (await store()).filtersOf(context.userId) };
   });
 
