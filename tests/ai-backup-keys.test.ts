@@ -70,6 +70,10 @@ describe('backup keys', () => {
     settings.main_key = 'k-bg';
     const mine = job({});
     expect(await withAi('u', 'main', mine.run)).toEqual({ value: 'k-bg' });
+    // The verified recovery must also clear the cooldown, rather than starving future background checks.
+    const recovered = job({});
+    expect(await withAi('u', 'background', recovered.run)).toEqual({ value: 'k-bg' });
+    expect(recovered.tried).toEqual(['k-bg']);
   });
 
   test('streamed HTTP 402 also marks the key out of credit for background work', async () => {
