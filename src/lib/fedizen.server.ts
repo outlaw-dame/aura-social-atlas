@@ -579,6 +579,9 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v1\/lists$/, schema: listsSchema },
   // People you block (Bonfire: MastoAccountController.blocks, people both ghosted and silenced). Instances aren't in it.
   { match: /^\/api\/v1\/blocks\?limit=80$/, schema: moderationListSchema },
+  // Owner-bound complete-list pagination for Spotlight only. Always use the
+  // same fixed host and bounded opaque cursor; no caller-supplied URL.
+  { match: /^\/api\/v1\/blocks\?limit=80&max_id=[A-Za-z0-9_\-.~=%]{1,512}$/, schema: moderationListSchema },
   { match: new RegExp(`^/api/v1/lists/${ID}/accounts\\?limit=80$`), schema: accountsSchema },
   // Which of your circles someone is in (Bonfire circles_containing_subject).
   { match: new RegExp(`^/api/v1/accounts/${ID}/lists$`), schema: listsSchema },
@@ -613,6 +616,7 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v2\/search\?q=[A-Za-z0-9_%]{1,1200}&type=hashtags&limit=8$/, schema: z.object({ hashtags: z.array(z.object({ name: z.string().min(1).max(100) })).max(40) }), single: true },
   // People you mute (Bonfire: MastoAccountController.mutes).
   { match: /^\/api\/v1\/mutes\?limit=80$/, schema: moderationListSchema },
+  { match: /^\/api\/v1\/mutes\?limit=80&max_id=[A-Za-z0-9_\-.~=%]{1,512}$/, schema: moderationListSchema },
   // Posts you liked, newest first (Bonfire: MastoTimelineController.favourites).
   { match: /^\/api\/v1\/favourites\?limit=40$/, schema: bookmarksSchema },
   // Who liked or boosted a post.
@@ -715,7 +719,7 @@ export async function fedizenGet(token: string, path: string, opts: { requireCom
   // ordinary user-facing moderation list keeps its historical tolerant parser.
   // Do not broaden strict parsing to unrelated endpoints or let callers opt
   // into bypassing the existing fixed-path allowlist.
-  const isModerationRoute = path === '/api/v1/blocks?limit=80' || path === '/api/v1/mutes?limit=80';
+  const isModerationRoute = /^\/api\/v1\/(blocks|mutes)\?limit=80(?:&max_id=[A-Za-z0-9_\-.~=%]{1,512})?$/.test(path);
   const parsed = (opts.requireCompleteModeration && isModerationRoute
     ? completeModerationSchema : read.schema).safeParse(payload);
   if (!parsed.success) {
