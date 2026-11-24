@@ -1,6 +1,6 @@
 # Fedizen native moderation API: implementation contract (provider/flavor boundary)
 
-**State:** Source-verified design for the Fedizen Bonfire provider. NOT deployed on Fedizen. Atlas must keep remote-actor Spotlight withheld until a complete owner-authorized policy is available.
+**State (24 Nov 2026):** Provider contract, not deployed on Fedizen. Atlas now has an opt-in, owner-bound native GraphQL consumer, but the default remains OFF. Remote-actor Spotlight stays withheld until the endpoint is deployed, the owner's complete policy is authenticated and the native keyword semantics/UX are verified.
 
 ## Why this is necessary
 
@@ -25,6 +25,7 @@ Use an **explicit, additive** Bonfire/Fedizen flavor extension instead of dumpin
 
 ```graphql
 query AtlasViewerModeration {
+  me { user { character { username } } }
   viewerModeration {
     revision
     complete
@@ -38,6 +39,27 @@ query AtlasViewerModeration {
 Every field is owner-scoped from the authenticated GraphQL context; the query accepts **no** `userId` selector. A nullable object or `complete: false` means **withhold remote Spotlight**. `blockedDomains` is a normalized array of explicitly blocked remote instance hostnames (including both ghost/silence as applicable), not instances the viewer merely follows or peers used for global federation.
 
 The fields must never leak scope from another account, an administrator's unrelated lists, or actor-level blocks mistaken for a whole domain. For admin/global policies, expose a separate effective-policy field only where relevant and authorized. `revision` is a stable owner-policy change token or digest, not a fabricated current-time stamp; a policy update must invalidate it. If revision cannot be computed reliably, omit it and use bounded revalidation without claiming push consistency.
+
+
+## Atlas consumer: shipped code, deliberately disabled by default
+
+The consumer is implemented in `src/lib/spotlight-native-moderation.server.ts` and integrated in `getViewerSpotlight`; the existing strict REST block/mute reads still run. The consumer **does not query GraphQL** unless the operator explicitly sets `ATLAS_BONFIRE_OWNER_MODERATION_READ=enabled` on the Atlas **server** after the provider's own implementation has been deployed and tested. Do not enable this against Fedizen rc.1.
+
+The static GraphQL document includes `me.user.character.username` in the **same authenticated operation** as `viewerModeration`. The client compares that identity to the delegated Fedizen account associated with the authenticated Atlas session; there is no arbitrary `userId` argument. Null or mismatched identity, any GraphQL error/HTTP failure, `complete: false`, malformed arrays, unsafe domain, missing revision or overlong payload fails closed.
+
+The provider MUST guarantee `complete: true` covers the *effective* owner policy, including personal ghost/silence blocked-domain peers and applicable instance-wide domain restrictions; a missing/truncated policy is `complete: false` rather than `[]`. `revision` must be stable for the same effective owner policy, must change after a relevant policy edit, and must never be an arbitrary request-time timestamp. It may be an opaque policy digest (no raw user data). The normalized hostnames are DNS domains (not display handles, URLs or peer record IDs); IDNs may be serialized in their ASCII punycode form.
+
+For now **nonempty `rejectKeywords` or `warnKeywords` suppress remote Spotlight promotion** even with `complete: true`: Bonfire's actual keyword regex/word-boundary semantics and the Spotlight warn/reveal UX must be verified before any remote content can pass those rules. An invalid/missing keyword array is rejected entirely. This restriction is intentional, not a complete native keyword implementation. Native policies are not written to a public cache, Supabase service role or the discovery gateway.
+
+### Activation gates (must all be proven)
+
+1. Fedizen's running, version-pinned provider implements the authenticated `viewerModeration` resolver in its actual deployed GraphQL schema, with owner and effective-instance scope documented and independently tested.
+2. Two consenting test accounts have distinct blocked domains and native keywords; each sees only their own effective policy. Unauthenticated or revoked bearers return no policy. Missing peer host, truncated lists, upstream timeout or malformed keyword data yields incomplete/denied.
+3. Host provenance, IDNs/subdomains, blocked/muted accounts, backend-native reject and warn semantics, policy edits and revision changes are tested against the same Fedizen build.
+4. Full Spotlight acceptance confirms configured native keyword rules have correct outcomes and warn/reveal UI, not just network success; only then consider relaxing the conservative keyword hold.
+5. Only after successful tests and explicit operator decision should the **server-side** flag be enabled. Verify the account-scoped snapshot on refresh and direct Fedizen settings changes without cross-account caching.
+
+This is a **provider API dependency** rather than a requirement to move Bonfire moderation decisions into Atlas or to fork Bonfire's entire architecture. A small additive extension in the existing `bonfire_boundaries` GraphQL resolver (or Fedizen flavor) is preferred.
 
 ## Implementation conditions
 
