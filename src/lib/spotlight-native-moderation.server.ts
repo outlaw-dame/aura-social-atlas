@@ -97,9 +97,15 @@ export async function readOwnerNativeModeration(
   enabled = process.env.ATLAS_BONFIRE_OWNER_MODERATION_READ === 'enabled',
 ): Promise<OwnerNativePolicy | null> {
   if (!enabled || !token || !linkedHandle) return null;
+  // Keep native policy discovery optional in latency as well as correctness.
+  // This never holds the local Spotlight view for GraphQL's full retry budget.
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, AbortSignal.timeout(2500)])
+    : AbortSignal.timeout(2500);
   try {
     return await requestBonfireGraphQL({
       ...options,
+      signal,
       operation: 'query',
       document: VIEWER_MODERATION_DOCUMENT,
       accessToken: token,
