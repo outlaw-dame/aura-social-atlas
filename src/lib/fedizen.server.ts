@@ -621,6 +621,9 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: /^\/api\/v1\/favourites\?limit=40$/, schema: bookmarksSchema },
   // Who liked or boosted a post.
   { match: new RegExp(`^/api/v1/statuses/${ID}/(favourited_by|reblogged_by)\\?limit=40$`), schema: accountsSchema },
+  // Someone's posts as Fedizen has them, newest first, then older pages by the Link header's cursor (Bonfire:
+  // MastoTimelineController.user_statuses over the user_activities feed), so a profile's posts can be acted on.
+  { match: new RegExp(`^/api/v1/accounts/${ID}/statuses\\?limit=20(&max_id=[A-Za-z0-9_\\-.~=%]{1,512})?$`), schema: homeSchema },
   // Your own recent posts, without boosts: the hashtags you used lately come first in the composer's suggestions.
   { match: new RegExp(`^/api/v1/accounts/${ID}/statuses\\?limit=40&exclude_reblogs=true$`), schema: homeSchema },
 ];

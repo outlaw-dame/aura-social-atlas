@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent, hasScope, lookupAcct } from './fedizen-feed';
 import type { FediProfile } from './fedi-profile';
+import type { FedizenPost } from './fedizen-feed';
 
 /**
  * Fediverse profiles shown inside Atlas. Reading one needs no account: it is the person's public ActivityPub
@@ -106,4 +107,36 @@ export const getActorAvatar = createServerFn({ method: 'GET' }).middleware([requ
     const { actorAvatars } = await import('./feed-enrich.server');
     const found = await actorAvatars([data.actor], 4000).catch(() => new Map<string, string>());
     return { avatar: found.get(data.actor) ?? null };
+  });
+
+/**
+ * Someone's posts as the reader's Fedizen has them, so each can be liked, boosted, replied to and saved: the handle is
+ * confirmed against the profile's actor first (as Follow does), then their statuses are read through the reader's
+ * connection, newest first, 20 at a time. Fedizen only has what reached it, so a profile also shows the newest posts
+ * from the account's own server that Fedizen hasn't received yet (useProfilePosts). Older pages pass the Fedizen id
+ * this returned and the cursor.
+ */
+export const getProfilePosts = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.extend({
+    acct: acctInput, actor: actorInput,
+    accountId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(), max: z.string().min(1).max(512).optional(),
+  }).parse(d))
+  .handler(async ({ data, context }): Promise<{ posts: FedizenPost[]; accountId?: string; next?: string; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const [{ tokenFor, fedizenGet, PAGE_CURSOR }, { fromStatuses }, { withArticleAuthors }] = await Promise.all([import('./fedizen.server'), import('./fedizen-feed'), import('./feed-enrich.server')]);
+    const t = await tokenFor(context.userId);
+    if (!t) return { posts: [], error: 'not-connected' };
+    let id = data.accountId;
+    if (!id) {
+      const who = await findOnFedizen(t.access_token, data.acct, data.actor).catch(() => ({ error: 'unavailable' as const }));
+      if ('error' in who) return { posts: [], error: who.error };
+      id = who.id;
+    }
+    // The cursor is Fedizen's own (from its Link header), sent back exactly as the home timeline's is.
+    const cursor = data.max ? encodeURIComponent(data.max) : undefined;
+    if (cursor && !PAGE_CURSOR.test(cursor)) return { posts: [], accountId: id, error: 'unavailable' };
+    const r = await fedizenGet(t.access_token, `/api/v1/accounts/${encodeURIComponent(id)}/statuses?limit=20${cursor ? `&max_id=${cursor}` : ''}`).catch(() => null);
+    if (!r || r.status !== 200) return { posts: [], accountId: id, error: r ? problem(r.status) : 'unavailable' };
+    // Link previews' creators within a short budget: a profile shouldn't wait on other servers.
+    return { posts: await withArticleAuthors(fromStatuses(r.data as never), 800, t.access_token), accountId: id, ...(r.next ? { next: r.next } : {}) };
   });

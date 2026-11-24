@@ -26,6 +26,8 @@ export type FediProfilePost = {
   sensitive?: boolean;
   /** A video post (PeerTube), playable in place. */
   video?: FediVideo;
+  /** Replies, boosts and likes as its own server counts them (ActivityPub collections' totalItems), when it says. */
+  counts?: { replies?: number; boosts?: number; likes?: number };
 };
 export type FediProfile = {
   actor: string;
@@ -160,6 +162,11 @@ export function postsFromOutbox(page: unknown, actorId: string, max = 10,
       id, url: href(o.url) ?? id, date: published && !Number.isNaN(Date.parse(published)) ? published : undefined,
       title, paragraphs, cw, image: img ? href(img.url) : undefined,
       ...(o.sensitive === true ? { sensitive: true } : {}),
+      ...(() => {
+        const total = (c: unknown) => (isObj(c) && typeof c.totalItems === 'number' && Number.isFinite(c.totalItems) && c.totalItems >= 0 ? Math.floor(c.totalItems) : undefined);
+        const counts = { replies: total(o.replies), boosts: total(o.shares), likes: total(o.likes) };
+        return counts.replies != null || counts.boosts != null || counts.likes != null ? { counts } : {};
+      })(),
       ...(() => {
         if (isArticle && summary) return {};
         const r = sourceRich?.(o) ?? htmlToRich(str(o.content));
