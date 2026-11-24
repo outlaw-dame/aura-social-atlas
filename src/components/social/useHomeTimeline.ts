@@ -3,12 +3,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { getFedizenHomeLatest, getFedizenHomePage, type FedizenHome } from '@/lib/fedizen.functions';
 import type { FedizenPost } from '@/lib/fedizen-feed';
-import { appendOlder, CHECK_MAX, CHECK_MIN, newerThan, nextCheckDelay } from '@/lib/home-timeline';
+import { CHECK_MAX, CHECK_MIN, newerThan, nextCheckDelay } from '@/lib/home-timeline';
 import { useReading } from '@/lib/reading-prefs';
 import { useAtlasAuth } from './AuthState';
 import { useShownPosts } from './useIntelligence';
 import { newPostFaces } from '@/lib/new-post-faces';
 import { LIVE_NOTICE_EVENT, LIVE_POST_EVENT, livePosts } from './LiveUpdates';
+import { useLoadMoreSentinel, useOlderPages } from './useOlderPages';
+
+const NO_POSTS: FedizenPost[] = [];
 
 /** The element that scrolls the feed: Framework7's page content on the phone, the window on desktop. */
 const scroller = (el: Element | null): HTMLElement | null => (el?.closest('.page-content') as HTMLElement | null) ?? null;
@@ -35,20 +38,13 @@ export function useHomeTimeline(data: FedizenHome | undefined, enabled: boolean,
   const { slowMode } = useReading();
   const key = useMemo(() => ['fedizen-home', id] as const, [id]);
 
-  // Older pages, appended below the first. They belong to the first page they continued from.
-  const [older, setOlder] = useState<{ from?: string; posts: FedizenPost[]; next?: string; loading: boolean; failed: boolean }>({ posts: [], loading: false, failed: false });
-  const olderNow = older.from === data?.next ? older : { from: data?.next, posts: [] as FedizenPost[], next: undefined, loading: false, failed: false };
-  const cursor = olderNow.posts.length ? olderNow.next : data?.next;
-  const posts = useMemo(() => appendOlder(data?.posts ?? [], olderNow.posts), [data?.posts, olderNow.posts]);
-  const loadOlder = useCallback(async () => {
-    if (!id || !enabled || !cursor || olderNow.loading) return;
-    const from = data?.next;
-    setOlder({ ...olderNow, loading: true, failed: false });
-    const r = await pageFn({ data: { expectedAtlasUserId: id, max: cursor } }).catch(() => ({ posts: [] as FedizenPost[], error: 'unavailable' as const }));
-    setOlder(o => (o.from !== from ? o : 'error' in r && r.error
-      ? { ...olderNow, from, loading: false, failed: true }
-      : { from, posts: [...olderNow.posts, ...r.posts], next: r.next, loading: false, failed: false }));
-  }, [id, enabled, cursor, olderNow, data?.next, pageFn]);
+  // Older pages, below the first: read one page ahead and kept in the query cache (useOlderPages), so leaving Home and
+  // coming back doesn't read them again. They belong to the first page they continued from.
+  const older = useOlderPages(key, data?.posts ?? NO_POSTS, data?.next,
+    (max: string) => pageFn({ data: { expectedAtlasUserId: id!, max } }).catch(() => ({ posts: [] as FedizenPost[], error: 'unavailable' as const })),
+    !!id && enabled);
+  const posts = useMemo(() => [...(data?.posts ?? []), ...older.posts], [data?.posts, older.posts]);
+  const loadOlder = older.loadMore;
 
   // New posts waiting behind the pill.
   const [pending, setPending] = useState<{ posts: FedizenPost[]; gap: boolean; next?: string }>({ posts: [], gap: false });
@@ -158,17 +154,10 @@ export function useHomeTimeline(data: FedizenHome | undefined, enabled: boolean,
   }, [enabled, id, qc, key, put, atTop, check]);
 
   // Fetch the next older page a couple of screens before the reader gets there.
-  const sentinel = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el || !enabled || !cursor || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) void loadOlder(); }, { root: scroller(el), rootMargin: '0px 0px 1600px 0px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [enabled, cursor, loadOlder]);
+  const sentinel = useLoadMoreSentinel(enabled && older.hasMore && !older.failed, loadOlder);
 
   return {
     posts, newCount: shown, gap: pending.gap, faces, reveal,
-    sentinel, hasOlder: !!cursor, loadingOlder: olderNow.loading, olderFailed: olderNow.failed, loadOlder,
+    sentinel, hasOlder: older.hasMore, loadingOlder: older.loading, olderFailed: older.failed, loadOlder,
   };
 }

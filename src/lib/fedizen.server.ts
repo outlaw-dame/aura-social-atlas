@@ -562,6 +562,8 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   // Fedizen-local PUBLIC discovery only; isolated to the authenticated owner
   // because the deployed public route may reject anonymous callers.
   { match: /^\/api\/v1\/timelines\/local\?limit=20$/, schema: homeSchema },
+  // Older pages of Local, as the person reads it in Feeds (Bonfire: MastoTimelineController.local).
+  { match: /^\/api\/v1\/timelines\/local\?limit=20&max_id=[A-Za-z0-9_\-.~=%]{1,512}$/, schema: homeSchema },
   // Exactly one optional older public page for owner-bound Spotlight sampling.
   // Never accept an arbitrary URL, hostname, cursor length or private feed.
   { match: /^\/api\/v1\/timelines\/public\?limit=20&max_id=[A-Za-z0-9_\-.~=%]{1,512}$/, schema: homeSchema },
@@ -592,9 +594,10 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   // For You: the hashtags you follow (Bonfire: MastoTagController.followed), and each one's timeline.
   // 200 is Bonfire's (and Mastodon's) maximum page: the Followed hashtags list in Settings reads one full page.
   { match: /^\/api\/v1\/followed_tags\?limit=(20|100|200)$/, schema: followedTagsSchema },
-  { match: new RegExp(`^/api/v1/timelines/tag/${TAG}\\?limit=(10|20)$`), schema: homeSchema },
+  // …then older pages of each, by the cursor Fedizen's Link header gave (For You, a hashtag's feed).
+  { match: new RegExp(`^/api/v1/timelines/tag/${TAG}\\?limit=(10|20)(&max_id=[A-Za-z0-9_\\-.~=%]{1,512})?$`), schema: homeSchema },
   // A circle's timeline (Bonfire: MastoListController.list_timeline over Circles), for circles pinned to Feeds.
-  { match: new RegExp(`^/api/v1/timelines/list/${ID}\\?limit=20$`), schema: homeSchema },
+  { match: new RegExp(`^/api/v1/timelines/list/${ID}\\?limit=20(&max_id=[A-Za-z0-9_\\-.~=%]{1,512})?$`), schema: homeSchema },
   // What the server takes in a post: its upload size limits and length (Bonfire: InstanceAdapter), for the composer.
   { match: /^\/api\/v2\/instance$/, schema: instanceSchema, single: true },
   // One post, as the person sees it (their like, boost and bookmark, its counts): for group posts read publicly.
