@@ -21,7 +21,9 @@ const duration = (start: number) => Math.round(performance.now() - start);
 async function main() {
   assert(token && expected, 'missing-protected-test-grant');
   const actual = await verifyFedizenReadGrant(token);
-  assert(actual && normalizedAccount(actual) === normalizedAccount(expected), 'owner-grant-mismatch');
+  const actualAccount = actual ? normalizedAccount(actual) : null;
+  const expectedAccount = normalizedAccount(expected);
+  assert(actualAccount && expectedAccount && actualAccount === expectedAccount, 'owner-grant-mismatch');
 
   const policyStarted = performance.now();
   const moderation = await readSpotlightModeration(path =>
