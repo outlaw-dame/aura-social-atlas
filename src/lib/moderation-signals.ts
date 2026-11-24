@@ -1,7 +1,8 @@
 /**
  * What the person's own moderation says about other accounts, for Intelligence's suggestions (Settings → Moderation →
  * Suggestions): who wrote posts their filters caught, who boosts or answers people they've blocked, and who they
- * reported. Counted in the browser as feeds are read (Fedizen doesn't filter for Atlas, and has no API listing a
+ * reported through Atlas. Feed signals are noted only while Intelligence is on; reports always, as the person's own act.
+ * Counted in the browser as feeds are read (Fedizen doesn't filter for Atlas, and has no API listing a
  * person's reports), kept per Atlas account on this device for 30 days, and only ever sent to the person's own AI
  * provider when they ask for suggestions.
  */

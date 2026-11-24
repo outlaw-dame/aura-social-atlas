@@ -281,7 +281,6 @@ export const judgeFilteredPosts = createServerFn({ method: 'POST' }).middleware(
     }
   });
 
-/** Suggestions from the filters in place: what they'd miss, and which ones catch the wrong posts. */
 const Handle = z.string().max(320);
 /** The person's blocks, mutes and the accounts their moderation noticed (moderation-signals), from their browser. */
 const ModerationInput = z.object({
