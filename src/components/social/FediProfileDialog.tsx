@@ -1,13 +1,15 @@
 import { useNavigate } from '@tanstack/react-router';
 import { linkifyPost } from './PostPeople';
-import { useState } from 'react';
-import { ArrowUpRight, BadgeCheck, Bot, Clapperboard, Lock, Mic, Rss, UserCheck, UserPlus, Users } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowUpRight, BadgeCheck, Bot, Clapperboard, Heart, Loader2, Lock, MessageCircle, Mic, Repeat2, Rss, UserCheck, UserPlus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { FediProfile, FediProfileTarget } from '@/lib/fedi-profile';
+import type { FediProfile, FediProfilePost, FediProfileTarget } from '@/lib/fedi-profile';
+import { OPEN_POST_EVENT } from '@/lib/open-post';
+import { FeedPostCard, useFeedPostActions } from './FeedPostCard';
 import { followLabels } from '@/lib/follow-labels';
 import { VideoPlayer } from './VideoPlayer';
-import { FOLLOW_PROBLEM, useFediFollow, useFediProfile, useIsMe } from './useFediProfile';
+import { FOLLOW_PROBLEM, useFediFollow, useFediProfile, useIsMe, useProfilePosts } from './useFediProfile';
 import { FilterPlaceProvider } from './useIntelligence';
 import { FilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
@@ -56,6 +58,8 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
   const navigate = useNavigate();
   const onTag = (tag: string) => { onClose(); void navigate({ to: '/tags/$tag', params: { tag } }); };
   const p = q.data?.profile;
+  // Opening one of their posts shows its conversation: the profile steps aside.
+  useEffect(() => { if (!target) return; const on = () => onClose(); window.addEventListener(OPEN_POST_EVENT, on); return () => window.removeEventListener(OPEN_POST_EVENT, on); }, [target, onClose]);
   return <Dialog open={!!target} onOpenChange={o => { if (!o) onClose(); }}>
     <DialogContent className="max-h-[88vh] max-w-xl overflow-y-auto rounded-3xl p-0">
       {!p ? <DialogHeader className="p-6">
@@ -93,19 +97,66 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
             {n(p.following) && <span><b>{n(p.following)}</b> <span className="text-muted-foreground">following</span></span>}
             {n(p.followers) && <span><b>{n(p.followers)}</b> <span className="text-muted-foreground">followers</span></span>}
           </p>
-          <section className="mt-6 space-y-5" aria-label={`Recent posts by ${p.name}`}>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts'}</h3>
-            <FilterPlaceProvider place="account">{p.posts.map(post => <FilterGate key={post.id} post={post}><article className="border-t border-border pt-4">
-              {post.title && <h3 className="font-serif text-xl">{post.title}</h3>}
-              <AuthorWarning cw={post.cw}><div className="mt-1 space-y-2 text-sm leading-relaxed"><PostBody post={post} onTag={onTag} /></div>
-              <SensitiveMedia sensitive={post.sensitive}>{post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-72 w-full rounded-2xl object-cover" />}</SensitiveMedia></AuthorWarning>
-              <p className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">{day(post.date)}<a href={post.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">Original<ArrowUpRight className="size-3" /></a></p>
-            </article></FilterGate>)}</FilterPlaceProvider>
-            {!p.posts.length && <p className="border-t border-border pt-4 text-sm text-muted-foreground">{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</p>}
-          </section>
+          <ProfilePosts p={p} onTag={onTag} />
           <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">View on {p.host}<ArrowUpRight className="size-3" /></a>
         </div>
       </>}
     </DialogContent>
   </Dialog>;
+}
+
+/**
+ * Their posts: the ones Fedizen has, as feed cards you can reply to, boost, like and save; and, from their own server,
+ * the newest ones Fedizen hasn't received yet, with that server's counts and a link to it. Older posts load as you near
+ * the end.
+ */
+function ProfilePosts({ p, onTag }: { p: FediProfile; onTag: (tag: string) => void }) {
+  const posts = useProfilePosts(p);
+  const actions = useFeedPostActions();
+  const end = useRef<HTMLDivElement>(null);
+  const { hasMore, loadMore } = posts;
+  useEffect(() => {
+    const el = end.current;
+    if (!el || !hasMore || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) loadMore(); }, { rootMargin: '0px 0px 800px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, loadMore]);
+  const title = p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts';
+  return <section className="mt-6" aria-label={`Recent posts by ${p.name}`}>
+    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
+    {actions.error && <p role="alert" className="mt-2 text-sm text-destructive">{actions.error}</p>}
+    <FilterPlaceProvider place="account">
+      <div className="mt-4 space-y-6">
+        {posts.items.map(x => x.kind === 'fedizen'
+          ? <FeedPostCard key={`f-${x.post.id}`} post={x.post} actions={actions} />
+          : <OriginPost key={`o-${x.post.id}`} post={x.post} host={p.host} onTag={onTag} />)}
+      </div>
+    </FilterPlaceProvider>
+    {posts.loading && !posts.items.length && <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Loading their posts…</p>}
+    {!posts.loading && !posts.items.length && <p className="mt-4 text-sm text-muted-foreground">{p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</p>}
+    {posts.hasMore && <div ref={end} className="mt-4 flex justify-center">
+      {posts.loadingMore ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />Loading older posts…</span>
+        : <Button type="button" variant="ghost" size="sm" onClick={posts.loadMore}>{posts.moreFailed ? 'Couldn’t load older posts. Try again' : 'Load older posts'}</Button>}
+    </div>}
+    {actions.dialog}
+  </section>;
+}
+
+/** A post from their own server that Fedizen hasn't received yet: read-only, with that server's counts. */
+function OriginPost({ post, host, onTag }: { post: FediProfilePost; host: string; onTag: (tag: string) => void }) {
+  const c = post.counts;
+  return <FilterGate post={post}><article className="border-t border-border pt-4">
+    {post.title && <h3 className="font-serif text-xl">{post.title}</h3>}
+    <AuthorWarning cw={post.cw}><div className="mt-1 space-y-2 text-sm leading-relaxed"><PostBody post={post} onTag={onTag} /></div>
+      <SensitiveMedia sensitive={post.sensitive}>{post.video ? <VideoPlayer video={post.video} /> : post.image && <img src={post.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-72 w-full rounded-2xl object-cover" />}</SensitiveMedia></AuthorWarning>
+    <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <span>{day(post.date)}</span>
+      {c?.replies != null && <span className="inline-flex items-center gap-1" aria-label={`${c.replies} replies`}><MessageCircle className="size-3.5" />{n(c.replies)}</span>}
+      {c?.boosts != null && <span className="inline-flex items-center gap-1" aria-label={`${c.boosts} boosts`}><Repeat2 className="size-3.5" />{n(c.boosts)}</span>}
+      {c?.likes != null && <span className="inline-flex items-center gap-1" aria-label={`${c.likes} likes`}><Heart className="size-3.5" />{n(c.likes)}</span>}
+      <span title="Fedizen hasn’t received this post yet, so it can’t be liked or boosted from Atlas">Not on Fedizen yet</span>
+      <a href={post.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">Open on {host}<ArrowUpRight className="size-3" /></a>
+    </p>
+  </article></FilterGate>;
 }

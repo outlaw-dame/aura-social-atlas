@@ -370,6 +370,13 @@ export const fediProfile: Impl<typeof FediProfileFns> = {
   },
   getFediProfile: (d: { acct?: string; actor?: string }) => ({ profile: profileOf(d?.acct, d?.actor) }),
   getActorAvatar: (d: { actor: string }) => ({ avatar: profileOf(undefined, d?.actor)?.avatar ?? null }),
+  // Their sample posts as "Fedizen" has them, so profile posts carry actions in the Lab too. One page.
+  getProfilePosts: (d: { acct: string }) => {
+    const x = personByAcct(d.acct); const k = x ? (Object.keys(PEOPLE) as PersonKey[]).find(y => PEOPLE[y] === x) : undefined;
+    if (!k) return { posts: [], error: 'not-found' as const };
+    const mine = ALL_POSTS.filter((p, i, a) => a.findIndex(y => y.id === p.id) === i && p.handle.replace(/^@/, '') === PEOPLE[k].acct && !p.boostedBy);
+    return { posts: shown(mine).slice(0, 20), accountId: person(k).id };
+  },
   getFediFollow: (d: { acct?: string; actor?: string }) => {
     const x = d.acct ? personByAcct(d.acct) : undefined; const k = x ? (Object.keys(PEOPLE) as PersonKey[]).find(y => PEOPLE[y] === x) : undefined;
     return { state: (k && following.has(k) ? 'following' : 'none') as 'following' | 'none', canWrite: true };
