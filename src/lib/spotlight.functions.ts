@@ -77,11 +77,16 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
     // Read the local and federated PUBLIC views concurrently. A sparse global
     // first page (often remote actors withheld pending blocked-instance policy)
     // must not suppress local stories that passed this viewer's own blocks.
-    const [moderation, response, local] = await Promise.all([
+    const { readOwnerNativeModeration, mergeVerifiedOwnerModeration } = await import('./spotlight-native-moderation.server');
+    const [restPolicy, response, local, nativePolicy] = await Promise.all([
       readSpotlightModeration(path => fedizenGet(connected.access_token, path, { requireCompleteModeration: true })),
       fedizenGet(connected.access_token, '/api/v1/timelines/public?limit=20'),
       fedizenGet(connected.access_token, '/api/v1/timelines/local?limit=20'),
+      // Off by default. An unrecognized schema, incomplete provider snapshot,
+      // mismatched bearer owner or native keyword rule never enables remote cards.
+      readOwnerNativeModeration(connected.access_token, connected.account_handle ?? ''),
     ]);
+    const moderation = mergeVerifiedOwnerModeration(restPolicy, nativePolicy);
     if (!moderation || (response.status !== 200 && local.status !== 200)) return { items: [], moderation };
     const localPosts = local.status === 200 && Array.isArray(local.data)
       ? eligiblePublicSpotlightPosts(local.data, moderation) : [];
