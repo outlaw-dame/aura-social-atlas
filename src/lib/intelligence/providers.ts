@@ -81,8 +81,12 @@ export const PREFERRED_MODELS: Record<ProviderId, RegExp[]> = {
   voyage: [], cohere: [], jina: [], openrouter: [],
 };
 
-/** Models that aren't for chat (embeddings, images, speech, moderation…), left out of the model picker. */
-const NOT_CHAT = /(embed|image|imagen|tts|audio|speech|whisper|transcribe|realtime|moderation|dall-e|veo|lyria|vision-preview|ocr|search)/i;
+/**
+ * Models that aren't for chat (embeddings, images, speech, moderation…), left out of the model picker. Google's list
+ * also carries image models (Nano Banana), world models (Genie), robotics, Live API-only models (bidirectional
+ * streaming, not chat completions), attributed QA (aqa), computer use and Antigravity's agent models.
+ */
+const NOT_CHAT = /(embed|image|imagen|tts|audio|speech|whisper|transcribe|realtime|moderation|dall-e|veo|lyria|vision-preview|ocr|search|nano-banana|genie|robotics|-live\b|^(models\/)?aqa$|computer-use|antigravity)/i;
 
 /** The provider's models worth offering for text, newest-looking first, the preferred one first of all. */
 export function chatModels(provider: ProviderId, ids: string[]): string[] {

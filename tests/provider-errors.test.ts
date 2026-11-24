@@ -15,3 +15,15 @@ describe('what a provider said, as the person is told it', () => {
     status(503); expect(await codeOf()).toBe('unavailable');
   });
 });
+
+describe('a model that refuses chat requests', () => {
+  test("Gemini's Live-only model answers 400 to both tries: choose another model, not try again", async () => {
+    const { completeJson } = await import('../src/lib/intelligence/llm');
+    let calls = 0;
+    globalThis.fetch = (async () => { calls++; return new Response('[{"error":{"code":400,"status":"INVALID_ARGUMENT"}}]', { status: 400 }); }) as unknown as typeof fetch;
+    const task = { system: 's', input: {}, schemaName: 'x', schema: { type: 'object' } };
+    const code = await completeJson({ provider: 'google', key: 'invented-key' }, 'gemini-3.8-live', task).then(() => 'ok', e => (e instanceof ProviderError ? e.code : 'other'));
+    expect(code).toBe('bad-model');
+    expect(calls).toBe(2);
+  });
+});

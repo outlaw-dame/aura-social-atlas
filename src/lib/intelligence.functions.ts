@@ -194,23 +194,37 @@ export const addContentFilters = createServerFn({ method: 'POST' }).middleware([
     }
   });
 
-/** Changes a filter: what it does, where and until when, whether it's checked in context, its wordings. */
+/**
+ * Changes a filter: its words, what it does, where and until when, whether it's checked in context, its wordings.
+ * New words replace the filter's kind and drop its wordings (they were other ways of saying the old words); a filter
+ * checked in context gets new ones. Words another filter already has are refused (`taken`).
+ */
 export const updateContentFilter = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator(d => z.object({
-    expectedAtlasUserId: Uid, id: Uid, semantic: z.boolean().optional(), expansions: Wordings.optional(),
+    expectedAtlasUserId: Uid, id: Uid, text: z.string().max(400).optional(), semantic: z.boolean().optional(), expansions: Wordings.optional(),
     action: Options.action.optional(), places: Options.places.optional(), expiresAt: Options.expiresAt.optional(), exceptFollowing: Options.exceptFollowing.optional(),
   }).parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }): Promise<{ filters: ContentFilter[]; taken?: boolean }> => {
     sameSession(data.expectedAtlasUserId, context.userId);
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-    const own = (await (await store()).filtersOf(context.userId)).find(f => f.id === data.id);
+    const all = await (await store()).filtersOf(context.userId);
+    const own = all.find(f => f.id === data.id);
+    const text = data.text !== undefined ? normalizeFilterText(data.text)?.slice(0, 200) : undefined;
+    // A blank/invalid rename must not silently return success while leaving the original filter unchanged.
+    if (data.text !== undefined && !text) throw new Error('Invalid filter text');
+    const renamed = !!own && !!text && text !== own.text;
+    if (renamed && all.some(f => f.id !== data.id && f.text.toLowerCase() === text.toLowerCase())) return { filters: all, taken: true };
     const patch = {
+      ...(renamed ? { text, kind: filterKind(text), expansions: [] } : {}),
       ...(data.action ? { action: data.action } : {}), ...(data.semantic !== undefined ? { semantic: data.semantic } : {}),
-      ...(data.expansions && own ? { expansions: cleanWordings(data.expansions, own.text) } : {}),
+      ...(data.expansions && own ? { expansions: cleanWordings(data.expansions, renamed ? text : own.text) } : {}),
       ...(data.places ? { places: data.places } : {}), ...(data.expiresAt !== undefined ? { expires_at: data.expiresAt } : {}),
       ...(data.exceptFollowing !== undefined ? { except_following: data.exceptFollowing } : {}),
     };
-    if (own && Object.keys(patch).length) await supabaseAdmin.from('atlas_content_filters').update(patch).eq('id', data.id).eq('user_id', context.userId);
+    if (own && Object.keys(patch).length) {
+      const { error } = await supabaseAdmin.from('atlas_content_filters').update(patch).eq('id', data.id).eq('user_id', context.userId);
+      if (error) throw new Error('Content filter update failed');
+    }
     return { filters: await (await store()).filtersOf(context.userId) };
   });
 
@@ -308,7 +322,9 @@ export const embedTextsFor = createServerFn({ method: 'POST' }).middleware([requ
       const { embedWith, EMBEDDING_MODELS } = await import('./intelligence/embeddings');
       const m = EMBEDDING_MODELS[ai.credential.provider];
       if (!m) return { error: 'bad-model' };
-      const vectors = await embedWith(ai.credential, data.texts, data.kind);
+      let vectors: Float32Array[];
+      try { vectors = await embedWith(ai.credential, data.texts, data.kind); } catch (e) { (await store()).noteEmbedding(ai.keyId, e); throw e; }
+      (await store()).noteEmbedding(ai.keyId, null);
       return { key: m.key, vectors: vectors.map(v => Array.from(v)) };
     } catch (e) {
       return { error: (await store()).problem(e) };

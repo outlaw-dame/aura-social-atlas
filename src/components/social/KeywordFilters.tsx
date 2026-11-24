@@ -11,7 +11,9 @@ import { ACTION_LABEL, DURATIONS, PLACE_LABEL, downloadExport, expiresAfter, fil
 import { useAtlasAuth } from './AuthState';
 import { countLabel, totalLabel, useFilteredCounts } from '@/lib/filter-stats';
 
-type Suggestions = { suggestions: { text: string; reason: string }[]; cautions: { filterId: string; issue: string }[] };
+type Suggestions = import('@/lib/intelligence/tasks').FilterSuggestions;
+/** Something that may be wrong with a filter, and the words to change it to when there's a better choice. */
+type Caution = { issue: string; replacement?: string };
 
 /**
  * Desktop: Settings → Moderation → Keyword filters, kept by Atlas and applied in every Atlas feed. Words, phrases,
@@ -27,7 +29,7 @@ export function KeywordFilters() {
   const counts = useFilteredCounts(user?.id);
   const [text, setText] = useState(''), [options, setOptions] = useState<FilterOptions>(DEFAULT_OPTIONS), [duration, setDuration] = useState(0), [more, setMore] = useState(false);
   const [note, setNote] = useState<string | null>(null), [busy, setBusy] = useState(false), [thinking, setThinking] = useState(false);
-  const [suggested, setSuggested] = useState<Suggestions | null>(null), [importing, setImporting] = useState(false), [pasted, setPasted] = useState('');
+  const [suggested, setSuggested] = useState<(Suggestions & { asked: Map<string, string> }) | null>(null), [importing, setImporting] = useState(false), [pasted, setPasted] = useState('');
   const file = useRef<HTMLInputElement>(null);
 
   if (!user) return <p className="text-sm text-muted-foreground">Sign in to Atlas to keep keyword filters.</p>;
@@ -43,8 +45,9 @@ export function KeywordFilters() {
     for (const g of groups) await add(g.texts, g.options);
     setPasted(''); setImporting(false);
   };
-  const aiCautions = new Map<string, string[]>();
-  for (const c of suggested?.cautions ?? []) aiCautions.set(c.filterId, [...(aiCautions.get(c.filterId) ?? []), c.issue]);
+  const aiCautions = new Map<string, Caution[]>();
+  // A caution is about the words the filter had when asked; once they're changed it no longer applies.
+  for (const c of suggested?.cautions ?? []) if (filters.find(f => f.id === c.filterId)?.text === suggested?.asked.get(c.filterId)) aiCautions.set(c.filterId, [...(aiCautions.get(c.filterId) ?? []), { issue: c.issue, replacement: c.replacement }]);
 
   return <div>
     <form className="flex flex-wrap gap-2" onSubmit={async e => { e.preventDefault(); await add([text], { ...options, expiresAt: expiresAfter(DURATIONS[duration].ms) }); setText(''); }}>
@@ -59,7 +62,7 @@ export function KeywordFilters() {
 
     {q.isLoading ? <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
       : <>{filters.length > 0 && <p className="mt-4 text-sm text-muted-foreground">{totalLabel(filters, counts)}</p>}<ul className="mt-2 divide-y divide-border">
-          {filters.map(f => <FilterRow key={f.id} filter={f} ai={ai} count={counts.get(f.id) ?? 0} cautions={[...(cautions.get(f.id) ?? []), ...(aiCautions.get(f.id) ?? [])]} />)}
+          {filters.map(f => <FilterRow key={f.id} filter={f} ai={ai} count={counts.get(f.id) ?? 0} cautions={[...(cautions.get(f.id) ?? []).map(issue => ({ issue })), ...(aiCautions.get(f.id) ?? [])]} />)}
           {!filters.length && <li className="py-3 text-sm text-muted-foreground">No keyword filters yet.</li>}
         </ul></>}
 
@@ -68,7 +71,7 @@ export function KeywordFilters() {
         setThinking(true); setNote(null);
         const r = await act.suggest();
         setThinking(false);
-        if ('error' in r) setNote(AI_PROBLEM[r.error]); else setSuggested(r);
+        if ('error' in r) setNote(AI_PROBLEM[r.error]); else setSuggested({ ...r, asked: new Map(filters.map(f => [f.id, f.text])) });
       }}><Sparkles />{thinking ? 'Thinking…' : 'Suggest filters'}</Button>}
       <Button variant="ghost" className="rounded-full" onClick={() => setImporting(v => !v)}><Upload />Import</Button>
       {filters.length > 0 && <Button variant="ghost" className="rounded-full" onClick={() => downloadExport(filters)}><Download />Export</Button>}
@@ -83,6 +86,7 @@ export function KeywordFilters() {
               <Button size="sm" variant="outline" className="rounded-full" disabled={busy || have} onClick={() => void add([s.text], DEFAULT_OPTIONS)}>{have ? 'Added' : 'Add'}</Button>
             </li>; })}</ul>
         : <p className="text-sm text-muted-foreground">Your filters already cover their topics well.</p>}
+      {aiCautions.size > 0 && <p className="mt-3 text-xs text-muted-foreground">{aiCautions.size === 1 ? 'One of your filters has a note under it' : `${aiCautions.size} of your filters have notes under them`}, above.</p>}
       <Button variant="ghost" size="sm" className="mt-3" onClick={() => setSuggested(null)}>Done</Button>
     </section>}
 
@@ -125,10 +129,13 @@ function OptionsEditor({ options, onChange, duration, onDuration, className = ''
   </div>;
 }
 
-function FilterRow({ filter: f, ai, count, cautions }: { filter: ContentFilter; ai: boolean; count: number; cautions: string[] }) {
+function FilterRow({ filter: f, ai, count, cautions }: { filter: ContentFilter; ai: boolean; count: number; cautions: Caution[] }) {
   const act = useFilterActions();
   const [busy, setBusy] = useState(false), [editing, setEditing] = useState(false), [note, setNote] = useState<string | null>(null);
-  const run = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
+  const [words, setWords] = useState(f.text);
+  // Any message an action returns (a refusal, a provider problem) shows under the filter.
+  const run = async (fn: () => Promise<unknown>) => { setBusy(true); setNote(null); try { const r = await fn(); if (typeof r === 'string') setNote(r); } finally { setBusy(false); } };
+  const rename = (text: string) => run(async () => { const why = await act.update(f.id, { text }); if (!why) setWords(text); return why; });
   const summary = filterSummary(f);
   return <li className="py-3">
     <div className="flex flex-wrap items-center gap-3">
@@ -139,8 +146,17 @@ function FilterRow({ filter: f, ai, count, cautions }: { filter: ContentFilter; 
     </div>
     {!editing && ai && f.semantic && f.expansions.length > 0 && <p className="mt-1 text-xs text-muted-foreground">Also catches {f.expansions.slice(0, 8).join(', ')}{f.expansions.length > 8 ? ` and ${f.expansions.length - 8} more` : ''}</p>}
     {!ai && f.kind === 'topic' && <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">A topic matches posts only through its wordings, which come with Intelligence.</p>}
-    {cautions.map(c => <p key={c} className="mt-1 text-xs text-amber-700 dark:text-amber-400">{c}</p>)}
+    {cautions.map(c => <div key={c.issue} className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <p className="text-xs text-amber-700 dark:text-amber-400">{c.issue}</p>
+      {c.replacement && <Button size="sm" variant="outline" className="h-7 rounded-full text-xs" disabled={busy} onClick={() => void rename(c.replacement!)}>Change to “{c.replacement}”</Button>}
+    </div>)}
+    {!editing && note && <p role="alert" className="mt-1 text-sm text-destructive">{note}</p>}
     {editing && <div className="mt-3 space-y-3">
+      <form className="flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); if (words.trim() && words.trim() !== f.text) void rename(words); }}>
+        <Input className="min-w-56 flex-1" value={words} onChange={e => setWords(e.target.value)} maxLength={200} aria-label={`Words for “${f.text}”`} placeholder="A word, phrase, #hashtag or topic" />
+        <Button type="submit" variant="outline" disabled={busy || !words.trim() || words.trim() === f.text}>Save</Button>
+      </form>
+      {ai && f.semantic && <p className="text-xs text-muted-foreground">Changing the words starts its other wordings again.</p>}
       <div className="flex flex-wrap items-center gap-3"><ActionSelect value={f.action} label={`What “${f.text}” does`} onChange={a => void run(() => act.update(f.id, { action: a }))} /></div>
       <OptionsEditor options={{ action: f.action, places: f.places, expiresAt: f.expiresAt, exceptFollowing: f.exceptFollowing }} onChange={o => void run(() => act.update(f.id, { places: o.places, exceptFollowing: o.exceptFollowing }))}
         duration={f.expiresAt ? -1 : 0} onDuration={i => void run(() => act.update(f.id, { expiresAt: expiresAfter(DURATIONS[i].ms) }))} />

@@ -9,7 +9,7 @@ const keys = [
 let settings: SettingsRow;
 // The store module imports the database client; this test passes its own settings and keys instead, so nothing is
 // mocked (a module mock would leak into other test files).
-const { runWithKeys, _resetResting } = await import('../src/lib/intelligence/store.server');
+const { runWithKeys, _resetResting, noteFailure } = await import('../src/lib/intelligence/store.server');
 const { ProviderError } = await import('../src/lib/intelligence/llm');
 type SettingsRow = import('../src/lib/intelligence/store.server').SettingsRow;
 const open = async (id: string) => ({ provider: keys.find(k => k.id === id)!.provider as 'anthropic', key: `secret-${id}` });
@@ -57,6 +57,31 @@ describe('backup keys', () => {
     const one = job({ 'k-main': 'rate-limited' });
     expect(await withAi('u', 'main', one.run)).toEqual({ problem: 'rate-limited' });
     expect(one.tried).toEqual(['k-main']);
+  });
+
+  test('a key out of credit (HTTP 402) rests: background work answers no-credit without asking again', async () => {
+    settings.fallback = false;
+    const first = job({ 'k-bg': 'no-credit' });
+    expect(await withAi('u', 'background', first.run)).toEqual({ problem: 'no-credit' });
+    const again = job({});
+    expect(await withAi('u', 'background', again.run)).toEqual({ problem: 'no-credit' });
+    expect(again.tried).toEqual([]);
+    // The person's own request still tries it, so adding credit shows at once.
+    settings.main_key = 'k-bg';
+    const mine = job({});
+    expect(await withAi('u', 'main', mine.run)).toEqual({ value: 'k-bg' });
+    // The verified recovery must also clear the cooldown, rather than starving future background checks.
+    const recovered = job({});
+    expect(await withAi('u', 'background', recovered.run)).toEqual({ value: 'k-bg' });
+    expect(recovered.tried).toEqual(['k-bg']);
+  });
+
+  test('streamed HTTP 402 also marks the key out of credit for background work', async () => {
+    settings.fallback = false;
+    noteFailure('k-bg', { statusCode: 402 });
+    const j = job({});
+    expect(await withAi('u', 'background', j.run)).toEqual({ problem: 'no-credit' });
+    expect(j.tried).toEqual([]);
   });
 
   test('Intelligence off: nothing is sent', async () => {
