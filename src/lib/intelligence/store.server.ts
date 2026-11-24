@@ -122,6 +122,7 @@ export async function runWithKeys<T>(s: SettingsRow, keys: KeyRow[], open: (keyI
       if (!c) continue;
       const value = await job(c, p.model, s.deep_matching);
       noCredit.delete(p.keyId);
+      resting.delete(p.keyId);
       return { value };
     } catch (e) {
       const code = problem(e);
@@ -163,7 +164,7 @@ export async function embeddingModel(userId: string): Promise<{ credential: Cred
 
 /** Records how an embeddings request with a key went (rests it after a limit or no credit). */
 export function noteEmbedding(keyId: string, e: unknown | null) {
-  if (e === null) { noCredit.delete(keyId); return; }
+  if (e === null) { noCredit.delete(keyId); resting.delete(keyId); return; }
   const code = problem(e);
   rest(keyId, code);
   if (code === 'no-credit') noCredit.add(keyId);
