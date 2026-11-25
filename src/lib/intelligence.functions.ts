@@ -28,6 +28,8 @@ export type IntelligenceStatus = {
   /** Whose embedding model the semantic index uses with server keys (Anthropic and Kimi have none). */
   embeddingProvider: ProviderId | null;
   deepMatching: boolean; keys: SavedKey[];
+  /** Offer the assistant in Compose, kept with the account; null when never chosen. */
+  assistant: boolean | null;
 };
 
 const store = () => import('./intelligence/store.server');
@@ -118,7 +120,7 @@ export const updateAiKey = createServerFn({ method: 'POST' }).middleware([requir
  */
 export const updateIntelligence = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator(d => z.object({
-    expectedAtlasUserId: Uid, enabled: z.boolean().optional(), deepMatching: z.boolean().optional(), fallback: z.boolean().optional(),
+    expectedAtlasUserId: Uid, enabled: z.boolean().optional(), deepMatching: z.boolean().optional(), fallback: z.boolean().optional(), assistant: z.boolean().optional(),
     main: z.object({ key: Uid, model: Model.optional() }).optional(),
     background: z.object({ key: Uid, model: Model.optional() }).nullable().optional(),
   }).parse(d))
@@ -137,6 +139,7 @@ export const updateIntelligence = createServerFn({ method: 'POST' }).middleware(
     await st.writeSettings(context.userId, {
       ...s,
       enabled: data.enabled ?? s.enabled, deep_matching: data.deepMatching ?? s.deep_matching, fallback: data.fallback ?? s.fallback,
+      assistant: data.assistant ?? s.assistant,
       ...(main ? { main_key: main.key, model: main.model } : {}),
       ...(data.background === null ? { background_key: null, background_model: null } : background ? { background_key: background.key, background_model: background.model } : {}),
     }, keys);

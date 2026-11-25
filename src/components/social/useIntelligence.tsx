@@ -81,6 +81,62 @@ export function whyUnavailable(s: Intelligence | undefined, needsServerKey = fal
 
 export const intelligenceReady = (s?: Intelligence | IntelligenceStatus) => !!s?.available && s.enabled && ('active' in s ? !!s.active : !!s.provider && !!s.model);
 
+/** Where the assistant switch used to live: this browser only, off unless turned on here. */
+const LEGACY_ASSISTANT_KEY = 'atlas-intelligence-enabled';
+const readLegacy = (): string | null => { try { return localStorage.getItem(LEGACY_ASSISTANT_KEY); } catch { return null; } };
+
+/**
+ * Whether the person wants the assistant: their account's choice; before they've made one there, what this browser
+ * had (the old switch); otherwise yes — whoever has a key on Atlas's server that can answer gets the assistant.
+ */
+export function assistantWanted(account: boolean | null | undefined, legacy: string | null): boolean {
+  if (typeof account === 'boolean') return account;
+  if (legacy === '1') return true;
+  if (legacy === '0') return false;
+  return true;
+}
+
+/**
+ * The assistant in Compose (desktop) and the phone's assistant: `ready` when a key on Atlas's server can answer,
+ * `on` when it's also wanted. The choice is kept with the account, so it follows the person to every device; a choice
+ * made in this browser before that is moved to the account once.
+ */
+export function useAssistant() {
+  const { user } = useAtlasAuth();
+  const { data } = useIntelligence();
+  const qc = useQueryClient();
+  const update = useServerFn(updateIntelligence);
+  const ready = intelligenceReady(data) && data?.active?.where === 'server';
+  const legacy = readLegacy();
+  const on = ready && assistantWanted(data?.assistant, legacy);
+  const moving = useRef(false);
+  useEffect(() => {
+    if (!user || !data?.available || data.assistant !== null || (legacy !== '1' && legacy !== '0') || moving.current) return;
+    moving.current = true;
+    update({ data: { expectedAtlasUserId: user.id, assistant: legacy === '1' } })
+      .then(s => { qc.setQueryData(statusKey(user.id), s); try { localStorage.removeItem(LEGACY_ASSISTANT_KEY); } catch { /* kept */ } })
+      // Can't be kept with the account here (say, a database without the column): stay with this browser's choice.
+      .catch(() => undefined);
+  }, [user?.id, data?.available, data?.assistant, legacy]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [, rerender] = useState(0);
+  const set = useCallback(async (want: boolean) => {
+    if (!user) return;
+    const key = statusKey(user.id), before = qc.getQueryData<IntelligenceStatus>(key);
+    if (before) qc.setQueryData(key, { ...before, assistant: want });
+    try {
+      qc.setQueryData(key, await update({ data: { expectedAtlasUserId: user.id, assistant: want } }));
+      try { localStorage.removeItem(LEGACY_ASSISTANT_KEY); } catch { /* kept */ }
+    } catch {
+      // The account couldn't keep it (a database without the column, or a failed save): keep it in this browser, as
+      // before, so the switch still works.
+      if (before) qc.setQueryData(key, before);
+      try { localStorage.setItem(LEGACY_ASSISTANT_KEY, want ? '1' : '0'); } catch { /* storage blocked */ }
+      rerender(n => n + 1);
+    }
+  }, [user, qc, update]);
+  return { ready, on, set };
+}
+
 const problemOf = async (e: unknown): Promise<AiProblem> => {
   const { ProviderError } = await import('@/lib/intelligence/llm');
   if (e instanceof ProviderError) return e.code;

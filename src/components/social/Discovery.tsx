@@ -22,7 +22,7 @@ import { useAtlasAuth } from './AuthState';
 import { useFedizenIdentity } from './useFedizenIdentity';
 import { IdentityAvatar } from './IdentityAvatar';
 import { DesktopHosts } from './DesktopHosts';
-import { intelligenceReady, useIntelligence } from './useIntelligence';
+import { useAssistant } from './useIntelligence';
 
 export type DiscoveryView = 'feeds' | 'discover' | 'groups' | 'activity' | 'messages' | 'profile' | 'settings' | 'intelligence' | 'appearance' | 'moderation' | 'hashtags' | 'notifications' | 'import';
 
@@ -30,9 +30,8 @@ export type DiscoveryView = 'feeds' | 'discover' | 'groups' | 'activity' | 'mess
  *  profile (Saved is a tab there; follows open from its Following count), then Settings. */
 export function Discovery({ view = 'discover', profileSection, groupId }: { view?: DiscoveryView; profileSection?: ProfileSection; groupId?: string }) {
   const state = useSocial();
-  // The assistant answers through /api/chat, so it needs a key kept on Atlas's server.
-  const ai = useIntelligence().data;
-  const aiReady = intelligenceReady(ai) && ai?.active?.where === 'server';
+  // The assistant answers through /api/chat, so it needs a key kept on Atlas's server; on/off follows the account.
+  const assistant = useAssistant();
   const auth = useAtlasAuth();
   const identity = useFedizenIdentity();
   const [query, setQuery] = useState('');
@@ -87,7 +86,7 @@ export function Discovery({ view = 'discover', profileSection, groupId }: { view
         </>}
       </main>
     </div>
-    {!settingsView && <Composer assistantEnabled={state.assistantEnabled && aiReady} onNavigate={url => { if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); else { setQuery(url); setSubmitted(url); } }} />}
+    {!settingsView && <Composer assistantEnabled={assistant.on} onNavigate={url => { if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); else { setQuery(url); setSubmitted(url); } }} />}
     <DesktopHosts collections={collections} />
   </div></div>;
 }

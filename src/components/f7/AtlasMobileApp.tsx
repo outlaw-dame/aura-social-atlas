@@ -40,7 +40,7 @@ import { AppearancePage, MobileSettingsList } from './SettingsPages';
 import { MobileSpotlight, MobileVoicesToKnow } from './Discover';
 import { IntelligencePage, KeywordFilterPage, KeywordFiltersPage } from './Intelligence';
 import { MobileModerationSuggestionsPage } from './ModerationSuggestions';
-import { intelligenceReady, useIntelligence } from '@/components/social/useIntelligence';
+import { useAssistant } from '@/components/social/useIntelligence';
 import { GatewayDiscovery } from '@/components/social/GatewayDiscovery';
 import { Spotlight } from '@/components/social/Spotlight';
 import { VoicesToKnow } from '@/components/social/VoicesToKnow';
@@ -146,10 +146,9 @@ export default function AtlasMobileApp() {
   useEffect(registerAppServiceWorker, []);
   // A tapped notification opens Activity (public/sw.js posts this to the open app).
   useOpenActivityFromPush(useCallback(() => { try { showTab('tab-activity'); } catch { /* not ready */ } }, []));
-  const { appearance, assistantEnabled: assistantWanted } = useSocial();
-  // The assistant answers with the person's own key: only there once Intelligence is on with a key.
-  const intelligence = useIntelligence();
-  const assistantEnabled = assistantWanted && intelligenceReady(intelligence.data) && intelligence.data?.active?.where === 'server';
+  const { appearance } = useSocial();
+  // The assistant answers with the person's own key on Atlas's server; on/off follows the account (useAssistant).
+  const assistantEnabled = useAssistant().on;
   const auth = useAtlasAuth() as { user?: { email?: string } | null; profile?: { display_name: string | null; avatar_key: string | null } | null; signOut?: () => Promise<void> };
   const identity = useFedizenIdentity();
   const [query, setQuery] = useState('');

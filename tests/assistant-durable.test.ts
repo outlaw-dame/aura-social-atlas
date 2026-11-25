@@ -188,3 +188,31 @@ describe('wiring', () => {
     expect(readFileSync('infra/durable-streams/Dockerfile', 'utf8')).toMatch(/ARG DS_COMMIT=0483b435d30b6a60759df5ee2fe21983c7d65eba/);
   });
 });
+
+describe('the assistant switch follows the account', () => {
+  test("the account's choice wins; before one, this browser's old switch; otherwise on", async () => {
+    const { assistantWanted } = await import('../src/components/social/useIntelligence');
+    expect(assistantWanted(true, '0')).toBe(true);
+    expect(assistantWanted(false, '1')).toBe(false);
+    expect(assistantWanted(null, '1')).toBe(true);
+    expect(assistantWanted(null, '0')).toBe(false);
+    expect(assistantWanted(null, null)).toBe(true);
+    expect(assistantWanted(undefined, null)).toBe(true);
+  });
+
+  test('every place that shows or switches the assistant uses the account setting', () => {
+    for (const f of ['src/components/social/Discovery.tsx', 'src/components/f7/AtlasMobileApp.tsx', 'src/components/social/IntelligenceSettings.tsx', 'src/components/f7/Intelligence.tsx']) {
+      const src = readFileSync(f, 'utf8');
+      expect(src).toMatch(/useAssistant\(\)/);
+      expect(src).not.toMatch(/assistantEnabled: assistantWanted|social\.assistantEnabled/);
+    }
+    expect(readFileSync('src/components/social/SocialState.tsx', 'utf8')).not.toMatch(/localStorage/);
+    // Reading works on a database without the new column, and writing only sends it once chosen.
+    const store = readFileSync('src/lib/intelligence/store.server.ts', 'utf8');
+    expect(store).toMatch(/from\('atlas_ai_settings'\)\.select\('\*'\)/);
+    expect(store).toMatch(/\.\.\.\(typeof s\.assistant === 'boolean' \? \{ assistant: s\.assistant \} : \{\}\)/);
+    // Where the account can't keep it, the switch falls back to this browser, as it used to.
+    const hook = readFileSync('src/components/social/useIntelligence.tsx', 'utf8');
+    expect(hook).toMatch(/try \{ localStorage\.setItem\(LEGACY_ASSISTANT_KEY, want \? '1' : '0'\); \}/);
+  });
+});

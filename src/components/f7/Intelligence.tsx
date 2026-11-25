@@ -4,12 +4,11 @@ import { PROVIDERS, PROVIDER_IDS, type ProviderId } from '@/lib/intelligence/pro
 import { BROWSER_CAPABLE } from '@/lib/intelligence/llm';
 import { FILTER_PLACES, MAX_EXPANSIONS, type FilterAction, type FilterPlace } from '@/lib/content-filter';
 import { FEDIZEN_KEYWORD_FILTERS_URL } from '@/lib/fedizen-feed';
-import { AI_PROBLEM, DEFAULT_OPTIONS, type KeyRef, intelligenceReady, whyUnavailable, useContentFilters, useFilterActions, useFilterCautions, useIntelligence, useIntelligenceActions, type FilterOptions } from '@/components/social/useIntelligence';
+import { AI_PROBLEM, DEFAULT_OPTIONS, type KeyRef, intelligenceReady, useAssistant, whyUnavailable, useContentFilters, useFilterActions, useFilterCautions, useIntelligence, useIntelligenceActions, type FilterOptions } from '@/components/social/useIntelligence';
 import { ACTION_LABEL, ACTION_SHORT, DURATIONS, PLACE_LABEL, downloadExport, expiresAfter, filterSummary, parseImport } from '@/components/social/filter-options';
 import { DEVICE_KEY_NOTE, keyTitle } from '@/components/social/IntelligenceSettings';
 import { useAtlasAuth } from '@/components/social/AuthState';
 import { countLabel, totalLabel, useFilteredCounts } from '@/lib/filter-stats';
-import { useSocial } from '@/components/social/SocialState';
 import { pushPage } from './navigation';
 import { MobileSemanticSettings } from './SemanticSettings';
 import { MobileTranslationSettings } from './TranslationSettings';
@@ -17,7 +16,7 @@ import { MobileTranslationSettings } from './TranslationSettings';
 /** Phone: Settings → Intelligence, a pushed page (swipe back). */
 export function IntelligencePage() {
   const { user } = useAtlasAuth();
-  const social = useSocial();
+  const assistant = useAssistant();
   const q = useIntelligence();
   const act = useIntelligenceActions();
   const s = q.data;
@@ -105,7 +104,7 @@ export function IntelligencePage() {
         <BlockTitle>Features</BlockTitle>
         <List strong inset dividers>
           <ListItem title="Assistant" footer={whyUnavailable(s, true) ?? 'A sparkle button opens chat.'}>
-            <Toggle slot="after" checked={social.assistantEnabled && ready && active?.where === 'server'} disabled={!ready || active?.where !== 'server'} onToggleChange={() => social.setAssistantEnabled(!social.assistantEnabled)} />
+            <Toggle slot="after" checked={assistant.on} disabled={!assistant.ready} onToggleChange={() => void assistant.set(!assistant.on)} />
           </ListItem>
           <ListItem title="Check every post against topic filters" footer={whyUnavailable(s) ?? "Also sends every public post you scroll past to your provider."}><Toggle slot="after" checked={s.deepMatching} disabled={!ready || act.busy} onToggleChange={() => void act.update({ deepMatching: !s.deepMatching })} /></ListItem>
           <ListItem link="#" title="Keyword filters" onClick={() => pushPage('/keyword-filters/')} />
