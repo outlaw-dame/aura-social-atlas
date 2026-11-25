@@ -1,8 +1,9 @@
+import { _resetMicrocache } from '../src/lib/fedizen-microcache';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { fedizenGet, fedizenSend, fedizenUpload } from '../src/lib/fedizen.server';
 
 const realFetch = globalThis.fetch;
-afterEach(() => { globalThis.fetch = realFetch; });
+afterEach(() => { globalThis.fetch = realFetch; _resetMicrocache(); });
 
 describe('Fedizen private reads and writes are allowlisted', () => {
   test('refuses reads and writes outside the allowlist before any request', async () => {
@@ -33,6 +34,7 @@ describe('Fedizen private reads and writes are allowlisted', () => {
     expect((ok.data[0] as Record<string, unknown>).extra).toBeUndefined();
     expect(seen?.redirect).toBe('manual');
     expect(seen?.cache).toBe('no-store');
+    _resetMicrocache(); // the first answer would otherwise be reused for a few seconds
     globalThis.fetch = (async () => new Response('[{"unread":true}]')) as unknown as typeof fetch;
     expect(await fedizenGet('t', '/api/v1/conversations?limit=30')).toMatchObject({ status: 502, data: [], failure: 'mismatch' });
   });

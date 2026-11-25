@@ -12,6 +12,8 @@
  * Accounts are told apart by a hash of their token; no token is kept here.
  */
 
+import { _resetMicrocache, forgetMicrocache } from './fedizen-microcache';
+
 const DEFAULT_WAIT_MS = 15_000;
 const MIN_WAIT_MS = 1_000;
 const MAX_WAIT_MS = 120_000;
@@ -84,9 +86,12 @@ export function keepStatus(account: string, path: string, value: unknown, now: n
 export function forgetAccountReads(account: string): void {
   const prefix = `${account} `;
   for (const key of statuses.keys()) if (key.startsWith(prefix)) statuses.delete(key);
+  // And its micro-cached reads (fedizen-microcache.ts), so its own like, reply or block shows on the next read.
+  forgetMicrocache(account);
 }
 
 /** Test seam. */
 export function resetRateLimitState(): void {
   waitUntil.clear(); statuses.clear(); recent.length = 0; sharedUntil = 0;
+  _resetMicrocache();
 }
