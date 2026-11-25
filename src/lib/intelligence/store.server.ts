@@ -21,13 +21,23 @@ export function problem(e: unknown): AiProblem {
 export type SettingsRow = {
   enabled: boolean; provider: string | null; model: string | null; deep_matching: boolean;
   main_key: string | null; background_key: string | null; background_model: string | null; fallback: boolean;
+  /** Offer the assistant in Compose; null when never chosen (then it's offered whenever a server key can answer). */
+  assistant?: boolean | null;
 };
 const NO_SETTINGS: SettingsRow = { enabled: false, provider: null, model: null, deep_matching: false, main_key: null, background_key: null, background_model: null, fallback: true };
 
 export async function readSettings(userId: string): Promise<SettingsRow> {
-  const { data, error } = await supabaseAdmin.from('atlas_ai_settings').select('enabled, provider, model, deep_matching, main_key, background_key, background_model, fallback').eq('user_id', userId).maybeSingle();
+  // '*' rather than a column list, so a database without the newer `assistant` column (migration
+  // 20261126010000_assistant_setting.sql not applied) still reads everything else.
+  const { data, error } = await supabaseAdmin.from('atlas_ai_settings').select('*').eq('user_id', userId).maybeSingle();
   if (error) throw Object.assign(new Error('storage'), { storage: true });
-  return (data as SettingsRow | null) ?? NO_SETTINGS;
+  if (!data) return NO_SETTINGS;
+  const r = data as SettingsRow;
+  return {
+    enabled: r.enabled, provider: r.provider, model: r.model, deep_matching: r.deep_matching, main_key: r.main_key,
+    background_key: r.background_key, background_model: r.background_model, fallback: r.fallback,
+    assistant: typeof r.assistant === 'boolean' ? r.assistant : null,
+  };
 }
 
 export const roleSettings = (s: SettingsRow): RoleSettings => ({ mainKey: s.main_key, mainModel: s.model, backgroundKey: s.background_key, backgroundModel: s.background_model, fallback: s.fallback });
@@ -40,6 +50,8 @@ export async function writeSettings(userId: string, s: SettingsRow, keys: KeyRow
     main_key: main?.keyId ?? null, provider: main?.provider ?? null, model: main?.model ?? null,
     background_key: main && s.background_key && keys.some(k => k.id === s.background_key) ? s.background_key : null,
     background_model: main && s.background_key ? s.background_model : null,
+    // Only once chosen, so writing other settings works on a database without the column.
+    ...(typeof s.assistant === 'boolean' ? { assistant: s.assistant } : {}),
     updated_at: new Date().toISOString(),
   });
   if (error) throw Object.assign(new Error('storage'), { storage: true });
@@ -47,14 +59,14 @@ export async function writeSettings(userId: string, s: SettingsRow, keys: KeyRow
 
 /** Settings as the page sees them. `available` means the tables exist; `serverKeys` that keys can be kept here. */
 export async function status(userId: string): Promise<IntelligenceStatus> {
-  const off: IntelligenceStatus = { available: false, serverKeys: false, enabled: false, provider: null, model: null, mainKey: null, background: null, fallback: true, embeddingProvider: null, deepMatching: false, keys: [] };
+  const off: IntelligenceStatus = { available: false, serverKeys: false, enabled: false, provider: null, model: null, mainKey: null, background: null, fallback: true, embeddingProvider: null, deepMatching: false, assistant: null, keys: [] };
   try {
     const s = await readSettings(userId);
     const serverKeys = await vaultReady();
     const keys = serverKeys ? await savedKeys(userId) : [];
     const rs = roleSettings(s), main = mainPick(rs, keys), bg = backgroundPick(rs, keys);
     return {
-      available: true, serverKeys, enabled: s.enabled, deepMatching: s.deep_matching, fallback: s.fallback,
+      available: true, serverKeys, enabled: s.enabled, deepMatching: s.deep_matching, fallback: s.fallback, assistant: s.assistant ?? null,
       provider: main?.provider ?? null, model: main?.model ?? null, mainKey: main?.keyId ?? null,
       background: main && bg && s.background_key && keys.some(k => k.id === s.background_key) ? { key: bg.keyId, provider: bg.provider, model: bg.model } : null,
       embeddingProvider: embeddingPick(rs, keys)?.provider ?? null,

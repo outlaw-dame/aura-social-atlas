@@ -61,6 +61,7 @@ export type Database = {
       }
       atlas_ai_settings: {
         Row: {
+          assistant: boolean | null
           background_key: string | null
           background_model: string | null
           deep_matching: boolean
@@ -73,6 +74,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          assistant?: boolean | null
           background_key?: string | null
           background_model?: string | null
           deep_matching?: boolean
@@ -85,6 +87,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          assistant?: boolean | null
           background_key?: string | null
           background_model?: string | null
           deep_matching?: boolean

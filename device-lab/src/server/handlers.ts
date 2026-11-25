@@ -409,7 +409,7 @@ const SAMPLE_KEYS: IntelligenceStatus['keys'] = [
 ];
 const aiStatus: IntelligenceStatus = {
   available: true, serverKeys: true, enabled: false, provider: 'anthropic', model: 'claude-haiku-5-5', mainKey: SAMPLE_KEYS[0].id,
-  background: null, fallback: true, embeddingProvider: 'openai', deepMatching: false, keys: SAMPLE_KEYS,
+  background: null, fallback: true, embeddingProvider: 'openai', deepMatching: false, assistant: null, keys: SAMPLE_KEYS,
 };
 const pickKey = (c: { key: string; model?: string }) => { const k = SAMPLE_KEYS.find(x => x.id === c.key); return k ? { k, model: c.model && k.models.includes(c.model) ? c.model : k.model ?? k.models[0] } : null; };
 /**
@@ -440,10 +440,11 @@ export const intelligence: Impl<typeof Intelligence> = {
   saveAiKey: () => ({ error: 'not-configured' as const }),
   removeAiKey: () => aiStatus,
   updateAiKey: (d: { keyId: string; label?: string | null }) => { const k = SAMPLE_KEYS.find(x => x.id === d.keyId); if (k && d.label !== undefined) k.label = d.label; return aiStatus; },
-  updateIntelligence: (d: { deepMatching?: boolean; fallback?: boolean; enabled?: boolean; main?: { key: string; model?: string }; background?: { key: string; model?: string } | null }) => {
+  updateIntelligence: (d: { deepMatching?: boolean; fallback?: boolean; enabled?: boolean; assistant?: boolean; main?: { key: string; model?: string }; background?: { key: string; model?: string } | null }) => {
     if (d.deepMatching != null) aiStatus.deepMatching = d.deepMatching;
     if (d.fallback != null) aiStatus.fallback = d.fallback;
     if (d.enabled != null) aiStatus.enabled = d.enabled;
+    if (d.assistant != null) aiStatus.assistant = d.assistant;
     const m = d.main && pickKey(d.main);
     if (m) Object.assign(aiStatus, { mainKey: m.k.id, provider: m.k.provider, model: m.model });
     if (d.background === null) aiStatus.background = null;
