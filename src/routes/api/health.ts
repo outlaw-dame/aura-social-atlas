@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-/** When this server process started, to tell a fresh wake (Railway App Sleeping) from one that stayed up. */
+/** When this server process started, to tell a fresh start from one that stayed up. */
 const STARTED = Date.now();
 
 /**
- * GET/HEAD /api/health: whether Atlas's server is up, for a keep-awake ping and for Railway's healthcheck.
- * It touches nothing else (no Fedizen, no Supabase, no page render), so a ping costs almost nothing and can't be
- * slowed or failed by Fedizen. Nothing about any account; never cached.
+ * GET/HEAD /api/health: whether Atlas's server is up, for Railway's healthcheck. It touches nothing else (no Fedizen,
+ * no Supabase, no page render), so it costs almost nothing and can't be slowed or failed by Fedizen. Nothing about any
+ * account; never cached.
  */
 function health(method: "GET" | "HEAD") {
   const body = JSON.stringify({ ok: true, uptimeSeconds: Math.round((Date.now() - STARTED) / 1000) });

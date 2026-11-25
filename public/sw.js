@@ -4,9 +4,10 @@
  * connection and only as a top-level page (src/lib/register-sw.ts).
  *
  * - Navigations: network first (with navigation preload), but the /app shell kept from last time is shown when
- *   the network takes over NAV_TIMEOUT_MS or answers with an error: Atlas's server sleeps when idle (Railway App
- *   Sleeping), and waking it takes 1–10 s and may answer 502 first. The fresh shell is still saved for next time.
- *   Offline falls back to the cached shell as before.
+ *   the network takes over NAV_TIMEOUT_MS or answers with an error. While Atlas's server restarts (a deploy, a
+ *   crash), Cloudflare Tunnel answers 502 at once, so a navigation that gets 502/503/504 or no connection is asked
+ *   again after 1 s and 2 s (RETRY_DELAYS_MS, as src/lib/restart-retry.ts does for reads); the fresh shell is still
+ *   saved for next time. Offline falls back to the cached shell as before.
  * - Hashed build assets (/assets/*): cache first — their names change whenever their content does.
  * - Icons and the manifest: stale-while-revalidate.
  * - API, auth and server-function requests, and anything that isn't GET: never touched.
@@ -95,10 +96,28 @@ async function trim(cacheName, max) {
 }
 
 const NAV_TIMEOUT_MS = 2000;
+const RESTARTING_STATUSES = [502, 503, 504];
+const RETRY_DELAYS_MS = [1000, 2000];
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The navigation's answer, asked again (fresh, without the preload) while the server is restarting.
+async function navigationResponse(event) {
+  for (let attempt = 0; ; attempt++) {
+    const last = attempt >= RETRY_DELAYS_MS.length;
+    try {
+      const response = (attempt === 0 && (await event.preloadResponse)) || (await fetch(event.request));
+      if (last || !RESTARTING_STATUSES.includes(response.status)) return response;
+    } catch (error) {
+      if (last) throw error;
+    }
+    await pause(RETRY_DELAYS_MS[attempt]);
+  }
+}
+
 async function navigation(event) {
   const isShell = new URL(event.request.url).pathname === SHELL_URL;
   const cache = await caches.open(SHELL_CACHE);
-  const network = (async () => (await event.preloadResponse) || fetch(event.request))().then((response) => {
+  const network = navigationResponse(event).then((response) => {
     if (response.ok && isShell) return cache.put(SHELL_URL, response.clone()).then(() => response, () => response);
     return response;
   });

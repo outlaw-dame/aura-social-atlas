@@ -2,6 +2,7 @@ import { createStart, createMiddleware, createCsrfMiddleware } from "@tanstack/r
 
 import { renderErrorPage } from "./lib/error-page";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
+import { retryWhileRestarting } from "./lib/restart-retry";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -29,4 +30,7 @@ export const startInstance = createStart(() => ({
     createCsrfMiddleware({ filter: (ctx) => ctx.handlerType === "serverFn" }),
     errorMiddleware,
   ],
+  // In the browser, server-function reads ride out a server restart instead of failing on the tunnel's 502
+  // (src/lib/restart-retry.ts). Writes are sent once, as before.
+  serverFns: { fetch: retryWhileRestarting((input, init) => fetch(input, init)) },
 }));

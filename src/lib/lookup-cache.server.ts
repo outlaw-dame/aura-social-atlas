@@ -1,10 +1,10 @@
 /**
  * Public lookups kept in Supabase (server only), so they outlive the server's memory.
  *
- * Staging runs with Railway App Sleeping: the service sleeps 5–10 min after its last outbound traffic and its memory
- * starts empty on every wake (nine wakes in nine hours on 25 Nov 2026). The in-memory caches for actors' avatars,
- * article credits and Voices to know then refill from dozens of other servers while the person waits. These helpers
- * are a second level behind those memory caches:
+ * The server's memory starts empty after every restart and deploy (and, while staging ran with Railway App Sleeping,
+ * on every wake: nine in nine hours on 25 Nov 2026). The in-memory caches for actors' avatars, article credits and
+ * Voices to know then refill from dozens of other servers while the person waits. These helpers are a second level
+ * behind those memory caches:
  * - read: one query for all the keys a page needs, given at most READ_BUDGET_MS; a slow or failing database just
  *   means the lookups go to the network as before;
  * - write: batched (WRITE_DELAY_MS) and fire-and-forget, never awaited by a page;
