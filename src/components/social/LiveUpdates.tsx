@@ -52,6 +52,8 @@ export function LiveUpdates() {
     if (!user || typeof window === 'undefined' || typeof ReadableStream === 'undefined') return;
     let stop = false, ctrl: AbortController | null = null, wait = 2000, timer: ReturnType<typeof setTimeout> | undefined, off = false;
     let hubs: 'unknown' | 'yes' | 'no' = 'unknown';
+    // The hub moved this tab to a fresh stream (`rotate`): read the new one from its start, nothing to catch up on.
+    let rotated = false;
     // What a missed event would have needed: Home checks (LIVE_NOTICE_EVENT), Activity and Messages refresh.
     const resync = () => {
       void qc.invalidateQueries({ queryKey: ['fedizen-notification-groups', user.id] });
@@ -65,6 +67,7 @@ export function LiveUpdates() {
     };
     const handleEvent = (event: string, d: Record<string, unknown>) => {
       if (event === 'resync') resync();
+      else if (event === 'rotate') rotated = true;
       else if (event === 'ready') { set({ connected: true, posts: d.posts === true }); wait = 2000; }
       else if (event === 'post' && d.post && typeof d.post === 'object') window.dispatchEvent(new CustomEvent<{ post: FedizenPost; edited: boolean }>(LIVE_POST_EVENT, { detail: { post: d.post as FedizenPost, edited: d.edited === true } }));
       else if (event === 'delete' && typeof d.id === 'string') markDeleted(d.id);
@@ -86,8 +89,9 @@ export function LiveUpdates() {
       const { id, streamUrl, posts } = await s.json() as { id: string; streamUrl: string; posts?: boolean | null };
       const saved = readSaved(user.id);
       // A hub this tab hasn't read: start from now, and catch up on whatever the old one would have brought.
-      const offset = saved?.hub === id ? saved.offset : 'now';
-      if (saved && saved.hub !== id) resync();
+      const offset = saved?.hub === id ? saved.offset : rotated ? '-1' : 'now';
+      if (saved && saved.hub !== id && !rotated) resync();
+      rotated = false;
       const res = await readStream<Record<string, unknown>>({
         url: hubUrl(streamUrl, window.location.href), live: 'sse', json: true, offset, signal,
         headers: { Authorization: bearer },
