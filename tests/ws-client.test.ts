@@ -47,6 +47,7 @@ const out = {};
   const got = collect(ws);
   await until(() => got.length > 0);
   out.refused = got.map(g => g.type);
+  out.refusedWhy = got[0]?.data;
   s.close();
 }
 { // closing from either side
@@ -122,8 +123,9 @@ describe("Atlas's WebSocket client for Fedizen, on Node", () => {
   test('large and fragmented messages arrive whole; pings are answered', () => {
     expect(results.messages).toEqual({ bigOk: true, fragmented: 'part one and two', ponged: true });
   });
-  test('a refused handshake is an error, never an open', () => {
+  test('a refused handshake is an error with its status, never an open', () => {
     expect(results.refused).toEqual(['error']);
+    expect(results.refusedWhy).toEqual({ why: 'refused', status: 403 });
   });
   test('closed during the handshake: the connection is dropped and nothing is emitted after the close', () => {
     expect(results.earlyClose).toEqual({ events: ['close'], socketClosed: true });
