@@ -7,7 +7,7 @@ liveDeps.server = async () => ({
   liveStatus: (s: unknown) => (s && typeof s === 'object' && 'id' in s ? s : null),
 }) as never;
 // No real WebSockets in tests unless a test brings its own.
-liveDeps.WebSocket = undefined;
+liveDeps.openWs = undefined;
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
@@ -56,26 +56,37 @@ describe('Live updates stream', () => {
     expect(out).toContain('event: notification');
     expect(out).not.toContain('Ann liked'); // Bonfire's own text and links aren't passed on
   });
-  test("on Node: Fedizen's WebSocket through the runtime's client, the token only as the subprotocol", async () => {
+  test("on Node: Fedizen's WebSocket through Atlas's own client, the token only as the subprotocol", async () => {
     globalThis.fetch = (async () => new Response('no upgrade', { status: 400 })) as unknown as typeof fetch;
-    const made: { url: string; protocols: unknown }[] = [];
+    const made: { url: string; protocol: string }[] = [];
     const listeners: Record<string, ((e: { data?: unknown }) => void)[]> = {};
-    liveDeps.WebSocket = class {
-      constructor(url: string, protocols?: string | string[]) { made.push({ url, protocols }); setTimeout(() => listeners.open?.forEach(l => l({})), 5); }
-      close() {}
-      addEventListener(t: string, l: (e: { data?: unknown }) => void) { (listeners[t] ??= []).push(l); }
-    } as never;
+    liveDeps.openWs = async () => (url: string, protocol: string) => {
+      made.push({ url, protocol });
+      setTimeout(() => listeners.open?.forEach(l => l({})), 5);
+      return { close() {}, addEventListener(t: string, l: (e: { data?: unknown }) => void) { (listeners[t] ??= []).push(l); } };
+    };
     try {
       const reading = readAll(liveStream('u1', new AbortController().signal), t => t.includes('event: delete'));
       await new Promise(r => setTimeout(r, 30));
       listeners.message.forEach(l => l({ data: JSON.stringify({ event: 'delete', payload: '01C' }) }));
       const out = await reading;
-      expect(made).toEqual([{ url: 'wss://fedizen.net/api/v1/streaming?stream=user', protocols: ['secret-token'] }]);
+      expect(made).toEqual([{ url: 'wss://fedizen.net/api/v1/streaming?stream=user', protocol: 'secret-token' }]);
       expect(out).toContain('"type":"ready","posts":true');
       expect(out).toContain('"type":"delete","id":"01C"');
       expect(out).not.toContain('secret-token');
     } finally {
-      liveDeps.WebSocket = undefined;
+      liveDeps.openWs = undefined;
     }
+  });
+
+  test("Bonfire's SSE is read at its own path, /api/v1-bonfire/streaming", async () => {
+    const urls: string[] = [];
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      urls.push(String(url));
+      if (new Headers(init?.headers).get('upgrade')) return new Response('no', { status: 400 });
+      return new Response('', { headers: { 'content-type': 'text/event-stream' } });
+    }) as unknown as typeof fetch;
+    await readAll(liveStream('u1', new AbortController().signal), () => false);
+    expect(urls).toEqual(['https://fedizen.net/api/v1/streaming?stream=user', 'https://fedizen.net/api/v1-bonfire/streaming']);
   });
 });

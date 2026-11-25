@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { _resetHubs, _sweep, hubDeps, hubFor, IDLE_MS, readyHubFor, STREAM_TTL_SECONDS, touchHub } from '../src/lib/live-hub.server';
+import { _resetHubs, _sweep, hubDeps, hubFor, IDLE_MS, readyHubFor, RENEW_MS, ROTATE_MS, STREAM_TTL_SECONDS, touchHub } from '../src/lib/live-hub.server';
 import type { Outgoing } from '../src/lib/live.server';
 import { hubUrl } from '../src/components/social/LiveUpdates';
 
@@ -91,6 +91,67 @@ describe('one live hub per person, on a Durable Stream', () => {
   });
 });
 
+describe('hardening', () => {
+  test('an append that fails closes the hub, so readers come back and catch up', async () => {
+    const { id } = hubFor(cfg, 'u1');
+    upstreams[0].out({ type: 'ready', posts: true });
+    await tick();
+    // The stream server stops taking appends.
+    streams[0].appended.push = () => { throw new Error('stream server gone'); };
+    upstreams[0].out({ type: 'notification' });
+    await tick();
+    expect(touchHub('u1', id)).toBe(false);
+    expect(upstreams[0].closed).toBe(true);
+  });
+
+  test('every ROTATE_MS the hub moves to a fresh stream: rotate on the old one, new events on the new', async () => {
+    const first = hubFor(cfg, 'u1');
+    upstreams[0].out({ type: 'ready', posts: true });
+    await tick();
+    now += ROTATE_MS + 1;
+    hubFor(cfg, 'u1'); // a read: still active
+    _sweep();
+    await tick();
+    upstreams[0].out({ type: 'notification' });
+    await tick();
+    const second = hubFor(cfg, 'u1');
+    expect(second.id).not.toBe(first.id);
+    expect(streams[0].appended.map(e => e.type)).toEqual(['ready', 'rotate']);
+    expect(streams[0].closed).toBe(true);
+    expect(streams[1].appended.map(e => e.type)).toEqual(['notification']);
+    // Moving streams isn't a gap: no resync anywhere.
+    expect([...streams[0].appended, ...streams[1].appended].some(e => e.type === 'resync')).toBe(false);
+    expect(touchHub('u1', first.id)).toBe(false);
+    expect(touchHub('u1', second.id)).toBe(true);
+  });
+
+  test('every RENEW_MS a new Fedizen connection comes up before the old goes; nothing twice, no resync', async () => {
+    hubDeps.overlapMs = 30;
+    try {
+      hubFor(cfg, 'u1');
+      upstreams[0].out({ type: 'ready', posts: true });
+      await tick();
+      now += RENEW_MS + 1;
+      hubFor(cfg, 'u1');
+      _sweep();
+      expect(upstreams.length).toBe(2);
+      upstreams[1].out({ type: 'ready', posts: true });
+      // The same post from both while they overlap: once on the stream.
+      upstreams[0].out({ type: 'post', post: { id: 'p1' } });
+      upstreams[1].out({ type: 'post', post: { id: 'p1' } });
+      await new Promise(r => setTimeout(r, 60));
+      expect(upstreams[0].closed).toBe(true);
+      upstreams[0].done(); // the old one closing doesn't start a reconnect
+      upstreams[1].out({ type: 'delete', id: 'p9' });
+      await tick();
+      expect(streams[0].appended.map(e => e.type)).toEqual(['ready', 'ready', 'post', 'delete']);
+      expect(upstreams.length).toBe(2);
+    } finally {
+      hubDeps.overlapMs = 10_000;
+    }
+  });
+});
+
 describe('a stream server that does not answer', () => {
   test('no hub is handed out; the browser uses /api/live this time', async () => {
     hubDeps.stream = (() => ({ create: async () => { throw new Error('refused'); }, append: async () => {}, close: async () => ({}) })) as never;
@@ -114,8 +175,8 @@ describe('the browser side', () => {
 
   test('resumes from where this tab read; a new hub means catching up the old way', () => {
     const src = readFileSync('src/components/social/LiveUpdates.tsx', 'utf8');
-    expect(src).toMatch(/const offset = saved\?\.hub === id \? saved\.offset : 'now';/);
-    expect(src).toMatch(/if \(saved && saved\.hub !== id\) resync\(\);/);
+    expect(src).toMatch(/const offset = saved\?\.hub === id \? saved\.offset : rotated \? '-1' : 'now';/);
+    expect(src).toMatch(/if \(saved && saved\.hub !== id && !rotated\) resync\(\);/);
     expect(src).toMatch(/save\(user\.id, \{ hub: id, offset: batch\.offset \}\);/);
     expect(src).toMatch(/if \(event === 'resync'\) resync\(\);/);
     // Without streams on the server, /api/live as before.

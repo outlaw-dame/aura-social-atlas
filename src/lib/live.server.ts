@@ -5,9 +5,9 @@
  * Upstream it prefers Mastodon's WebSocket streaming API on Fedizen (the `user` stream: new posts in Home, edits,
  * deletes and notifications), opened from the Worker with the token in a header. Where the runtime
  * can't open an outgoing WebSocket, or Fedizen refuses the upgrade, it reads Bonfire's SSE stream at the same path
- * instead (notifications, messages and the unread count, but not posts). On Node (Railway), where a fetch can't
- * upgrade, it opens the same WebSocket with the runtime's own WebSocket client, the token again only in
- * Sec-WebSocket-Protocol. Downstream it's Server-Sent Events, with a heartbeat; each stream ends after MAX_MS and the
+ * instead (notifications, messages and the unread count, but not posts; /api/v1-bonfire/streaming). On Node (Railway),
+ * where a fetch can't upgrade, it opens the same WebSocket with ws-client.server.ts, the token again only in
+ * Sec-WebSocket-Protocol (Node's own WebSocket refuses Fedizen's handshake, which names no subprotocol back). Downstream it's Server-Sent Events, with a heartbeat; each stream ends after MAX_MS and the
  * browser reconnects, so no connection lives forever.
  *
  * openUpstream is the Fedizen side alone, shared with live-hub.server.ts (one connection per person, kept on a
@@ -18,19 +18,26 @@ import { fromBonfireSse, fromMastoFrame, readSse, toSse, type LiveEvent } from '
 
 const MAX_MS = 25 * 60_000, HEARTBEAT_MS = 25_000;
 const STREAM = `${FEDIZEN}/api/v1/streaming`;
+// Bonfire's own SSE stream (bonfire_notify StreamingController, routed under /api/v1-bonfire since Feb 2026); the
+// Mastodon path above is WebSocket only.
+const SSE_STREAM = `${FEDIZEN}/api/v1-bonfire/streaming`;
 
 type CfSocket = { accept(): void; close(code?: number, reason?: string): void; addEventListener(t: 'message' | 'close' | 'error', l: (e: { data?: unknown }) => void): void };
 
 type WsLike = { close(code?: number): void; addEventListener(t: 'open' | 'message' | 'close' | 'error', l: (e: { data?: unknown }) => void): void };
-type WsCtor = new (url: string, protocols?: string | string[]) => WsLike;
+/** Opens a WebSocket with the token as its only subprotocol. */
+type WsOpen = (url: string, protocol: string) => WsLike;
+// Node, not Cloudflare's runtime (which upgrades through fetch above and has WebSocketPair).
+const onNode = typeof process !== 'undefined' && !!process.versions?.node && !(globalThis as { WebSocketPair?: unknown }).WebSocketPair;
 
 /** Fedizen access and the runtime's WebSocket client, swappable in tests. */
 export const liveDeps: {
   server: () => Promise<{ tokenFor(uid: string): Promise<{ access_token: string } | null>; liveStatus(raw: unknown): unknown | null }>;
-  WebSocket: WsCtor | undefined;
+  /** Node only (Railway): ws-client.server.ts, which accepts Fedizen's handshake without a subprotocol. */
+  openWs: (() => Promise<WsOpen>) | undefined;
 } = {
   server: () => import('./fedizen.server') as never,
-  WebSocket: (globalThis as { WebSocket?: WsCtor }).WebSocket,
+  openWs: onNode ? async () => (await import('./ws-client.server')).openWebSocket : undefined,
 };
 
 /** What goes to the browser: Atlas's own events only (never the token or Bonfire's text). */
@@ -94,12 +101,14 @@ export function openUpstream(userId: string, out: (e: Outgoing) => void, done: (
     } catch { /* no upgrade by fetch here */ }
     if (closed) return;
 
-    // Node: its own WebSocket client, the token only in Sec-WebSocket-Protocol. If Fedizen won't take it, SSE below.
-    const Ws = liveDeps.WebSocket;
-    if (Ws) {
+    // Node: Atlas's own WebSocket client (ws-client.server.ts), the token only in Sec-WebSocket-Protocol. If Fedizen
+    // won't take it, SSE below.
+    const load = liveDeps.openWs;
+    const open = load ? await load().catch(() => undefined) : undefined;
+    if (open) {
       const opened = await new Promise<WsLike | null>(resolve => {
         let ws: WsLike;
-        try { ws = new Ws(`${STREAM.replace(/^https:/, 'wss:')}?stream=user`, [t.access_token]); } catch { resolve(null); return; }
+        try { ws = open(`${STREAM.replace(/^https:/, 'wss:')}?stream=user`, t.access_token); } catch { resolve(null); return; }
         const timer = setTimeout(() => { try { ws.close(); } catch { /* gone */ } resolve(null); }, WS_OPEN_MS);
         ws.addEventListener('open', () => { clearTimeout(timer); resolve(ws); });
         ws.addEventListener('error', () => { clearTimeout(timer); resolve(null); });
@@ -118,7 +127,7 @@ export function openUpstream(userId: string, out: (e: Outgoing) => void, done: (
     // Bonfire's own SSE stream: notifications, messages and the unread count.
     const up = new AbortController();
     cleanups.push(() => up.abort());
-    const res = await fetch(STREAM, { headers: { ...auth, Accept: 'text/event-stream' }, signal: up.signal, redirect: 'manual' }).catch(() => null);
+    const res = await fetch(SSE_STREAM, { headers: { ...auth, Accept: 'text/event-stream' }, signal: up.signal, redirect: 'manual' }).catch(() => null);
     if (closed) return;
     if (!res?.ok || !res.body) { out({ type: 'off', reason: res && (res.status === 401 || res.status === 403) ? 'expired' : 'unavailable' }); finish(); return; }
     out({ type: 'ready', posts: false });
