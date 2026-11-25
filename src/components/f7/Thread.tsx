@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Block, Link, Navbar, Page } from 'framework7-react';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { openPost } from '@/lib/open-post';
-import { useThread } from '@/components/social/useThread';
+import { SLOW_CONVERSATION as SLOW, useThread } from '@/components/social/useThread';
 import { FEED_PROBLEM } from '@/components/social/useFeeds';
 import { FilterPlaceProvider } from '@/components/social/useIntelligence';
 import { MobilePostContent, useMobilePostActions } from './MobilePostCard';
@@ -27,9 +27,9 @@ export function ThreadPage({ f7route, seed }: { f7route?: { params: { id?: strin
       : !t.thread && t.loading ? <Block strong inset><span aria-live="polite">Loading the conversation…</span></Block>
       : !t.thread ? <Block strong inset>{t.error === 'not-found'
           ? 'This post isn’t available. It may have been deleted, or you may not be able to see it.'
-          : <>{t.error && t.error in FEED_PROBLEM ? FEED_PROBLEM[t.error as keyof typeof FEED_PROBLEM] : FEED_PROBLEM.unavailable} <Link onClick={t.refetch}>Try again</Link></>}</Block>
+          : <>{t.slow ? SLOW : t.error && t.error in FEED_PROBLEM ? FEED_PROBLEM[t.error as keyof typeof FEED_PROBLEM] : FEED_PROBLEM.unavailable} <Link onClick={t.refetch}>Try again</Link></>}</Block>
       : <FilterPlaceProvider place="public">
-        <div className="atlas-proto-wrap"><ConversationThread thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} capped={t.capped} sort={t.sort} setSort={t.setSort}
+        <div className="atlas-proto-wrap"><ConversationThread thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} slow={t.slow} retry={t.refetch} capped={t.capped} sort={t.sort} setSort={t.setSort}
           replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} arrived={t.arrived} Gate={MessageGate} Content={MobilePostContent} onOpenPost={p => openPost(p)} /></div>
       </FilterPlaceProvider>}
     {actions.sheet}

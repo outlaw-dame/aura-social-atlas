@@ -38,6 +38,8 @@ import type { useReactions } from './usePostActions';
 type Acts = { save: ReturnType<typeof useSaveToggle>; reactions: ReturnType<typeof useReactions>; onReply: (p: FedizenPost) => void };
 export type ConversationThreadProps = {
   thread: Thread; actions: Acts; loading: boolean; partial: boolean; retry: () => void;
+  /** The rest didn't load because Fedizen didn't answer in time; Atlas is already trying again (useThread). */
+  slow?: boolean;
   /** Fedizen sent its most replies (CONTEXT_REPLY_LIMIT): the rest are only on fedizen.net. */
   capped?: boolean;
   sort: ReplySort; setSort: (s: ReplySort) => void; replyMode: ReplyMode; setReplyMode: (m: ReplyMode) => void;
@@ -93,7 +95,7 @@ export function ConversationThread(props: ConversationThreadProps) {
     </div>}
     <ArrivalNote arrived={props.arrived} one="1 new reply" many="new replies" />
     {loading && <p className="atlas-ph-note" aria-live="polite">Loading replies…</p>}
-    {partial && <p className="atlas-ph-note">Couldn’t load the rest of this conversation. <button type="button" className="atlas-ph-link" onClick={retry}>Try again</button></p>}
+    {partial && <p className="atlas-ph-note" aria-live="polite">{props.slow ? 'Fedizen is slow to answer, so the replies haven’t loaded yet. Atlas will keep trying.' : 'Couldn’t load the rest of this conversation.'} <button type="button" className="atlas-ph-link" onClick={retry}>Try again</button></p>}
     {props.capped && !loading && <p className="atlas-ph-note">Fedizen sends the first {CONTEXT_REPLY_LIMIT} replies.{t.focus.url && <> <a className="atlas-ph-link" href={t.focus.url} target="_blank" rel="noopener noreferrer">See the whole conversation on fedizen.net</a></>}</p>}
     {replyMode === 'flat'
       // Bonfire's flat mode, oldest first; each reply to anything but the post says which, in Phanpy's reply orange.

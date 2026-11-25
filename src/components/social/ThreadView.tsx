@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { PostContent, useFeedPostActions } from './FeedPostCard';
 import { FilterGate } from './FilterGate';
 import { FEED_PROBLEM } from './useFeeds';
-import { useThread } from './useThread';
+import { SLOW_CONVERSATION as SLOW, useThread } from './useThread';
 import { FilterPlaceProvider } from './useIntelligence';
 import { useConversationVisit, useReplyMode } from './ConversationParts';
 import { ConversationThread } from './ConversationThread';
@@ -32,17 +32,17 @@ export function ThreadView({ statusId, seed }: { statusId: string; seed?: Fedize
     {actions.error && <p role="alert" className="mb-3 text-sm text-destructive">{actions.error}</p>}
     {!t.signedIn ? <p className="text-sm text-muted-foreground">Sign in to Atlas and connect Fedizen to open conversations.</p>
       : !t.thread && t.loading ? <p className="text-sm text-muted-foreground" aria-live="polite">Loading the conversation…</p>
-      : !t.thread ? <Problem error={t.error} retry={t.refetch} />
+      : !t.thread ? <Problem error={t.error} slow={t.slow} retry={t.refetch} />
       : <FilterPlaceProvider place="public">
-        <ConversationThread thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} retry={t.refetch} capped={t.capped} sort={t.sort} setSort={t.setSort}
+        <ConversationThread thread={t.thread} actions={actions} loading={t.loading} partial={!!t.error && !t.loading} slow={t.slow} retry={t.refetch} capped={t.capped} sort={t.sort} setSort={t.setSort}
           replyMode={replyMode} setReplyMode={setReplyMode} lastVisit={lastVisit} arrived={t.arrived} Gate={FilterGate} Content={PostContent} onOpenPost={open} />
       </FilterPlaceProvider>}
     {actions.dialog}
   </main>;
 }
 
-function Problem({ error, retry }: { error?: string; retry: () => void }) {
+function Problem({ error, slow, retry }: { error?: string; slow?: boolean; retry: () => void }) {
   if (error === 'not-found') return <p className="text-sm text-muted-foreground">This post isn’t available. It may have been deleted, or you may not be able to see it.</p>;
-  const known = error && error in FEED_PROBLEM ? FEED_PROBLEM[error as keyof typeof FEED_PROBLEM] : FEED_PROBLEM.unavailable;
+  const known = slow ? SLOW : error && error in FEED_PROBLEM ? FEED_PROBLEM[error as keyof typeof FEED_PROBLEM] : FEED_PROBLEM.unavailable;
   return <p className="text-sm text-muted-foreground">{known} <button type="button" className="underline" onClick={retry}>Try again</button></p>;
 }

@@ -63,3 +63,11 @@ export function touches(shown: ThreadData, p: FedizenPost): boolean {
 
 const time = (p: FedizenPost) => { const t = p.date ? Date.parse(p.date) : NaN; return Number.isNaN(t) ? 0 : t; };
 const byTime = (a: FedizenPost, b: FedizenPost) => time(a) - time(b);
+
+/** How often an open conversation is read again while everything is fine. */
+export const CHECK_MS = 45_000;
+/** After a read that didn't come back whole: try again soon, then less often, then at the usual pace. */
+export const RETRY_MS = [4_000, 12_000] as const;
+export function nextReadIn(failuresInARow: number): number {
+  return failuresInARow > 0 && failuresInARow <= RETRY_MS.length ? RETRY_MS[failuresInARow - 1] : CHECK_MS;
+}

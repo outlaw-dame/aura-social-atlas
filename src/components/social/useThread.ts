@@ -4,7 +4,7 @@ import { useServerFn } from '@tanstack/react-start';
 import { getFedizenThread } from '@/lib/fedizen.functions';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { buildThread, type ReplySort } from '@/lib/thread';
-import { reconcile, touches, withDeleted, type ThreadData } from '@/lib/thread-live';
+import { nextReadIn, reconcile, touches, withDeleted, type ThreadData } from '@/lib/thread-live';
 import { useAtlasAuth } from './AuthState';
 import { getFedizenStatus } from '@/lib/fedizen.functions';
 import { fullAcct } from '@/lib/fedizen-feed';
@@ -16,9 +16,9 @@ function savedSort(): ReplySort {
   try { const v = localStorage.getItem(SORT_KEY); return v === 'newest' || v === 'top' ? v : 'oldest'; } catch { return 'oldest'; }
 }
 
-/** While a conversation is open and on screen, it's read again this often: Fedizen's live stream only carries posts
- *  that land in the reader's Home and their notifications, not a stranger's reply in someone else's thread. */
-const CHECK_MS = 45_000;
+// While a conversation is open and on screen it's read again every CHECK_MS (thread-live.ts): Fedizen's live stream
+// only carries posts that land in the reader's Home and their notifications, not a stranger's reply in someone else's
+// thread. A read that didn't come back whole is tried again after 4 s and 12 s first (nextReadIn).
 /** Live events in a burst lead to one read. */
 const SETTLE_MS = 800;
 
@@ -37,12 +37,20 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
   // Same query as the rest of Atlas reads the connection with (useIsMe).
   const status = useQuery({ queryKey: ['fedizen-status', user?.id], queryFn: () => statusFn(), enabled: !!user, staleTime: 60_000 });
   const id = user?.id;
+  // Reads in a row that didn't come back whole (Fedizen slow or refusing), for the retry pace.
+  const failures = useRef(0);
   const q = useQuery({
     queryKey: ['fedizen-thread', id, statusId],
-    queryFn: () => read({ data: { expectedAtlasUserId: id!, statusId: statusId! } }),
+    queryFn: async () => {
+      try {
+        const r = await read({ data: { expectedAtlasUserId: id!, statusId: statusId! } });
+        failures.current = r.error && r.error !== 'not-found' ? failures.current + 1 : 0;
+        return r;
+      } catch (e) { failures.current += 1; throw e; }
+    },
     enabled: !!id && !!statusId,
     staleTime: 30_000,
-    refetchInterval: CHECK_MS,
+    refetchInterval: () => nextReadIn(failures.current),
   });
   const [sort, setSortState] = useState<ReplySort>(savedSort);
   const setSort = (s: ReplySort) => { setSortState(s); try { localStorage.setItem(SORT_KEY, s); } catch { /* per-device convenience only */ } };
@@ -53,6 +61,7 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
   // What the reader is looking at, reconciled with each read of Fedizen.
   type View = { id: string; data: ThreadData; arrived: ReadonlyMap<string, number> };
   const [view, setView] = useState<View | null>(null);
+  useEffect(() => { failures.current = 0; }, [statusId]);
   useEffect(() => {
     const live = q.data;
     if (!statusId || !live?.post) return;
@@ -100,9 +109,14 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
   return {
     thread, loading: q.isLoading, refreshing: q.isFetching && !q.isLoading,
     error: q.isError ? 'unavailable' as const : q.data?.error, refetch: () => void q.refetch(), sort, setSort, signedIn: !!user,
+    /** The last read failed because Fedizen didn't answer in time (or couldn't be reached), not because it refused.
+     *  Only Atlas's server can tell: a request that failed on the way to Atlas itself isn't called slow. */
+    slow: !q.isError && !!q.data?.slow,
     /** Fedizen sent as many replies as it sends at most: there may be more on fedizen.net. */ capped: !!q.data?.capped,
     /** Posts added while the conversation was open, and when (ms). */ arrived: current?.arrived ?? EMPTY,
   };
 }
 
 const EMPTY: ReadonlyMap<string, number> = new Map();
+/** When the post itself didn't load because Fedizen didn't answer in time. */
+export const SLOW_CONVERSATION = 'Fedizen is slow to answer right now. Atlas will keep trying.';
