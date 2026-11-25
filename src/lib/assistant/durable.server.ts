@@ -65,10 +65,17 @@ export async function writeAnswer(cfg: DurableConfig, streamId: string, source: 
 const PASS_HEADERS = ['content-type', 'stream-next-offset', 'stream-up-to-date', 'stream-cursor', 'stream-closed', 'etag', 'stream-sse-data-encoding'];
 const PASS_PARAMS = ['offset', 'live', 'cursor'];
 
-/** Reads `streamId` for the browser: only the protocol's read parameters go through, and only its own headers come back. */
-export async function proxyRead(cfg: DurableConfig, streamId: string, request: Request, fetchImpl: typeof fetch = fetch): Promise<Response> {
+/** Reads the answer `streamId` for the browser (proxyStream). */
+export const proxyRead = (cfg: DurableConfig, streamId: string, request: Request, fetchImpl: typeof fetch = fetch) =>
+  proxyStream(cfg, `assistant/${streamId}`, request, fetchImpl);
+
+/**
+ * Reads the stream at `path` on the stream server for the browser, after the route has checked it's theirs: only the
+ * protocol's read parameters go through, and only its own headers come back.
+ */
+export async function proxyStream(cfg: DurableConfig, path: string, request: Request, fetchImpl: typeof fetch = fetch): Promise<Response> {
   const from = new URL(request.url);
-  const to = new URL(streamUrlFor(cfg, streamId));
+  const to = new URL(`${cfg.base}/${path}`);
   for (const p of PASS_PARAMS) {
     const v = from.searchParams.get(p);
     if (v !== null && v.length <= 512) to.searchParams.set(p, v);

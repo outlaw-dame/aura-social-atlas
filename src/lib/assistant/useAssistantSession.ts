@@ -45,6 +45,11 @@ export function keepOrReplace(current: AssistantSession, next: AssistantSession)
   return current.ready && !current.durable && !next.durable ? current : next;
 }
 
+/** Stops the answer being written for this person's chat (on the server: the model stops, what it wrote is kept). */
+export async function stopKeptAnswer() {
+  await fetch('/api/assistant/stop', { method: 'POST', headers: await assistantAuthHeaders() }).catch(() => undefined);
+}
+
 export function useAssistantSession(open: boolean) {
   const [session, setSession] = useState<AssistantSession>({ ...PLAIN, key: 'loading', ready: false });
   const loading = useRef(false);

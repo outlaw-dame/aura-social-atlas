@@ -5,7 +5,9 @@ const { liveStream, liveDeps } = await import('../src/lib/live.server');
 liveDeps.server = async () => ({
   tokenFor: async (uid: string) => (uid === 'u1' ? { access_token: 'secret-token' } : null),
   liveStatus: (s: unknown) => (s && typeof s === 'object' && 'id' in s ? s : null),
-});
+}) as never;
+// No real WebSockets in tests unless a test brings its own.
+liveDeps.WebSocket = undefined;
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
@@ -53,5 +55,27 @@ describe('Live updates stream', () => {
     expect(out).toContain('"type":"unseen","count":2');
     expect(out).toContain('event: notification');
     expect(out).not.toContain('Ann liked'); // Bonfire's own text and links aren't passed on
+  });
+  test("on Node: Fedizen's WebSocket through the runtime's client, the token only as the subprotocol", async () => {
+    globalThis.fetch = (async () => new Response('no upgrade', { status: 400 })) as unknown as typeof fetch;
+    const made: { url: string; protocols: unknown }[] = [];
+    const listeners: Record<string, ((e: { data?: unknown }) => void)[]> = {};
+    liveDeps.WebSocket = class {
+      constructor(url: string, protocols?: string | string[]) { made.push({ url, protocols }); setTimeout(() => listeners.open?.forEach(l => l({})), 5); }
+      close() {}
+      addEventListener(t: string, l: (e: { data?: unknown }) => void) { (listeners[t] ??= []).push(l); }
+    } as never;
+    try {
+      const reading = readAll(liveStream('u1', new AbortController().signal), t => t.includes('event: delete'));
+      await new Promise(r => setTimeout(r, 30));
+      listeners.message.forEach(l => l({ data: JSON.stringify({ event: 'delete', payload: '01C' }) }));
+      const out = await reading;
+      expect(made).toEqual([{ url: 'wss://fedizen.net/api/v1/streaming?stream=user', protocols: ['secret-token'] }]);
+      expect(out).toContain('"type":"ready","posts":true');
+      expect(out).toContain('"type":"delete","id":"01C"');
+      expect(out).not.toContain('secret-token');
+    } finally {
+      liveDeps.WebSocket = undefined;
+    }
   });
 });

@@ -43,6 +43,17 @@ export async function startAnswer(userId: string, chatId: string, messages: unkn
     updated_at: new Date(chatStoreDeps.now()).toISOString(),
   }, { onConflict: 'user_id' });
   if (error) throw new Error(`assistant chat write failed (${error.code ?? 'unknown'})`);
+  void sweepExpired();
+}
+
+let sweptAt = 0;
+/** Deletes everyone's chats over a day old, at most once an hour (each person's own is also dropped when read). */
+export async function sweepExpired(now = chatStoreDeps.now()) {
+  if (now - sweptAt < 60 * 60_000) return;
+  sweptAt = now;
+  const db = await chatStoreDeps.db();
+  const { error } = await db.from(TABLE).delete().lt('updated_at', new Date(now - KEEP_MS).toISOString());
+  if (error) console.warn('Assistant chats not swept', { code: error.code });
 }
 
 /**
