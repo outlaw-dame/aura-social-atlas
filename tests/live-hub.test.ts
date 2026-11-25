@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { _resetHubs, _sweep, hubDeps, hubFor, IDLE_MS, STREAM_TTL_SECONDS, touchHub } from '../src/lib/live-hub.server';
+import { _resetHubs, _sweep, hubDeps, hubFor, IDLE_MS, readyHubFor, STREAM_TTL_SECONDS, touchHub } from '../src/lib/live-hub.server';
 import type { Outgoing } from '../src/lib/live.server';
 import { hubUrl } from '../src/components/social/LiveUpdates';
 
@@ -88,6 +88,19 @@ describe('one live hub per person, on a Durable Stream', () => {
     expect(streams[0].appended).toEqual([{ type: 'off', reason: 'not-connected' }]);
     expect(streams[0].closed).toBe(true);
     expect(touchHub('u1', id)).toBe(false);
+  });
+});
+
+describe('a stream server that does not answer', () => {
+  test('no hub is handed out; the browser uses /api/live this time', async () => {
+    hubDeps.stream = (() => ({ create: async () => { throw new Error('refused'); }, append: async () => {}, close: async () => ({}) })) as never;
+    expect(await readyHubFor(cfg, 'u1', 100)).toBeNull();
+    const src = readFileSync('src/components/social/LiveUpdates.tsx', 'utf8');
+    expect(src).toMatch(/if \(s\.status === 503\) return 'not-now';/);
+  });
+  test('a ready hub is handed out with whether posts come', async () => {
+    const p = readyHubFor(cfg, 'u1');
+    expect((await p)?.streamUrl).toMatch(/^\/api\/live-stream\//);
   });
 });
 

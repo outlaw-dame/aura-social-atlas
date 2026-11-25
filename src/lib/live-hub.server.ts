@@ -125,6 +125,18 @@ export function hubFor(cfg: DurableConfig, userId: string): { id: string; stream
   return { id: h.id, streamUrl: hubReadPath(h.id), posts: h.posts };
 }
 
+/**
+ * hubFor, once its stream exists on the stream server (at most `waitMs`): null when it couldn't be made, so the
+ * browser uses /api/live this time rather than a hub nobody can read.
+ */
+export async function readyHubFor(cfg: DurableConfig, userId: string, waitMs = 3_000): Promise<ReturnType<typeof hubFor> | null> {
+  const r = hubFor(cfg, userId);
+  const h = byId.get(r.id);
+  if (!h) return null;
+  const ok = await Promise.race([h.ready.then(() => true, () => false), new Promise<boolean>(res => setTimeout(() => res(false), waitMs))]);
+  return ok && !h.closed ? { ...r, posts: h.posts } : null;
+}
+
 /** Whether `id` is this person's open hub; marks it read. */
 export function touchHub(userId: string, id: string): boolean {
   const h = byId.get(id);

@@ -78,9 +78,10 @@ export function LiveUpdates() {
     };
     const bearer = async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ''}`;
     /** Reads the person's live hub from where this tab left off. 'no' when the server keeps no streams. */
-    const fromHub = async (signal: AbortSignal): Promise<'no' | 'read'> => {
+    const fromHub = async (signal: AbortSignal): Promise<'no' | 'not-now' | 'read'> => {
       const s = await fetch('/api/live-stream/session', { headers: { Authorization: await bearer() }, signal, cache: 'no-store' });
       if (s.status === 404) return 'no';
+      if (s.status === 503) return 'not-now';
       if (!s.ok) throw new Error(String(s.status));
       const { id, streamUrl, posts } = await s.json() as { id: string; streamUrl: string; posts?: boolean | null };
       const saved = readSaved(user.id);
@@ -104,11 +105,11 @@ export function LiveUpdates() {
       if (stop || document.hidden || off) return;
       ctrl = new AbortController();
       try {
-        if (hubs !== 'no') {
-          const r = await fromHub(ctrl.signal);
-          if (r === 'no') hubs = 'no'; else hubs = 'yes';
-        }
-        if (hubs === 'yes') throw new Error('hub read ended');
+        // The hub when there is one; /api/live when the server keeps no streams, or this time if its stream server
+        // didn't answer.
+        const r = hubs === 'no' ? 'no' : await fromHub(ctrl.signal);
+        if (r === 'no') hubs = 'no';
+        if (r === 'read') { hubs = 'yes'; throw new Error('hub read ended'); }
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
         if (!token) return;
