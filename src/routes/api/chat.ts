@@ -92,6 +92,8 @@ export const Route = createFileRoute("/api/chat")({
           const settle = () => { durableMod.untrackAnswer(streamId); return store.finishAnswer(userId, chatId, streamId, null); };
           const source = result.toUIMessageStream({
             originalMessages: messages as UIMessage[],
+            // The answer is kept and replayed, so it needs a lasting id of its own (else every device makes its own).
+            generateMessageId: () => crypto.randomUUID(),
             onFinish: ({ messages: finished }) => store.finishAnswer(userId, chatId, streamId, finished),
           });
           let done: Promise<void>;

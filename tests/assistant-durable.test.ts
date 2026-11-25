@@ -156,6 +156,8 @@ describe('wiring', () => {
     expect(chatRoute).toMatch(/if \(store && !store\.isUuid\(id\)\) return new Response\("A chat id is required", \{ status: 400 \}\);/);
     expect(chatRoute).toMatch(/onFinish: \(\{ messages: finished \}\) => store\.finishAnswer\(userId, chatId, streamId, finished\)/);
     expect(chatRoute).toMatch(/status: 201, headers: \{ Location: streamUrl/);
+    // A kept answer has one id everywhere it's replayed.
+    expect(chatRoute).toMatch(/generateMessageId: \(\) => crypto\.randomUUID\(\),/);
     // Without a stream server, exactly as before.
     expect(chatRoute).toMatch(/return result\.toUIMessageStreamResponse\(\{\s*originalMessages: messages as UIMessage\[\],\s*\}\);/);
   });
