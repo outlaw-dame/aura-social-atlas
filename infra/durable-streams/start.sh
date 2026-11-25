@@ -1,6 +1,7 @@
 #!/bin/sh
 # Refuse to start without a real token: the Caddyfile accepts only "Authorization: Bearer $DS_TOKEN".
 set -eu
+DS_TOKEN="${DS_TOKEN:-}"
 if [ "${#DS_TOKEN}" -lt 32 ]; then
   echo "DS_TOKEN must be set to at least 32 characters" >&2
   exit 1
