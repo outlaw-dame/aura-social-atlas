@@ -136,13 +136,18 @@ export const getFedizenHome = createServerFn({ method: 'GET' }).middleware([requ
   if (!t) return { connected: false, accountHandle: null, nativeReadEnabled: false, posts: [], notices: [] };
   const [home, notes] = await Promise.all([fedizenGet(t.access_token, '/api/v1/timelines/home?limit=20'), fedizenGet(t.access_token, '/api/v1/notifications?limit=20')]);
   const error = fedizenReadError(home.status, notes.status);
+  // Posts' extras and notices' faces at the same time (each has its own time budget).
+  const [posts, notices] = await Promise.all([
+    withArticleAuthors(fromStatuses(home.data as never), 2000, t.access_token),
+    withActorAvatars(fromNotifications(notes.data as never)),
+  ]);
   return {
     connected: true,
     accountHandle: t.account_handle,
     canWrite: hasScope(t.scope, 'write'),
     nativeReadEnabled: process.env['ATLAS_BONFIRE_NATIVE_GRAPHQL_READS'] === 'verified',
-    posts: await withArticleAuthors(fromStatuses(home.data as never), 2000, t.access_token),
-    notices: await withActorAvatars(fromNotifications(notes.data as never)),
+    posts,
+    notices,
     ...(home.next ? { next: home.next } : {}),
     error,
   };
@@ -269,10 +274,11 @@ export const getFedizenHomeLatest = createServerFn({ method: 'GET' }).middleware
       fedizenGet(t.access_token, '/api/v1/notifications?limit=20').catch(() => null),
     ]);
     if (!r || r.status !== 200) return { posts: [], error: r ? problem(r.status) : 'unavailable' };
-    return {
-      posts: await withArticleAuthors(fromStatuses(r.data as never), 1200, t.access_token), ...(r.next ? { next: r.next } : {}),
-      ...(n?.status === 200 ? { notices: await withActorAvatars(fromNotifications(n.data as never), 800) } : {}),
-    };
+    const [posts, notices] = await Promise.all([
+      withArticleAuthors(fromStatuses(r.data as never), 1200, t.access_token),
+      n?.status === 200 ? withActorAvatars(fromNotifications(n.data as never), 800) : Promise.resolve(null),
+    ]);
+    return { posts, ...(r.next ? { next: r.next } : {}), ...(notices ? { notices } : {}) };
   });
 
 /** Feed enrichment lives in feed-enrich.server.ts (shared with native Bonfire Home); loaded on the server only. */
@@ -612,10 +618,15 @@ export const getForYou = createServerFn({ method: 'GET' }).middleware([requireSu
         // The REST read also carries what the public feed leaves out: an attached video and the full preview image.
         ...(s.video && !p.video ? { video: s.video } : {}), ...(!p.image && s.image ? { image: s.image } : {}), ...(s.collections && !p.collections ? { collections: s.collections } : {}) } as ForYouPost;
     };
-    const hydrated: ForYouPost[] = [];
-    for (let i = 0; i < posts.length; i += 8) hydrated.push(...await Promise.all(posts.slice(i, i + 8).map(hydrate)));
-    // Credits and players for the links in them, as on Following.
-    const withAuthors = await withArticleAuthors(hydrated);
+    // Reading group posts (8 at a time, a new one as soon as one finishes) and the links' credits and players (as on
+    // Following) at the same time; each post then takes its credits, face and booster's face from the second.
+    const { inPool } = await import('./in-pool');
+    const [hydrated, enriched] = await Promise.all([inPool(posts, 8, hydrate), withArticleAuthors(posts)]);
+    const withAuthors = hydrated.map((h, i) => {
+      const e = enriched[i] as ForYouPost | undefined;
+      if (!e || e.id !== h.id) return h;
+      return { ...h, ...(e.article ? { article: e.article } : {}), ...(e.avatar ? { avatar: e.avatar } : {}), ...(e.booster && h.booster ? { booster: e.booster } : {}) } as ForYouPost;
+    });
     const next = forYouNext(home.status === 200 ? home.next : undefined, tagFeeds);
     return { posts: withAuthors as ForYouPost[], tags, groups: (joined?.groups ?? []).map(g => g.name), missing, ...(next ? { next } : {}) };
   });

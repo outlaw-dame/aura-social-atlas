@@ -27,11 +27,23 @@ async function actorAvatar(handle: string): Promise<string | null> {
   return typeof url === 'string' && url.startsWith('https://') ? url : null;
 }
 
-/** Real profile photos for Voices to know, looked up from each voice's own server. */
+/** Real profile photos for Voices to know, looked up from each voice's own server: about 30 requests to other
+ *  servers, so the answer is kept for a day (and one lookup shared by everyone asking meanwhile), not repeated for
+ *  every browser that opens Discover. Lost when the server restarts or sleeps; browsers keep their own copy too. */
+let avatarsKept: { at: number; value: Record<string, string | null> } | null = null;
+let avatarsOnTheirWay: Promise<Record<string, string | null>> | null = null;
+const AVATARS_FOR_MS = 24 * 3_600_000;
 export const getVoiceAvatars = createServerFn({ method: 'GET' }).handler(async () => {
-  const all = [...voices, ...podcastVoices, ...videoVoices];
-  const pairs = await Promise.all(all.map(async v => [v.id, await (v.network === 'PeerTube' || v.network === 'Castopod' ? actorAvatar(v.handle) : lookupAvatar(v.handle, v.network)).catch(() => null)] as const));
-  return Object.fromEntries(pairs) as Record<string, string | null>;
+  if (avatarsKept && Date.now() - avatarsKept.at < AVATARS_FOR_MS) return avatarsKept.value;
+  avatarsOnTheirWay ??= (async () => {
+    const all = [...voices, ...podcastVoices, ...videoVoices];
+    const pairs = await Promise.all(all.map(async v => [v.id, await (v.network === 'PeerTube' || v.network === 'Castopod' ? actorAvatar(v.handle) : lookupAvatar(v.handle, v.network)).catch(() => null)] as const));
+    const value = Object.fromEntries(pairs) as Record<string, string | null>;
+    // Keep it only when most were found: a server-side hiccup shouldn't be kept for a day.
+    if (Object.values(value).filter(Boolean).length >= all.length / 2) avatarsKept = { at: Date.now(), value };
+    return value;
+  })().finally(() => { avatarsOnTheirWay = null; });
+  return avatarsOnTheirWay;
 });
 
 /** All Voices to know: curated writers, podcasters and video channels, FediDB's popular accounts and the Castopod
