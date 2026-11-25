@@ -25,6 +25,7 @@ import { Route as SavedRouteImport } from './routes/saved'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLiveRouteImport } from './routes/api/live'
 import { Route as FedizenCallbackRouteImport } from './routes/fedizen.callback'
 import { Route as PostIdRouteImport } from './routes/post.$id'
@@ -118,6 +119,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiLiveRoute = ApiLiveRouteImport.update({
   id: '/api/live',
   path: '/api/live',
@@ -196,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/post/$id': typeof PostIdRoute
@@ -225,6 +232,7 @@ export interface FileRoutesByTo {
   '/saved': typeof SavedRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/post/$id': typeof PostIdRoute
@@ -256,6 +264,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/live': typeof ApiLiveRoute
   '/fedizen/callback': typeof FedizenCallbackRoute
   '/post/$id': typeof PostIdRoute
@@ -288,6 +297,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/health'
     | '/api/live'
     | '/fedizen/callback'
     | '/post/$id'
@@ -317,6 +327,7 @@ export interface FileRouteTypes {
     | '/saved'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/health'
     | '/api/live'
     | '/fedizen/callback'
     | '/post/$id'
@@ -347,6 +358,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/health'
     | '/api/live'
     | '/fedizen/callback'
     | '/post/$id'
@@ -378,6 +390,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   ApiLiveRoute: typeof ApiLiveRoute
   FedizenCallbackRoute: typeof FedizenCallbackRoute
   PostIdRoute: typeof PostIdRoute
@@ -497,6 +510,13 @@ declare module '@tanstack/react-router' {
       path: '/api/chat'
       fullPath: '/api/chat'
       preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/live': {
@@ -627,6 +647,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiHealthRoute: ApiHealthRoute,
   ApiLiveRoute: ApiLiveRoute,
   FedizenCallbackRoute: FedizenCallbackRoute,
   PostIdRoute: PostIdRoute,

@@ -4,7 +4,7 @@ import { useOpenActivityFromPush } from '@/components/social/usePush';
 import { LiveUpdates } from '@/components/social/LiveUpdates';
 import { SemanticIndexer } from '@/components/social/useSemanticIndex';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import Framework7 from 'framework7/lite-bundle';
+import { framework7WithComponents } from './f7-modules';
 import Framework7React, {
   App, View, Page, Navbar, Link, Toolbar, Tabs, Tab,
   Searchbar, List, ListItem, Block, BlockTitle, Chip,
@@ -52,7 +52,7 @@ import { useComposeIntent } from '@/lib/compose-intent';
 import { ThreadPage } from './Thread';
 import { OPEN_POST_EVENT, type OpenPostDetail } from '@/lib/open-post';
 
-Framework7.use(Framework7React);
+framework7WithComponents().use(Framework7React);
 
 type Theme = 'ios' | 'md';
 

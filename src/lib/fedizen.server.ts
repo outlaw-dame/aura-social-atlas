@@ -283,6 +283,7 @@ export async function finishConnect(userId: string, code: string, state: string)
   // Remember the issuing app so Disconnect can revoke with it (migration 0005); without the column, save as before.
   let { error: saveError } = await db.from('fedizen_connections').upsert({ ...row, client_id: app.client_id });
   if (saveError?.code === '42703') ({ error: saveError } = await db.from('fedizen_connections').upsert(row));
+  forgetConnection(userId);
   if (saveError) throw new Error('Could not save Fedizen connection.');
   return { ok: true as const };
 }
@@ -297,9 +298,26 @@ export async function connectionFor(
   return data;
 }
 
+/**
+ * The person's Fedizen connection, kept for CONNECTION_MS: every server function needs it, and a page asks for
+ * several at once (Home, For You, notifications, circles…), each of which used to read it from Supabase again. Only
+ * in this server's memory, never shared between people, and forgotten at once when the person connects or
+ * disconnects here (forgetConnection), so a disconnect takes effect on the next request. (With more than one replica,
+ * another replica could keep using a just-disconnected token for up to CONNECTION_MS; Fedizen has revoked it by then.)
+ */
+const CONNECTION_MS = 15_000;
+const connections = new Map<string, { until: number; value: ReturnType<typeof connectionFor> }>();
 export async function tokenFor(userId: string) {
-  return connectionFor(await admin(), userId);
+  const hit = connections.get(userId);
+  if (hit && hit.until > Date.now()) return hit.value;
+  const value = admin().then(db => connectionFor(db, userId));
+  connections.set(userId, { until: Date.now() + CONNECTION_MS, value });
+  if (connections.size > 1000) connections.delete(connections.keys().next().value!);
+  value.catch(() => { if (connections.get(userId)?.value === value) connections.delete(userId); });
+  return value;
 }
+/** This person's connection changed: read it again next time. */
+export function forgetConnection(userId: string) { connections.delete(userId); }
 
 /**
  * Asks Fedizen to revoke a token (RFC 7009: POST /oauth/revoke with the issuing client's credentials; Bonfire serves
@@ -363,7 +381,9 @@ export async function disconnect(userId: string): Promise<{ revoked: boolean }> 
   const conn = await connectionFor(db, userId).catch(() => null);
   let revoked = false;
   if (conn?.access_token) revoked = await revokeFedizenToken(conn.access_token, await issuingApps(db, userId));
+  forgetConnection(userId);
   const { error } = await db.from('fedizen_connections').delete().eq('user_id', userId);
+  forgetConnection(userId); // and again, in case a read landed in between
   if (error) throw new Error('Could not disconnect Fedizen account.');
   return { revoked };
 }

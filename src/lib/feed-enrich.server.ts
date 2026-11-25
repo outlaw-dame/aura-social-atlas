@@ -88,15 +88,26 @@ export async function actorAvatars(actors: string[], budgetMs: number): Promise<
     if (hit && Date.now() - hit.at < (hit.url ? 6 * 3600_000 : 3600_000)) { if (hit.url) out.set(a, hit.url); } else todo.push(a);
   }
   if (!todo.length) return out;
+  // Kept in Supabase from before the server last slept (lookup-cache.server.ts)?
+  const { readLookups, writeLookup } = await import('./lookup-cache.server');
+  const kept = await readLookups<{ url: string | null }>('avatar', todo);
+  for (const [a, v] of kept) {
+    const url = typeof v?.url === 'string' ? v.url : null;
+    avatarCache.set(a, { at: Date.now(), url });
+    if (url) out.set(a, url);
+  }
+  const unknown = todo.filter(a => !kept.has(a));
+  if (!unknown.length) return out;
   const { fetchActor } = await import('./article-author.server');
   const { isPublicHttpsUrl } = await import('./article-author');
-  const work = Promise.all(todo.map(async a => {
+  const work = Promise.all(unknown.map(async a => {
     const actor = await fetchActor(a).catch(() => null);
     const icon = actor ? [actor.icon].flat()[0] : undefined;
     const raw = typeof icon === 'string' ? icon : icon && typeof icon === 'object' ? (icon as { url?: unknown }).url : undefined;
     const url = typeof raw === 'string' && isPublicHttpsUrl(raw) && raw.length <= 2048 ? raw : null;
     if (avatarCache.size >= 1000) avatarCache.delete(avatarCache.keys().next().value as string);
     avatarCache.set(a, { at: Date.now(), url });
+    writeLookup('avatar', a, { url }, url ? 6 * 3600_000 : 3600_000);
     if (url) out.set(a, url);
   }));
   await Promise.race([work, new Promise(r => setTimeout(r, budgetMs))]);
