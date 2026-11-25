@@ -1,40 +1,61 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { durableChatTransport } from "@/lib/assistant/durable-transport";
+import { assistantAuthHeaders, useAssistantSession, type AssistantSession } from "@/lib/assistant/useAssistantSession";
 import ReactMarkdown from "react-markdown";
 import { ArrowUp, PenLine, Send, Sparkle, X } from "lucide-react";
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
 const SUGGESTED_PROMPTS = ["What is the open social web?", "How do Mastodon and Bluesky differ?", "Explain RSS feeds"];
-export function AssistantOverlay({
-  open,
-  onOpenChange,
-  onNavigate,
-  showLauncher = true,
-  onCompose,
-}: {
+type OverlayProps = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onNavigate: (url: string, title?: string) => void;
   showLauncher?: boolean;
   onCompose?: () => void;
-}) {
-  // The chat route answers with the person's own AI key, so it needs to know who's asking.
-  const transport = useMemo(() => new DefaultChatTransport({
-    api: "/api/chat",
-    headers: async (): Promise<Record<string, string>> => {
-      const { data } = await supabase.auth.getSession();
-      return data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : {};
-    },
-  }), []);
+};
+
+export function AssistantOverlay(props: OverlayProps) {
+  // Which conversation to show (src/lib/assistant/useAssistantSession.ts); the chat is rebuilt when it changes.
+  const { session, newChat } = useAssistantSession(props.open);
+  return <AssistantOverlayChat key={session.key} {...props} session={session} onNewChat={newChat} />;
+}
+
+function AssistantOverlayChat({
+  open,
+  onOpenChange,
+  onNavigate,
+  showLauncher = true,
+  onCompose,
+  session,
+  onNewChat,
+}: OverlayProps & { session: AssistantSession; onNewChat: () => void }) {
+  // The chat route answers with the person's own AI key, so it needs to know who's asking. Where answers are kept
+  // (Durable Streams), they're read from a stream that survives a refresh; otherwise they stream back as before.
+  const transport = useMemo(
+    () => (session.durable ? durableChatTransport(assistantAuthHeaders) : new DefaultChatTransport({ api: "/api/chat", headers: assistantAuthHeaders })),
+    [session.durable],
+  );
   const { messages, sendMessage, status, error } = useChat({
+    id: session.id,
+    messages: session.messages,
+    resume: session.durable && session.answering,
     transport,
     onError: (e) => console.error("chat error", e),
   });
 
+  // Open a page only for answers to questions asked here and now: an answer picked up after a refresh or on
+  // another device may already have opened it.
+  const actFrom = useRef<number | null>(null);
+  const ask = (text: string) => {
+    actFrom.current = messages.length;
+    sendMessage({ text });
+  };
+
   const handledToolCallsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    for (const m of messages) {
+    if (actFrom.current === null) return;
+    for (const m of messages.slice(actFrom.current)) {
       if (m.role !== "assistant") continue;
       for (const part of m.parts) {
         const anyPart = part as {
@@ -68,8 +89,8 @@ export function AssistantOverlay({
 
   const submit = () => {
     const text = input.trim();
-    if (!text || status === "streaming" || status === "submitted") return;
-    sendMessage({ text });
+    if (!text || !session.ready || status === "streaming" || status === "submitted") return;
+    ask(text);
     setInput("");
   };
 
@@ -115,7 +136,7 @@ export function AssistantOverlay({
                 <p className="text-[11px] text-zinc-500">Your discovery companion</p>
               </div>
             </div>
-            <div className="flex items-center gap-1">{onCompose && <Button variant="ghost" size="icon" aria-label="Return to composer" title="Compose" onClick={onCompose}><PenLine /></Button>}<button
+            <div className="flex items-center gap-1">{messages.length > 0 && <Button variant="ghost" size="sm" className="h-8 rounded-full px-3 text-xs" onClick={onNewChat}>New chat</Button>}{onCompose && <Button variant="ghost" size="icon" aria-label="Return to composer" title="Compose" onClick={onCompose}><PenLine /></Button>}<button
               onClick={() => onOpenChange(false)}
               className="grid size-8 place-items-center rounded-full text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10"
               aria-label="Close"
@@ -130,11 +151,14 @@ export function AssistantOverlay({
                 <p className="text-pretty text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
                   Hi — I'm Atlas. I can answer questions or run searches across the open social web. Try one:
                 </p>
+                {session.durable && (
+                  <p className="text-xs text-zinc-500">This chat is kept for a day, so an answer carries on after a refresh or on your other devices.</p>
+                )}
                 <div className="flex flex-col gap-2">
                   {SUGGESTED_PROMPTS.map((p) => (
                     <button
                       key={p}
-                      onClick={() => sendMessage({ text: p })}
+                      onClick={() => session.ready && ask(p)}
                       className="rounded-2xl bg-muted px-3 py-2 text-left text-sm text-foreground ring-1 ring-border transition hover:bg-accent/10 dark:bg-muted dark:text-zinc-200 dark:ring-white/10 dark:hover:bg-white/10"
                     >
                       {p}

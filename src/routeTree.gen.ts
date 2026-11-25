@@ -37,6 +37,9 @@ import { Route as SettingsIntelligenceRouteImport } from './routes/settings.inte
 import { Route as SettingsModerationRouteImport } from './routes/settings.moderation'
 import { Route as SettingsNotificationsRouteImport } from './routes/settings.notifications'
 import { Route as TagsTagRouteImport } from './routes/tags.$tag'
+import { Route as ApiAssistantChatRouteImport } from './routes/api/assistant/chat'
+import { Route as ApiAssistantResumeRouteImport } from './routes/api/assistant/resume'
+import { Route as ApiAssistantStreamStreamIdRouteImport } from './routes/api/assistant/stream.$streamId'
 import { Route as ApiPushRelayIdRouteImport } from './routes/api/push/relay.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -179,6 +182,22 @@ const TagsTagRoute = TagsTagRouteImport.update({
   path: '/tags/$tag',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAssistantChatRoute = ApiAssistantChatRouteImport.update({
+  id: '/api/assistant/chat',
+  path: '/api/assistant/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAssistantResumeRoute = ApiAssistantResumeRouteImport.update({
+  id: '/api/assistant/resume',
+  path: '/api/assistant/resume',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAssistantStreamStreamIdRoute =
+  ApiAssistantStreamStreamIdRouteImport.update({
+    id: '/api/assistant/stream/$streamId',
+    path: '/api/assistant/stream/$streamId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPushRelayIdRoute = ApiPushRelayIdRouteImport.update({
   id: '/api/push/relay/$id',
   path: '/api/push/relay/$id',
@@ -214,6 +233,9 @@ export interface FileRoutesByFullPath {
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/tags/$tag': typeof TagsTagRoute
   '/settings/': typeof SettingsIndexRoute
+  '/api/assistant/chat': typeof ApiAssistantChatRoute
+  '/api/assistant/resume': typeof ApiAssistantResumeRoute
+  '/api/assistant/stream/$streamId': typeof ApiAssistantStreamStreamIdRoute
   '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
 export interface FileRoutesByTo {
@@ -244,6 +266,9 @@ export interface FileRoutesByTo {
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/tags/$tag': typeof TagsTagRoute
   '/settings': typeof SettingsIndexRoute
+  '/api/assistant/chat': typeof ApiAssistantChatRoute
+  '/api/assistant/resume': typeof ApiAssistantResumeRoute
+  '/api/assistant/stream/$streamId': typeof ApiAssistantStreamStreamIdRoute
   '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
 export interface FileRoutesById {
@@ -276,6 +301,9 @@ export interface FileRoutesById {
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/tags/$tag': typeof TagsTagRoute
   '/settings/': typeof SettingsIndexRoute
+  '/api/assistant/chat': typeof ApiAssistantChatRoute
+  '/api/assistant/resume': typeof ApiAssistantResumeRoute
+  '/api/assistant/stream/$streamId': typeof ApiAssistantStreamStreamIdRoute
   '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
 export interface FileRouteTypes {
@@ -309,6 +337,9 @@ export interface FileRouteTypes {
     | '/settings/notifications'
     | '/tags/$tag'
     | '/settings/'
+    | '/api/assistant/chat'
+    | '/api/assistant/resume'
+    | '/api/assistant/stream/$streamId'
     | '/api/push/relay/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -339,6 +370,9 @@ export interface FileRouteTypes {
     | '/settings/notifications'
     | '/tags/$tag'
     | '/settings'
+    | '/api/assistant/chat'
+    | '/api/assistant/resume'
+    | '/api/assistant/stream/$streamId'
     | '/api/push/relay/$id'
   id:
     | '__root__'
@@ -370,6 +404,9 @@ export interface FileRouteTypes {
     | '/settings/notifications'
     | '/tags/$tag'
     | '/settings/'
+    | '/api/assistant/chat'
+    | '/api/assistant/resume'
+    | '/api/assistant/stream/$streamId'
     | '/api/push/relay/$id'
   fileRoutesById: FileRoutesById
 }
@@ -395,6 +432,9 @@ export interface RootRouteChildren {
   FedizenCallbackRoute: typeof FedizenCallbackRoute
   PostIdRoute: typeof PostIdRoute
   TagsTagRoute: typeof TagsTagRoute
+  ApiAssistantChatRoute: typeof ApiAssistantChatRoute
+  ApiAssistantResumeRoute: typeof ApiAssistantResumeRoute
+  ApiAssistantStreamStreamIdRoute: typeof ApiAssistantStreamStreamIdRoute
   ApiPushRelayIdRoute: typeof ApiPushRelayIdRoute
 }
 
@@ -596,6 +636,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TagsTagRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/assistant/chat': {
+      id: '/api/assistant/chat'
+      path: '/api/assistant/chat'
+      fullPath: '/api/assistant/chat'
+      preLoaderRoute: typeof ApiAssistantChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/assistant/resume': {
+      id: '/api/assistant/resume'
+      path: '/api/assistant/resume'
+      fullPath: '/api/assistant/resume'
+      preLoaderRoute: typeof ApiAssistantResumeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/assistant/stream/$streamId': {
+      id: '/api/assistant/stream/$streamId'
+      path: '/api/assistant/stream/$streamId'
+      fullPath: '/api/assistant/stream/$streamId'
+      preLoaderRoute: typeof ApiAssistantStreamStreamIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/push/relay/$id': {
       id: '/api/push/relay/$id'
       path: '/api/push/relay/$id'
@@ -652,6 +713,9 @@ const rootRouteChildren: RootRouteChildren = {
   FedizenCallbackRoute: FedizenCallbackRoute,
   PostIdRoute: PostIdRoute,
   TagsTagRoute: TagsTagRoute,
+  ApiAssistantChatRoute: ApiAssistantChatRoute,
+  ApiAssistantResumeRoute: ApiAssistantResumeRoute,
+  ApiAssistantStreamStreamIdRoute: ApiAssistantStreamStreamIdRoute,
   ApiPushRelayIdRoute: ApiPushRelayIdRoute,
 }
 export const routeTree = rootRouteImport

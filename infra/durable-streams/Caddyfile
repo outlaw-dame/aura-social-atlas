@@ -1,0 +1,27 @@
+# Durable Streams for Atlas: private network only (no public domain), every stream request needs the shared token.
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:{$PORT:4437} {
+	# Railway's healthcheck: says nothing about the streams.
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle /v1/stream/* {
+		route {
+			@unauthorized not header Authorization "Bearer {$DS_TOKEN}"
+			respond @unauthorized 401
+			durable_streams {
+				data_dir /data/streams
+			}
+		}
+	}
+
+	handle {
+		respond 404
+	}
+}
