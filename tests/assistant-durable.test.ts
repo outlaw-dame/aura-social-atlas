@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { durableConfig, proxyRead, readPathFor, streamUrlFor, STREAM_TTL_SECONDS } from '../src/lib/assistant/durable.server';
 import { chatStoreDeps, finishAnswer, isUuid, KEEP_MS, mayRead, readChat, type StoredChat } from '../src/lib/assistant/chat-store.server';
 import { sameOriginStreamUrl } from '../src/lib/assistant/durable-transport';
-import { sessionFrom } from '../src/lib/assistant/useAssistantSession';
+import { keepOrReplace, sessionFrom } from '../src/lib/assistant/useAssistantSession';
 
 const TOKEN = 'a'.repeat(40);
 const cfg = durableConfig({ ATLAS_DURABLE_STREAMS_URL: 'http://atlas-streams.railway.internal:4437/v1/stream/', ATLAS_DURABLE_STREAMS_TOKEN: TOKEN })!;
@@ -138,6 +138,15 @@ describe('the browser trusts only a well-formed answer from /api/assistant/chat'
     expect(sessionFrom({ durable: true, id: 5, messages: [] }).durable).toBe(false);
     expect(sessionFrom(null).durable).toBe(false);
   });
+
+  test('reopening while answers still aren’t kept leaves the chat on screen alone', () => {
+    const shown = { key: 'k1', ready: true, durable: false, messages: [], answering: false };
+    expect(keepOrReplace(shown, { ...shown, key: 'k2' })).toBe(shown);
+    const kept = sessionFrom({ durable: true, id: ID, messages: [] });
+    expect(keepOrReplace(shown, kept)).toBe(kept);
+    const loading = { ...shown, key: 'loading', ready: false };
+    expect(keepOrReplace(loading, shown)).toBe(shown);
+  });
 });
 
 describe('wiring', () => {
@@ -149,6 +158,10 @@ describe('wiring', () => {
     expect(chatRoute).toMatch(/status: 201, headers: \{ Location: streamUrl/);
     // Without a stream server, exactly as before.
     expect(chatRoute).toMatch(/return result\.toUIMessageStreamResponse\(\{\s*originalMessages: messages as UIMessage\[\],\s*\}\);/);
+  });
+
+  test('resuming finds the running answer, else the last one (it may have finished meanwhile)', () => {
+    expect(readFileSync('src/routes/api/assistant/resume.ts', 'utf8')).toMatch(/const stream = chat && chat\.chatId === id \? chat\.activeStream \?\? chat\.lastStream : null;/);
   });
 
   test('reading a stream checks who is asking and that it is their chat', () => {

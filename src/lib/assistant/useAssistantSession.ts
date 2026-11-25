@@ -37,6 +37,14 @@ export function sessionFrom(body: unknown): AssistantSession {
   return { key: `${b.id}:${newKey()}`, ready: true, durable: true, id: b.id, messages: b.messages as UIMessage[], answering: b.answering === true };
 }
 
+/**
+ * Still not kept: the chat on screen stays as it is (its messages, an answer in progress), rather than being rebuilt
+ * empty on every opening.
+ */
+export function keepOrReplace(current: AssistantSession, next: AssistantSession): AssistantSession {
+  return current.ready && !current.durable && !next.durable ? current : next;
+}
+
 export function useAssistantSession(open: boolean) {
   const [session, setSession] = useState<AssistantSession>({ ...PLAIN, key: 'loading', ready: false });
   const loading = useRef(false);
@@ -46,9 +54,10 @@ export function useAssistantSession(open: boolean) {
     loading.current = true;
     try {
       const res = await fetch('/api/assistant/chat', { headers: await assistantAuthHeaders() });
-      setSession(res.ok ? sessionFrom(await res.json()) : { ...PLAIN, key: newKey() });
+      const next = res.ok ? sessionFrom(await res.json()) : { ...PLAIN, key: newKey() };
+      setSession(current => keepOrReplace(current, next));
     } catch {
-      setSession({ ...PLAIN, key: newKey() });
+      setSession(current => keepOrReplace(current, { ...PLAIN, key: newKey() }));
     } finally {
       loading.current = false;
     }
