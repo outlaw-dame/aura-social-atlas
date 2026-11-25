@@ -109,8 +109,9 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
   return {
     thread, loading: q.isLoading, refreshing: q.isFetching && !q.isLoading,
     error: q.isError ? 'unavailable' as const : q.data?.error, refetch: () => void q.refetch(), sort, setSort, signedIn: !!user,
-    /** The last read failed because Fedizen didn't answer in time (or couldn't be reached), not because it refused. */
-    slow: q.isError || !!q.data?.slow,
+    /** The last read failed because Fedizen didn't answer in time (or couldn't be reached), not because it refused.
+     *  Only Atlas's server can tell: a request that failed on the way to Atlas itself isn't called slow. */
+    slow: !q.isError && !!q.data?.slow,
     /** Fedizen sent as many replies as it sends at most: there may be more on fedizen.net. */ capped: !!q.data?.capped,
     /** Posts added while the conversation was open, and when (ms). */ arrived: current?.arrived ?? EMPTY,
   };

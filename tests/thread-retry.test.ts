@@ -14,6 +14,8 @@ describe('an open conversation that did not load whole', () => {
   test('a post that is gone is not retried quickly; a timeout says Fedizen is slow', () => {
     const hook = readFileSync('src/components/social/useThread.ts', 'utf8');
     expect(hook).toMatch(/r\.error && r\.error !== 'not-found' \? failures\.current \+ 1 : 0/);
+    // Only Fedizen's own timeout reads as slow, never a failure reaching Atlas's server.
+    expect(hook).toMatch(/slow: !q\.isError && !!q\.data\?\.slow/);
     const server = readFileSync('src/lib/fedizen.functions.ts', 'utf8');
     expect(server).toMatch(/r\.failure === 'unreachable'/);
     expect(server).toMatch(/slow\(ctx\) \? \{ slow: true as const \}/);
