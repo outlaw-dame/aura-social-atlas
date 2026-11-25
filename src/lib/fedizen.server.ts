@@ -1,3 +1,4 @@
+import { BREAKER, mayAskFedizen, noteFedizenAnswered, noteFedizenTimeout, noteFedizenUnreached } from './fedizen-breaker';
 import { FEDIZEN_USER_AGENT, transportDetail, type FedizenTransportFailure } from './fedizen-http';
 import { FEDIZEN, FEDIZEN_API_SCOPE } from './fedizen-feed';
 import { accountKey, cachedStatus, forgetAccountReads, keepStatus, noteRateLimited, waitLeft } from './fedizen-rate-limit';
@@ -689,6 +690,9 @@ export async function fedizenGet(token: string, path: string, opts: { requireCom
     if (hit !== undefined) return { status: 200, data: [hit] };
   }
 
+  // Fedizen stopped answering moments ago (fedizen-breaker.ts): say so at once rather than wait out another 10 s.
+  if (!mayAskFedizen()) return { status: 503, data: [], failure: 'unreachable' };
+
   let response: Response;
   try {
     response = await fetch(`${FEDIZEN}${path}`, {
@@ -699,9 +703,14 @@ export async function fedizenGet(token: string, path: string, opts: { requireCom
       cache: 'no-store',
     });
   } catch (e) {
-    console.error('Fedizen read unreachable', { route: readRoute(path), why: transportDetail(e) });
+    const why = transportDetail(e);
+    console.error('Fedizen read unreachable', { route: readRoute(path), why });
+    if (why === 'timeout') {
+      if (noteFedizenTimeout(readRoute(path))) console.warn('Fedizen not answering: reads paused', { seconds: BREAKER.pauseMs / 1000 });
+    } else noteFedizenUnreached();
     return { status: 503, data: [], failure: 'unreachable' };
   }
+  noteFedizenAnswered();
 
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});

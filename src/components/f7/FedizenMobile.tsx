@@ -29,6 +29,7 @@ import { MobileFilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
 import { AuthorWarning } from '@/components/social/ContentWarning';
 import { useHomeTimeline } from '@/components/social/useHomeTimeline';
+import { MobileOlderFooter } from './MobileOlderFooter';
 import { PostBody } from '@/components/social/PostBody';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
@@ -92,11 +93,7 @@ export function MobileFedizenFeed() {
         {/* New posts wait here until asked for (Bonfire: "Show N new activities"; Mastodon: "N new items"). */}
         {tl.newCount > 0 && <div className="atlas-new-posts"><button type="button" onClick={tl.reveal} aria-label={newPostsLabel(tl.newCount, tl.gap, tl.faces)}><Icon ios="f7:arrow_up" md="material:arrow_upward" />{tl.faces.length ? <NewPostFaces faces={tl.faces} /> : <span>{tl.newCount === 1 ? '1 new post' : `${tl.newCount}${tl.gap ? '+' : ''} new posts`}</span>}</button></div>}
         {tl.posts.map(p => <MobilePostCard key={p.id} post={p} actions={actions} />)}
-        {tl.hasOlder && <div ref={tl.sentinel} className="atlas-older">
-          {tl.olderFailed ? <span>Couldn’t load older posts. <Link onClick={() => void tl.loadOlder()}>Try again</Link></span>
-            : tl.loadingOlder ? <span><span className="preloader preloader-small" /> Loading older posts…</span>
-            : <Link onClick={() => void tl.loadOlder()}>Load older posts</Link>}
-        </div>}
+        {tl.hasOlder && <MobileOlderFooter sentinel={tl.sentinel} loading={tl.loadingOlder} failed={tl.olderFailed} retry={() => void tl.loadOlder()} />}
       </div>}
     {(!f.signedIn || (!f.loading && (!f.data?.connected || f.data.error === 'expired'))) && <MobilePublicFedizen />}
     {/* As desktop's Following: Atlas can stop using the Fedizen account (the grant is revoked at Fedizen too). */}

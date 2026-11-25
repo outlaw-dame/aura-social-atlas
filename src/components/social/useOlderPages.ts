@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { appendOlder } from '@/lib/home-timeline';
 
@@ -30,16 +30,47 @@ export function useOlderPages<P extends { id: string }, C>(key: readonly unknown
   return { posts, hasMore: start != null && (!pages || !!hasNextPage || failed), loading: isFetching, failed, loadMore };
 }
 
-/** The element at a feed's end: as it comes within 1600 px of the screen, the next older page is read. */
+/** Older posts load on their own wherever IntersectionObserver exists; elsewhere the footer offers a button. */
+export const autoLoads = () => typeof IntersectionObserver !== 'undefined';
+
+/** How far ahead of the reader the next page is read, in screen heights (Bluesky's web list reads 2 ahead,
+ *  onEndReachedThreshold; Atlas reads a little further because Fedizen can take a second or two per page). */
+export const LOOKAHEAD_SCREENS = 3;
+
+/** The element that scrolls `el`: the nearest ancestor that scrolls (Framework7's .page-content, a dialog), else the
+ *  window (null, for IntersectionObserver). An observer rooted at the window can't see past a scrolling box's edge. */
+export function scrollRootOf(el: Element): HTMLElement | null {
+  for (let n = el.parentElement; n; n = n.parentElement) {
+    if (n.classList.contains('page-content')) return n;
+    const o = getComputedStyle(n).overflowY;
+    if ((o === 'auto' || o === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+  }
+  return null;
+}
+
+/**
+ * The element at a feed's end: as it comes within LOOKAHEAD_SCREENS screens of view, the next older page is read, and
+ * the next after it while the end stays that near (an observer only speaks when the end comes into or out of range,
+ * so after each page Atlas checks again; Bluesky's list does the same by re-creating its observer whenever the list's
+ * height changes). A callback ref, so an end element that is replaced is observed again.
+ */
 export function useLoadMoreSentinel(active: boolean, loadMore: () => void) {
-  const ref = useRef<HTMLDivElement | null>(null);
+  const [el, setEl] = useState<HTMLElement | null>(null);
+  const near = useRef(false);
+  const load = useRef(loadMore);
+  load.current = loadMore;
   useEffect(() => {
-    const el = ref.current;
     if (!el || !active || typeof IntersectionObserver === 'undefined') return;
-    const root = (el.closest('.page-content') as HTMLElement | null) ?? null;
-    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) loadMore(); }, { root, rootMargin: '0px 0px 1600px 0px' });
+    const root = scrollRootOf(el);
+    const screen = root?.clientHeight || window.innerHeight || 800;
+    const io = new IntersectionObserver(es => {
+      near.current = es.some(e => e.isIntersecting);
+      if (near.current) load.current();
+    }, { root, rootMargin: `0px 0px ${Math.round(LOOKAHEAD_SCREENS * screen)}px 0px` });
     io.observe(el);
-    return () => io.disconnect();
-  }, [active, loadMore]);
-  return ref;
+    return () => { io.disconnect(); near.current = false; };
+  }, [el, active]);
+  // loadMore changes as a read starts and ends: if the end is still in range once a page is in, read the next.
+  useEffect(() => { if (active && near.current) loadMore(); }, [active, loadMore]);
+  return setEl;
 }

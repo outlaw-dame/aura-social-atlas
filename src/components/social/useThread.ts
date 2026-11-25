@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { findCachedPost } from '@/lib/post-cache';
 import { useServerFn } from '@tanstack/react-start';
 import { getFedizenThread } from '@/lib/fedizen.functions';
 import type { FedizenPost } from '@/lib/fedizen-feed';
@@ -104,7 +105,14 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
   }, [statusId, refetch]);
 
   const current = view && view.id === statusId ? view : null;
-  const focus = current?.data.post ?? (seed?.statusId === statusId ? seed : undefined);
+  // Until Fedizen answers: the post that was tapped, else the same post from anywhere Atlas already has it (a feed,
+  // Saved, Activity's post, another conversation), so it opens at once from a notification or a link too.
+  const qc = useQueryClient();
+  const cached = useMemo(() => (seed?.statusId === statusId ? seed : statusId && !current
+    ? findCachedPost(qc.getQueryCache().getAll().filter(x => x.queryKey[0] !== 'fedizen-thread' || x.queryKey[2] !== statusId).map(x => x.state.data), statusId)
+    : undefined), [seed, statusId, qc, !current]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Fedizen says the post is gone: don't keep showing the copy Atlas had.
+  const focus = current?.data.post ?? (q.data?.error === 'not-found' ? undefined : cached);
   const thread = useMemo(() => (focus ? buildThread(focus, current?.data.ancestors ?? [], current?.data.descendants ?? [], { sort, isMe }) : null), [focus, current?.data, sort, isMe]);
   return {
     thread, loading: q.isLoading, refreshing: q.isFetching && !q.isLoading,

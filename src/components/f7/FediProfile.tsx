@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TagText, hashtagLabel } from '@/lib/hashtags';
 import { featuredDetail } from '@/lib/featured-tags';
 import type { FeaturedTag } from '@/lib/fedi-profile';
@@ -19,6 +19,8 @@ import { useAtlasAuth } from '@/components/social/AuthState';
 import { useProfileCircles } from '@/components/social/useFedizenLibrary';
 import { useModerationActions } from './useModerationActions';
 import { PostBody } from '@/components/social/PostBody';
+import { MobileOlderFooter } from './MobileOlderFooter';
+import { useLoadMoreSentinel } from '@/components/social/useOlderPages';
 
 /**
  * Phone: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -106,15 +108,8 @@ export function FediProfilePopup({ target, onClose }: { target: FediProfileTarge
 function MobileProfilePosts({ p, onTag, tag, onClearTag }: { p: FediProfile; onTag: (tag: string) => void; tag: string | null; onClearTag: () => void }) {
   const posts = useProfilePosts(p, tag);
   const actions = useMobilePostActions();
-  const end = useRef<HTMLDivElement>(null);
-  const { hasMore, loadMore } = posts;
-  useEffect(() => {
-    const el = end.current;
-    if (!el || !hasMore || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) loadMore(); }, { rootMargin: '0px 0px 800px 0px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [hasMore, loadMore]);
+  // Older posts load as the reader nears the end, as feeds do (useLoadMoreSentinel finds the profile's scrolling box).
+  const end = useLoadMoreSentinel(posts.hasMore && !posts.moreFailed && !posts.loading, posts.loadMore);
   return <>
     {tag
       ? <BlockTitle className="atlas-featured-title"><span>Posts with <TagText tag={tag} mark /></span><Link onClick={onClearTag}>All posts</Link></BlockTitle>
@@ -125,9 +120,7 @@ function MobileProfilePosts({ p, onTag, tag, onClearTag }: { p: FediProfile; onT
       : <OriginPost key={`o-${x.post.id}`} post={x.post} host={p.host} onTag={onTag} />)}</FilterPlaceProvider>
     {posts.loading && !posts.items.length && <Block>Loading their posts…</Block>}
     {!posts.loading && !posts.items.length && <Block>{tag ? 'No public posts with this hashtag that Atlas can see.' : p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</Block>}
-    {posts.hasMore && <div ref={end} className="atlas-older">
-      {posts.loadingMore ? <span>Loading older posts…</span> : <Link onClick={posts.loadMore}>{posts.moreFailed ? 'Couldn’t load older posts. Try again' : 'Load older posts'}</Link>}
-    </div>}
+    {posts.hasMore && <MobileOlderFooter sentinel={end} loading={posts.loadingMore} failed={posts.moreFailed} retry={posts.loadMore} />}
     {actions.sheet}
   </>;
 }
