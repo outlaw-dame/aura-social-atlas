@@ -4,7 +4,7 @@
  * Atlas's staging server is reached through Cloudflare Tunnel, and cloudflared doesn't wait for a server that is
  * starting: while it boots (a deploy, a crash restart) the tunnel answers 502 at once. Seen on 25 Nov 2026 in
  * cloudflared's log: "Unable to reach the origin service … connect: connection refused", the visitor got a 502.
- * Railway's own edge answers 503/504 in the same moment. Booting takes about 0.4 s on the slim image (3–11 s before).
+ * Other proxies may answer 503 or 504 instead. Booting takes 0.1–1 s on the slim image (3–11 s before, 25 Nov).
  *
  * So reads (GET and HEAD only) that meet one of those answers, or a failed connection, are asked again after 1 s and
  * then 2 s. Writes are never repeated: a 502 can also come after the server received the request, and a like or a
