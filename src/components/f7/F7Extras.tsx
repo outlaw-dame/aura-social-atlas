@@ -6,7 +6,7 @@ import {
   Sheet, Popup, Page, Navbar, NavLeft, NavRight, Link, Block, List, ListInput, Button, Messages, Message, Messagebar, Icon, f7,
 } from 'framework7-react';
 import { durableChatTransport } from '@/lib/assistant/durable-transport';
-import { assistantAuthHeaders, useAssistantSession, type AssistantSession } from '@/lib/assistant/useAssistantSession';
+import { assistantAuthHeaders, stopKeptAnswer, useAssistantSession, type AssistantSession } from '@/lib/assistant/useAssistantSession';
 
 export { ComposeSheet } from './ComposeSheet';
 
@@ -23,7 +23,7 @@ function AssistantPopupChat({ opened, onClose, session, onNewChat }: { opened: b
     () => (session.durable ? durableChatTransport(assistantAuthHeaders) : new DefaultChatTransport({ api: '/api/chat', headers: assistantAuthHeaders })),
     [session.durable],
   );
-  const { messages, sendMessage, status } = useChat({ id: session.id, messages: session.messages, resume: session.durable && session.answering, transport });
+  const { messages, sendMessage, status, stop } = useChat({ id: session.id, messages: session.messages, resume: session.durable && session.answering, transport });
   const [input, setInput] = useState('');
   const handled = useRef(new Set<string>());
   // Open links only from answers to questions asked here and now (see the desktop Assistant).
@@ -49,7 +49,9 @@ function AssistantPopupChat({ opened, onClose, session, onNewChat }: { opened: b
           <NavRight><Link popupClose iconIos="f7:xmark" iconMd="material:close" aria-label="Close assistant" /></NavRight>
         </Navbar>
         <Messagebar placeholder="Ask anything" value={input} onInput={(e: any) => setInput(e.target.value)}>
-          <Link slot="inner-end" aria-label="Send" onClick={() => send(input)} iconIos="f7:arrow_up_circle_fill" iconMd="material:send" />
+          {busy
+            ? <Link slot="inner-end" aria-label="Stop answering" onClick={() => { void stop(); if (session.durable) void stopKeptAnswer(); }} iconIos="f7:stop_circle_fill" iconMd="material:stop_circle" />
+            : <Link slot="inner-end" aria-label="Send" onClick={() => send(input)} iconIos="f7:arrow_up_circle_fill" iconMd="material:send" />}
         </Messagebar>
         <Messages>
           {messages.length === 0 && (

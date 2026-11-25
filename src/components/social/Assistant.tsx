@@ -2,9 +2,9 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { durableChatTransport } from "@/lib/assistant/durable-transport";
-import { assistantAuthHeaders, useAssistantSession, type AssistantSession } from "@/lib/assistant/useAssistantSession";
+import { assistantAuthHeaders, stopKeptAnswer, useAssistantSession, type AssistantSession } from "@/lib/assistant/useAssistantSession";
 import ReactMarkdown from "react-markdown";
-import { ArrowUp, PenLine, Send, Sparkle, X } from "lucide-react";
+import { ArrowUp, PenLine, Sparkle, Square, X } from "lucide-react";
 import { Button } from '@/components/ui/button';
 const SUGGESTED_PROMPTS = ["What is the open social web?", "How do Mastodon and Bluesky differ?", "Explain RSS feeds"];
 type OverlayProps = {
@@ -36,7 +36,7 @@ function AssistantOverlayChat({
     () => (session.durable ? durableChatTransport(assistantAuthHeaders) : new DefaultChatTransport({ api: "/api/chat", headers: assistantAuthHeaders })),
     [session.durable],
   );
-  const { messages, sendMessage, status, error } = useChat({
+  const { messages, sendMessage, status, error, stop } = useChat({
     id: session.id,
     messages: session.messages,
     resume: session.durable && session.answering,
@@ -103,6 +103,9 @@ function AssistantOverlayChat({
   }, []);
 
   const busy = status === "streaming" || status === "submitted";
+  // Stop: closes this view's read and, where answers are kept, stops the model on the server too (else it would go on
+  // answering, and spending the person's key, with no one reading).
+  const stopAnswer = () => { void stop(); if (session.durable) void stopKeptAnswer(); };
 
   return (
     <>
@@ -205,12 +208,12 @@ function AssistantOverlayChat({
                 className="max-h-32 flex-1 resize-none bg-transparent py-1.5 text-sm text-zinc-900 placeholder:text-zinc-500 focus:outline-none dark:text-zinc-100"
               />
               <button
-                onClick={submit}
-                disabled={busy || !input.trim()}
+                onClick={busy ? stopAnswer : submit}
+                disabled={!busy && !input.trim()}
                 className="grid size-9 place-items-center rounded-full bg-zinc-900 text-white transition active:scale-95 disabled:opacity-40 dark:bg-white dark:text-zinc-900"
-                aria-label="Send"
+                aria-label={busy ? "Stop answering" : "Send"}
               >
-                {busy ? <Send className="size-4" /> : <ArrowUp className="size-4" strokeWidth={2.5} />}
+                {busy ? <Square className="size-3.5 fill-current" /> : <ArrowUp className="size-4" strokeWidth={2.5} />}
               </button>
             </div>
           </div>

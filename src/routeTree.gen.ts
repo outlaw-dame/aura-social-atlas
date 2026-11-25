@@ -39,6 +39,9 @@ import { Route as SettingsNotificationsRouteImport } from './routes/settings.not
 import { Route as TagsTagRouteImport } from './routes/tags.$tag'
 import { Route as ApiAssistantChatRouteImport } from './routes/api/assistant/chat'
 import { Route as ApiAssistantResumeRouteImport } from './routes/api/assistant/resume'
+import { Route as ApiAssistantStopRouteImport } from './routes/api/assistant/stop'
+import { Route as ApiLiveStreamHubIdRouteImport } from './routes/api/live-stream/$hubId'
+import { Route as ApiLiveStreamSessionRouteImport } from './routes/api/live-stream/session'
 import { Route as ApiAssistantStreamStreamIdRouteImport } from './routes/api/assistant/stream.$streamId'
 import { Route as ApiPushRelayIdRouteImport } from './routes/api/push/relay.$id'
 
@@ -192,6 +195,21 @@ const ApiAssistantResumeRoute = ApiAssistantResumeRouteImport.update({
   path: '/api/assistant/resume',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAssistantStopRoute = ApiAssistantStopRouteImport.update({
+  id: '/api/assistant/stop',
+  path: '/api/assistant/stop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLiveStreamHubIdRoute = ApiLiveStreamHubIdRouteImport.update({
+  id: '/api/live-stream/$hubId',
+  path: '/api/live-stream/$hubId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLiveStreamSessionRoute = ApiLiveStreamSessionRouteImport.update({
+  id: '/api/live-stream/session',
+  path: '/api/live-stream/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAssistantStreamStreamIdRoute =
   ApiAssistantStreamStreamIdRouteImport.update({
     id: '/api/assistant/stream/$streamId',
@@ -235,6 +253,9 @@ export interface FileRoutesByFullPath {
   '/settings/': typeof SettingsIndexRoute
   '/api/assistant/chat': typeof ApiAssistantChatRoute
   '/api/assistant/resume': typeof ApiAssistantResumeRoute
+  '/api/assistant/stop': typeof ApiAssistantStopRoute
+  '/api/live-stream/$hubId': typeof ApiLiveStreamHubIdRoute
+  '/api/live-stream/session': typeof ApiLiveStreamSessionRoute
   '/api/assistant/stream/$streamId': typeof ApiAssistantStreamStreamIdRoute
   '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
@@ -268,6 +289,9 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsIndexRoute
   '/api/assistant/chat': typeof ApiAssistantChatRoute
   '/api/assistant/resume': typeof ApiAssistantResumeRoute
+  '/api/assistant/stop': typeof ApiAssistantStopRoute
+  '/api/live-stream/$hubId': typeof ApiLiveStreamHubIdRoute
+  '/api/live-stream/session': typeof ApiLiveStreamSessionRoute
   '/api/assistant/stream/$streamId': typeof ApiAssistantStreamStreamIdRoute
   '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
@@ -303,6 +327,9 @@ export interface FileRoutesById {
   '/settings/': typeof SettingsIndexRoute
   '/api/assistant/chat': typeof ApiAssistantChatRoute
   '/api/assistant/resume': typeof ApiAssistantResumeRoute
+  '/api/assistant/stop': typeof ApiAssistantStopRoute
+  '/api/live-stream/$hubId': typeof ApiLiveStreamHubIdRoute
+  '/api/live-stream/session': typeof ApiLiveStreamSessionRoute
   '/api/assistant/stream/$streamId': typeof ApiAssistantStreamStreamIdRoute
   '/api/push/relay/$id': typeof ApiPushRelayIdRoute
 }
@@ -339,6 +366,9 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/api/assistant/chat'
     | '/api/assistant/resume'
+    | '/api/assistant/stop'
+    | '/api/live-stream/$hubId'
+    | '/api/live-stream/session'
     | '/api/assistant/stream/$streamId'
     | '/api/push/relay/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -372,6 +402,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/assistant/chat'
     | '/api/assistant/resume'
+    | '/api/assistant/stop'
+    | '/api/live-stream/$hubId'
+    | '/api/live-stream/session'
     | '/api/assistant/stream/$streamId'
     | '/api/push/relay/$id'
   id:
@@ -406,6 +439,9 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/api/assistant/chat'
     | '/api/assistant/resume'
+    | '/api/assistant/stop'
+    | '/api/live-stream/$hubId'
+    | '/api/live-stream/session'
     | '/api/assistant/stream/$streamId'
     | '/api/push/relay/$id'
   fileRoutesById: FileRoutesById
@@ -434,6 +470,9 @@ export interface RootRouteChildren {
   TagsTagRoute: typeof TagsTagRoute
   ApiAssistantChatRoute: typeof ApiAssistantChatRoute
   ApiAssistantResumeRoute: typeof ApiAssistantResumeRoute
+  ApiAssistantStopRoute: typeof ApiAssistantStopRoute
+  ApiLiveStreamHubIdRoute: typeof ApiLiveStreamHubIdRoute
+  ApiLiveStreamSessionRoute: typeof ApiLiveStreamSessionRoute
   ApiAssistantStreamStreamIdRoute: typeof ApiAssistantStreamStreamIdRoute
   ApiPushRelayIdRoute: typeof ApiPushRelayIdRoute
 }
@@ -650,6 +689,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAssistantResumeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/assistant/stop': {
+      id: '/api/assistant/stop'
+      path: '/api/assistant/stop'
+      fullPath: '/api/assistant/stop'
+      preLoaderRoute: typeof ApiAssistantStopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/live-stream/$hubId': {
+      id: '/api/live-stream/$hubId'
+      path: '/api/live-stream/$hubId'
+      fullPath: '/api/live-stream/$hubId'
+      preLoaderRoute: typeof ApiLiveStreamHubIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/live-stream/session': {
+      id: '/api/live-stream/session'
+      path: '/api/live-stream/session'
+      fullPath: '/api/live-stream/session'
+      preLoaderRoute: typeof ApiLiveStreamSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/assistant/stream/$streamId': {
       id: '/api/assistant/stream/$streamId'
       path: '/api/assistant/stream/$streamId'
@@ -715,6 +775,9 @@ const rootRouteChildren: RootRouteChildren = {
   TagsTagRoute: TagsTagRoute,
   ApiAssistantChatRoute: ApiAssistantChatRoute,
   ApiAssistantResumeRoute: ApiAssistantResumeRoute,
+  ApiAssistantStopRoute: ApiAssistantStopRoute,
+  ApiLiveStreamHubIdRoute: ApiLiveStreamHubIdRoute,
+  ApiLiveStreamSessionRoute: ApiLiveStreamSessionRoute,
   ApiAssistantStreamStreamIdRoute: ApiAssistantStreamStreamIdRoute,
   ApiPushRelayIdRoute: ApiPushRelayIdRoute,
 }
