@@ -363,10 +363,21 @@ export async function resolveAuthorsFor(
 ): Promise<Map<string, FediAuthor[]>> {
   const out = new Map<string, FediAuthor[]>();
   const pending: Promise<void>[] = [];
-  for (const url of [...new Set(urls)].slice(0, 16)) {
+  const wanted = [...new Set(urls)].slice(0, 16);
+  const missing = wanted.filter((url) => {
     const hit = cached(url);
-    if (hit) {
-      out.set(url, hit);
+    if (hit) out.set(url, hit);
+    return !hit;
+  });
+  // Kept in Supabase from before the server last slept (lookup-cache.server.ts), with any episode or video found.
+  const { readLookups, writeLookup } = await import('./lookup-cache.server');
+  const kept = missing.length ? await readLookups<{ authors?: FediAuthor[]; media?: FoundMedia }>('authors', missing) : new Map();
+  for (const url of missing) {
+    const k = kept.get(url);
+    if (k && Array.isArray(k.authors)) {
+      remember(url, k.authors);
+      if (k.media) rememberMedia(url, k.media);
+      out.set(url, k.authors);
       continue;
     }
     pending.push(
@@ -374,6 +385,7 @@ export async function resolveAuthorsFor(
         .catch(() => [])
         .then((a) => {
           remember(url, a);
+          writeLookup('authors', url, { authors: a, ...(mediaFor(url) ? { media: mediaFor(url) } : {}) }, a.length ? POSITIVE_TTL : NEGATIVE_TTL);
           out.set(url, a);
         }),
     );

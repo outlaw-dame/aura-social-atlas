@@ -96,6 +96,18 @@ async function castopodPopular(): Promise<Voice[]> {
 
 /** Every voice, curated first within each category, without duplicates. */
 export async function allVoices(): Promise<{ voices: Voice[]; sources: { fedidb: boolean; castopodIndex: boolean } }> {
+  // Memory empty (a fresh or woken server): the list kept in Supabase from earlier today (lookup-cache.server.ts).
+  const { readLookups, writeLookup } = await import('./lookup-cache.server');
+  if (!popularCache && !podcastCache) {
+    const kept = (await readLookups<{ voices: Voice[]; sources: { fedidb: boolean; castopodIndex: boolean } }>('voices', ['all'])).get('all');
+    if (kept && Array.isArray(kept.voices) && kept.sources?.fedidb && kept.sources?.castopodIndex) return kept;
+  }
+  const result = await allVoicesFresh();
+  if (result.sources.fedidb && result.sources.castopodIndex) writeLookup('voices', 'all', result, 24 * 3_600_000);
+  return result;
+}
+
+async function allVoicesFresh(): Promise<{ voices: Voice[]; sources: { fedidb: boolean; castopodIndex: boolean } }> {
   const [pop, pods] = await Promise.all([popular().catch(() => null), castopodPopular().catch(() => null)]);
   const seen = new Set<string>();
   const out: Voice[] = [];

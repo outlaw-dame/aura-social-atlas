@@ -43,3 +43,17 @@ describe('waking the server', () => {
     expect(readKeptPublic('voices', 5000, 2000)).toBeNull();
   });
 });
+
+describe("the person's Fedizen connection", () => {
+  test('is read from Supabase once per 15 s per person and forgotten on connect and disconnect', () => {
+    const src = readFileSync('src/lib/fedizen.server.ts', 'utf8');
+    expect(src).toMatch(/const CONNECTION_MS = 15_000;/);
+    expect(src).toMatch(/if \(hit && hit\.until > Date\.now\(\)\) return hit\.value;/);
+    // A failed read isn't kept.
+    expect(src).toMatch(/value\.catch\(\(\) => \{ if \(connections\.get\(userId\)\?\.value === value\) connections\.delete\(userId\); \}\);/);
+    const connect = src.slice(src.indexOf('export async function finishConnect'), src.indexOf('export async function connectionFor'));
+    expect(connect).toMatch(/forgetConnection\(userId\);/);
+    const disconnect = src.slice(src.indexOf('export async function disconnect'));
+    expect(disconnect.match(/forgetConnection\(userId\)/g)?.length).toBe(2);
+  });
+});
