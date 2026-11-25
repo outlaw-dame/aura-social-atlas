@@ -1,9 +1,10 @@
+import { _resetMicrocache } from '../src/lib/fedizen-microcache';
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fedizenReadError } from '../src/lib/fedizen-feed';
 import { fedizenGet } from '../src/lib/fedizen.server';
 
 const originalFetch = globalThis.fetch;
-afterEach(() => { globalThis.fetch = originalFetch; });
+afterEach(() => { globalThis.fetch = originalFetch; _resetMicrocache(); });
 
 describe('Fedizen read-side failure isolation', () => {
   test.each([

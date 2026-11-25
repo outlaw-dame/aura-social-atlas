@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import {
   accountKey,
+  forgetAccountReads,
   noteRateLimited,
   resetRateLimitState,
   retryAfterMs,
@@ -143,13 +144,16 @@ describe("posts read moments ago are reused, but never hide the reader's own cha
     expect((after.data[0] as { favourited?: boolean }).favourited).toBe(true);
   });
 
-  test("lists and timelines are never reused", async () => {
+  test("lists and timelines are reused for only a few seconds (micro-cache), and not after the account writes", async () => {
     let calls = 0;
     globalThis.fetch = mock(async () => {
       calls += 1;
       return new Response("[]");
     }) as typeof fetch;
     await fedizenGet("token-a", "/api/v1/timelines/home?limit=20");
+    await fedizenGet("token-a", "/api/v1/timelines/home?limit=20");
+    expect(calls).toBe(1);
+    forgetAccountReads(await accountKey("token-a"));
     await fedizenGet("token-a", "/api/v1/timelines/home?limit=20");
     expect(calls).toBe(2);
   });

@@ -1,3 +1,5 @@
+import { forgetMicrocache, microcached, reuseFor } from './fedizen-microcache';
+import { BREAKER, mayAskFedizen, noteFedizenAnswered, noteFedizenTimeout, noteFedizenUnreached } from './fedizen-breaker';
 import { FEDIZEN_USER_AGENT, transportDetail, type FedizenTransportFailure } from './fedizen-http';
 import { FEDIZEN, FEDIZEN_API_SCOPE } from './fedizen-feed';
 import { accountKey, cachedStatus, forgetAccountReads, keepStatus, noteRateLimited, waitLeft } from './fedizen-rate-limit';
@@ -689,6 +691,18 @@ export async function fedizenGet(token: string, path: string, opts: { requireCom
     if (hit !== undefined) return { status: 200, data: [hit] };
   }
 
+  // The same read by this account moments ago, or one already on its way, is shared (fedizen-microcache.ts).
+  return microcached(account, `${opts.requireCompleteModeration ? 'strict ' : ''}${path}`, reuseFor(path), () => sendRead(token, path, account, read, isStatus, opts));
+}
+
+/** Reads that take this long are logged (route and time only), to tell a slow Fedizen from a slow Atlas. */
+const SLOW_READ_MS = 2_500;
+
+async function sendRead(token: string, path: string, account: string, read: (typeof READS)[number], isStatus: boolean, opts: { requireCompleteModeration?: boolean }): Promise<{ status: number; data: unknown[]; next?: string; prev?: string; failure?: FedizenReadFailure; issues?: FedizenReadIssue[] }> {
+  // Fedizen stopped answering moments ago (fedizen-breaker.ts): say so at once rather than wait out another 10 s.
+  if (!mayAskFedizen()) return { status: 503, data: [], failure: 'unreachable' };
+
+  const started = Date.now();
   let response: Response;
   try {
     response = await fetch(`${FEDIZEN}${path}`, {
@@ -699,9 +713,16 @@ export async function fedizenGet(token: string, path: string, opts: { requireCom
       cache: 'no-store',
     });
   } catch (e) {
-    console.error('Fedizen read unreachable', { route: readRoute(path), why: transportDetail(e) });
+    const why = transportDetail(e);
+    console.error('Fedizen read unreachable', { route: readRoute(path), why });
+    if (why === 'timeout') {
+      if (noteFedizenTimeout(readRoute(path))) console.warn('Fedizen not answering: reads paused', { seconds: BREAKER.pauseMs / 1000 });
+    } else noteFedizenUnreached();
     return { status: 503, data: [], failure: 'unreachable' };
   }
+  noteFedizenAnswered();
+  const took = Date.now() - started;
+  if (took >= SLOW_READ_MS) console.warn('Fedizen read slow', { route: readRoute(path), ms: took, status: response.status });
 
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});

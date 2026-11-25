@@ -1,6 +1,7 @@
 // Session state for Atlas accounts. One subscription, shared through context.
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { clearKeptFeeds } from '@/lib/kept-feeds';
 import { clearHomeCache } from '@/lib/home-timeline';
 import { supabase } from '@/integrations/supabase/client';
 import { readOAuthError } from '@/lib/bonfire-auth';
@@ -72,7 +73,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
     previousUser.current = userId ?? null;
     if (priorId && priorId !== userId) {
       // Home kept on this device for the prior account goes too (signing out, or switching account).
-      clearHomeCache(priorId);
+      clearHomeCache(priorId); clearKeptFeeds(priorId);
       forgetAccount(queryClient, priorId);
     }
   }, [userId, queryClient]);
@@ -98,7 +99,7 @@ export function AtlasAuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     if (session?.user.id) {
-      clearHomeCache(session.user.id); forgetAccount(queryClient, session.user.id);
+      clearHomeCache(session.user.id); clearKeptFeeds(session.user.id); forgetAccount(queryClient, session.user.id);
       // The semantic index holds posts this account was shown: it goes with the account (the downloaded model stays).
       const uid = session.user.id;
       void import('@/lib/semantic/index-store').then(m => m.clearIndex(uid)).catch(() => {});

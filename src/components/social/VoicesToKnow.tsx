@@ -8,6 +8,9 @@ import { getVoiceAvatars, getVoices } from '@/lib/voices.functions';
 import { categoryOf, podcastVoices, VOICE_CATEGORIES, videoVoices, voices as writers, voicesPage, VOICES_PER_PAGE, type Voice, type VoiceCategory } from '@/lib/voices';
 import { parseHandle } from '@/lib/article-author';
 import { openFediProfile } from '@/lib/fedi-profile';
+import { readKeptPublic, writeKeptPublic } from '@/lib/kept-public';
+
+const DAY = 24 * 3_600_000;
 
 export const compactCount = (n?: number) => (n == null ? null : new Intl.NumberFormat(undefined, { notation: 'compact' }).format(n));
 export const VOICE_BLURB: Record<VoiceCategory | 'all', string> = {
@@ -25,8 +28,13 @@ export const VOICE_BLURB: Record<VoiceCategory | 'all', string> = {
 export function useVoicesToKnow() {
   const [page, setPage] = useState(0);
   const [kind, setKind] = useState<VoiceCategory | 'all'>('all');
-  const { data: avatars } = useQuery({ queryKey: ['voice-avatars'], queryFn: () => getVoiceAvatars(), staleTime: 3600_000 });
-  const { data } = useQuery({ queryKey: ['voices'], queryFn: () => getVoices(), staleTime: 3600_000 });
+  // Opens on this device's copy from the last day (kept-public.ts), then asks the server when it's over an hour old.
+  const keptAvatars = useMemo(() => (typeof window === 'undefined' ? null : readKeptPublic<Awaited<ReturnType<typeof getVoiceAvatars>>>('voice-avatars', DAY)), []);
+  const keptVoices = useMemo(() => (typeof window === 'undefined' ? null : readKeptPublic<Awaited<ReturnType<typeof getVoices>>>('voices', DAY)), []);
+  const { data: avatars } = useQuery({ queryKey: ['voice-avatars'], queryFn: async () => { const r = await getVoiceAvatars(); writeKeptPublic('voice-avatars', r); return r; }, staleTime: 3600_000,
+    ...(keptAvatars ? { initialData: keptAvatars.data, initialDataUpdatedAt: keptAvatars.savedAt } : {}) });
+  const { data } = useQuery({ queryKey: ['voices'], queryFn: async () => { const r = await getVoices(); writeKeptPublic('voices', r); return r; }, staleTime: 3600_000,
+    ...(keptVoices ? { initialData: keptVoices.data, initialDataUpdatedAt: keptVoices.savedAt } : {}) });
   const all: Voice[] = data?.voices ?? [...writers, ...podcastVoices, ...videoVoices];
   const list = useMemo(() => {
     if (kind !== 'all') return all.filter(v => categoryOf(v) === kind);

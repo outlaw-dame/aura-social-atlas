@@ -13,8 +13,13 @@ import { creditsBesidesAuthor, fromStatuses, type FedizenNotice, type FedizenPos
  * and time budget, so a slow publisher never holds up the feed: what isn't ready shows on the next load.
  */
 export async function withArticleAuthors(posts: FedizenPost[], budgetMs = 2000, token?: string): Promise<FedizenPost[]> {
-  const enriched = await withArticleAuthorsAndFaces(posts, budgetMs);
-  return token ? withReplyParents(enriched, token, Math.min(budgetMs, 1500)) : enriched;
+  // Credits, faces and reply parents at the same time, not one after the other: each has its own budget, so a page
+  // waits at most the longest of them (2 s on a first page), not their sum (2 s + 1.5 s), when caches are cold.
+  const [enriched, parents] = await Promise.all([
+    withArticleAuthorsAndFaces(posts, budgetMs),
+    token ? replyParents(posts, token, Math.min(budgetMs, 1500)) : Promise.resolve(null),
+  ]);
+  return parents ? withParents(enriched, parents) : enriched;
 }
 
 /**
@@ -23,8 +28,8 @@ export async function withArticleAuthors(posts: FedizenPost[], budgetMs = 2000, 
  * it won't show (a blocked author or instance, a post the reader may not see) is simply left out. A parent already on
  * the page is reused. At most 12 per page, in parallel, within a time budget.
  */
-async function withReplyParents(posts: FedizenPost[], token: string, budgetMs: number): Promise<FedizenPost[]> {
-  const onPage = new Map(posts.map(p => [p.statusId ?? p.id, p]));
+async function replyParents(posts: FedizenPost[], token: string, budgetMs: number): Promise<Map<string, FedizenPost>> {
+  const onPage = new Set(posts.map(p => p.statusId ?? p.id));
   const wanted = [...new Set(posts.flatMap(p => (p.replyTo && !onPage.has(p.replyTo.statusId) ? [p.replyTo.statusId] : [])))].slice(0, 12);
   const found = new Map<string, FedizenPost>();
   if (wanted.length) {
@@ -36,6 +41,12 @@ async function withReplyParents(posts: FedizenPost[], token: string, budgetMs: n
     }));
     await Promise.race([work, new Promise(res => setTimeout(res, budgetMs))]);
   }
+  return found;
+}
+
+/** Each reply with the post it answers: read from Fedizen (replyParents) or already on the page. */
+function withParents(posts: FedizenPost[], found: Map<string, FedizenPost>): FedizenPost[] {
+  const onPage = new Map(posts.map(p => [p.statusId ?? p.id, p]));
   return posts.map(p => {
     if (!p.replyTo) return p;
     const parent = found.get(p.replyTo.statusId) ?? onPage.get(p.replyTo.statusId);

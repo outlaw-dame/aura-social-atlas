@@ -1,6 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import { linkifyPost } from './PostPeople';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowUpRight, BadgeCheck, Bot, Clapperboard, Heart, Loader2, Lock, MessageCircle, Mic, Repeat2, Rss, UserCheck, UserPlus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -19,6 +19,8 @@ import { useAtlasAuth } from './AuthState';
 import { PostBody } from './PostBody';
 import { FeaturedTags } from './FeaturedTags';
 import { TagText } from '@/lib/hashtags';
+import { OlderFooter } from './OlderFooter';
+import { useLoadMoreSentinel } from './useOlderPages';
 
 /**
  * Desktop: a fediverse account opened inside Atlas from an author tag — read from the account's own server
@@ -118,15 +120,8 @@ export function FediProfileDialog({ target, onClose }: { target: FediProfileTarg
 function ProfilePosts({ p, onTag, tag, onClearTag }: { p: FediProfile; onTag: (tag: string) => void; tag: string | null; onClearTag: () => void }) {
   const posts = useProfilePosts(p, tag);
   const actions = useFeedPostActions();
-  const end = useRef<HTMLDivElement>(null);
-  const { hasMore, loadMore } = posts;
-  useEffect(() => {
-    const el = end.current;
-    if (!el || !hasMore || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) loadMore(); }, { rootMargin: '0px 0px 800px 0px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [hasMore, loadMore]);
+  // Older posts load as the reader nears the end, as feeds do (useLoadMoreSentinel finds the profile's scrolling box).
+  const end = useLoadMoreSentinel(posts.hasMore && !posts.moreFailed && !posts.loading, posts.loadMore);
   const title = p.kind === 'podcast' ? 'Episodes and posts' : p.kind === 'channel' ? 'Videos' : 'Recent posts';
   return <section className="mt-6" aria-label={`Recent posts by ${p.name}`}>
     {tag
@@ -145,10 +140,7 @@ function ProfilePosts({ p, onTag, tag, onClearTag }: { p: FediProfile; onTag: (t
     </FilterPlaceProvider>
     {posts.loading && !posts.items.length && <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Loading their posts…</p>}
     {!posts.loading && !posts.items.length && <p className="mt-4 text-sm text-muted-foreground">{tag ? 'No public posts with this hashtag that Atlas can see.' : p.postsHidden ? `${p.host} doesn’t share this account’s posts publicly.` : 'No public posts yet.'}</p>}
-    {posts.hasMore && <div ref={end} className="mt-4 flex justify-center">
-      {posts.loadingMore ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />Loading older posts…</span>
-        : <Button type="button" variant="ghost" size="sm" onClick={posts.loadMore}>{posts.moreFailed ? 'Couldn’t load older posts. Try again' : 'Load older posts'}</Button>}
-    </div>}
+    {posts.hasMore && <OlderFooter sentinel={end} loading={posts.loadingMore} failed={posts.moreFailed} retry={posts.loadMore} />}
     {actions.dialog}
   </section>;
 }

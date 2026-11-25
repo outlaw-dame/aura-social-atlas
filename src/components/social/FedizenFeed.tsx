@@ -15,6 +15,8 @@ import { NewPostFaces } from './NewPostFaces';
 import { newPostsLabel } from '@/lib/new-post-faces';
 import { ArrowUp, Loader2 } from 'lucide-react';
 import { useHomeTimeline } from './useHomeTimeline';
+import { useLoadMoreSentinel } from './useOlderPages';
+import { OlderFooter } from './OlderFooter';
 import { useNativeNewPosts } from './useNativeNewPosts';
 import { useLiveAvatar } from './useLiveAvatar';
 
@@ -28,6 +30,7 @@ export function FedizenFeed() {
   const restSource = !!f.data?.connected && !f.data.error && selectBonfireHome(f.data, f.native).source !== 'native';
   const tl = useHomeTimeline(f.data, restSource, list, f.updatedAt);
   const nativeSource = !!f.data?.connected && !f.data.error && selectBonfireHome(f.data, f.native).source === 'native';
+  const nativeEnd = useLoadMoreSentinel(nativeSource && !!f.hasMoreNative && !f.moreNativeError, f.loadMoreNative);
   const nativeNew = useNativeNewPosts(nativeSource, nativeSource ? f.native?.posts ?? [] : [], f.refreshNative, list);
   // One pill for either source: what's new above the feed, and how to show it.
   const fresh = restSource ? { count: tl.newCount, gap: tl.gap, faces: tl.faces, reveal: tl.reveal } : nativeSource
@@ -58,22 +61,9 @@ export function FedizenFeed() {
           </button>
         </div>}
         {(restSource ? tl.posts : posts).length ? (restSource ? tl.posts : posts).map(p => <FeedPostCard key={p.id} post={p} actions={actions} />) : error && displayed.source !== 'native' ? null : <p className="text-sm text-muted-foreground">Your Fedizen timeline is empty. Follow people on Fedizen and their posts will appear here.</p>}
-        {restSource && tl.hasOlder && <div ref={tl.sentinel} className="flex justify-center py-2">
-          {tl.olderFailed ? <p role="status" className="text-xs text-muted-foreground">Couldn’t load older posts. <Button variant="link" size="sm" className="px-1" onClick={() => void tl.loadOlder()}>Try again</Button></p>
-            : tl.loadingOlder ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />Loading older posts…</span>
-            : <Button type="button" variant="ghost" size="sm" onClick={() => void tl.loadOlder()}>Load older posts</Button>}
-        </div>}
-        {displayed.source === 'native' && (
-          <div className="space-y-2">
-            {f.moreNativeError && <p role="status" className="text-xs text-muted-foreground">
-              Couldn’t load the next page. Your existing posts are unchanged.
-            </p>}
-            {f.hasMoreNative && <Button type="button" variant="outline" size="sm"
-              disabled={f.loadingMoreNative} onClick={f.loadMoreNative}>
-              {f.loadingMoreNative ? 'Loading more…' : 'Load more posts'}
-            </Button>}
-          </div>
-        )}</div>
+        {restSource && tl.hasOlder && <OlderFooter sentinel={tl.sentinel} loading={tl.loadingOlder} failed={tl.olderFailed} retry={() => void tl.loadOlder()} />}
+        {/* Bonfire's own Home: older pages load as the reader nears the end, as the REST Home does. */}
+        {displayed.source === 'native' && f.hasMoreNative && <OlderFooter sentinel={nativeEnd} loading={f.loadingMoreNative} failed={f.moreNativeError} retry={f.loadMoreNative} />}</div>
       {/* Phone and tablet widths have Activity in the header and menu; under the feed it only pushes posts away. */}
       <aside className="hidden lg:block"><h3 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase text-muted-foreground"><Bell className="size-3" />Activity</h3>
         {notices.length ? <ul className="space-y-3">{notices.map(n => <li key={n.id} className="flex gap-2 text-xs"><NoticeFace n={n} /><span><span className="font-semibold">{n.author}</span> <span className="text-muted-foreground">{n.text}</span></span></li>)}</ul> : <p className="text-xs text-muted-foreground">No new activity.</p>}

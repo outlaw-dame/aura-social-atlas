@@ -1,4 +1,5 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { readKeptFeed, writeKeptFeed, type KeptFeed } from '@/lib/kept-feeds';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useQueries, useQuery, type InfiniteData } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { getCircleFeed, getFedizenHome, getFedizenLocal, getFedizenTagFeed, getFollowedTags, getForYou, type ForYouCursors } from '@/lib/fedizen.functions';
@@ -16,11 +17,25 @@ export function useForYou(enabled: boolean) {
   const { user } = useAtlasAuth();
   const read = useServerFn(getForYou);
   const id = user?.id;
-  return useQuery({
+  // Opens on this device's copy (kept-feeds.ts), read again from Fedizen at once.
+  const kept = useMemo(() => (id && typeof window !== 'undefined' ? readKeptFeed<Awaited<ReturnType<typeof read>>>(id, 'foryou') : null), [id]);
+  const q = useQuery({
     queryKey: ['fedizen-foryou', id],
     queryFn: () => { if (!id) throw new Error('Atlas user is not signed in.'); return read({ data: { expectedAtlasUserId: id } }); },
     enabled: !!id && enabled, staleTime: 60_000,
+    ...(kept ? { initialData: kept.data, initialDataUpdatedAt: kept.savedAt } : {}),
   });
+  useKeep(id, 'foryou', q.data);
+  return q;
+}
+
+/** Keeps a feed's first page on this device once it came back whole (not a copy read back, not an error). */
+function useKeep(id: string | undefined, feed: KeptFeed, data: { error?: unknown; kept?: true; posts?: unknown[] } | undefined) {
+  useEffect(() => {
+    if (!id || !data || data.error || data.kept || !data.posts?.length) return;
+    const t = setTimeout(() => writeKeptFeed(id, feed, data), 800);
+    return () => clearTimeout(t);
+  }, [id, feed, data]);
 }
 
 /** The hashtags the person follows (lowercase), as a set for marking posts. Empty when signed out or not connected. */
@@ -144,7 +159,7 @@ export function useForYouOlder(d: { posts: FedizenPost[]; next?: ForYouCursors; 
   const { user } = useAtlasAuth();
   const read = useServerFn(getForYou);
   const id = user?.id;
-  return useOlderPages(['fedizen-foryou', id], d?.posts ?? EMPTY, d?.next, (older: ForYouCursors) => read({ data: { expectedAtlasUserId: id!, older } }), !!id && !!d && !d.error);
+  return useOlderPages(['fedizen-foryou', id], d?.posts ?? EMPTY, d?.next, (older: ForYouCursors) => read({ data: { expectedAtlasUserId: id!, older } }), !!id && !!d && !d.error && !(d as { kept?: true }).kept);
 }
 
 /** A hashtag's feed further down. */
@@ -171,12 +186,15 @@ export function useLocalFeed() {
   const { user } = useAtlasAuth();
   const read = useServerFn(getFedizenLocal);
   const id = user?.id;
+  const kept = useMemo(() => (id && typeof window !== 'undefined' ? readKeptFeed<Awaited<ReturnType<typeof read>>>(id, 'local') : null), [id]);
   const q = useQuery({
     queryKey: ['fedizen-local', id],
     queryFn: () => read({ data: { expectedAtlasUserId: id! } }),
     enabled: !!id, staleTime: q => (q.state.data?.error ? 0 : 60_000),
+    ...(kept ? { initialData: kept.data, initialDataUpdatedAt: kept.savedAt } : {}),
   });
-  const older = useOlderPages(['fedizen-local', id], q.data?.posts ?? EMPTY, q.data?.next, (max: string) => read({ data: { expectedAtlasUserId: id!, max } }), !!id && !!q.data && !q.data.error);
+  useKeep(id, 'local', q.data);
+  const older = useOlderPages(['fedizen-local', id], q.data?.posts ?? EMPTY, q.data?.next, (max: string) => read({ data: { expectedAtlasUserId: id!, max } }), !!id && !!q.data && !q.data.error && !(q.data as { kept?: true }).kept);
   return { q, older, connected: !!id && !!q.data && !q.data.error };
 }
 const EMPTY: FedizenPost[] = [];

@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { useEffect, useRef, useState } from 'react';
+import { clearKeptFeeds } from '@/lib/kept-feeds';
 import { clearHomeCache, readHomeCache, writeHomeCache } from '@/lib/home-timeline';
 import { useAtlasAuth } from './AuthState';
 import { disconnectFedizen, getFedizenHome, getFedizenMessages, getFedizenStatus, startFedizenConnect, type FedizenHome } from '@/lib/fedizen.functions';
@@ -39,7 +40,7 @@ export function useFedizen() {
   // Keep it for next time: only a connected, error-free Home, and only under this Atlas account.
   useEffect(() => {
     if (!id || !q.data) return;
-    if (!q.data.connected) { clearHomeCache(id); return; }
+    if (!q.data.connected) { clearHomeCache(id); clearKeptFeeds(id); return; }
     if (q.data.error) return;
     const t = setTimeout(() => writeHomeCache(id, q.data), 800);
     return () => clearTimeout(t);
@@ -188,7 +189,7 @@ export function useFedizen() {
           connected: false, accountHandle: null, posts: [], notices: [],
         };
         qc.setQueryData(key, disconnected);
-        clearHomeCache(id);
+        clearHomeCache(id); clearKeptFeeds(id);
       } catch {
         setActionError({ userId: id, message: 'Could not disconnect Fedizen. Please try again.' });
       } finally {

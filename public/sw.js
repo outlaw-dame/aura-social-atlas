@@ -3,7 +3,10 @@
  * Registered only by /app (scope "/app"), only in production, only over a secure
  * connection and only as a top-level page (src/lib/register-sw.ts).
  *
- * - Navigations: network first (with navigation preload); offline falls back to the cached /app shell.
+ * - Navigations: network first (with navigation preload), but the /app shell kept from last time is shown when
+ *   the network takes over NAV_TIMEOUT_MS or answers with an error: Atlas's server sleeps when idle (Railway App
+ *   Sleeping), and waking it takes 1–10 s and may answer 502 first. The fresh shell is still saved for next time.
+ *   Offline falls back to the cached shell as before.
  * - Hashed build assets (/assets/*): cache first — their names change whenever their content does.
  * - Icons and the manifest: stale-while-revalidate.
  * - API, auth and server-function requests, and anything that isn't GET: never touched.
@@ -91,18 +94,25 @@ async function trim(cacheName, max) {
   for (let i = 0; i < keys.length - max; i++) await cache.delete(keys[i]);
 }
 
+const NAV_TIMEOUT_MS = 2000;
 async function navigation(event) {
-  try {
-    const preloaded = await event.preloadResponse;
-    const response = preloaded || (await fetch(event.request));
-    if (response.ok && new URL(event.request.url).pathname === SHELL_URL) {
-      const copy = response.clone();
-      event.waitUntil(caches.open(SHELL_CACHE).then((c) => c.put(SHELL_URL, copy)));
-    }
+  const isShell = new URL(event.request.url).pathname === SHELL_URL;
+  const cache = await caches.open(SHELL_CACHE);
+  const network = (async () => (await event.preloadResponse) || fetch(event.request))().then((response) => {
+    if (response.ok && isShell) return cache.put(SHELL_URL, response.clone()).then(() => response, () => response);
     return response;
+  });
+  event.waitUntil(network.catch(() => undefined));
+  const kept = isShell ? await cache.match(SHELL_URL) : undefined;
+  if (!kept) {
+    try { return await network; } catch { return (await cache.match(SHELL_URL)) || Response.error(); }
+  }
+  const late = new Promise((resolve) => setTimeout(() => resolve(null), NAV_TIMEOUT_MS));
+  try {
+    const first = await Promise.race([network, late]);
+    return first && first.ok ? first : kept;
   } catch {
-    const cache = await caches.open(SHELL_CACHE);
-    return (await cache.match(SHELL_URL)) || Response.error();
+    return kept;
   }
 }
 
