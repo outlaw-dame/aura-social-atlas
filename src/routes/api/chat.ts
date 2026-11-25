@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { convertToModelMessages, streamText, tool, stepCountIs, type UIMessage } from "ai";
 import { z } from "zod";
 
-type ChatRequestBody = { messages?: unknown };
+type ChatRequestBody = { messages?: unknown; id?: unknown; durable?: unknown };
 
 const SYSTEM_PROMPT = `You are Atlas, a warm and concise AI assistant built into the Atlas browser — a beautiful native-feeling browser inspired by iOS 27 Liquid Glass.
 
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/api/chat")({
         const userId = await userIdFromRequest(request);
         if (!userId) return new Response("Sign in to use the assistant", { status: 401 });
 
-        const { messages } = (await request.json()) as ChatRequestBody;
+        const { messages, id, durable } = (await request.json()) as ChatRequestBody;
         if (!Array.isArray(messages) || messages.length > 100) {
           return new Response("Messages are required", { status: 400 });
         }
@@ -42,9 +42,25 @@ export const Route = createFileRoute("/api/chat")({
         const provider = createOpenAICompatible({ name: ai.credential.provider, baseURL: openAiBase(ai.credential), apiKey: ai.credential.key });
         const model = provider.chatModel(ai.model);
 
+        // Durable answers (src/lib/assistant/durable.server.ts): asked for by the browser only when /api/assistant/chat
+        // said this server has a stream server. The answer is written to a stream the browser reads, so it survives a
+        // refresh or another device; without one, the answer streams back on this response as before.
+        const durableMod = durable === true ? await import("@/lib/assistant/durable.server") : null;
+        const cfg = durableMod?.durableConfig() ?? null;
+        if (durable === true && !cfg) return new Response("The assistant can't keep answers right now", { status: 503 });
+        const store = cfg ? await import("@/lib/assistant/chat-store.server") : null;
+        if (store && !store.isUuid(id)) return new Response("A chat id is required", { status: 400 });
+        const streamId = cfg ? crypto.randomUUID() : null;
+        if (store && streamId) {
+          try { await store.startAnswer(userId, id as string, messages, streamId); }
+          catch { return new Response("The assistant can't keep answers right now", { status: 503 }); }
+        }
+        const abortSignal = durableMod && streamId ? durableMod.trackAnswer(streamId) : undefined;
+
         const { noteFailure } = await import("@/lib/intelligence/store.server");
         const result = streamText({
           model,
+          abortSignal,
           // A key the provider is limiting rests a minute, so the next request starts with the person's backup key.
           onError: ({ error }) => noteFailure(ai.keyId, error),
           system: SYSTEM_PROMPT,
@@ -70,6 +86,27 @@ export const Route = createFileRoute("/api/chat")({
             }),
           },
         });
+
+        if (durableMod && cfg && store && streamId) {
+          const chatId = id as string;
+          const settle = () => { durableMod.untrackAnswer(streamId); return store.finishAnswer(userId, chatId, streamId, null); };
+          const source = result.toUIMessageStream({
+            originalMessages: messages as UIMessage[],
+            onFinish: ({ messages: finished }) => store.finishAnswer(userId, chatId, streamId, finished),
+          });
+          let done: Promise<void>;
+          try {
+            ({ done } = await durableMod.writeAnswer(cfg, streamId, source));
+          } catch {
+            durableMod.stopAnswer(streamId);
+            await settle();
+            return new Response("The assistant can't keep answers right now", { status: 503 });
+          }
+          // The answer goes on being written after this response; the browser reads it from the stream.
+          void done.catch(() => console.warn("Assistant answer not fully written")).finally(settle);
+          const streamUrl = durableMod.readPathFor(streamId);
+          return Response.json({ streamUrl }, { status: 201, headers: { Location: streamUrl, "cache-control": "no-store" } });
+        }
 
         return result.toUIMessageStreamResponse({
           originalMessages: messages as UIMessage[],
