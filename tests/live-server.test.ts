@@ -79,6 +79,37 @@ describe('Live updates stream', () => {
     }
   });
 
+  test('on Node: a message that comes with the handshake is kept; a close before then is a failed open, not a ready', async () => {
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+      if (new Headers(init?.headers).get('upgrade')) return new Response('no', { status: 400 });
+      return new Response('', { headers: { 'content-type': 'text/event-stream' } });
+    }) as unknown as typeof fetch;
+    // Fires message then open in the same turn, as frames buffered with the 101 can.
+    liveDeps.openWs = async () => () => {
+      const ls: Record<string, ((e: { data?: unknown }) => void)[]> = {};
+      setTimeout(() => {
+        ls.message?.forEach(l => l({ data: JSON.stringify({ event: 'delete', payload: '01E' }) }));
+        ls.open?.forEach(l => l({}));
+      }, 5);
+      return { close() {}, addEventListener(t: string, l: (e: { data?: unknown }) => void) { (ls[t] ??= []).push(l); } };
+    };
+    try {
+      const out = await readAll(liveStream('u1', new AbortController().signal), t => t.includes('event: delete'));
+      expect(out.indexOf('"type":"ready","posts":true')).toBeLessThan(out.indexOf('"id":"01E"'));
+      // Closed straight after the handshake, before Atlas took it: SSE instead, never posts: true.
+      liveDeps.openWs = async () => () => {
+        const ls: Record<string, ((e: { data?: unknown }) => void)[]> = {};
+        setTimeout(() => { ls.close?.forEach(l => l({})); ls.open?.forEach(l => l({})); }, 5);
+        return { close() {}, addEventListener(t: string, l: (e: { data?: unknown }) => void) { (ls[t] ??= []).push(l); } };
+      };
+      const out2 = await readAll(liveStream('u1', new AbortController().signal), () => false);
+      expect(out2).toContain('"type":"ready","posts":false');
+      expect(out2).not.toContain('"posts":true');
+    } finally {
+      liveDeps.openWs = undefined;
+    }
+  });
+
   test("Bonfire's SSE is read at its own path, /api/v1-bonfire/streaming", async () => {
     const urls: string[] = [];
     globalThis.fetch = (async (url: string, init?: RequestInit) => {

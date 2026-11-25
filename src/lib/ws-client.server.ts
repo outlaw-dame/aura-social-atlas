@@ -68,6 +68,8 @@ export function openWebSocket(url: string, protocol: string): MiniWs {
   req.on('response', res => { res.resume(); end('error'); }); // anything but 101: refused
   req.on('upgrade', (res, sock, head) => {
     clearTimeout(handshake);
+    // Closed (or timed out) while the handshake was on its way: don't keep the connection.
+    if (ended) { sock.destroy(); return; }
     const accept = createHash('sha1').update(key + GUID).digest('base64');
     if (res.statusCode !== 101 || res.headers['sec-websocket-accept'] !== accept) { sock.destroy(); end('error'); return; }
     socket = sock;
@@ -107,15 +109,18 @@ export function openWebSocket(url: string, protocol: string): MiniWs {
     sock.on('close', () => end('close'));
     sock.on('error', () => end('error'));
     emit('open');
-    read();
+    // Frames that came with the handshake are read on the next turn, once whoever waited for `open` has added its
+    // listeners (they resume in a microtask; this runs after).
+    setImmediate(read);
   });
   req.end();
 
   return {
     close(code = 1000) {
       if (ended) return;
+      if (!socket) { req.destroy(); end('close'); return; } // still handshaking: cancel it
       const b = Buffer.alloc(2); b.writeUInt16BE(code);
-      try { socket?.write(frame(0x8, b)); socket?.end(); } catch { /* gone */ }
+      try { socket.write(frame(0x8, b)); socket.end(); } catch { /* gone */ }
       end('close');
     },
     addEventListener(t, l) { listeners[t].push(l); },

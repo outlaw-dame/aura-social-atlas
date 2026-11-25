@@ -14,6 +14,8 @@ let results: Record<string, unknown> = {};
 const SCRIPT = (client: string, ws: string) => `
 import { openWebSocket } from ${JSON.stringify(client)};
 import { WebSocketServer } from ${JSON.stringify(ws)};
+import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
 const until = async (cond, ms = 4000) => { const t = Date.now(); while (!cond() && Date.now() - t < ms) await new Promise(r => setTimeout(r, 10)); };
 const serve = (opts, onConn) => new Promise(r => { const s = new WebSocketServer({ port: 0, ...opts }); if (onConn) s.on('connection', onConn); s.on('listening', () => r(s)); });
 const collect = ws => { const got = []; for (const t of ['open', 'message', 'close', 'error']) ws.addEventListener(t, e => got.push({ type: t, data: e.data })); return got; };
@@ -62,6 +64,39 @@ const out = {};
   out.closing = { ours: got.map(g => g.type), serverSawClose, theirs: got2.map(g => g.type) };
   s.close(); s2.close();
 }
+{ // closed while the handshake is on its way: nothing is kept, and no events after the close
+  let upgraded = 0, socketClosed = false;
+  const s = createServer();
+  s.on('upgrade', (req, sock) => { upgraded++; sock.on('end', () => { socketClosed = true; }); sock.on('close', () => { socketClosed = true; }); setTimeout(() => {
+    const accept = createHash('sha1').update(req.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+    try { sock.write('HTTP/1.1 101 Switching Protocols\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\nSec-WebSocket-Accept: ' + accept + '\\r\\n\\r\\n'); } catch {}
+  }, 100); });
+  await new Promise(r => s.listen(0, '127.0.0.1', r));
+  const ws = openWebSocket('ws://127.0.0.1:' + s.address().port + '/', 't');
+  const got = collect(ws);
+  await until(() => upgraded > 0);
+  ws.close();
+  await new Promise(r => setTimeout(r, 300));
+  out.earlyClose = { events: got.map(g => g.type), socketClosed };
+  s.close();
+}
+{ // a frame written together with the 101 reaches a listener added once open has been awaited
+  const s = createServer();
+  s.on('upgrade', (req, sock) => {
+    const accept = createHash('sha1').update(req.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+    const text = Buffer.from('{"event":"delete","payload":"01D"}');
+    const frame = Buffer.concat([Buffer.from([0x81, text.length]), text]);
+    sock.write(Buffer.concat([Buffer.from('HTTP/1.1 101 Switching Protocols\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\nSec-WebSocket-Accept: ' + accept + '\\r\\n\\r\\n'), frame]));
+  });
+  await new Promise(r => s.listen(0, '127.0.0.1', r));
+  const ws = openWebSocket('ws://127.0.0.1:' + s.address().port + '/', 't');
+  await new Promise(r => ws.addEventListener('open', r));
+  const msgs = [];
+  ws.addEventListener('message', e => msgs.push(e.data));
+  await until(() => msgs.length > 0, 1000);
+  out.buffered = msgs;
+  ws.close(); s.close();
+}
 console.log(JSON.stringify(out));
 process.exit(0);
 `;
@@ -89,6 +124,12 @@ describe("Atlas's WebSocket client for Fedizen, on Node", () => {
   });
   test('a refused handshake is an error, never an open', () => {
     expect(results.refused).toEqual(['error']);
+  });
+  test('closed during the handshake: the connection is dropped and nothing is emitted after the close', () => {
+    expect(results.earlyClose).toEqual({ events: ['close'], socketClosed: true });
+  });
+  test('a frame sent with the handshake reaches a listener added after open', () => {
+    expect(results.buffered).toEqual(['{"event":"delete","payload":"01D"}']);
   });
   test('closing from our side tells the server; the server closing is a close', () => {
     expect(results.closing).toEqual({ ours: ['open', 'close'], serverSawClose: true, theirs: ['open', 'close'] });

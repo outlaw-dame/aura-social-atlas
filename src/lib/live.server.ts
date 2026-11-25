@@ -106,20 +106,26 @@ export function openUpstream(userId: string, out: (e: Outgoing) => void, done: (
     const load = liveDeps.openWs;
     const open = load ? await load().catch(() => undefined) : undefined;
     if (open) {
+      // Listeners go on before the handshake ends, so nothing that arrives with it (or a close right after) is missed:
+      // messages wait in `early` until the connection is taken, and a close before that is a failed open.
+      let taken = false, gone = false;
+      const early: { data?: unknown }[] = [];
       const opened = await new Promise<WsLike | null>(resolve => {
         let ws: WsLike;
         try { ws = open(`${STREAM.replace(/^https:/, 'wss:')}?stream=user`, t.access_token); } catch { resolve(null); return; }
         const timer = setTimeout(() => { try { ws.close(); } catch { /* gone */ } resolve(null); }, WS_OPEN_MS);
-        ws.addEventListener('open', () => { clearTimeout(timer); resolve(ws); });
-        ws.addEventListener('error', () => { clearTimeout(timer); resolve(null); });
+        const fail = () => { clearTimeout(timer); if (taken) finish(); else { gone = true; resolve(null); } };
+        ws.addEventListener('message', ev => { if (taken) onFrame(ev); else early.push(ev); });
+        ws.addEventListener('close', fail);
+        ws.addEventListener('error', fail);
+        ws.addEventListener('open', () => { clearTimeout(timer); if (!gone) resolve(ws); });
       });
       if (closed) { try { opened?.close(1000); } catch { /* gone */ } return; }
-      if (opened) {
+      if (opened && !gone) {
+        taken = true;
         cleanups.push(() => opened.close(1000));
-        opened.addEventListener('message', onFrame);
-        opened.addEventListener('close', finish);
-        opened.addEventListener('error', finish);
         out({ type: 'ready', posts: true });
+        for (const ev of early.splice(0)) onFrame(ev);
         return;
       }
     }

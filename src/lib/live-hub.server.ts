@@ -101,8 +101,17 @@ function close(h: Hub, last?: Outgoing) {
   byId.delete(h.id);
 }
 
+/** A short fingerprint of an edit's content, so two different edits of one post are never taken for the same. */
+function fingerprint(v: unknown): string {
+  const t = JSON.stringify(v) ?? '';
+  let h = 2166136261;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return `${t.length}:${(h >>> 0).toString(36)}`;
+}
+
 const identity = (e: Outgoing): string | null =>
-  e.type === 'post' && e.post && typeof e.post === 'object' ? `p:${(e.post as { id?: unknown }).id}${e.edited ? ':e' : ''}`
+  e.type === 'post' && e.post && typeof e.post === 'object'
+    ? `p:${(e.post as { id?: unknown }).id}${e.edited ? `:e:${fingerprint(e.post)}` : ''}`
     : e.type === 'delete' && typeof e.id === 'string' ? `d:${e.id}` : null;
 
 /** Opens a Fedizen connection for the hub. `renewal`: a planned one, opened before the old one is closed. */

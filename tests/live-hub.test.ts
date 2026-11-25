@@ -152,6 +152,31 @@ describe('hardening', () => {
   });
 });
 
+describe('overlap de-duplication', () => {
+  test('the same edit from both connections is kept once; a later, different edit of the post is kept too', async () => {
+    hubDeps.overlapMs = 30;
+    try {
+      hubFor(cfg, 'u1');
+      upstreams[0].out({ type: 'ready', posts: true });
+      await tick();
+      now += RENEW_MS + 1;
+      hubFor(cfg, 'u1');
+      _sweep();
+      upstreams[1].out({ type: 'ready', posts: true });
+      const first = { id: 'p1', content: 'one', edited_at: '2026-11-25T10:00:00Z' };
+      const second = { id: 'p1', content: 'two', edited_at: '2026-11-25T10:00:05Z' };
+      upstreams[0].out({ type: 'post', post: first, edited: true });
+      upstreams[1].out({ type: 'post', post: { ...first }, edited: true });
+      upstreams[1].out({ type: 'post', post: second, edited: true });
+      await tick();
+      const edits = streams[0].appended.filter(e => e.type === 'post').map(e => (e.post as { content: string }).content);
+      expect(edits).toEqual(['one', 'two']);
+    } finally {
+      hubDeps.overlapMs = 10_000;
+    }
+  });
+});
+
 describe('a stream server that does not answer', () => {
   test('no hub is handed out; the browser uses /api/live this time', async () => {
     hubDeps.stream = (() => ({ create: async () => { throw new Error('refused'); }, append: async () => {}, close: async () => ({}) })) as never;
