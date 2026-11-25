@@ -115,8 +115,10 @@ export function useAssistant() {
     moving.current = true;
     update({ data: { expectedAtlasUserId: user.id, assistant: legacy === '1' } })
       .then(s => { qc.setQueryData(statusKey(user.id), s); try { localStorage.removeItem(LEGACY_ASSISTANT_KEY); } catch { /* kept */ } })
-      .catch(() => { moving.current = false; });
+      // Can't be kept with the account here (say, a database without the column): stay with this browser's choice.
+      .catch(() => undefined);
   }, [user?.id, data?.available, data?.assistant, legacy]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [, rerender] = useState(0);
   const set = useCallback(async (want: boolean) => {
     if (!user) return;
     const key = statusKey(user.id), before = qc.getQueryData<IntelligenceStatus>(key);
@@ -125,7 +127,11 @@ export function useAssistant() {
       qc.setQueryData(key, await update({ data: { expectedAtlasUserId: user.id, assistant: want } }));
       try { localStorage.removeItem(LEGACY_ASSISTANT_KEY); } catch { /* kept */ }
     } catch {
+      // The account couldn't keep it (a database without the column, or a failed save): keep it in this browser, as
+      // before, so the switch still works.
       if (before) qc.setQueryData(key, before);
+      try { localStorage.setItem(LEGACY_ASSISTANT_KEY, want ? '1' : '0'); } catch { /* storage blocked */ }
+      rerender(n => n + 1);
     }
   }, [user, qc, update]);
   return { ready, on, set };

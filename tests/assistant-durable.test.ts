@@ -211,5 +211,8 @@ describe('the assistant switch follows the account', () => {
     const store = readFileSync('src/lib/intelligence/store.server.ts', 'utf8');
     expect(store).toMatch(/from\('atlas_ai_settings'\)\.select\('\*'\)/);
     expect(store).toMatch(/\.\.\.\(typeof s\.assistant === 'boolean' \? \{ assistant: s\.assistant \} : \{\}\)/);
+    // Where the account can't keep it, the switch falls back to this browser, as it used to.
+    const hook = readFileSync('src/components/social/useIntelligence.tsx', 'utf8');
+    expect(hook).toMatch(/try \{ localStorage\.setItem\(LEGACY_ASSISTANT_KEY, want \? '1' : '0'\); \}/);
   });
 });
