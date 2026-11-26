@@ -67,6 +67,8 @@ export function useFediFollow(acct: string | undefined, actor: string | undefine
     onSuccess: r => {
       if (r.ok) qc.setQueryData(['fedi-follow', id, acct, actor], (old: { canWrite: boolean } | undefined) => ({ canWrite: old?.canWrite ?? true, state: r.state }));
       void qc.invalidateQueries({ queryKey: ['fedizen-home'] });
+      // Voices to know leaves out who they follow.
+      void qc.invalidateQueries({ queryKey: ['fedizen-followed-handles', id] });
     },
   });
   const state: FollowState | undefined = q.data?.state;

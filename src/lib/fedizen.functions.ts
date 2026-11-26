@@ -724,6 +724,22 @@ export const getRelayFollows = createServerFn({ method: 'GET' }).middleware([req
   });
 
 /**
+ * The handles the person follows on Fedizen (full, lowercase), so Voices to know can leave out who they already
+ * follow. Relays aren't in it. `complete` is false when the list couldn't all be read.
+ */
+export const getFollowedHandles = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ handles: string[]; complete: boolean; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor } = await import('./fedizen.server');
+    const t = await tokenFor(context.userId);
+    if (!t) return { handles: [], complete: false, error: 'not-connected' };
+    const [{ following }, { relayFromAcct }] = await Promise.all([import('./fedibuzz-follows.server'), import('./fedibuzz')]);
+    const f = await following(context.userId, t.access_token, t.account_handle);
+    return { handles: f.accts.filter(a => !relayFromAcct(a)), complete: f.complete };
+  });
+
+/**
  * Hashtags followed before Atlas followed their relays: follows the missing relays (up to 10 a call), once the whole
  * following list could be read, so a relay already followed is never followed twice.
  */

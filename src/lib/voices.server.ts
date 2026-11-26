@@ -8,13 +8,17 @@ import { podcastVoices, videoVoices, voices as writerVoices, type Voice, type Vo
  *   Castopod → Podcasters, blog software → Writers, everything else → Popular.
  * - The Castopod Index (https://index.castopod.org/podcastindex.json, from Podcast Index) for podcasters, ranked by
  *   Podcast Index's popularityScore, live shows only; a Castopod show's page is its actor (https://host/@handle).
- * Both are fixed, public, read-only sources fetched server-side, cached for a day; if either is down the curated
- * lists still show.
+ * - Inkwell (https://inkwell.social, AGPL-3.0, https://github.com/stantondev/inkwell), a federated journaling and
+ *   blogging platform: its public writers directory (GET https://api.inkwell.social/api/explore/writers, recently
+ *   active writers who haven't opted out of discovery), each as @username@inkwell.social.
+ * All are fixed, public, read-only sources fetched server-side, cached for a day; if one is down the others and the
+ * curated lists still show.
  */
 
 const DAY = 24 * 60 * 60_000;
 const FEDIDB = 'https://api.fedidb.org/v1';
 const CASTOPOD_INDEX = 'https://index.castopod.org/podcastindex.json';
+const INKWELL = 'https://api.inkwell.social';
 
 async function getJson(url: string, maxBytes: number, timeoutMs = 8000): Promise<unknown> {
   const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'Atlas/1.0 (Voices to know)' }, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
@@ -94,29 +98,56 @@ async function castopodPopular(): Promise<Voice[]> {
   return list;
 }
 
+const inkwellWriter = z.object({
+  username: z.string().regex(/^[A-Za-z0-9_]{1,64}$/), display_name: z.string().max(200).nullish(), avatar_url: z.string().max(2048).nullish(),
+  bio: z.string().max(20000).nullish(), entry_count: z.number().nonnegative().nullish(), ink_count: z.number().nonnegative().nullish(),
+});
+let inkwellCache: { at: number; list: Voice[] } | null = null;
+/** Inkwell's writers directory: those with a few entries, most-inked first. */
+async function inkwellWriters(): Promise<Voice[]> {
+  if (inkwellCache && Date.now() - inkwellCache.at < DAY) return inkwellCache.list;
+  const raw = await getJson(`${INKWELL}/api/explore/writers?limit=12`, 500_000);
+  const rows = (raw as { data?: unknown })?.data;
+  const list = (Array.isArray(rows) ? rows : []).map(r => inkwellWriter.safeParse(r)).flatMap(r => (r.success ? [r.data] : []))
+    .filter(w => (w.entry_count ?? 0) >= 3)
+    .sort((a, b) => (b.ink_count ?? 0) - (a.ink_count ?? 0))
+    .map((w): Voice => {
+      // The directory gives the avatar as a path on Inkwell's API host.
+      let avatar: string | undefined;
+      try { const u = new URL(w.avatar_url ?? '', INKWELL); if (u.protocol === 'https:' && u.hostname === 'api.inkwell.social' && w.avatar_url) avatar = u.toString(); } catch { /* none */ }
+      return {
+        id: `inkwell-${w.username}`.toLowerCase(), name: cap(strip(w.display_name ?? '') || w.username, 80), handle: `@${w.username}@inkwell.social`,
+        network: 'Inkwell', topic: 'Writing', bio: cap(strip(w.bio ?? ''), 160), url: `https://inkwell.social/${w.username}`, category: 'writer', avatar,
+      };
+    });
+  inkwellCache = { at: Date.now(), list };
+  return list;
+}
+
 /** Every voice, curated first within each category, without duplicates. */
-export async function allVoices(): Promise<{ voices: Voice[]; sources: { fedidb: boolean; castopodIndex: boolean } }> {
+export async function allVoices(): Promise<{ voices: Voice[]; sources: { fedidb: boolean; castopodIndex: boolean; inkwell?: boolean } }> {
   // Memory empty (a fresh or woken server): the list kept in Supabase from earlier today (lookup-cache.server.ts).
   const { readLookups, writeLookup } = await import('./lookup-cache.server');
   if (!popularCache && !podcastCache) {
-    const kept = (await readLookups<{ voices: Voice[]; sources: { fedidb: boolean; castopodIndex: boolean } }>('voices', ['all'])).get('all');
-    if (kept && Array.isArray(kept.voices) && kept.sources?.fedidb && kept.sources?.castopodIndex) return kept;
+    const kept = (await readLookups<{ voices: Voice[]; sources: { fedidb: boolean; castopodIndex: boolean; inkwell?: boolean } }>('voices', ['all'])).get('all');
+    // A list kept before Inkwell was a source (no `inkwell` in it) is read fresh instead.
+    if (kept && Array.isArray(kept.voices) && kept.sources?.fedidb && kept.sources?.castopodIndex && typeof kept.sources.inkwell === 'boolean') return kept;
   }
   const result = await allVoicesFresh();
   if (result.sources.fedidb && result.sources.castopodIndex) writeLookup('voices', 'all', result, 24 * 3_600_000);
   return result;
 }
 
-async function allVoicesFresh(): Promise<{ voices: Voice[]; sources: { fedidb: boolean; castopodIndex: boolean } }> {
-  const [pop, pods] = await Promise.all([popular().catch(() => null), castopodPopular().catch(() => null)]);
+async function allVoicesFresh(): Promise<{ voices: Voice[]; sources: { fedidb: boolean; castopodIndex: boolean; inkwell?: boolean } }> {
+  const [pop, pods, ink] = await Promise.all([popular().catch(() => null), castopodPopular().catch(() => null), inkwellWriters().catch(() => null)]);
   const seen = new Set<string>();
   const out: Voice[] = [];
-  for (const v of [...writerVoices.map(v => ({ ...v, category: 'writer' as const })), ...podcastVoices, ...videoVoices, ...(pods ?? []), ...(pop ?? [])]) {
+  for (const v of [...writerVoices.map(v => ({ ...v, category: 'writer' as const })), ...(ink ?? []), ...podcastVoices, ...videoVoices, ...(pods ?? []), ...(pop ?? [])]) {
     const key = v.handle.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(v);
   }
-  return { voices: out, sources: { fedidb: !!pop, castopodIndex: !!pods } };
+  return { voices: out, sources: { fedidb: !!pop, castopodIndex: !!pods, inkwell: !!ink } };
 }
-export function _clearVoiceCaches() { popularCache = null; podcastCache = null; }
+export function _clearVoiceCaches() { popularCache = null; podcastCache = null; inkwellCache = null; }

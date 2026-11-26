@@ -74,6 +74,8 @@ export const setFediFollow = createServerFn({ method: 'POST' }).middleware([requ
     if ('error' in who) return { ok: false, error: who.error };
     const r = await fedizenSend(t.access_token, 'POST', `/api/v1/accounts/${who.id}/${data.on ? 'follow' : 'unfollow'}`);
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
+    // Who they follow changed: Voices to know and the relay count read it again.
+    (await import('./fedibuzz-follows.server')).forgetRelayFollows(context.userId);
     const rel = r.data as { following?: boolean | null; requested?: boolean | null } | undefined;
     return { ok: true, state: rel?.following ? 'following' : rel?.requested ? 'requested' : data.on ? 'requested' : 'none' };
   });

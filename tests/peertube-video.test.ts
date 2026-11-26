@@ -136,7 +136,7 @@ describe("Voices to know sources", () => {
       return body ? new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } }) : new Response("no", { status: 404 });
     }) as unknown as typeof fetch;
     const { voices, sources } = await allVoices();
-    expect(sources).toEqual({ fedidb: true, castopodIndex: true });
+    expect(sources).toEqual({ fedidb: true, castopodIndex: true, inkwell: false });
     const big = voices.find(v => v.handle === "@big@mastodon.example")!;
     expect(big).toMatchObject({ category: "popular", network: "Mastodon", followers: 120000, bio: "Hi & welcome" });
     expect(voices.find(v => v.handle === "@tube@tube.example.org")).toMatchObject({ category: "video", network: "PeerTube" });
@@ -147,7 +147,7 @@ describe("Voices to know sources", () => {
   test("curated voices still show when FediDB and the Castopod Index are down", async () => {
     globalThis.fetch = (async () => new Response("down", { status: 503 })) as unknown as typeof fetch;
     const { voices, sources } = await allVoices();
-    expect(sources).toEqual({ fedidb: false, castopodIndex: false });
+    expect(sources).toEqual({ fedidb: false, castopodIndex: false, inkwell: false });
     expect(new Set(voices.map(v => v.category))).toEqual(new Set(["writer", "podcast", "video"]));
   });
 });
