@@ -1,4 +1,6 @@
-import { Block, BlockFooter, Button, Card, CardContent, CardFooter, Icon, Link, List, ListItem, Navbar, NavRight, Page } from 'framework7-react';
+import { Block, BlockFooter, Button, Card, CardContent, CardFooter, Icon, Link, List, ListItem, Navbar, NavRight, Page, Toggle } from 'framework7-react';
+import { tagRelay } from '@/lib/fedibuzz';
+import { useFediFollow } from '@/components/social/useFediProfile';
 import { useQuery } from '@tanstack/react-query';
 import { getTagFeed } from '@/lib/tag-feed.functions';
 import { NetworkBadge } from '@/lib/networks';
@@ -55,6 +57,7 @@ export function TagFeedPage({ f7route }: { f7route?: { params: { tag?: string } 
         {feature.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{feature.error}</p></Block>}
         {feedOk && state.failed && <Block strong inset><p role="alert" style={{ margin: 0 }}>Couldn’t check whether you follow this hashtag. <Link onClick={state.retry}>Try again</Link></p></Block>}
         {actions.error && <Block strong inset><p role="alert" style={{ margin: 0 }}>{actions.error}</p></Block>}
+        {feedOk && <MobileTagRelayFollow tag={tag} />}
         {/* As desktop's /tags/$tag: only signed out, or not connected, does it fall back to public posts from
             mastodon.social. A connected person whose read fails sees that, with retry or reconnect. */}
         {!user ? <PublicTagPosts tag={tag} />
@@ -137,5 +140,21 @@ function PublicTagPosts({ tag }: { tag: string }) {
         </CardContent>
         <CardFooter><Link external target="_blank" href={p.url} aria-label="Open original post">↩ {p.replies} · ↻ {p.boosts} · ★ {p.favourites}</Link></CardFooter>
       </Card></MobileFilterGate>)}</FilterPlaceProvider>}
+  </>;
+}
+
+/** "Across the fediverse" on a hashtag's page (phone): see TagRelayFollow (desktop). */
+function MobileTagRelayFollow({ tag }: { tag: string }) {
+  const relay = tagRelay(tag);
+  const f = useFediFollow(relay?.acct, relay?.actor);
+  if (!relay || !f.signedIn || !f.canFollow) return f.error ? <Block strong inset><p role="alert" style={{ margin: 0 }}>{f.error}</p></Block> : null;
+  const on = f.state === 'following' || f.state === 'requested';
+  return <>
+    <List inset strong className="atlas-tag-relay">
+      <ListItem title="Across the fediverse">
+        <Toggle slot="after" checked={on} disabled={f.busy} onToggleChange={() => f.toggle()} aria-label="Across the fediverse" />
+      </ListItem>
+    </List>
+    <BlockFooter>{f.state === 'requested' ? 'Waiting for FediBuzz to accept. ' : ''}Public posts with this tag from servers Fedizen doesn’t follow come into Following, boosted by the FediBuzz relay.{f.error ? ` ${f.error}` : ''}</BlockFooter>
   </>;
 }

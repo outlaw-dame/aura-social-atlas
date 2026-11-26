@@ -10,6 +10,7 @@ import { useTagFollowState } from '@/components/social/useTagFollow';
 import { StandaloneDesktopHosts } from '@/components/social/DesktopHosts';
 import { useFedizen } from '@/components/social/useFedizen';
 import { Button } from '@/components/ui/button';
+import { TagRelayFollow } from '@/components/social/TagRelayFollow';
 import { FeedPostCard, useFeedPostActions } from '@/components/social/FeedPostCard';
 import { getTagFeed } from '@/lib/tag-feed.functions';
 import { gatedTagPost } from '@/lib/tag-post';
@@ -58,6 +59,7 @@ function TagBody({ tag }: { tag: string }) {
     : followState.failed ? <p role="alert" className="text-xs text-muted-foreground">Couldn’t check whether you follow this. <button type="button" className="underline" onClick={followState.retry}>Try again</button></p>
     : null;
   if (personal) return <TagShell tag={tag} action={action}>
+    {feedOk && <TagRelayFollow tag={norm} />}
     <FedizenTagPosts data={fedizen.data} norm={norm} tag={tag} failed={fedizen.isError} problem={fedizen.data?.error} retry={() => void fedizen.refetch()} />
   </TagShell>;
   return <PublicTagPage tag={tag} />;
