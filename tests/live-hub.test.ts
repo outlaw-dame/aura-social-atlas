@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { _resetHubs, _sweep, hubDeps, hubFor, IDLE_MS, readyHubFor, RENEW_MS, ROTATE_MS, STREAM_TTL_SECONDS, touchHub } from '../src/lib/live-hub.server';
+import { _resetHubs, _sweep, hubDeps, hubFor, IDLE_MS, readerOpened, readyHubFor, RENEW_MS, ROTATE_MS, STREAM_TTL_SECONDS, touchHub } from '../src/lib/live-hub.server';
+import type { FedizenPost } from '../src/lib/fedizen-feed';
 import type { Outgoing } from '../src/lib/live.server';
 import { hubUrl } from '../src/components/social/LiveUpdates';
 
@@ -11,7 +12,7 @@ type Fake = { url: string; created?: unknown; appended: Outgoing[]; closed: bool
 let streams: Fake[] = [];
 let upstreams: { userId: string; out: (e: Outgoing) => void; done: () => void; closed: boolean }[] = [];
 let now = 0;
-const realOpen = hubDeps.open, realStream = hubDeps.stream, realNow = hubDeps.now;
+const realOpen = hubDeps.open, realStream = hubDeps.stream, realNow = hubDeps.now, realHome = hubDeps.home;
 
 beforeEach(() => {
   streams = []; upstreams = []; now = 1_000_000;
@@ -31,7 +32,7 @@ beforeEach(() => {
     return () => { u.closed = true; };
   }) as never;
 });
-afterEach(() => { _resetHubs(); hubDeps.open = realOpen; hubDeps.stream = realStream; hubDeps.now = realNow; });
+afterEach(() => { _resetHubs(); hubDeps.open = realOpen; hubDeps.stream = realStream; hubDeps.now = realNow; hubDeps.home = realHome; hubDeps.pollMinMs = 30_000; hubDeps.pollMaxMs = 120_000; });
 const tick = () => new Promise(r => setTimeout(r, 5));
 
 describe('one live hub per person, on a Durable Stream', () => {
@@ -174,6 +175,97 @@ describe('overlap de-duplication', () => {
     } finally {
       hubDeps.overlapMs = 10_000;
     }
+  });
+});
+
+describe("Fedizen's side sends no posts: the hub checks Home itself", () => {
+  const post = (id: string) => ({ id, text: id }) as unknown as FedizenPost;
+  let home: FedizenPost[] = [];
+  let reads = 0;
+  const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+  beforeEach(() => {
+    home = []; reads = 0;
+    hubDeps.home = async () => { reads++; return home; };
+    hubDeps.pollMinMs = 20; hubDeps.pollMaxMs = 40;
+  });
+
+  test('new Home posts go on the stream, oldest first, once; tabs are told posts come', async () => {
+    const { id } = hubFor(cfg, 'u1');
+    const done = readerOpened('u1', id);
+    home = [post('p2'), post('p1')];
+    upstreams[0].out({ type: 'ready', posts: false });
+    await wait(10);
+    expect(reads).toBe(1); // where Home is now: nothing passed on
+    home = [post('p4'), post('p3'), post('p2'), post('p1')];
+    await wait(35);
+    upstreams[0].out({ type: 'ready', posts: false }); // not a reconnect: just to see the stream so far
+    await tick();
+    const got = streams[0].appended;
+    expect(got[0]).toEqual({ type: 'ready', posts: true, checked: true });
+    expect(got.filter(e => e.type === 'post').map(e => (e.post as FedizenPost).id)).toEqual(['p3', 'p4']);
+    expect(hubFor(cfg, 'u1').posts).toBe(true);
+    // Same page again: nothing twice.
+    await wait(60);
+    expect(streams[0].appended.filter(e => e.type === 'post').length).toBe(2);
+    done();
+  });
+
+  test('more new posts than a page holds: resync instead, so tabs check Home', async () => {
+    const { id } = hubFor(cfg, 'u1');
+    const done = readerOpened('u1', id);
+    home = [post('a1')];
+    upstreams[0].out({ type: 'ready', posts: false });
+    await wait(10);
+    home = [post('b3'), post('b2'), post('b1')];
+    await wait(35);
+    expect(streams[0].appended.map(e => e.type)).toEqual(['ready', 'resync']);
+    done();
+  });
+
+  test('no tab reading: no checks; reading again starts them', async () => {
+    const { id } = hubFor(cfg, 'u1');
+    upstreams[0].out({ type: 'ready', posts: false });
+    await wait(60);
+    expect(reads).toBe(0);
+    const done = readerOpened('u1', id);
+    await wait(10);
+    expect(reads).toBe(1);
+    done();
+    const after = reads;
+    await wait(60);
+    expect(reads).toBe(after);
+  });
+
+  test("when Fedizen's WebSocket sends posts, the hub stops checking", async () => {
+    const { id } = hubFor(cfg, 'u1');
+    const done = readerOpened('u1', id);
+    upstreams[0].out({ type: 'ready', posts: false });
+    await wait(10);
+    upstreams[0].out({ type: 'ready', posts: true });
+    const after = reads;
+    await wait(60);
+    expect(reads).toBe(after);
+    expect(streams[0].appended.at(-1)).toEqual({ type: 'ready', posts: true });
+    done();
+  });
+
+  test('a tab still reading keeps the hub past IDLE_MS', async () => {
+    const { id } = hubFor(cfg, 'u1');
+    const done = readerOpened('u1', id);
+    now += IDLE_MS + 1;
+    _sweep();
+    expect(touchHub('u1', id)).toBe(true);
+    done();
+    now += IDLE_MS + 1;
+    _sweep();
+    expect(touchHub('u1', id)).toBe(false);
+  });
+
+  test('the read route counts a reader until the read ends', () => {
+    const route = readFileSync('src/routes/api/live-stream/$hubId.ts', 'utf8');
+    expect(route).toMatch(/const done = readerOpened\(userId, params\.hubId\);/);
+    expect(route).toMatch(/request\.signal\.addEventListener\("abort", done/);
+    expect(route).toMatch(/new TransformStream\(\{ flush: done \}\)/);
   });
 });
 
