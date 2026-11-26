@@ -52,11 +52,35 @@ export function useFollowedTags(): ReadonlySet<string> {
   return q.data ?? EMPTY_TAGS;
 }
 const EMPTY_TAGS: ReadonlySet<string> = new Set();
-/** The hashtags a card names in its tag line: those its text uses that you follow, and any For You found it by. */
-export function useTagLine(p: Pick<FedizenPost, 'paragraphs'>, reasons?: ForYouReason[]): string[] {
-  const followed = useFollowedTags();
+const NO_VARIANTS: Readonly<Record<string, string>> = {};
+
+/** Other spellings Atlas follows behind a followed hashtag (spelling → the hashtag followed: #ps5pro → ps5). */
+export function useTagVariants(): Readonly<Record<string, string>> {
+  const { user } = useAtlasAuth();
+  const read = useServerFn(getFollowedTags);
+  const id = user?.id;
+  const q = useQuery({
+    queryKey: ['fedizen-followed-tags', id],
+    queryFn: () => read({ data: { expectedAtlasUserId: id! } }),
+    enabled: !!id, staleTime: q => (q.state.data?.error ? 0 : 5 * 60_000),
+    select: d => d.variants ?? NO_VARIANTS,
+  });
+  return q.data ?? NO_VARIANTS;
+}
+
+/**
+ * The hashtags a card names in its tag line: those its text uses that you follow (an other spelling of one reads as
+ * the one you follow), the hashtag whose FediBuzz relay brought it in, and any For You found it by.
+ */
+export function tagLineFor(p: Pick<FedizenPost, 'paragraphs' | 'relayed'>, followed: ReadonlySet<string>, variants: Readonly<Record<string, string>>, reasons?: ForYouReason[]): string[] {
+  const watched = Object.keys(variants).length ? new Set([...followed, ...Object.keys(variants)]) : followed;
+  const inText = followedTagsIn(p.paragraphs, watched).map(t => variants[t] ?? t);
+  const relayed = p.relayed?.kind === 'tag' ? [variants[p.relayed.value] ?? p.relayed.value] : [];
   const fromReasons = (reasons ?? []).flatMap(r => (r.kind === 'tag' ? [r.tag.toLowerCase()] : []));
-  return [...new Set([...followedTagsIn(p.paragraphs, followed), ...fromReasons])];
+  return [...new Set([...inText, ...relayed, ...fromReasons])];
+}
+export function useTagLine(p: Pick<FedizenPost, 'paragraphs' | 'relayed'>, reasons?: ForYouReason[]): string[] {
+  return tagLineFor(p, useFollowedTags(), useTagVariants(), reasons);
 }
 
 /** A hashtag's feed through the person's Fedizen connection (only posts they may see). */

@@ -94,3 +94,84 @@ export function missingTagRelays(followedTags: string[], follows: RelayFollows, 
   }
   return out;
 }
+
+/* ── Other spellings of a followed hashtag (src/lib/tag-variants.ts) ─────────────────────────────────────────────── */
+
+type Db = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
+export const variantDeps = {
+  db: async (): Promise<Db> => (await import('@/integrations/supabase/client.server')).supabaseAdmin as unknown as Db,
+  /** Recent public posts with the tag, as text: the person's Fedizen tag feed and mastodon.social's public one. */
+  samples: async (token: string, tag: string): Promise<string[]> => {
+    const { htmlToParagraphs } = await import('./spotlight');
+    const text = (list: unknown) => (Array.isArray(list) ? list : []).map(s => htmlToParagraphs(String((s as { content?: unknown })?.content ?? '')).join('\n'));
+    const [own, pub] = await Promise.all([
+      fedizenGet(token, `/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=20`).then(r => (r.status === 200 ? text(r.data) : [])).catch(() => []),
+      fetch(`https://mastodon.social/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=40`, { headers: { accept: 'application/json' }, redirect: 'manual', signal: AbortSignal.timeout(6000) })
+        .then(async r => (r.ok ? text(await r.json()) : [])).catch(() => []),
+    ]);
+    return [...own, ...pub];
+  },
+};
+const VARIANTS = 'atlas_tag_variants';
+
+/** Each followed hashtag's spellings Atlas follows for it (tag → spellings). Empty when the table can't be read. */
+export async function storedVariants(userId: string): Promise<Map<string, string[]>> {
+  try {
+    const db = await variantDeps.db();
+    const { data, error } = await db.from(VARIANTS).select('tag, variants').eq('user_id', userId);
+    if (error || !Array.isArray(data)) return new Map();
+    return new Map((data as { tag: string; variants: string[] }[]).map(r => [r.tag, Array.isArray(r.variants) ? r.variants : []]));
+  } catch { return new Map(); }
+}
+
+/** Whether another followed hashtag brings `tag` in as one of its spellings (so its relay must stay). */
+export async function neededAsSpelling(userId: string, tag: string): Promise<boolean> {
+  const key = tag.toLowerCase();
+  for (const [t, vs] of await storedVariants(userId)) if (t !== key && vs.includes(key)) return true;
+  return false;
+}
+
+async function saveVariants(userId: string, tag: string, variants: string[]) {
+  const db = await variantDeps.db();
+  await db.from(VARIANTS).upsert({ user_id: userId, tag, variants, updated_at: new Date().toISOString() });
+}
+async function dropVariants(userId: string, tag: string) {
+  const db = await variantDeps.db();
+  await db.from(VARIANTS).delete().eq('user_id', userId).eq('tag', tag);
+}
+
+/**
+ * Following `tag`: finds its other spellings in recent public posts and follows their relays too, then keeps the list.
+ * Returns the spellings followed. Best effort: nothing here can undo the hashtag follow itself.
+ */
+export async function followSpellings(userId: string, token: string, tag: string): Promise<string[]> {
+  const { findSpellings } = await import('./tag-variants');
+  const key = tag.toLowerCase();
+  const found = findSpellings(key, await variantDeps.samples(token, key).catch(() => []), tag);
+  const followedRelays: string[] = [];
+  for (const v of found) {
+    const relay = tagRelay(v);
+    if (!relay) continue;
+    const state = await followRelay(token, relay, true).catch(() => 'failed' as const);
+    if (state === 'following' || state === 'requested') followedRelays.push(v);
+  }
+  await saveVariants(userId, key, followedRelays).catch(() => undefined);
+  return followedRelays;
+}
+
+/**
+ * Unfollowing `tag`: unfollows the relays of its spellings, except any another followed hashtag still brings in or
+ * the person follows as a hashtag of its own, and forgets the list.
+ */
+export async function unfollowSpellings(userId: string, token: string, tag: string, followedTags: string[]) {
+  const key = tag.toLowerCase();
+  const all = await storedVariants(userId);
+  const mine = all.get(key) ?? [];
+  const keep = new Set([...followedTags.map(t => t.toLowerCase()), ...[...all.entries()].filter(([t]) => t !== key).flatMap(([, v]) => v)]);
+  for (const v of mine) {
+    if (keep.has(v)) continue;
+    const relay = tagRelay(v);
+    if (relay) await followRelay(token, relay, false).catch(() => 'failed');
+  }
+  await dropVariants(userId, key).catch(() => undefined);
+}

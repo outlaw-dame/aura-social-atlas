@@ -670,7 +670,7 @@ async function olderForYou(token: string, older: ForYouCursors): Promise<{ posts
 /** The hashtags the person follows on Fedizen (lowercase, no "#"), for marking posts that use them. */
 export const getFollowedTags = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
   .inputValidator(d => me.parse(d))
-  .handler(async ({ data, context }): Promise<{ tags: string[]; names?: string[]; full?: boolean; error?: Problem }> => {
+  .handler(async ({ data, context }): Promise<{ tags: string[]; names?: string[]; full?: boolean; variants?: Record<string, string>; error?: Problem }> => {
     assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
     const c = await connection(context.userId);
     if ('error' in c) return { tags: [], error: c.error };
@@ -678,7 +678,12 @@ export const getFollowedTags = createServerFn({ method: 'GET' }).middleware([req
     const r = await fedizenGet(c.token, '/api/v1/followed_tags?limit=200').catch(() => null);
     if (!r || r.status !== 200) return { tags: [], error: r ? problem(r.status) : 'unavailable' };
     const names = (r.data as { name: string }[]).map(t => t.name.replace(/^#/, ''));
-    return { tags: [...new Set(names.map(n => n.toLowerCase()))], names, full: names.length >= 200 };
+    const tags = [...new Set(names.map(n => n.toLowerCase()))];
+    // The other spellings Atlas follows for each (spelling → the followed hashtag), so their posts read as it.
+    const { storedVariants } = await import('./fedibuzz-follows.server');
+    const variants: Record<string, string> = {};
+    for (const [tag, vs] of await storedVariants(context.userId)) if (tags.includes(tag)) for (const v of vs) variants[v] ??= tag;
+    return { tags, names, full: names.length >= 200, variants };
   });
 
 /** Follow or unfollow a hashtag from the person's Fedizen account, as Mastodon does: one tap on the tag's page. */
@@ -700,10 +705,18 @@ export const setTagFollow = createServerFn({ method: 'POST' }).middleware([requi
   });
 
 async function tagRelayFollow(userId: string, token: string, tag: string, on: boolean) {
-  const [{ tagRelay }, f] = await Promise.all([import('./fedibuzz'), import('./fedibuzz-follows.server')]);
+  const [{ tagRelay }, f, { fedizenGet }] = await Promise.all([import('./fedibuzz'), import('./fedibuzz-follows.server'), import('./fedizen.server')]);
   const relay = tagRelay(tag);
-  if (!relay) return;
-  await f.followRelay(token, relay, on).catch(() => 'failed');
+  if (relay && on) await f.followRelay(token, relay, true).catch(() => 'failed');
+  // Unfollowed: its relay goes too, unless another followed hashtag brings this one in as a spelling of itself.
+  if (relay && !on && !(await f.neededAsSpelling(userId, relay.key))) await f.followRelay(token, relay, false).catch(() => 'failed');
+  // Its other spellings (#PS5 → #PS5Pro, #PlayStation5) come and go with it (tag-variants.ts).
+  if (on) await f.followSpellings(userId, token, tag).catch(() => []);
+  else {
+    const r = await fedizenGet(token, '/api/v1/followed_tags?limit=200').catch(() => null);
+    const followed = r?.status === 200 ? (r.data as { name: string }[]).map(x => x.name.replace(/^#/, '')) : [];
+    await f.unfollowSpellings(userId, token, tag, followed).catch(() => undefined);
+  }
   f.forgetRelayFollows(userId);
 }
 
@@ -762,6 +775,11 @@ export const syncTagRelays = createServerFn({ method: 'POST' }).middleware([requ
     for (const relay of f.missingTagRelays(names, follows)) {
       const state = await f.followRelay(t.access_token, relay, true).catch(() => 'failed' as const);
       if (state === 'following' || state === 'requested') followed++;
+    }
+    // Hashtags followed before Atlas looked for their other spellings: a few at a time.
+    const stored = await f.storedVariants(context.userId);
+    for (const name of names.filter(n => !stored.has(n.toLowerCase())).slice(0, 3)) {
+      followed += (await f.followSpellings(context.userId, t.access_token, name).catch(() => [])).length;
     }
     if (followed) f.forgetRelayFollows(context.userId);
     return { followed };

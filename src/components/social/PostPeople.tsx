@@ -1,8 +1,8 @@
 import { Fragment, type ReactNode } from 'react';
-import { Globe, Hash, RefreshCw } from 'lucide-react';
+import { Globe, RefreshCw } from 'lucide-react';
 import type { FediMention, FediPerson, FedizenPost } from '@/lib/fedizen-feed';
 import { openFediProfile } from '@/lib/fedi-profile';
-import { hashtagLabel, hashtagUrl, linkifyHashtagsWith, TagText } from '@/lib/hashtags';
+import { linkifyHashtagsWith } from '@/lib/hashtags';
 import type { Relayed } from '@/lib/fedibuzz';
 import { ProfileHoverCard } from './ProfileHoverCard';
 import { useLiveAvatar } from './useLiveAvatar';
@@ -118,16 +118,12 @@ export function BoostedBy({ post: p, className, onTag }: { post: FedizenPost; cl
 const languageName = (code: string) => { try { return new Intl.DisplayNames(undefined, { type: 'language' }).of(code) ?? code; } catch { return code; } };
 
 /**
- * Where a post pushed to Fedizen by a FediBuzz relay came from: the hashtag (opens its feed), the server, or the
- * language. The relay itself is plumbing, never shown as someone who boosted it (src/lib/fedibuzz.ts).
+ * Where a post pushed to Fedizen by a FediBuzz relay came from, when that isn't a hashtag: the server or the language.
+ * A hashtag relay's post shows the tag line a followed hashtag gets instead (useTagLine). The relay itself is plumbing,
+ * never shown as someone who boosted it (src/lib/fedibuzz.ts).
  */
-function RelayedFrom({ relayed: r, className, onTag }: { relayed: Relayed; className: string; onTag?: (tag: string) => void }) {
-  if (r.kind === 'tag') return <p className={className}>
-    <Hash aria-hidden="true" className="atlas-boost-icon" />
-    <span>From</span>
-    <a href={hashtagUrl(r.value)} className="atlas-boost-who atlas-hashtag" aria-label={`From ${hashtagLabel(r.value)}. Open its feed`}
-      onClick={e => { e.stopPropagation(); if (onTag) { e.preventDefault(); onTag(r.value); } }}><b><TagText tag={r.value} mark /></b></a>
-  </p>;
+function RelayedFrom({ relayed: r, className }: { relayed: Relayed; className: string; onTag?: (tag: string) => void }) {
+  if (r.kind === 'tag') return null;
   return <p className={className}>
     <Globe aria-hidden="true" className="atlas-boost-icon" />
     <span>{r.kind === 'instance' ? <>From <b>{r.value}</b></> : <>In <b>{languageName(r.value)}</b></>}</span>
