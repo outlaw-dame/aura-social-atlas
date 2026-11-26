@@ -1,8 +1,9 @@
 import { Fragment, type ReactNode } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Globe, Hash, RefreshCw } from 'lucide-react';
 import type { FediMention, FediPerson, FedizenPost } from '@/lib/fedizen-feed';
 import { openFediProfile } from '@/lib/fedi-profile';
-import { linkifyHashtagsWith } from '@/lib/hashtags';
+import { hashtagLabel, hashtagUrl, linkifyHashtagsWith, TagText } from '@/lib/hashtags';
+import type { Relayed } from '@/lib/fedibuzz';
 import { ProfileHoverCard } from './ProfileHoverCard';
 import { useLiveAvatar } from './useLiveAvatar';
 
@@ -99,7 +100,8 @@ function Face({ person, size }: { person: FediPerson; size: number }) {
  * "[avatar] Name boosted" above a boosted post, with the boost button's own icon (PostActionBar's RefreshCw). The
  * name and avatar open the booster's profile. `className` styles the row for desktop or phone.
  */
-export function BoostedBy({ post: p, className }: { post: FedizenPost; className: string }) {
+export function BoostedBy({ post: p, className, onTag }: { post: FedizenPost; className: string; /** Opens a hashtag's feed in Atlas (a relayed post's tag). */ onTag?: (tag: string) => void }) {
+  if (p.relayed) return <RelayedFrom relayed={p.relayed} className={className} onTag={onTag} />;
   if (!p.boostedBy) return null;
   const who = p.booster ?? { name: p.boostedBy };
   const label = <><Face person={who} size={16} /><b>{who.name}</b></>;
@@ -110,5 +112,24 @@ export function BoostedBy({ post: p, className }: { post: FedizenPost; className
         onClick={e => { e.stopPropagation(); openFediProfile({ actor: who.actor, acct: who.acct, name: who.name }); }}>{label}</button></ProfileHoverCard>
       : <span className="atlas-boost-who">{label}</span>}
     <span>boosted</span>
+  </p>;
+}
+
+const languageName = (code: string) => { try { return new Intl.DisplayNames(undefined, { type: 'language' }).of(code) ?? code; } catch { return code; } };
+
+/**
+ * Where a post pushed to Fedizen by a FediBuzz relay came from: the hashtag (opens its feed), the server, or the
+ * language. The relay itself is plumbing, never shown as someone who boosted it (src/lib/fedibuzz.ts).
+ */
+function RelayedFrom({ relayed: r, className, onTag }: { relayed: Relayed; className: string; onTag?: (tag: string) => void }) {
+  if (r.kind === 'tag') return <p className={className}>
+    <Hash aria-hidden="true" className="atlas-boost-icon" />
+    <span>From</span>
+    <a href={hashtagUrl(r.value)} className="atlas-boost-who atlas-hashtag" aria-label={`From ${hashtagLabel(r.value)}. Open its feed`}
+      onClick={e => { e.stopPropagation(); if (onTag) { e.preventDefault(); onTag(r.value); } }}><b><TagText tag={r.value} mark /></b></a>
+  </p>;
+  return <p className={className}>
+    <Globe aria-hidden="true" className="atlas-boost-icon" />
+    <span>{r.kind === 'instance' ? <>From <b>{r.value}</b></> : <>In <b>{languageName(r.value)}</b></>}</span>
   </p>;
 }

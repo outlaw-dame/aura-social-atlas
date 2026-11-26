@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { getFollowedTags, setTagFollow } from '@/lib/fedizen.functions';
+import { getFollowedTags, setTagFollow, syncTagRelays } from '@/lib/fedizen.functions';
 import { useAtlasAuth } from './AuthState';
 
 const FOLLOW_PROBLEM: Record<string, string> = {
@@ -20,12 +20,31 @@ export function useFollowedTagList() {
   const { user } = useAtlasAuth();
   const read = useServerFn(getFollowedTags);
   const id = user?.id;
-  return useQuery({
+  const q = useQuery({
     queryKey: key(id),
     queryFn: () => read({ data: { expectedAtlasUserId: id! } }),
     // A failed read isn't kept: the next view asks Fedizen again.
     enabled: !!id, staleTime: q => (q.state.data?.error ? 0 : 5 * 60_000),
   });
+  useTagRelaySync(id, !!q.data?.tags.length);
+  return q;
+}
+
+/**
+ * Hashtags followed before Atlas followed their FediBuzz relays get them once per session (syncTagRelays: only those
+ * missing, up to 10 a time), so every followed hashtag brings in posts from across the fediverse.
+ */
+function useTagRelaySync(id: string | undefined, hasTags: boolean) {
+  const sync = useServerFn(syncTagRelays);
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!id || !hasTags) return;
+    const flag = `atlas-tag-relays-synced:${id}`;
+    try { if (sessionStorage.getItem(flag)) return; sessionStorage.setItem(flag, '1'); } catch { /* storage blocked: sync anyway */ }
+    void sync({ data: { expectedAtlasUserId: id } }).then(r => {
+      if (r.followed) void qc.invalidateQueries({ queryKey: ['fedizen-relay-follows', id] });
+    }).catch(() => undefined);
+  }, [id, hasTags, sync, qc]);
 }
 
 /**
@@ -63,6 +82,8 @@ export function useTagFollow() {
       // Reconcile with Fedizen's own list (and For You, which reads it) now that the write has settled.
       void qc.invalidateQueries({ queryKey: k });
       void qc.invalidateQueries({ queryKey: ['fedizen-foryou', uid] });
+      // The tag's FediBuzz relay was followed (or unfollowed) with it, on the server.
+      void qc.invalidateQueries({ queryKey: ['fedizen-relay-follows', uid] });
     } catch {
       qc.setQueryData(k, before); setError(FOLLOW_PROBLEM.unavailable);
       void qc.invalidateQueries({ queryKey: k });

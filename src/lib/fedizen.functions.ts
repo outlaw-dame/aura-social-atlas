@@ -691,9 +691,64 @@ export const setTagFollow = createServerFn({ method: 'POST' }).middleware([requi
     const { fedizenSend } = await import('./fedizen.server');
     const r = await fedizenSend(c.token, 'POST', `/api/v1/tags/${encodeURIComponent(data.tag)}/${data.on ? 'follow' : 'unfollow'}`);
     // Unfollowing a tag Fedizen has never seen answers 404: either way, it isn't followed.
-    if (!data.on && r.status === 404) return { ok: true, following: false };
-    if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
-    return { ok: true, following: typeof r.data?.following === 'boolean' ? r.data.following : data.on };
+    const notFound = !data.on && r.status === 404;
+    if (!notFound && (r.status < 200 || r.status >= 300)) return { ok: false, error: problem(r.status) };
+    // Behind the scenes, the tag's FediBuzz relay too, so posts with it from across the fediverse reach Fedizen
+    // (fedibuzz-follows.server.ts). Best effort: the hashtag follow stands whether or not the relay answers.
+    await tagRelayFollow(context.userId, c.token, data.tag, data.on);
+    return { ok: true, following: notFound ? false : typeof r.data?.following === 'boolean' ? r.data.following : data.on };
+  });
+
+async function tagRelayFollow(userId: string, token: string, tag: string, on: boolean) {
+  const [{ tagRelay }, f] = await Promise.all([import('./fedibuzz'), import('./fedibuzz-follows.server')]);
+  const relay = tagRelay(tag);
+  if (!relay) return;
+  await f.followRelay(token, relay, on).catch(() => 'failed');
+  f.forgetRelayFollows(userId);
+}
+
+/**
+ * How many FediBuzz relays the person follows (Atlas leaves them out of the following count), and whether the whole
+ * following list could be read.
+ */
+export const getRelayFollows = createServerFn({ method: 'GET' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ count: number; complete: boolean; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor } = await import('./fedizen.server');
+    const t = await tokenFor(context.userId);
+    if (!t) return { count: 0, complete: false, error: 'not-connected' };
+    const { relayFollows } = await import('./fedibuzz-follows.server');
+    const r = await relayFollows(context.userId, t.access_token, t.account_handle);
+    return { count: r.relays.length, complete: r.complete };
+  });
+
+/**
+ * Hashtags followed before Atlas followed their relays: follows the missing relays (up to 10 a call), once the whole
+ * following list could be read, so a relay already followed is never followed twice.
+ */
+export const syncTagRelays = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
+  .inputValidator(d => me.parse(d))
+  .handler(async ({ data, context }): Promise<{ followed: number; error?: Problem }> => {
+    assertFedizenSessionIntent(data.expectedAtlasUserId, context.userId);
+    const { tokenFor, fedizenGet } = await import('./fedizen.server');
+    const t = await tokenFor(context.userId);
+    if (!t) return { followed: 0, error: 'not-connected' };
+    if (!hasScope(t.scope, 'write')) return { followed: 0, error: 'needs-permission' };
+    const f = await import('./fedibuzz-follows.server');
+    const [tags, follows] = await Promise.all([
+      fedizenGet(t.access_token, '/api/v1/followed_tags?limit=200').catch(() => null),
+      f.relayFollows(context.userId, t.access_token, t.account_handle),
+    ]);
+    if (!tags || tags.status !== 200 || !follows.complete) return { followed: 0 };
+    const names = (tags.data as { name: string }[]).map(x => x.name.replace(/^#/, ''));
+    let followed = 0;
+    for (const relay of f.missingTagRelays(names, follows)) {
+      const state = await f.followRelay(t.access_token, relay, true).catch(() => 'failed' as const);
+      if (state === 'following' || state === 'requested') followed++;
+    }
+    if (followed) f.forgetRelayFollows(context.userId);
+    return { followed };
   });
 
 /** A hashtag's feed as the person sees it on Fedizen: the posts using it that they may see and act on (Bonfire applies

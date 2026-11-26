@@ -1,4 +1,5 @@
 /** Browser-safe Fedizen (Mastodon-compatible) feed types, normalizers and redirect allowlist. */
+import { relayFromAcct, type Relayed } from './fedibuzz';
 import { emojiMap, htmlToRich, type EmojiMap, type RichBlock } from './rich-text';
 import { htmlToParagraphs } from './spotlight';
 import { collectionLinksIn, mastodonCollectionApi } from './collections';
@@ -29,6 +30,7 @@ export function hasScope(granted: string | null | undefined, needed: string): bo
 export type FedizenPost = { /** Deleted, or gone from the conversation, while it was open: kept as a placeholder so its replies keep their place (thread-live.ts). */ tombstone?: boolean; id: string; /** The post itself (the boosted one for a boost), for bookmarking. */ statusId?: string; /** Native Home only: the status id of a card shown before its details were read (bonfire-private.server); read afterwards, never used for actions. */ statusRef?: string; bookmarked?: boolean; author: string; handle: string; avatar?: string; paragraphs: string[]; /** Its formatting (rich-text.ts), when it has any: bold, code, quotes, Misskey's MFM… */ rich?: RichBlock[]; /** Its custom emoji, by shortcode. */ emojis?: EmojiMap; url: string; /** Its ActivityPub id, to match it with the same post read from its author's server. */ uri?: string; date?: string; image?: string; /** The image's width and height (from Fedizen's media meta), to reserve its space before it loads. */ imageSize?: { w: number; h: number }; /** The author marked its media sensitive. */ sensitive?: boolean; boostedBy?: string;
   /** The author's actor and full handle, to open their profile in Atlas. */ actor?: string; acct?: string;
   /** Who boosted it (boostedBy is their name), to show their avatar and open their profile. */ booster?: FediPerson;
+  /** Pushed to Fedizen by a FediBuzz relay the person follows (a hashtag, a server or a language): shown as where it came from. */ relayed?: Relayed;
   /** The people the post mentions, as Fedizen resolved them: "@name" in the text opens theirs. */ mentions?: FediMention[];
   /** The post this one replies to: its id, and the post itself once Atlas has read it from Fedizen (absent when
    *  Fedizen won't show it to the reader, eg. its author is blocked). */ replyTo?: { statusId: string; post?: FedizenPost };
@@ -135,8 +137,12 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
       ...(() => { const e = emojiMap(o.emojis); return e ? { emojis: e } : {}; })(),
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
       ...(() => { const size = imageSizeOf(o.media_attachments?.find(m => m.type === 'image')?.meta); return size ? { imageSize: size } : {}; })(),
-      boostedBy: s.reblog ? name(s.account) : undefined,
-      ...(s.reblog ? { booster: person(s.account) } : {}),
+      // A FediBuzz relay's boost is where the post came from (a hashtag, a server), not someone who boosted it.
+      ...(() => {
+        if (!s.reblog) return {};
+        const relayed = relayFromAcct(s.account?.acct);
+        return relayed ? { relayed } : { boostedBy: name(s.account), booster: person(s.account) };
+      })(),
       ...(() => { const a = person(o.account); return { ...(a.acct ? { acct: a.acct } : {}), ...(a.actor ? { actor: a.actor } : {}) }; })(),
       ...(() => { const m = mentionsOf(o); return m.length ? { mentions: m } : {}; })(),
       ...(o.in_reply_to_id && /^[A-Za-z0-9_-]{1,64}$/.test(o.in_reply_to_id) ? { replyTo: { statusId: o.in_reply_to_id } } : {}),

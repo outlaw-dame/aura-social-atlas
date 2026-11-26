@@ -110,7 +110,7 @@ function FeedPostCardBody({ post: p, actions, reasons, inTag, mode = 'feed' }: {
     onClick={opens ? e => { if (isPostClick(e)) open(); } : undefined}>
     {mode === 'feed' && <FollowedTagLine tags={tagLine} />}
     {mode === 'feed' && <ReasonChips reasons={reasons} />}
-    <BoostedBy post={p} className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground" />
+    <BoostedBy post={p} className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground" onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} />
     {mode === 'feed' && p.replyTo?.post && <ReplyParent post={p.replyTo.post} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} Gate={FilterGate} />}
     <div className="flex items-center gap-3">
       {canOpen(p)
