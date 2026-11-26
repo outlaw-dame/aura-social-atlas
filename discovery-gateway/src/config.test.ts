@@ -24,4 +24,14 @@ describe('gateway startup config', () => {
     expect(() => loadConfig({ ...base, GATEWAY_FEDERATION_RATE_LIMIT: '0' })).toThrow();
     expect(() => loadConfig({ ...base, GATEWAY_FEDERATION_RATE_LIMIT: '100001' })).toThrow();
   });
+  test('GATEWAY_SUBSCRIPTIONS: FediBuzz tag and instance relays, normalised, de-duplicated; anything else refuses to start', () => {
+    expect(loadConfig(base).declaredSubscriptions).toEqual([]);
+    expect(loadConfig({ ...base, GATEWAY_SUBSCRIPTIONS: 'tag:#PS5, tag:YouTube,instance:texasobserver.social, instance:Social.Vivaldi.net,tag:ps5' }).declaredSubscriptions).toEqual([
+      { type: 'tag', value: 'ps5' }, { type: 'tag', value: 'youtube' },
+      { type: 'instance', value: 'texasobserver.social' }, { type: 'instance', value: 'social.vivaldi.net' },
+    ]);
+    for (const bad of ['ps5', 'actor:https://relay.example/actor', 'tag:open-source', 'tag:Café', 'instance:not a domain', 'instance:localhost']) {
+      expect(() => loadConfig({ ...base, GATEWAY_SUBSCRIPTIONS: bad })).toThrow();
+    }
+  });
 });
