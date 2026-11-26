@@ -707,7 +707,9 @@ export const setTagFollow = createServerFn({ method: 'POST' }).middleware([requi
 async function tagRelayFollow(userId: string, token: string, tag: string, on: boolean) {
   const [{ tagRelay }, f, { fedizenGet }] = await Promise.all([import('./fedibuzz'), import('./fedibuzz-follows.server'), import('./fedizen.server')]);
   const relay = tagRelay(tag);
-  if (relay) await f.followRelay(token, relay, on).catch(() => 'failed');
+  if (relay && on) await f.followRelay(token, relay, true).catch(() => 'failed');
+  // Unfollowed: its relay goes too, unless another followed hashtag brings this one in as a spelling of itself.
+  if (relay && !on && !(await f.neededAsSpelling(userId, relay.key))) await f.followRelay(token, relay, false).catch(() => 'failed');
   // Its other spellings (#PS5 → #PS5Pro, #PlayStation5) come and go with it (tag-variants.ts).
   if (on) await f.followSpellings(userId, token, tag).catch(() => []);
   else {

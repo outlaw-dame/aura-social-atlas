@@ -21,7 +21,8 @@ describe('other spellings of a followed hashtag', () => {
       '#PS5 #PS5Pro #Gaming', 'Great #PS5 game #PlayStation5 #Gaming', 'x #ps5 #PlayStation5 #PS5Pro',
       '#PS5 #Playstation5Pro #PlayStation5Pro', '#PS5 #PS5_Pro', 'once #PS5 #NewPS5', '#PS4 #PS4Pro #PS4Pro',
     ];
-    expect(findSpellings('ps5', posts)).toEqual(['ps5pro', 'playstation5', 'playstation5pro']);
+    // #PlayStation5Pro appears in one post only (twice, in two capitals): not enough.
+    expect(findSpellings('ps5', posts)).toEqual(['ps5pro', 'playstation5']);
     // #Gaming is used together just as often, but isn't another way of writing #PS5.
     expect(findSpellings('ps5', posts)).not.toContain('gaming');
   });
@@ -63,5 +64,18 @@ describe('spellings come and go with the hashtag', () => {
     expect(sql).toMatch(/enable row level security/);
     expect(sql).toMatch(/revoke all on public\.atlas_tag_variants from anon, authenticated/);
     expect(sql).toMatch(/cardinality\(variants\) <= 6/);
+  });
+});
+
+describe('review fixes', () => {
+  test('one post using a spelling twice, in different capitals, is still one use', () => {
+    expect(findSpellings('ps5', ['#PS5 #Playstation5Pro #PlayStation5Pro'])).toEqual([]);
+    expect(findSpellings('ps5', ['#PS5 #Playstation5Pro #PlayStation5Pro', '#PS5 #PlayStation5Pro'])).toEqual(['playstation5pro']);
+  });
+  test("unfollowing a hashtag keeps its relay while another followed hashtag brings it in as a spelling", () => {
+    const fns = readFileSync('src/lib/fedizen.functions.ts', 'utf8');
+    expect(fns).toMatch(/if \(relay && !on && !\(await f\.neededAsSpelling\(userId, relay\.key\)\)\) await f\.followRelay\(token, relay, false\)/);
+    const server = readFileSync('src/lib/fedibuzz-follows.server.ts', 'utf8');
+    expect(server).toMatch(/for \(const \[t, vs\] of await storedVariants\(userId\)\) if \(t !== key && vs\.includes\(key\)\) return true;/);
   });
 });

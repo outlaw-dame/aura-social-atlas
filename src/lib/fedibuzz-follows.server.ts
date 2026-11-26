@@ -124,6 +124,13 @@ export async function storedVariants(userId: string): Promise<Map<string, string
   } catch { return new Map(); }
 }
 
+/** Whether another followed hashtag brings `tag` in as one of its spellings (so its relay must stay). */
+export async function neededAsSpelling(userId: string, tag: string): Promise<boolean> {
+  const key = tag.toLowerCase();
+  for (const [t, vs] of await storedVariants(userId)) if (t !== key && vs.includes(key)) return true;
+  return false;
+}
+
 async function saveVariants(userId: string, tag: string, variants: string[]) {
   const db = await variantDeps.db();
   await db.from(VARIANTS).upsert({ user_id: userId, tag, variants, updated_at: new Date().toISOString() });
