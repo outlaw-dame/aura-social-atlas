@@ -65,8 +65,16 @@ export function findSpellings(followed: string, posts: string[], cased: string =
     if (!own) continue;
     // How people write the followed tag (#PlayStation5, not #playstation5) tells its initials.
     if (own !== own.toLowerCase()) writtenFollowed = own;
-    for (const t of new Set(tags.filter(x => x.toLowerCase() !== f))) {
+    // Each tag once per post, whatever its capitals (#Playstation5Pro and #PlayStation5Pro in one post are one use),
+    // keeping a capitalised way of writing it for its initials.
+    const inPost = new Map<string, string>();
+    for (const t of tags) {
       const k = t.toLowerCase();
+      if (k === f) continue;
+      const prev = inPost.get(k);
+      if (!prev || (prev === k && t !== k) || /[A-Z].*[A-Z]/.test(t)) inPost.set(k, t);
+    }
+    for (const [k, t] of inPost) {
       const e = seen.get(k) ?? { count: 0, written: t };
       e.count++;
       if (t !== k) e.written = t;
