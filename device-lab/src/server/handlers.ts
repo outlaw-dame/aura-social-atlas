@@ -262,6 +262,8 @@ export const fedizen: Impl<typeof Fedizen> = {
   // The sample account follows no FediBuzz relays, so nothing to leave out of the count or to follow.
   getRelayFollows: () => ({ count: 0, complete: true }),
   syncTagRelays: () => ({ followed: 0 }),
+  // Voices to know leaves out who the account follows; the sample account follows none of them.
+  getFollowedHandles: () => ({ handles: [], complete: true }),
   getFedizenTagFeed: (d: { tag: string }) => ({ posts: shown(byTag(d.tag)) }),
   // Local: the sample posts by Fedizen's own members (one page; the Lab has no older pages).
   getFedizenLocal: () => ({ posts: shown(ALL_POSTS.filter((p, i, a) => a.findIndex(y => y.id === p.id) === i && /@fedizen\.net$/.test(p.handle) && !p.boostedBy)).slice(0, 20) }),

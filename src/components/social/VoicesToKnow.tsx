@@ -5,6 +5,9 @@ import { NetworkBadge } from '@/lib/networks';
 import { useQuery } from '@tanstack/react-query';
 import { linkifyHashtags } from '@/lib/hashtags';
 import { getVoiceAvatars, getVoices } from '@/lib/voices.functions';
+import { getFollowedHandles } from '@/lib/fedizen.functions';
+import { useServerFn } from '@tanstack/react-start';
+import { useAtlasAuth } from './AuthState';
 import { categoryOf, podcastVoices, VOICE_CATEGORIES, videoVoices, voices as writers, voicesPage, VOICES_PER_PAGE, type Voice, type VoiceCategory } from '@/lib/voices';
 import { parseHandle } from '@/lib/article-author';
 import { openFediProfile } from '@/lib/fedi-profile';
@@ -16,10 +19,17 @@ export const compactCount = (n?: number) => (n == null ? null : new Intl.NumberF
 export const VOICE_BLURB: Record<VoiceCategory | 'all', string> = {
   all: 'Writers, podcasters, video channels and the fediverse’s most-followed accounts',
   popular: 'The most-followed accounts across the fediverse, from FediDB',
-  writer: 'Writers across Mastodon, Micro.blog and Write.as',
+  writer: 'Writers across Mastodon, Micro.blog, Write.as and Inkwell',
   podcast: 'Podcasts on Castopod, including the Castopod Index’s most popular',
   video: 'Video channels on PeerTube',
 };
+
+/** Voices whose handle isn't among those the person follows (full, lowercase handles from Fedizen). */
+export function notFollowed(voices: Voice[], handles: string[] | undefined): Voice[] {
+  if (!handles?.length) return voices;
+  const followed = new Set(handles);
+  return voices.filter(v => { const h = parseHandle(v.handle); return !h || !followed.has(h.toLowerCase()); });
+}
 
 /**
  * Voices to know, shared by desktop (this file) and the phone (f7/Discover.tsx): real open-web voices six at a time,
@@ -35,7 +45,15 @@ export function useVoicesToKnow() {
     ...(keptAvatars ? { initialData: keptAvatars.data, initialDataUpdatedAt: keptAvatars.savedAt } : {}) });
   const { data } = useQuery({ queryKey: ['voices'], queryFn: async () => { const r = await getVoices(); writeKeptPublic('voices', r); return r; }, staleTime: 3600_000,
     ...(keptVoices ? { initialData: keptVoices.data, initialDataUpdatedAt: keptVoices.savedAt } : {}) });
-  const all: Voice[] = data?.voices ?? [...writers, ...podcastVoices, ...videoVoices];
+  // Signed in with Fedizen: leave out who they already follow there.
+  const { user } = useAtlasAuth();
+  const followedFn = useServerFn(getFollowedHandles);
+  const { data: followed } = useQuery({
+    queryKey: ['fedizen-followed-handles', user?.id],
+    queryFn: () => followedFn({ data: { expectedAtlasUserId: user!.id } }),
+    enabled: !!user, staleTime: 10 * 60_000, retry: false,
+  });
+  const all: Voice[] = useMemo(() => notFollowed(data?.voices ?? [...writers, ...podcastVoices, ...videoVoices], followed?.handles), [data?.voices, followed?.handles]);
   const list = useMemo(() => {
     if (kind !== 'all') return all.filter(v => categoryOf(v) === kind);
     const by = (['popular', 'writer', 'podcast', 'video'] as const).map(k => all.filter(v => categoryOf(v) === k));

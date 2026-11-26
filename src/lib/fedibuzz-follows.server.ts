@@ -13,44 +13,59 @@ const PAGES = 25; // 25 × 80 accounts: far past what a person follows by hand
 const TTL = 10 * 60_000;
 
 export type RelayFollows = { relays: Relayed[]; complete: boolean };
-const cache = new Map<string, { at: number; value: RelayFollows }>();
+/** Everyone the person follows on Fedizen, as full lowercase handles (`ann@mastodon.social`, `bea@fedizen.net`). */
+export type Following = { accts: string[]; complete: boolean };
+const cache = new Map<string, { at: number; value: Following }>();
 
-/** Forget what was read for this person (after following or unfollowing a relay). */
+/** Forget what was read for this person (after following or unfollowing someone, or a relay). */
 export function forgetRelayFollows(userId: string) { cache.delete(userId); }
 
 /** The person's Fedizen account id, from their own handle. */
 async function myId(token: string, handle: string): Promise<string | null> {
   const acct = handle.replace(/^@/, '').split('@')[0];
-  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(acct)) return null;
+  if (!acct || !/^[A-Za-z0-9_.-]{1,64}$/.test(acct)) return null;
   const r = await fedizenGet(token, `/api/v1/accounts/lookup?acct=${encodeURIComponent(acct)}`).catch(() => null);
   const id = r?.status === 200 ? (r.data[0] as { id?: string } | undefined)?.id : undefined;
   return id && /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : null;
 }
 
+/** A Mastodon `acct` as a full handle: local accounts (no @) are Fedizen's own. */
+export function fullAcct(acct: string | null | undefined): string | null {
+  const a = (acct ?? '').trim().replace(/^@/, '').toLowerCase();
+  if (!a) return null;
+  return a.includes('@') ? a : `${a}@fedizen.net`;
+}
+
 /**
- * Which FediBuzz relays the person follows, read from their following list a page at a time (cached 10 min).
- * `complete` is false when the list couldn't all be read; what was found is still right.
+ * Who the person follows, read from their following list a page at a time (cached 10 min, shared by the relay count
+ * and Voices to know). `complete` is false when the list couldn't all be read; what was found is still right.
  */
-export async function relayFollows(userId: string, token: string, handle: string | null | undefined): Promise<RelayFollows> {
+export async function following(userId: string, token: string, handle: string | null | undefined): Promise<Following> {
   const hit = cache.get(userId);
   if (hit && Date.now() - hit.at < TTL) return hit.value;
   const id = handle ? await myId(token, handle) : null;
-  if (!id) return { relays: [], complete: false };
-  const relays: Relayed[] = [];
+  if (!id) return { accts: [], complete: false };
+  const accts: string[] = [];
   let next: string | undefined, complete = false;
   for (let page = 0; page < PAGES; page++) {
     const cursor = next ? encodeURIComponent(next) : undefined;
     if (cursor && !PAGE_CURSOR.test(cursor)) break;
     const r = await fedizenGet(token, `/api/v1/accounts/${id}/following?limit=80${cursor ? `&max_id=${cursor}` : ''}`).catch(() => null);
     if (!r || r.status !== 200) break;
-    for (const a of r.data as { acct?: string }[]) { const rel = relayFromAcct(a.acct); if (rel) relays.push(rel); }
+    for (const a of r.data as { acct?: string }[]) { const f = fullAcct(a.acct); if (f) accts.push(f); }
     if (!r.next || !r.data.length) { complete = true; break; }
     next = r.next;
   }
-  const value = { relays, complete };
+  const value = { accts, complete };
   cache.set(userId, { at: Date.now(), value });
   if (cache.size > 2000) cache.delete(cache.keys().next().value!);
   return value;
+}
+
+/** Which FediBuzz relays the person follows (from `following`). */
+export async function relayFollows(userId: string, token: string, handle: string | null | undefined): Promise<RelayFollows> {
+  const f = await following(userId, token, handle);
+  return { relays: f.accts.flatMap(a => { const r = relayFromAcct(a); return r ? [r] : []; }), complete: f.complete };
 }
 
 /**
