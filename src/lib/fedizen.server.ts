@@ -522,6 +522,10 @@ const relationship = z.object({
   id: z.string().min(1).max(64),
   following: z.boolean().nullish(),
   requested: z.boolean().nullish(),
+  // Whether the person blocks or mutes them, or blocks their server: replies read from another server honour these.
+  blocking: z.boolean().nullish(),
+  muting: z.boolean().nullish(),
+  domain_blocking: z.boolean().nullish(),
 });
 const relationshipsSchema = z.array(relationship).max(40);
 /** Mastodon Conversation (Bonfire v1.1.0-rc.1: bonfire_api_graphql masto_compatible_router, GET /conversations). */
