@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { MAX_CHECKED_AUTHORS, authorsToCheck, originOf, originReplies, repliesFedizenLacks, visibleOriginReplies, type AuthorCheck } from '../src/lib/origin-replies';
+import { MAX_CHECKED_AUTHORS, authorsToCheck, originOf, originReplies, repliesFedizenLacks, visibleOriginReplies, withFedizenIds, type AuthorCheck } from '../src/lib/origin-replies';
 import type { SpotlightModeration } from '../src/lib/spotlight-curation';
 import { buildThread } from '../src/lib/thread';
 import type { FedizenPost } from '../src/lib/fedizen-feed';
@@ -99,7 +99,25 @@ describe("replies from the post's own server", () => {
       expect(fn).toMatch(/assertFedizenSessionIntent\(data\.expectedAtlasUserId, context\.userId\)/);
       expect(fn).toMatch(/if \(!moderation \|\| !looked\) return \{ replies: \[\] \};/);
       expect(fn).toMatch(/if \(r\?\.status !== 200\) return \{ replies: \[\] \};/);
-      expect(fn).toMatch(/visibleOriginReplies\(replies, moderation, checks\)/);
+      expect(fn).toMatch(/withFedizenIds\(visibleOriginReplies\(replies, moderation, checks\), ids\)/);
     });
+  });
+
+  test("an author's id is Fedizen's, never the other server's", () => {
+    const replies = originReplies([
+      status('10', '1', { account: { id: '999', acct: 'ann', display_name: 'Ann' } }),
+      status('11', '1', { account: { id: '998', acct: 'bo@else.example', display_name: 'Bo' } }),
+    ], 'mastodon.example');
+    expect(replies.map(r => r.post.authorId)).toEqual([undefined, undefined]);
+    const withIds = withFedizenIds(replies, new Map([['ann@mastodon.example', 'AbC12']]));
+    expect(withIds.map(r => r.post.authorId)).toEqual(['AbC12', undefined]);
+  });
+
+  test('blocking or muting drops and rereads the reader\'s origin replies', () => {
+    const cache = readFileSync('src/components/social/originRepliesCache.ts', 'utf8');
+    expect(cache).toMatch(/cancelQueries\(\{ queryKey \}\);\s*await qc\.resetQueries\(\{ queryKey \}\)/);
+    for (const f of ['useFedizenLibrary', 'useServerBlock', 'useOwnPosts', 'useAccountImport']) {
+      expect(readFileSync(`src/components/social/${f}.ts`, 'utf8')).toMatch(/revokeOriginReplies\(qc, (user\.id|accountId)\)/);
+    }
   });
 });

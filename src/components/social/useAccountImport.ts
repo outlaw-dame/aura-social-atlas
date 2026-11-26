@@ -6,6 +6,7 @@ import type { ImportFile } from '@/lib/account-import';
 import { parseImport } from './filter-options';
 import { useFilterActions } from './useIntelligence';
 import { useAtlasAuth } from './AuthState';
+import { revokeOriginReplies } from './originRepliesCache';
 
 export type ImportProgress = { done: number; total: number; failed: { what: string; why: string }[]; running: boolean; finished: boolean };
 const IDLE: ImportProgress = { done: 0, total: 0, failed: [], running: false, finished: false };
@@ -91,6 +92,7 @@ export function useAccountImport() {
     }
     const end = { done: stop.current ? failed.length + doneOk : steps.length, total: steps.length, failed, running: false, finished: true };
     setProgress(end);
+    void revokeOriginReplies(qc, user.id);
     void Promise.all(['fedizen-blocks', 'fedizen-mutes', 'fedizen-circles', 'fedizen-home', 'fedizen-foryou'].map(k => qc.invalidateQueries({ queryKey: [k] })));
     return end;
   };

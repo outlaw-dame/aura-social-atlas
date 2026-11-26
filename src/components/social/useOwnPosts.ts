@@ -12,6 +12,7 @@ import {
 } from '@/lib/fedizen.functions';
 import type { FediPoll, FedizenPost } from '@/lib/fedizen-feed';
 import { recordSignal } from '@/lib/moderation-signals';
+import { revokeOriginReplies } from './originRepliesCache';
 
 /** Every feed that can show a post: after an edit or delete they all read Fedizen again. */
 const FEEDS = ['fedizen-home', 'bonfire-native-home', 'fedizen-saved', 'fedizen-foryou', 'fedizen-tag-feed', 'fedizen-circle-feed', 'fedizen-search-posts'];
@@ -198,6 +199,7 @@ export function useMutes(enabled = true) {
       if (user) {
         await qc.cancelQueries({ queryKey: ['spotlight-viewer', user.id] });
         qc.setQueryData(['spotlight-viewer', user.id], { items: [], moderation: null });
+        await revokeOriginReplies(qc, user.id);
       }
       void qc.invalidateQueries({ queryKey: ['spotlight-viewer'] });
       void qc.invalidateQueries({ queryKey: ['fedizen-mutes'] });

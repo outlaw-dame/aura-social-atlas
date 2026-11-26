@@ -72,6 +72,16 @@ export function visibleOriginReplies(
   });
 }
 
+/** Each reply's author as Fedizen knows them (`ids`: full handle → Fedizen account id); none when it doesn't. */
+export function withFedizenIds(replies: OriginReply[], ids: ReadonlyMap<string, string>): OriginReply[] {
+  return replies.map(r => {
+    const { authorId: _a, ...post } = r.post;
+    const acct = authorOf(r);
+    const id = acct ? ids.get(acct) : undefined;
+    return { ...r, post: id ? { ...post, authorId: id } : post };
+  });
+}
+
 /** The distinct authors to check, in reply order, at most MAX_CHECKED_AUTHORS. */
 export function authorsToCheck(replies: OriginReply[]): string[] {
   return [...new Set(replies.map(authorOf).filter((a): a is string => !!a))].slice(0, MAX_CHECKED_AUTHORS);
@@ -97,8 +107,11 @@ export function originReplies(raw: unknown, host: string): OriginReply[] {
   });
   const posts = fromStatuses(qualified as never);
   return list.flatMap((s, i) => {
-    const post = posts[i];
-    if (!post) return [];
+    const read = posts[i];
+    if (!read) return [];
+    // The author's id is the other server's, meaningless on Fedizen (who the reader follows, filters' exceptions):
+    // left out here, and replaced with their Fedizen id where Fedizen knows them (withFedizenIds).
+    const { authorId: _foreign, ...post } = read;
     const str = (v: unknown) => (typeof v === 'string' && v.length <= 2048 ? v : undefined);
     const inReplyTo = typeof s.in_reply_to_id === 'string' && /^\d{1,25}$/.test(s.in_reply_to_id) ? s.in_reply_to_id : undefined;
     return [{ id: s.id as string, ...(inReplyTo ? { inReplyTo } : {}), ...(str(s.uri) ? { uri: str(s.uri) } : {}), ...(str(s.url) ? { url: str(s.url) } : {}), post }];

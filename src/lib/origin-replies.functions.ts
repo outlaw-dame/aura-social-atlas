@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { assertFedizenSessionIntent } from './fedizen-feed';
-import { authorsToCheck, originOf, originReplies, visibleOriginReplies, type AuthorCheck, type OriginReply } from './origin-replies';
+import { authorsToCheck, originOf, originReplies, visibleOriginReplies, withFedizenIds, type AuthorCheck, type OriginReply } from './origin-replies';
 
 /**
  * A remote post's replies as its own server has them (GET /api/v1/statuses/:id/context there, public posts only), for
@@ -81,5 +81,6 @@ export const getOriginReplies = createServerFn({ method: 'GET' }).middleware([re
       }
       return [l.acct, l.unknown ? { state: 'unknown' } : { state: 'unreadable' }];
     }));
-    return { replies: visibleOriginReplies(replies, moderation, checks) };
+    const ids = new Map(known.map(l => [l.acct, l.id] as const));
+    return { replies: withFedizenIds(visibleOriginReplies(replies, moderation, checks), ids) };
   });

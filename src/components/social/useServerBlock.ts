@@ -4,6 +4,7 @@ import { useServerFn } from '@tanstack/react-start';
 import { blockFedizenServer } from '@/lib/fedizen-profile.functions';
 import { FEDIZEN_BLOCKED_URL } from '@/lib/fedizen-feed';
 import { useAtlasAuth } from './AuthState';
+import { revokeOriginReplies } from './originRepliesCache';
 
 /** A handle as name@server, whether it came with a leading "@" (as profiles show it) or not. */
 export const bareAcct = (acct: string | undefined) => acct?.trim().replace(/^@/, '') ?? '';
@@ -34,6 +35,7 @@ const SAID = {
 export async function revokeSpotlightAfterServerBlock(qc: QueryClient, accountId: string): Promise<void> {
   await qc.cancelQueries({ queryKey: ['spotlight-viewer', accountId] });
   qc.setQueryData(['spotlight-viewer', accountId], { items: [], moderation: null });
+  await revokeOriginReplies(qc, accountId);
   void Promise.allSettled(['spotlight-viewer', 'fedizen-home', 'fedizen-foryou', 'fedizen-notifications']
     .map(k => qc.invalidateQueries({ queryKey: [k] })));
 }

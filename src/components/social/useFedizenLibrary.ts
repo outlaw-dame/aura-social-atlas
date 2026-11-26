@@ -7,6 +7,7 @@ import {
 } from '@/lib/fedizen.functions';
 import { getFediCircles } from '@/lib/fedi-profile.functions';
 import type { FedizenPost } from '@/lib/fedizen-feed';
+import { revokeOriginReplies } from './originRepliesCache';
 
 /**
  * Saved and Circles, read and written through the person's Fedizen connection:
@@ -184,6 +185,7 @@ export function useBlockActions() {
         // while a stale moderation snapshot is being refreshed.
         await qc.cancelQueries({ queryKey: ['spotlight-viewer', user.id] });
         qc.setQueryData(['spotlight-viewer', user.id], { items: [], moderation: null });
+        await revokeOriginReplies(qc, user.id);
         await Promise.all(['spotlight-viewer', 'fedizen-blocks', 'fedizen-home', 'bonfire-native-home', 'fedizen-messages', 'fedizen-saved', 'fedizen-foryou', 'fedizen-circle-feed', 'fedizen-tag-feed']
           .map(k => qc.invalidateQueries({ queryKey: [k] })));
         return null;
