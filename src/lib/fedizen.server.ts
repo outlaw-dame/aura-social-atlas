@@ -3,6 +3,7 @@ import { BREAKER, mayAskFedizen, noteFedizenAnswered, noteFedizenTimeout, noteFe
 import { FEDIZEN_USER_AGENT, transportDetail, type FedizenTransportFailure } from './fedizen-http';
 import { FEDIZEN, FEDIZEN_API_SCOPE } from './fedizen-feed';
 import { accountKey, cachedStatus, forgetAccountReads, holdForLimit, keepStatus, noteRateLimited } from './fedizen-rate-limit';
+import { forgetModeration } from './moderation-cache.server';
 import { z } from 'zod';
 
 const b64url = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -317,7 +318,12 @@ export async function tokenFor(userId: string) {
   return value;
 }
 /** This person's connection changed: read it again next time. */
-export function forgetConnection(userId: string) { connections.delete(userId); }
+/** The connection changed (connected, reconnected, disconnected): its token and what was kept for it are read afresh. */
+export function forgetConnection(userId: string) {
+  connections.delete(userId);
+  // Block and mute lists kept for the old Fedizen account must never be used for a new one.
+  forgetModeration(userId);
+}
 
 /**
  * Asks Fedizen to revoke a token (RFC 7009: POST /oauth/revoke with the issuing client's credentials; Bonfire serves

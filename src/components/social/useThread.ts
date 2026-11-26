@@ -123,9 +123,10 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
     // Per reader: their blocks and mutes are applied on the server.
     queryKey: ['origin-replies', id, origin?.host, origin?.id],
     queryFn: () => originFn({ data: { expectedAtlasUserId: id!, url: (current?.data.post.url ?? focus?.url)! } }),
-    // Read once a conversation opens and every 5 minutes after, not on every focus: each read checks the reply
-    // authors with Fedizen, and that load counts toward its rate limit.
+    // Read once a conversation opens and every 5 minutes while it's on screen (not while the tab is hidden, not on
+    // every focus): each read checks the reply authors with Fedizen, and that load counts toward its rate limit.
     enabled: !!id && !!origin && origin.host !== 'fedizen.net' && !!current, staleTime: 5 * 60_000, retry: false, refetchOnWindowFocus: false,
+    refetchInterval: 5 * 60_000, refetchIntervalInBackground: false,
   });
   const originExtra = useMemo(() => (origin && current && fromOrigin.data?.replies.length
     ? repliesFedizenLacks(origin, current.data.post, [current.data.post, ...current.data.ancestors, ...current.data.descendants], fromOrigin.data.replies)

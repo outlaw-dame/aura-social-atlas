@@ -52,7 +52,7 @@ export const getOriginReplies = createServerFn({ method: 'GET' }).middleware([re
     const [{ readSpotlightModeration }, { readOwnerNativeModeration, mergeVerifiedOwnerModeration }, { inPool }, { blockedServersOf, withAtlasServers }, mc] = await Promise.all([
       import('./spotlight-moderation.server'), import('./spotlight-native-moderation.server'), import('./in-pool'), import('./server-blocks.server'), import('./moderation-cache.server'),
     ]);
-    const uid = context.userId;
+    const uid = await mc.moderationScope(context.userId, t.access_token);
     const authors = authorsToCheck(replies);
     const [rest, native, looked, atlasServers] = await Promise.all([
       // Kept briefly per person (moderation-cache.server.ts), so each conversation doesn't read the lists again.

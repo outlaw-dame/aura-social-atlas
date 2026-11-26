@@ -7,8 +7,10 @@
  * - The block and mute lists (complete or nothing): 3 minutes, one read shared by everyone asking at once.
  * - Reply authors as Fedizen knows them (an account id, or not known to it): 30 minutes.
  * - The person's relationship with those authors (blocking, muting, their server blocked): 3 minutes.
- * Blocking or muting someone, or a server, through Atlas forgets all of it for that person at once
- * (forgetModeration). A change made on Fedizen itself shows within those times.
+ * Everything is kept per Atlas account AND the Fedizen account it's connected to (`scope`, moderationScope), so
+ * reconnecting another Fedizen account never uses the last one's lists. Blocking or muting someone, or a server,
+ * through Atlas, connecting or disconnecting Fedizen, forgets all of it for that person at once (forgetModeration).
+ * A change made on Fedizen itself shows within those times.
  */
 import type { SpotlightModeration } from './spotlight-curation';
 
@@ -21,47 +23,55 @@ type Rel = { blocking?: boolean | null; muting?: boolean | null; domain_blocking
 const lists = new Map<string, { at: number; value: Promise<SpotlightModeration | null> }>();
 const authors = new Map<string, { at: number; id?: string; unknown: boolean }>();
 const relations = new Map<string, { at: number; rel: Rel }>();
-const key = (userId: string, k: string) => `${userId} ${k}`;
+const key = (scope: string, k: string) => `${scope} ${k}`;
+
+/** Whose moderation this is: the Atlas account and a hash of its Fedizen token (never the token itself). */
+export async function moderationScope(userId: string, token: string): Promise<string> {
+  const { accountKey } = await import('./fedizen-rate-limit');
+  return `${userId}|${await accountKey(token)}`;
+}
 function trim<V>(m: Map<string, V>) { while (m.size > MAX_ENTRIES) m.delete(m.keys().next().value!); }
 
 /** The block and mute lists, read through `read` at most every MODERATION_MS; a failed read isn't kept. */
-export function cachedModeration(userId: string, read: () => Promise<SpotlightModeration | null>, now = Date.now()): Promise<SpotlightModeration | null> {
-  const hit = lists.get(userId);
+export function cachedModeration(scope: string, read: () => Promise<SpotlightModeration | null>, now = Date.now()): Promise<SpotlightModeration | null> {
+  const hit = lists.get(scope);
   if (hit && now - hit.at < MODERATION_MS) return hit.value;
   const value = read().catch(() => null);
-  lists.set(userId, { at: now, value });
-  void value.then(v => { if (!v && lists.get(userId)?.value === value) lists.delete(userId); });
+  lists.set(scope, { at: now, value });
+  void value.then(v => { if (!v && lists.get(scope)?.value === value) lists.delete(scope); });
   trim(lists);
   return value;
 }
 
 /** A reply author as Fedizen knows them, if looked up lately: its id, or `unknown` (Fedizen answered 404). */
-export function knownAuthor(userId: string, acct: string, now = Date.now()): { id?: string; unknown: boolean } | undefined {
-  const hit = authors.get(key(userId, acct));
+export function knownAuthor(scope: string, acct: string, now = Date.now()): { id?: string; unknown: boolean } | undefined {
+  const hit = authors.get(key(scope, acct));
   if (!hit || now - hit.at >= AUTHOR_MS) return undefined;
   return { ...(hit.id ? { id: hit.id } : {}), unknown: hit.unknown };
 }
 /** Keeps an answer about an author: only a definite one (an id, or 404); a failed lookup is asked again. */
-export function keepAuthor(userId: string, acct: string, a: { id?: string; unknown: boolean }, now = Date.now()) {
+export function keepAuthor(scope: string, acct: string, a: { id?: string; unknown: boolean }, now = Date.now()) {
   if (!a.id && !a.unknown) return;
-  authors.set(key(userId, acct), { at: now, ...a });
+  authors.set(key(scope, acct), { at: now, ...a });
   trim(authors);
 }
 
-export function knownRelation(userId: string, accountId: string, now = Date.now()): Rel | undefined {
-  const hit = relations.get(key(userId, accountId));
+export function knownRelation(scope: string, accountId: string, now = Date.now()): Rel | undefined {
+  const hit = relations.get(key(scope, accountId));
   return hit && now - hit.at < RELATION_MS ? hit.rel : undefined;
 }
-export function keepRelation(userId: string, accountId: string, rel: Rel, now = Date.now()) {
-  relations.set(key(userId, accountId), { at: now, rel: { blocking: rel.blocking, muting: rel.muting, domain_blocking: rel.domain_blocking } });
+export function keepRelation(scope: string, accountId: string, rel: Rel, now = Date.now()) {
+  relations.set(key(scope, accountId), { at: now, rel: { blocking: rel.blocking, muting: rel.muting, domain_blocking: rel.domain_blocking } });
   trim(relations);
 }
 
-/** The person blocked or muted someone (or a server) through Atlas: their lists and relationships are read afresh. */
+/**
+ * The person blocked or muted someone (or a server) through Atlas, or connected or disconnected Fedizen: everything
+ * kept for their Atlas account, whichever Fedizen account it was for, is read afresh.
+ */
 export function forgetModeration(userId: string) {
-  lists.delete(userId);
-  const prefix = `${userId} `;
-  for (const k of relations.keys()) if (k.startsWith(prefix)) relations.delete(k);
+  const prefix = `${userId}|`;
+  for (const m of [lists, authors, relations] as Map<string, unknown>[]) for (const k of m.keys()) if (k.startsWith(prefix)) m.delete(k);
 }
 
 export function _resetModerationCache() { lists.clear(); authors.clear(); relations.clear(); }
