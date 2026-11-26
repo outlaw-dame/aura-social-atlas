@@ -78,15 +78,18 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
     // first page (often remote actors withheld pending blocked-instance policy)
     // must not suppress local stories that passed this viewer's own blocks.
     const { readOwnerNativeModeration, mergeVerifiedOwnerModeration } = await import('./spotlight-native-moderation.server');
-    const [restPolicy, response, local, nativePolicy] = await Promise.all([
+    const { blockedServersOf, withAtlasServers } = await import('./server-blocks.server');
+    const [restPolicy, response, local, nativePolicy, atlasServers] = await Promise.all([
       readSpotlightModeration(path => fedizenGet(connected.access_token, path, { requireCompleteModeration: true })),
       fedizenGet(connected.access_token, '/api/v1/timelines/public?limit=20'),
       fedizenGet(connected.access_token, '/api/v1/timelines/local?limit=20'),
       // Off by default. An unrecognized schema, incomplete provider snapshot,
       // mismatched bearer owner or native keyword rule never enables remote cards.
       readOwnerNativeModeration(connected.access_token, connected.account_handle ?? ''),
+      // Servers the person blocks in Atlas: never in their Spotlight; unreadable means none from anywhere is shown.
+      blockedServersOf(context.userId),
     ]);
-    const moderation = mergeVerifiedOwnerModeration(restPolicy, nativePolicy);
+    const moderation = withAtlasServers(mergeVerifiedOwnerModeration(restPolicy, nativePolicy), atlasServers);
     if (!moderation || (response.status !== 200 && local.status !== 200)) return { items: [], moderation };
     const localPosts = local.status === 200 && Array.isArray(local.data)
       ? eligiblePublicSpotlightPosts(local.data, moderation) : [];

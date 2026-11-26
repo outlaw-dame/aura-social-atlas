@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FEDIZEN_BLOCKED_URL } from '@/lib/fedizen-feed';
 import { KeywordFilters } from './KeywordFilters';
+import { BlockedServers } from './BlockedServers';
 import { ModerationSuggestions } from './ModerationSuggestions';
 import { LIBRARY_PROBLEM, useBlockActions, useFedizenBlocks } from './useFedizenLibrary';
 import { useAtlasAuth } from './AuthState';
@@ -15,7 +16,8 @@ import type { FedizenPerson } from '@/lib/fedizen-feed';
  * Settings → Moderation: separate lists, where Bonfire shows blocked people and instances in one.
  * Blocked people are read and changed here (Mastodon API, which Bonfire v1.1.0-rc.1 serves). Keyword filters are
  * Atlas's own (KeywordFilters): Bonfire lists /api/v2/filters as "coming soon", and its own filters match words without
- * context. Blocked instances have no client API yet, so that list opens Fedizen's page.
+ * context. Servers blocked on Fedizen have no client API yet, so Atlas keeps its own list (BlockedServers) and links
+ * to Fedizen's page for the rest.
  */
 
 function Section({ icon: Icon, title, detail, children, id }: { icon: typeof Ban; title: string; detail: string; children: React.ReactNode; id?: string }) {
@@ -63,8 +65,10 @@ export function ModerationPage() {
 
     <MutedPeople />
 
-    <Section icon={Globe2} title="Blocked instances" detail="Block a whole server: nothing from its people reaches you. Fedizen keeps this list; Atlas can’t show or change it yet.">
-      <OnFedizen href={FEDIZEN_BLOCKED_URL} label="Manage blocked instances on Fedizen" />
+    <Section icon={Globe2} title="Blocked servers" detail="Atlas hides posts, replies and boosts from these servers in every feed, conversation and Spotlight. Add one by name or import a blocklist (Mastodon’s CSV, plain text or JSON).">
+      <BlockedServers />
+      <p className="mt-5 text-xs text-muted-foreground">This list is kept by Atlas. Fedizen doesn’t know about it, and Atlas can’t read the servers you block on Fedizen, which are managed there.</p>
+      <div className="mt-3"><OnFedizen href={FEDIZEN_BLOCKED_URL} label="Servers blocked on Fedizen" /></div>
     </Section>
   </div>;
 }

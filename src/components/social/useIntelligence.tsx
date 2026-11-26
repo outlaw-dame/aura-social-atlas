@@ -18,6 +18,8 @@ import { useAtlasAuth } from './AuthState';
 import { forgetFilterStats, recordFiltered } from '@/lib/filter-stats';
 import { acctKey, recordSignal } from '@/lib/moderation-signals';
 import { useFedizenBlocks } from './useFedizenLibrary';
+import { useBlockedServers } from './useBlockedServers';
+import { blockedServerOf } from '@/lib/server-blocklist';
 import { makeSimilar, useSemantic } from './useSemanticIndex';
 
 export const AI_PROBLEM: Record<AiProblem, string> = {
@@ -410,7 +412,8 @@ export function useFilterCautions(filters: ContentFilter[]) {
 /* ── Applying filters in every feed ──────────────────────────────────────────────────────────── */
 
 type FilterEnv = { engine: FilterEngine; me: string | null; product: string | null ; following: FollowLookup; /** Atlas account, for filter counts. */ account: string | null;
-  /** With Intelligence on: where to note moderation signals, and who the person blocks (acctKey form). */ signals: { account: string; blocked: ReadonlySet<string> } | null };
+  /** With Intelligence on: where to note moderation signals, and who the person blocks (acctKey form). */ signals: { account: string; blocked: ReadonlySet<string> } | null;
+  /** Servers the person blocks in Atlas: their posts are hidden everywhere (server-blocklist.ts). */ servers: ReadonlySet<string> };
 const EngineContext = createContext<FilterEnv | null>(null);
 const PlaceContext = createContext<FilterPlace>('home');
 
@@ -462,12 +465,34 @@ export function ContentFilterProvider({ children }: { children: ReactNode }) {
   const blocks = useFedizenBlocks(runner.ready);
   const blocked = useMemo(() => new Set((blocks.data?.people ?? []).map(p => acctKey(p.handle)).filter((a): a is string => !!a)), [blocks.data]);
   const list = useMemo(() => (user && filters.data && 'filters' in filters.data ? filters.data.filters : []), [user, filters.data]);
+  const blockedServers = useBlockedServers();
+  const servers = useMemo(() => new Set(blockedServers.servers), [blockedServers.servers]);
   useEffect(() => {
     engine.configure({ filters: list, ai: runner.ready, deep: !!ai?.deepMatching, scope: `${user?.id}:${runner.judgeModel ?? runner.where}:${semantic.model ?? ''}`, judge: runner.judge(list), similar, following });
   }, [engine, list, runner, ai?.deepMatching, user?.id, following, similar, semantic.model]);
   const env = useMemo(() => ({ engine, me: fedizen.data?.handle ?? null, product: ai?.active ? PROVIDERS[ai.active.provider].product : null, following, account: user?.id ?? null,
-    signals: runner.ready && user ? { account: user.id, blocked } : null }), [engine, fedizen.data?.handle, ai?.active, following, user, runner.ready, blocked]);
+    signals: runner.ready && user ? { account: user.id, blocked } : null, servers }), [engine, fedizen.data?.handle, ai?.active, following, user, runner.ready, blocked, servers]);
   return <EngineContext.Provider value={env}>{children}</EngineContext.Provider>;
+}
+
+/** A stand-in filter per blocked server, so a post from one is hidden as a filter would hide it (same object per server). */
+const serverFilters = new Map<string, ContentFilter>();
+function serverFilter(host: string): ContentFilter {
+  let f = serverFilters.get(host);
+  if (!f) {
+    f = { id: `server:${host}`, text: host, kind: 'word', action: 'hide', semantic: false, expansions: [], places: [...FILTER_PLACES], expiresAt: null, exceptFollowing: false };
+    serverFilters.set(host, f);
+  }
+  return f;
+}
+
+/** The verdict for a post: hidden when it comes from a server the person blocks in Atlas, otherwise their filters'. */
+function verdictOf(env: FilterEnv, p: FilterablePost & { handle?: string }, place: FilterPlace): Verdict {
+  if (!p.mine) {
+    const host = blockedServerOf(p as Parameters<typeof blockedServerOf>[0], env.servers);
+    if (host) return { state: 'filtered', action: 'hide', filter: serverFilter(host), reason: { by: 'server', host } };
+  }
+  return env.engine.evaluate(p, place);
 }
 
 /** Whether a post is the person's own: its handle is their Fedizen handle (local posts carry no domain). */
@@ -489,7 +514,7 @@ export function useFilteredOut(posts: (FilterablePost & { handle?: string })[], 
     if (!env) return out;
     for (const p of posts) {
       if (isOwnPost(p.handle, env.me)) continue;
-      const v = env.engine.evaluate(p, place);
+      const v = verdictOf(env, p, place);
       if (v.state === 'filtered' && v.action !== 'blur') out.add(p.id);
     }
     return out;
@@ -502,11 +527,11 @@ export function usePostFilter(post: FilterablePost & { handle?: string }): { ver
   const place = useContext(PlaceContext);
   const revision = useSyncExternalStore(env?.engine.subscribe ?? noop, env?.engine.getRevision ?? zero, zero);
   const subject = useMemo(() => (isOwnPost(post.handle, env?.me ?? null) ? { ...post, mine: true } : post), [post, env?.me]);
-  const verdict = useMemo(() => (env ? env.engine.evaluate(subject, place) : CLEAR), [env, subject, place, revision]); // eslint-disable-line react-hooks/exhaustive-deps
+  const verdict = useMemo(() => (env ? verdictOf(env, subject, place) : CLEAR), [env, subject, place, revision]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { env?.engine.request(subject, place); }, [env, subject, place, revision]);
   // Counted for Settings → Keyword filters ("Filtered 12 posts in the last 30 days"), once per post.
   useEffect(() => {
-    if (verdict.state === 'filtered' && env?.account) recordFiltered(env.account, verdict.filter.id, subject.statusId ?? subject.id);
+    if (verdict.state === 'filtered' && verdict.reason.by !== 'server' && env?.account) recordFiltered(env.account, verdict.filter.id, subject.statusId ?? subject.id);
   }, [verdict, env?.account, subject.statusId, subject.id]);
   // With Intelligence on, what this post says about its accounts, for Suggestions (lib/moderation-signals).
   useEffect(() => {
@@ -514,7 +539,7 @@ export function usePostFilter(post: FilterablePost & { handle?: string }): { ver
     if (!s || subject.mine) return;
     const p = subject as typeof subject & { acct?: string; booster?: { acct?: string }; replyTo?: { post?: { acct?: string } } };
     const ref = p.statusId ?? p.id, author = p.acct ?? p.handle;
-    if (verdict.state === 'filtered') recordSignal(s.account, 'caught', author, ref, verdict.filter.id);
+    if (verdict.state === 'filtered' && verdict.reason.by !== 'server') recordSignal(s.account, 'caught', author, ref, verdict.filter.id);
     const authorKey = acctKey(author);
     if (p.booster?.acct && authorKey && s.blocked.has(authorKey)) recordSignal(s.account, 'boosts-blocked', p.booster.acct, ref);
     const parent = acctKey(p.replyTo?.post?.acct);
@@ -560,7 +585,7 @@ export function useShownPosts<T extends FilterablePost & { handle?: string }>(po
   useEffect(() => { for (const p of subjects) env?.engine.request(p, 'home'); }, [env, subjects]);
   return useMemo(() => {
     if (!env) return posts;
-    return posts.filter((_, i) => { const v = env.engine.evaluate(subjects[i], 'home'); return v.state === 'clear' || (v.state === 'filtered' && v.action !== 'hide'); });
+    return posts.filter((_, i) => { const v = verdictOf(env, subjects[i], 'home'); return v.state === 'clear' || (v.state === 'filtered' && v.action !== 'hide'); });
   }, [env, posts, subjects, revision]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 

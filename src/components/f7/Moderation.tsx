@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Block, BlockFooter, BlockTitle, Icon, Link, List, ListItem, Navbar, Page, Searchbar, Subnavbar, f7 } from 'framework7-react';
 import { FEDIZEN_BLOCKED_URL } from '@/lib/fedizen-feed';
 import { pushPage } from './navigation';
@@ -8,14 +8,15 @@ import { useAtlasAuth } from '@/components/social/AuthState';
 import { useContentFilters } from '@/components/social/useIntelligence';
 import { STATS_DAYS, useFilteredCounts } from '@/lib/filter-stats';
 import { searchPeople } from '@/lib/people-search';
+import { BLOCKLIST_ACCEPT, exportBlocklist, useBlockedServers } from '@/components/social/useBlockedServers';
 import type { FedizenPerson } from '@/lib/fedizen-feed';
 
 /**
  * Phone: Settings → Moderation, a pushed page in the same order as desktop's /settings/moderation: keyword filters,
- * blocked people, muted people, blocked instances — separate lists, where Bonfire shows blocked people and instances
+ * blocked people, muted people, blocked servers — separate lists, where Bonfire shows blocked people and instances
  * in one. Blocked and muted people are read and changed here; keyword filters are Atlas's own (their own page, with
- * how many there are and what they caught); blocked instances open Fedizen's page, since Bonfire v1.1.0-rc.1 has no
- * client API for them yet.
+ * how many there are and what they caught); so are blocked servers (Atlas's list, since Bonfire v1.1.0-rc.1 has no
+ * client API for the ones blocked on Fedizen, which open Fedizen's page).
  */
 export function ModerationPage() {
   const { user } = useAtlasAuth();
@@ -26,6 +27,7 @@ export function ModerationPage() {
   const counts = useFilteredCounts(user?.id);
   const caught = list.reduce((n, f) => n + (counts.get(f.id) ?? 0), 0);
   const blocked = q.data?.people ?? [];
+  const servers = useBlockedServers(true);
   const blockedFooter = !user ? 'Sign in to Atlas and connect Fedizen to manage who you block.'
     : q.data?.error || q.isError ? LIBRARY_PROBLEM[q.data?.error ?? 'unavailable']
     : 'They can’t follow you or see your posts, and you won’t see theirs.';
@@ -53,13 +55,18 @@ export function ModerationPage() {
         </ListItem>}
       </List>
 
-      <BlockTitle>Blocked instances</BlockTitle>
+      <BlockTitle>Blocked servers</BlockTitle>
       <List strong inset dividers>
-        <ListItem link={FEDIZEN_BLOCKED_URL} external target="_blank" title="Manage on Fedizen" footer="Block a whole server: nothing from its people reaches you.">
+        <ListItem link={user ? '#' : undefined} title="Blocked in Atlas" after={servers.loading ? '…' : user && !servers.readError ? servers.servers.length.toLocaleString() : undefined}
+          footer={!user ? 'Sign in to Atlas to block servers.' : servers.readError ?? 'Posts, replies and boosts from these servers are hidden in Atlas. Add one or import a list.'}
+          onClick={() => { if (user) pushPage('/blocked-servers/'); }}>
           <Icon slot="media" ios="f7:globe" md="material:public_off" />
         </ListItem>
+        <ListItem link={FEDIZEN_BLOCKED_URL} external target="_blank" title="Blocked on Fedizen" footer="Managed on Fedizen.">
+          <Icon slot="media" ios="f7:arrow_up_right_square" md="material:open_in_new" />
+        </ListItem>
       </List>
-      <BlockFooter>Fedizen keeps blocked instances; Atlas can’t show or change them yet.</BlockFooter>
+      <BlockFooter>Atlas keeps its own list. Fedizen doesn’t know about it, and Atlas can’t read the servers you block on Fedizen.</BlockFooter>
     </Page>;
 }
 
@@ -118,4 +125,42 @@ export function MutedPeoplePage() {
     add={h => m.mute({ acct: h.replace(/^@/, ''), on: true })}
     action={p => <Link onClick={() => void m.mute({ accountId: p.id, on: false })}>Unmute</Link>}
     footer={m.error ? <span role="alert">{m.error}</span> : 'Their posts leave your feeds. Unlike blocking, they can still follow you and won’t know you muted them.'} />;
+}
+
+/** Phone: Settings → Moderation → Blocked in Atlas: the servers the person blocks in Atlas (see BlockedServers). */
+export function BlockedServersPage() {
+  const b = useBlockedServers(true);
+  const [query, setQuery] = useState('');
+  const file = useRef<HTMLInputElement>(null);
+  const q = query.trim().toLowerCase();
+  const found = q ? b.servers.filter(s => s.includes(q)) : b.servers;
+  const ask = () => f7.dialog.prompt('A server’s name, like spam.example', 'Block a server', n => { if (n.trim()) void b.block(n.trim()); });
+  const unblock = (s: string) => f7.dialog.confirm(`Unblock ${s}? Its posts will show in Atlas again.`, 'Unblock', () => void b.unblock([s]));
+  const unblockAll = () => f7.dialog.confirm(`Unblock all ${b.servers.length.toLocaleString()} servers? Their posts will show in Atlas again.`, 'Unblock all', () => void b.unblock('all'));
+  return <Page>
+    <Navbar title="Blocked servers" backLink backLinkShowText={false}>
+      {b.servers.length > 8 && <Subnavbar inner={false}>
+        <Searchbar placeholder={`Search ${b.servers.length.toLocaleString()}`} disableButton={false} customSearch onSearchbarSearch={(_sb: unknown, v: string) => setQuery(v)} onSearchbarClear={() => setQuery('')} />
+      </Subnavbar>}
+    </Navbar>
+    <input ref={file} type="file" accept={BLOCKLIST_ACCEPT} hidden aria-hidden="true" tabIndex={-1}
+      onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void b.importFile(f); }} />
+    {b.loading && <Block>Loading…</Block>}
+    {b.readError && <Block>{b.readError}</Block>}
+    {!b.loading && !b.readError && <>
+      <List strong inset dividers>
+        <ListItem link="#" title="Block a server…" className={b.busy ? 'disabled' : undefined} onClick={ask}><Icon slot="media" ios="f7:plus_circle" md="material:add_circle_outline" /></ListItem>
+        <ListItem link="#" title="Import a list…" footer="Mastodon’s CSV, plain text (one server a line) or JSON." className={b.busy ? 'disabled' : undefined} onClick={() => file.current?.click()}><Icon slot="media" ios="f7:square_arrow_down" md="material:file_upload" /></ListItem>
+        {b.servers.length > 0 && <ListItem link="#" title="Export the list" footer="As Mastodon’s CSV." onClick={() => exportBlocklist(b.servers)}><Icon slot="media" ios="f7:square_arrow_up" md="material:file_download" /></ListItem>}
+      </List>
+      {b.note && <Block><span role={b.note.problem ? 'alert' : 'status'}>{b.note.text}</span></Block>}
+      <List strong inset dividers>
+        {found.map(s => <ListItem key={s} title={s}><span slot="after"><Link onClick={() => unblock(s)}>Unblock</Link></span></ListItem>)}
+        {!b.servers.length && <ListItem title="You haven’t blocked any servers in Atlas." />}
+        {b.servers.length > 0 && !found.length && <ListItem title={`No server matches “${query.trim()}”.`} />}
+      </List>
+      {b.servers.length > 0 && <List strong inset><ListItem link="#" title="Unblock all…" className="atlas-destructive" noChevron onClick={unblockAll} /></List>}
+    </>}
+    <BlockFooter>Atlas hides posts, replies and boosts from these servers. Fedizen doesn’t know about this list.</BlockFooter>
+  </Page>;
 }
