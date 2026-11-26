@@ -36,7 +36,32 @@ export type GatewayConfig = {
   adminRateLimitPerMinute: number;
   /** Inbound federation POST admission cap per minute, per process, before body parsing/signature verification. */
   federationRateLimitPerMinute: number;
+  /**
+   * FediBuzz relays to be subscribed to (GATEWAY_SUBSCRIPTIONS, e.g. `tag:ps5,instance:social.vivaldi.net`), so the
+   * list is set in Railway rather than through the admin API. Startup only adds what's missing; removing one stays an
+   * explicit operator action.
+   */
+  declaredSubscriptions: DeclaredSubscription[];
 };
+
+export type DeclaredSubscription = { type: 'tag' | 'instance'; value: string };
+
+/** Parses GATEWAY_SUBSCRIPTIONS; fails closed on anything malformed rather than subscribing to a guess. */
+export function parseDeclaredSubscriptions(raw: string | undefined): DeclaredSubscription[] {
+  if (!raw || !raw.trim()) return [];
+  const out: DeclaredSubscription[] = [];
+  for (const part of raw.split(',').map(p => p.trim()).filter(Boolean)) {
+    const m = /^(tag|instance):(.+)$/i.exec(part);
+    if (!m) throw new Error(`GATEWAY_SUBSCRIPTIONS entries must be tag:<name> or instance:<domain>, got ${JSON.stringify(part)}.`);
+    const type = m[1]!.toLowerCase() as DeclaredSubscription['type'];
+    const value = m[2]!.trim().replace(/^#/, '').toLowerCase();
+    if (type === 'tag' && !/^[a-z0-9_]{1,100}$/.test(value)) throw new Error(`GATEWAY_SUBSCRIPTIONS tag must be ASCII letters, digits or underscore, got ${JSON.stringify(m[2])}.`);
+    if (type === 'instance' && (value.length > 253 || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(value))) throw new Error(`GATEWAY_SUBSCRIPTIONS instance must be a domain, got ${JSON.stringify(m[2])}.`);
+    if (!out.some(o => o.type === type && o.value === value)) out.push({ type, value });
+  }
+  if (out.length > 200) throw new Error('GATEWAY_SUBSCRIPTIONS lists more than 200 relays.');
+  return out;
+}
 
 function required(env: Record<string, string | undefined>, name: string): string {
   const v = env[name];
@@ -107,5 +132,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     readRateLimitPerMinute: intInRange('GATEWAY_READ_RATE_LIMIT', env['GATEWAY_READ_RATE_LIMIT'], 120, 1, 100_000),
     adminRateLimitPerMinute: intInRange('GATEWAY_ADMIN_RATE_LIMIT', env['GATEWAY_ADMIN_RATE_LIMIT'], 30, 1, 10_000),
     federationRateLimitPerMinute: intInRange('GATEWAY_FEDERATION_RATE_LIMIT', env['GATEWAY_FEDERATION_RATE_LIMIT'], 600, 1, 100_000),
+    declaredSubscriptions: parseDeclaredSubscriptions(env['GATEWAY_SUBSCRIPTIONS']),
   };
 }

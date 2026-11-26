@@ -172,3 +172,25 @@ export async function retrySubscription(gateway: Gateway, sql: Sql, origin: stri
 export async function listAll(sql: Sql): Promise<Subscription[]> {
   return listSubscriptions(sql);
 }
+
+/**
+ * Subscribes to each declared FediBuzz relay that isn't subscribed yet (GATEWAY_SUBSCRIPTIONS). Idempotent: an existing
+ * subscription is left as it is, and one an operator disabled or a relay rejected stays so (re-enabling is the admin
+ * retry). Never removes anything. Returns what happened to each, for the log.
+ */
+export async function subscribeDeclared(
+  gateway: Gateway, sql: Sql, origin: string, declared: { type: 'tag' | 'instance'; value: string }[],
+): Promise<{ target: string; outcome: 'subscribed' | 'already' | 'skipped' | 'failed'; status?: number }[]> {
+  const out: { target: string; outcome: 'subscribed' | 'already' | 'skipped' | 'failed'; status?: number }[] = [];
+  for (const d of declared) {
+    const target = `${d.type}:${d.value}`;
+    try {
+      const r = await subscribe(gateway, sql, origin, d);
+      if (r.ok) out.push({ target, outcome: r.created ? 'subscribed' : 'already' });
+      else out.push({ target, outcome: r.status === 409 ? 'skipped' : 'failed', status: r.status });
+    } catch {
+      out.push({ target, outcome: 'failed' });
+    }
+  }
+  return out;
+}
