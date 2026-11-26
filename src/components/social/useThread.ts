@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { findCachedPost } from '@/lib/post-cache';
 import { useServerFn } from '@tanstack/react-start';
 import { getFedizenThread } from '@/lib/fedizen.functions';
+import { getOriginReplies } from '@/lib/origin-replies.functions';
+import { originOf, repliesFedizenLacks } from '@/lib/origin-replies';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { buildThread, type ReplySort } from '@/lib/thread';
 import { nextReadIn, reconcile, touches, withDeleted, type ThreadData } from '@/lib/thread-live';
@@ -34,6 +36,7 @@ const key = (p: FedizenPost) => p.statusId ?? p.id;
 export function useThread(statusId: string | null, seed?: FedizenPost) {
   const { user } = useAtlasAuth();
   const read = useServerFn(getFedizenThread);
+  const originFn = useServerFn(getOriginReplies);
   const statusFn = useServerFn(getFedizenStatus);
   // Same query as the rest of Atlas reads the connection with (useIsMe).
   const status = useQuery({ queryKey: ['fedizen-status', user?.id], queryFn: () => statusFn(), enabled: !!user, staleTime: 60_000 });
@@ -113,7 +116,18 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
     : undefined), [seed, statusId, qc, !current]); // eslint-disable-line react-hooks/exhaustive-deps
   // Fedizen says the post is gone: don't keep showing the copy Atlas had.
   const focus = current?.data.post ?? (q.data?.error === 'not-found' ? undefined : cached);
-  const thread = useMemo(() => (focus ? buildThread(focus, current?.data.ancestors ?? [], current?.data.descendants ?? [], { sort, isMe }) : null), [focus, current?.data, sort, isMe]);
+  // Replies on the post's own server that Fedizen hasn't received (origin-replies.ts), read-only. Added when the thread
+  // is built, never into what Fedizen sent, so a later read of Fedizen can't take them for deleted posts.
+  const origin = originOf(current?.data.post.url ?? focus?.url);
+  const fromOrigin = useQuery({
+    queryKey: ['origin-replies', origin?.host, origin?.id],
+    queryFn: () => originFn({ data: { url: (current?.data.post.url ?? focus?.url)! } }),
+    enabled: !!origin && origin.host !== 'fedizen.net' && !!current, staleTime: 2 * 60_000, retry: false,
+  });
+  const originExtra = useMemo(() => (origin && current && fromOrigin.data?.replies.length
+    ? repliesFedizenLacks(origin, current.data.post, [current.data.post, ...current.data.ancestors, ...current.data.descendants], fromOrigin.data.replies)
+    : NO_POSTS), [origin?.host, origin?.id, current?.data, fromOrigin.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const thread = useMemo(() => (focus ? buildThread(focus, current?.data.ancestors ?? [], [...(current?.data.descendants ?? []), ...originExtra], { sort, isMe }) : null), [focus, current?.data, originExtra, sort, isMe]);
   return {
     thread, loading: q.isLoading, refreshing: q.isFetching && !q.isLoading,
     error: q.isError ? 'unavailable' as const : q.data?.error, refetch: () => void q.refetch(), sort, setSort, signedIn: !!user,
@@ -126,5 +140,6 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
 }
 
 const EMPTY: ReadonlyMap<string, number> = new Map();
+const NO_POSTS: FedizenPost[] = [];
 /** When the post itself didn't load because Fedizen didn't answer in time. */
 export const SLOW_CONVERSATION = 'Fedizen is slow to answer right now. Atlas will keep trying.';

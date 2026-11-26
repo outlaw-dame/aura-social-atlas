@@ -330,7 +330,8 @@ function Row({ post: p, kind, number, replyingTo, actions, onOpenPost, arrived, 
     <article className={['atlas-ph-row', `is-${kind}`, p.boostedBy && 'is-boost', active && 'is-active', justArrived(arrived, keyOf(p)) && 'is-arrived'].filter(Boolean).join(' ')} data-status-id={p.statusId}
       onClick={e => {
         if (!isPostClick(e)) return;
-        if (hero) return;
+        // A reply read from its own server has no conversation on Fedizen to open.
+        if (hero || p.notOnFedizen) return;
         // A tap on a coarse pointer shows the actions first; a second opens the post, as Phanpy's status-link does.
         if (matchMedia('(pointer: coarse)').matches && !active) { setActive(true); return; }
         onOpenPost(p);
@@ -344,13 +345,17 @@ function Row({ post: p, kind, number, replyingTo, actions, onOpenPost, arrived, 
           <span className="atlas-ph-handle">{p.handle}</span>
           {number && <span className="atlas-ph-badge is-thread">Thread {number.index}/{number.total}</span>}
           {!hero && newCheck?.(p) && <span className="atlas-new-badge">New</span>}
-          {!hero && ago && <button type="button" className="atlas-ph-time" onClick={() => onOpenPost(p)} title={p.date ? new Date(p.date).toLocaleString() : undefined} aria-label={`Open the conversation, posted ${p.date ? new Date(p.date).toLocaleString() : ago}`}>{ago}</button>}
+          {!hero && ago && p.notOnFedizen && <a className="atlas-ph-time" href={p.url} target="_blank" rel="noopener noreferrer" title={p.date ? new Date(p.date).toLocaleString() : undefined} aria-label={`Open on ${p.notOnFedizen.host}, posted ${p.date ? new Date(p.date).toLocaleString() : ago}`}>{ago}</a>}
+          {!hero && ago && !p.notOnFedizen && <button type="button" className="atlas-ph-time" onClick={() => onOpenPost(p)} title={p.date ? new Date(p.date).toLocaleString() : undefined} aria-label={`Open the conversation, posted ${p.date ? new Date(p.date).toLocaleString() : ago}`}>{ago}</button>}
         </header>
         {p.boostedBy && <p className="atlas-ph-boost"><Repeat2 aria-hidden="true" />{p.boostedBy} boosted</p>}
         {replyingTo && <p className="atlas-ph-replyto"><CornerDownRight aria-hidden="true" />Replying to <b>{replyingTo.author}</b></p>}
         <div className={hero ? 'atlas-ph-content is-large' : 'atlas-ph-content'}><Content post={p} /></div>
         {hero && <HeroDetails post={p} />}
-        <div className="atlas-ph-actions"><PostActionBar post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply} more={<PostMoreMenu post={p} />} /></div>
+        {p.notOnFedizen
+          // Read from the post's own server (origin-replies.ts): Fedizen hasn't received it, so there's nothing to act on.
+          ? <p className="atlas-ph-origin" title="Fedizen hasn’t received this reply yet, so it can’t be liked, boosted or answered from Atlas">Not on Fedizen yet · <a href={p.url} target="_blank" rel="noopener noreferrer">Open on {p.notOnFedizen.host}</a></p>
+          : <div className="atlas-ph-actions"><PostActionBar post={p} save={actions.save} reactions={actions.reactions} onReply={actions.onReply} more={<PostMoreMenu post={p} />} /></div>}
       </div>
     </article>
   </Gate>;

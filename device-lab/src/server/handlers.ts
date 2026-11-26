@@ -16,6 +16,7 @@ import type * as TagFeed from '@/lib/tag-feed.functions';
 import type * as Spotlight from '@/lib/spotlight.functions';
 import type * as Translation from '@/lib/translation.functions';
 import type * as Voices from '@/lib/voices.functions';
+import type * as OriginReplies from '@/lib/origin-replies.functions';
 import type { Impl } from './types';
 import type { IntelligenceStatus } from '@/lib/intelligence.functions';
 import type { FedizenNoticeGroup, FedizenPerson, FedizenPost } from '@/lib/fedizen-feed';
@@ -522,6 +523,11 @@ export const translation: Impl<typeof Translation> = {
 export const voices: Impl<typeof Voices> = {
   getVoices: () => ({ voices: [...writerVoices.map(v => ({ ...v, category: 'writer' as const })), ...podcastVoices, ...videoVoices], sources: { fedidb: false, castopodIndex: false } }),
   getVoiceAvatars: () => ({} as Record<string, string | null>),
+};
+
+// Replies from a post's own server: the sample posts' servers are invented, so there are none to add.
+export const originReplies: Impl<typeof OriginReplies> = {
+  getOriginReplies: () => ({ replies: [] }),
 };
 
 void NOW; void me;

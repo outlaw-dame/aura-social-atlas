@@ -31,6 +31,7 @@ export type FedizenPost = { /** Deleted, or gone from the conversation, while it
   /** The author's actor and full handle, to open their profile in Atlas. */ actor?: string; acct?: string;
   /** Who boosted it (boostedBy is their name), to show their avatar and open their profile. */ booster?: FediPerson;
   /** Pushed to Fedizen by a FediBuzz relay the person follows (a hashtag, a server or a language): shown as where it came from. */ relayed?: Relayed;
+  /** A reply read from the post's own server that Fedizen hasn't received (origin-replies.ts): read-only. */ notOnFedizen?: { host: string };
   /** The people the post mentions, as Fedizen resolved them: "@name" in the text opens theirs. */ mentions?: FediMention[];
   /** The post this one replies to: its id, and the post itself once Atlas has read it from Fedizen (absent when
    *  Fedizen won't show it to the reader, eg. its author is blocked). */ replyTo?: { statusId: string; post?: FedizenPost };

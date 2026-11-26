@@ -1226,6 +1226,9 @@ ruby rt { font-size: .6em; }
 .atlas-ph-badge.is-thread { color: var(--atlas-reply-text); background: var(--atlas-reply-faded); }
 .atlas-ph-boost, .atlas-ph-replyto, .atlas-ph-part { display: flex; align-items: center; gap: 5px; margin: 3px 0 0; font-size: 12px; }
 .atlas-ph-boost { color: var(--atlas-boost-color); }
+/* A reply read from its own server that Fedizen hasn't received (origin-replies.ts): a quiet note where the actions go. */
+.atlas-ph-origin { margin: 6px 0 0; font-size: 12px; color: var(--muted-foreground, #6b7280); }
+.atlas-ph-origin a { text-decoration: underline; text-underline-offset: 2px; color: inherit; }
 .atlas-ph-replyto { color: var(--atlas-reply-text); }
 .atlas-ph-replyto b { font-weight: 600; }
 .atlas-ph-part { color: var(--atlas-reply-text); padding-inline-start: calc(var(--av) + var(--av-gap)); margin-top: 8px; }
