@@ -18,3 +18,16 @@ export function tagRelay(tag: string): TagRelay | null {
   if (!/^[a-z0-9_]{1,100}$/.test(key)) return null;
   return { key, acct: `tag-${key}@${FEDIBUZZ_HOST}`, actor: `https://${FEDIBUZZ_HOST}/tag/${key}` };
 }
+
+/** What a FediBuzz relay carries, read from its handle: a hashtag, a server's public posts, or a language's. */
+export type Relayed = { kind: 'tag' | 'instance' | 'language'; value: string };
+
+/**
+ * The relay an account is, if it is one of FediBuzz's (`tag-ps5@relay.fedi.buzz`, `instance-mastodon.art@…`,
+ * `language-de@…`); null for anyone else. Atlas shows their boosts as where the post came from ("#ps5"), not as a
+ * person who boosted, and leaves them out of the following count.
+ */
+export function relayFromAcct(acct: string | null | undefined): Relayed | null {
+  const m = /^(tag|instance|language)-([a-z0-9_.-]{1,253})@relay\.fedi\.buzz$/i.exec((acct ?? '').trim().replace(/^@/, ''));
+  return m ? { kind: m[1].toLowerCase() as Relayed['kind'], value: m[2].toLowerCase() } : null;
+}

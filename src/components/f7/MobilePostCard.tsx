@@ -135,7 +135,7 @@ function MobilePostCardBody({ post: p, actions, reasons, inTag, mode = 'feed' }:
     <CardContent>
       {mode === 'feed' && <FollowedTagLine tags={tagLine} />}
       {mode === 'feed' && <MobileReasonChips reasons={reasons} />}
-      <BoostedBy post={p} className="atlas-post-boosted" />
+      <BoostedBy post={p} className="atlas-post-boosted" onTag={openTag} />
       {mode === 'feed' && p.replyTo?.post && <ReplyParent post={p.replyTo.post} onTag={openTag} Gate={({ post, children }) => <MobileFilterGate post={post} card={false}>{children}</MobileFilterGate>} />}
       <div className="atlas-post-head">
         {canOpen(p)

@@ -259,6 +259,9 @@ export const fedizen: Impl<typeof Fedizen> = {
   getForYou: () => ({ posts: FOR_YOU.map(p => ({ ...seen(p), reasons: p.reasons })), tags: [...followedTags], groups: Object.keys(memberships), missing: [] }),
   getFollowedTags: () => ({ tags: [...followedTags], names: [...followedTags], full: true }),
   setTagFollow: (d: { tag: string; on: boolean }) => { if (d.on) followedTags.add(d.tag.toLowerCase()); else followedTags.delete(d.tag.toLowerCase()); return ok({ following: d.on }); },
+  // The sample account follows no FediBuzz relays, so nothing to leave out of the count or to follow.
+  getRelayFollows: () => ({ count: 0, complete: true }),
+  syncTagRelays: () => ({ followed: 0 }),
   getFedizenTagFeed: (d: { tag: string }) => ({ posts: shown(byTag(d.tag)) }),
   // Local: the sample posts by Fedizen's own members (one page; the Lab has no older pages).
   getFedizenLocal: () => ({ posts: shown(ALL_POSTS.filter((p, i, a) => a.findIndex(y => y.id === p.id) === i && /@fedizen\.net$/.test(p.handle) && !p.boostedBy)).slice(0, 20) }),

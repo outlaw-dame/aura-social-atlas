@@ -609,6 +609,8 @@ const READS: { match: RegExp; schema: z.ZodType<unknown> ; single?: true }[] = [
   { match: new RegExp(`^/api/v1/lists/${ID}/accounts\\?limit=80$`), schema: accountsSchema },
   // Which of your circles someone is in (Bonfire circles_containing_subject).
   { match: new RegExp(`^/api/v1/accounts/${ID}/lists$`), schema: listsSchema },
+  // Who the person follows, a page at a time (fedibuzz-follows.server.ts: which of them are FediBuzz relays).
+  { match: new RegExp(`^/api/v1/accounts/${ID}/following\\?limit=80(&max_id=[A-Za-z0-9_\\-.~=%]{1,512})?$`), schema: accountsSchema },
   // One account by handle, to add someone to a circle. Answers a single Account, returned here as a one-item list.
   { match: new RegExp(`^/api/v1/accounts/lookup\\?acct=${ACCT}$`), schema: account.extend({ id: z.string().min(1).max(64) }), single: true },
   // People whose name or handle starts with what's typed after "@" in a reply (mention suggestions).

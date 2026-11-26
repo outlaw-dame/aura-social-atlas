@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { getFedizenViewer } from '@/lib/fedizen.functions';
+import { getFedizenViewer, getRelayFollows } from '@/lib/fedizen.functions';
 import { avatarPreset, defaultAvatarKey } from '@/lib/atlas-avatars';
 import { signedInThroughFedizen } from '@/lib/fedizen-viewer';
 import { useAtlasAuth } from './AuthState';
@@ -22,6 +22,15 @@ export function useFedizenIdentity() {
     refetchOnWindowFocus: true,
   });
   const viewer = query.data?.viewer ?? null;
+  // FediBuzz relays the account follows (hashtags' relays, followed behind the scenes): plumbing, not people, so the
+  // following count Atlas shows leaves them out (src/lib/fedibuzz-follows.server.ts).
+  const relaysFn = useServerFn(getRelayFollows);
+  const relays = useQuery({
+    queryKey: ['fedizen-relay-follows', user?.id],
+    queryFn: () => relaysFn({ data: { expectedAtlasUserId: user!.id } }),
+    enabled: !!user && !!viewer, staleTime: 10 * 60_000, retry: false,
+  });
+  const relayCount = relays.data?.count ?? 0;
   const isFedizen = signedInThroughFedizen(user) || !!viewer || query.data?.connected === true;
   const avatar = viewer?.avatar ?? (!isFedizen && user
     ? avatarPreset(profile?.avatar_key ?? defaultAvatarKey(user.id)).src : null);
@@ -34,7 +43,7 @@ export function useFedizenIdentity() {
     handle: viewer?.handle || (isFedizen ? 'Fedizen profile not verified' : user?.email || ''),
     counts: viewer ? {
       followers: viewer.followers,
-      following: viewer.following,
+      following: viewer.following === null ? null : Math.max(0, viewer.following - relayCount),
       posts: viewer.posts,
     } : null,
     refresh: () => query.refetch(),
