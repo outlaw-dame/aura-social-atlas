@@ -89,6 +89,15 @@ export const hubDeps = {
     const r = await fedizenGet(t.access_token, '/api/v1/timelines/home?limit=20');
     return r.status === 200 ? fromStatuses(r.data as never) : null;
   },
+  /**
+   * What a tab's own check adds to new posts (getFedizenHomeLatest): verified creators, episodes and videos. Only the
+   * posts being passed on, so the check itself stays one read.
+   */
+  enrich: async (userId: string, posts: FedizenPost[]): Promise<FedizenPost[]> => {
+    const [{ tokenFor }, { withArticleAuthors }] = await Promise.all([import('./fedizen.server'), import('./feed-enrich.server')]);
+    const t = await tokenFor(userId);
+    return t ? withArticleAuthors(posts, 1200, t.access_token) : posts;
+  },
 };
 
 const hubs = new Map<string, Hub>(); // by Atlas user
@@ -190,7 +199,11 @@ async function pollOnce(h: Hub) {
         found = true;
         // Nothing on this page was seen before: more arrived than one page holds. Tabs check Home and show the gap.
         if (seen.length && !posts.some(p => known.has(p.id))) append(h, { type: 'resync' });
-        else for (const post of fresh.reverse()) passOn(h, { type: 'post', post });
+        else {
+          const ready = await hubDeps.enrich(h.userId, fresh.reverse()).catch(() => fresh);
+          if (h.closed || !h.poll.on) return;
+          for (const post of ready) passOn(h, { type: 'post', post });
+        }
       }
     }
     // The first check only notes where Home is: tabs read their own first page.
@@ -218,6 +231,20 @@ export function readerOpened(userId: string, id: string): () => void {
     h.lastRead = hubDeps.now();
     if (h.readers === 0 && h.poll.timer) { clearTimeout(h.poll.timer); h.poll.timer = null; }
   };
+}
+
+/** `body`, calling `done` once however it ends: read to the end, failed partway, or cancelled by the reader. */
+export function releaseOnEnd(body: ReadableStream<Uint8Array>, done: () => void): ReadableStream<Uint8Array> {
+  const upstream = body.getReader();
+  return new ReadableStream<Uint8Array>({
+    async pull(c) {
+      try {
+        const r = await upstream.read();
+        if (r.done) { done(); c.close(); } else c.enqueue(r.value);
+      } catch (e) { done(); c.error(e); }
+    },
+    cancel(reason) { done(); return upstream.cancel(reason); },
+  });
 }
 
 /** Opens a Fedizen connection for the hub. `renewal`: a planned one, opened before the old one is closed. */

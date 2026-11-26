@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { _resetHubs, _sweep, hubDeps, hubFor, IDLE_MS, readerOpened, readyHubFor, RENEW_MS, ROTATE_MS, STREAM_TTL_SECONDS, touchHub } from '../src/lib/live-hub.server';
+import { _resetHubs, _sweep, hubDeps, hubFor, IDLE_MS, readerOpened, releaseOnEnd, readyHubFor, RENEW_MS, ROTATE_MS, STREAM_TTL_SECONDS, touchHub } from '../src/lib/live-hub.server';
 import type { FedizenPost } from '../src/lib/fedizen-feed';
 import type { Outgoing } from '../src/lib/live.server';
 import { hubUrl } from '../src/components/social/LiveUpdates';
@@ -12,7 +12,7 @@ type Fake = { url: string; created?: unknown; appended: Outgoing[]; closed: bool
 let streams: Fake[] = [];
 let upstreams: { userId: string; out: (e: Outgoing) => void; done: () => void; closed: boolean }[] = [];
 let now = 0;
-const realOpen = hubDeps.open, realStream = hubDeps.stream, realNow = hubDeps.now, realHome = hubDeps.home;
+const realOpen = hubDeps.open, realStream = hubDeps.stream, realNow = hubDeps.now, realHome = hubDeps.home, realEnrich = hubDeps.enrich;
 
 beforeEach(() => {
   streams = []; upstreams = []; now = 1_000_000;
@@ -32,7 +32,7 @@ beforeEach(() => {
     return () => { u.closed = true; };
   }) as never;
 });
-afterEach(() => { _resetHubs(); hubDeps.open = realOpen; hubDeps.stream = realStream; hubDeps.now = realNow; hubDeps.home = realHome; hubDeps.pollMinMs = 30_000; hubDeps.pollMaxMs = 120_000; });
+afterEach(() => { _resetHubs(); hubDeps.open = realOpen; hubDeps.stream = realStream; hubDeps.now = realNow; hubDeps.home = realHome; hubDeps.enrich = realEnrich; hubDeps.pollMinMs = 30_000; hubDeps.pollMaxMs = 120_000; });
 const tick = () => new Promise(r => setTimeout(r, 5));
 
 describe('one live hub per person, on a Durable Stream', () => {
@@ -186,6 +186,8 @@ describe("Fedizen's side sends no posts: the hub checks Home itself", () => {
   beforeEach(() => {
     home = []; reads = 0;
     hubDeps.home = async () => { reads++; return home; };
+    // What a tab's check adds (credits, episodes): marked so the test sees it went through.
+    hubDeps.enrich = async (_u, posts) => posts.map(p => ({ ...p, enriched: true }) as FedizenPost);
     hubDeps.pollMinMs = 20; hubDeps.pollMaxMs = 40;
   });
 
@@ -203,6 +205,7 @@ describe("Fedizen's side sends no posts: the hub checks Home itself", () => {
     const got = streams[0].appended;
     expect(got[0]).toEqual({ type: 'ready', posts: true, checked: true });
     expect(got.filter(e => e.type === 'post').map(e => (e.post as FedizenPost).id)).toEqual(['p3', 'p4']);
+    expect(got.filter(e => e.type === 'post').every(e => (e.post as { enriched?: boolean }).enriched)).toBe(true);
     expect(hubFor(cfg, 'u1').posts).toBe(true);
     // Same page again: nothing twice.
     await wait(60);
@@ -261,11 +264,39 @@ describe("Fedizen's side sends no posts: the hub checks Home itself", () => {
     expect(touchHub('u1', id)).toBe(false);
   });
 
-  test('the read route counts a reader until the read ends', () => {
+  test('the read route counts a reader until the read ends, however it ends', async () => {
     const route = readFileSync('src/routes/api/live-stream/$hubId.ts', 'utf8');
     expect(route).toMatch(/const done = readerOpened\(userId, params\.hubId\);/);
     expect(route).toMatch(/request\.signal\.addEventListener\("abort", done/);
-    expect(route).toMatch(/new TransformStream\(\{ flush: done \}\)/);
+    expect(route).toMatch(/releaseOnEnd\(res\.body, done\)/);
+    const chunk = new Uint8Array([1]);
+    const ends: string[] = [];
+    // Read to the end.
+    const r1 = releaseOnEnd(new ReadableStream({ start(c) { c.enqueue(chunk); c.close(); } }), () => ends.push('end')).getReader();
+    while (!(await r1.read()).done) { /* read */ }
+    // The stream server drops it partway.
+    const r2 = releaseOnEnd(new ReadableStream({ start(c) { c.enqueue(chunk); }, pull(c) { c.error(new Error('reset')); } }), () => ends.push('error')).getReader();
+    await r2.read();
+    await r2.read().catch(() => undefined);
+    // The browser goes away.
+    const r3 = releaseOnEnd(new ReadableStream({ start(c) { c.enqueue(chunk); } }), () => ends.push('cancel')).getReader();
+    await r3.read();
+    await r3.cancel();
+    expect(ends).toEqual(['end', 'error', 'cancel']);
+  });
+
+  test('readers released by an error leave no phantom: polling stops with the last tab', async () => {
+    const { id } = hubFor(cfg, 'u1');
+    upstreams[0].out({ type: 'ready', posts: false });
+    for (let i = 0; i < 3; i++) {
+      const done = readerOpened('u1', id);
+      const r = releaseOnEnd(new ReadableStream({ pull(c) { c.error(new Error('reset')); } }), done).getReader();
+      await r.read().catch(() => undefined);
+    }
+    await wait(10);
+    const after = reads;
+    await wait(60);
+    expect(reads).toBe(after);
   });
 });
 
