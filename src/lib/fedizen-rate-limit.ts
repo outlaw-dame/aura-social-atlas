@@ -53,6 +53,21 @@ export function waitLeft(account: string, now: number = Date.now()): number {
   return Math.max(0, own - now, sharedUntil - now);
 }
 
+/** The longest Atlas holds a request for Fedizen's limit to pass, rather than refusing it at once. */
+export const HOLD_MAX_MS = 10_000;
+
+/**
+ * Waits out a short limit (up to HOLD_MAX_MS) so a like, a reply or opening a conversation goes through a moment late
+ * instead of failing; true when the request may go now, false when the limit is longer (the caller refuses it).
+ */
+export async function holdForLimit(account: string, maxMs: number = HOLD_MAX_MS): Promise<boolean> {
+  const left = waitLeft(account);
+  if (left <= 0) return true;
+  if (left > maxMs) return false;
+  await new Promise(r => setTimeout(r, left + 50));
+  return waitLeft(account) <= 0;
+}
+
 /** Fedizen said 429 to this account: it waits, and when several accounts were limited lately, all of them do. */
 export function noteRateLimited(account: string, retryAfter: string | null | undefined, now: number = Date.now()): number {
   const ms = retryAfterMs(retryAfter, now);

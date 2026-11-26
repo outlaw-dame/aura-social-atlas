@@ -36,6 +36,7 @@ export const FOLLOW_PROBLEM = {
   unavailable: 'Fedizen couldn’t do that right now. Try again.',
   'not-found': 'Fedizen couldn’t find this account yet.',
   unverified: 'Their server didn’t confirm this handle, so Atlas won’t follow it for you.',
+  'rate-limited': 'Fedizen asked Atlas to slow down for a moment. Try again in a minute.',
 } as const;
 
 /** Whether this handle is the reader's own Fedizen account (their own profile offers no Follow). */

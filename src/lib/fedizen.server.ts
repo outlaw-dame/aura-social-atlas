@@ -2,7 +2,7 @@ import { forgetMicrocache, microcached, reuseFor } from './fedizen-microcache';
 import { BREAKER, mayAskFedizen, noteFedizenAnswered, noteFedizenTimeout, noteFedizenUnreached } from './fedizen-breaker';
 import { FEDIZEN_USER_AGENT, transportDetail, type FedizenTransportFailure } from './fedizen-http';
 import { FEDIZEN, FEDIZEN_API_SCOPE } from './fedizen-feed';
-import { accountKey, cachedStatus, forgetAccountReads, keepStatus, noteRateLimited, waitLeft } from './fedizen-rate-limit';
+import { accountKey, cachedStatus, forgetAccountReads, holdForLimit, keepStatus, noteRateLimited } from './fedizen-rate-limit';
 import { z } from 'zod';
 
 const b64url = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -434,6 +434,8 @@ const status = z.object({
   uri: z.string().nullish(),
   created_at: z.string().nullish(),
   content: z.string().nullish(),
+  /** A titled post's title (Bonfire's non-standard `name`: Lemmy and PieFed posts, articles). */
+  name: z.string().max(500).nullish().catch(null),
   account: account.nullish(),
   media_attachments: z.array(media).nullish(),
   /** The author marked the media sensitive: shown behind a veil. */
@@ -710,7 +712,8 @@ export async function fedizenGet(token: string, path: string, opts: { requireCom
   if (!read) throw new Error('Unsupported Fedizen read path.');
   // Fedizen's rate limit (fedizen-rate-limit.ts): wait it out rather than ask again; a post read moments ago is reused.
   const account = await accountKey(token);
-  if (waitLeft(account) > 0) return { status: 429, data: [], failure: 'refused' };
+  // A short limit is waited out; a long one refuses at once (asking again only extends it).
+  if (!(await holdForLimit(account))) return { status: 429, data: [], failure: 'refused' };
   const isStatus = STATUS_PATH.test(path);
   if (isStatus) {
     const hit = cachedStatus(account, path);
@@ -907,7 +910,7 @@ export async function fedizenSend(token: string, method: 'POST' | 'PUT' | 'DELET
   const payload = route.body ? route.body.safeParse(body) : null;
   if (payload && !payload.success) throw new Error('Unsupported Fedizen write body.');
   const account = await accountKey(token);
-  if (waitLeft(account) > 0) return { status: 429, data: null };
+  if (!(await holdForLimit(account))) return { status: 429, data: null };
   // Whatever this account changes, its earlier reads may no longer be true (its own like, boost or reply).
   forgetAccountReads(account);
   let response: Response;
@@ -959,7 +962,7 @@ export async function fedizenUpload(token: string, file: Blob, name: string, des
   form.set('file', file, name.replace(/[^\w.-]+/g, '_').slice(0, 100) || 'upload');
   if (description.trim()) form.set('description', description.trim());
   const account = await accountKey(token);
-  if (waitLeft(account) > 0) return { status: 429 };
+  if (!(await holdForLimit(account))) return { status: 429 };
   let response: Response;
   try {
     response = await fetch(`${FEDIZEN}/api/v2/media`, {

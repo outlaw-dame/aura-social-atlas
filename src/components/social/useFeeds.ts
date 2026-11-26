@@ -114,6 +114,7 @@ export const FEED_PROBLEM = {
   expired: 'Fedizen ended Atlas’s access. Connect again to keep reading.',
   unavailable: 'Fedizen couldn’t send this feed right now.',
   'not-found': 'This circle no longer exists on Fedizen.',
+  'rate-limited': 'Fedizen asked Atlas to slow down for a moment. This feed will try again shortly.',
 } as const;
 
 const onVisibility = (l: () => void) => { document.addEventListener('visibilitychange', l); return () => document.removeEventListener('visibilitychange', l); };

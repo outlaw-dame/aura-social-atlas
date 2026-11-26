@@ -1,6 +1,6 @@
 import type { FedizenHome } from './fedizen.functions';
 import type { NativeBonfireSnapshot } from './bonfire-private.functions';
-import type { FedizenPost } from './fedizen-feed';
+import { boostFields, type FedizenPost } from './fedizen-feed';
 
 /**
  * The old REST timeline remains the fallback until a server-gated, identity
@@ -170,7 +170,7 @@ export function withNativeDetails(
     return {
       ...card,
       id: p.id,
-      ...(p.booster ? { boostedBy: p.booster.name, booster: p.booster } : p.boostedBy ? { boostedBy: p.boostedBy } : {}),
+      ...(p.relayed ? { relayed: p.relayed } : boostFields(p.booster, p.boostedBy)),
     };
   });
   return changed ? { ...native, posts } : native;

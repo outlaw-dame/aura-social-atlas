@@ -14,13 +14,14 @@ import { revokeOriginReplies } from './originRepliesCache';
  * Saved = Bonfire bookmarks (Mastodon /api/v1/bookmarks); Circles = Bonfire circles (served as Mastodon Lists).
  */
 
-export type LibraryProblem = 'not-connected' | 'needs-permission' | 'expired' | 'unavailable' | 'not-found';
+export type LibraryProblem = 'not-connected' | 'needs-permission' | 'expired' | 'unavailable' | 'not-found' | 'rate-limited';
 export const LIBRARY_PROBLEM: Record<LibraryProblem, string> = {
   'not-connected': 'Connect your Fedizen account to use this.',
   'needs-permission': 'Reconnect Fedizen so Atlas can act for you: save, like, boost and reply to posts, and manage circles.',
   expired: 'Fedizen ended Atlas’s access. Connect again to continue.',
   unavailable: 'Fedizen couldn’t do that right now. Try again.',
   'not-found': 'No one with that handle was found on Fedizen.',
+  'rate-limited': 'Fedizen asked Atlas to slow down for a moment. Try again in a minute.',
 };
 
 export function useFedizenSaved(enabled = true) {

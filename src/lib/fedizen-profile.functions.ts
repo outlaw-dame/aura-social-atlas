@@ -105,7 +105,9 @@ export const blockFedizenServer = createServerFn({ method: 'POST' }).middleware(
       if (!hasScope(c.scope, 'write')) return { ok: false, error: 'needs-permission' };
       const server = await serverIdFor(data.acct);
       if (!server) return { ok: false, error: 'not-found' };
-      return { ok: true, outcome: await blockServer(c.accessToken, server) };
+      const outcome = await blockServer(c.accessToken, server);
+      (await import('./moderation-cache.server')).forgetModeration(context.userId);
+      return { ok: true, outcome };
     } catch (e) {
       return { ok: false, error: isRateLimited(e) ? 'rate-limited' : (e as { kind?: string })?.kind === 'graphql' ? 'rejected' : 'unavailable' };
     }
