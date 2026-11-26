@@ -17,6 +17,8 @@ import type * as Spotlight from '@/lib/spotlight.functions';
 import type * as Translation from '@/lib/translation.functions';
 import type * as Voices from '@/lib/voices.functions';
 import type * as OriginReplies from '@/lib/origin-replies.functions';
+import type * as ServerBlocks from '@/lib/server-blocks.functions';
+import { normalizeServer, parseBlocklist } from '@/lib/server-blocklist';
 import type { Impl } from './types';
 import type { IntelligenceStatus } from '@/lib/intelligence.functions';
 import type { FedizenNoticeGroup, FedizenPerson, FedizenPost } from '@/lib/fedizen-feed';
@@ -528,6 +530,29 @@ export const voices: Impl<typeof Voices> = {
 // Replies from a post's own server: the sample posts' servers are invented, so there are none to add.
 export const originReplies: Impl<typeof OriginReplies> = {
   getOriginReplies: () => ({ replies: [] }),
+};
+
+/** Blocked servers, kept for this page load: invented names under .example (reserved, RFC 2606), never real servers. */
+let blockedServers = ['spam.example', 'harassment.example'];
+export const serverBlocks: Impl<typeof ServerBlocks> = {
+  getBlockedServers: () => ({ servers: blockedServers }),
+  addBlockedServer: (d: { server: string }) => {
+    const server = normalizeServer(d.server);
+    if (!server) return { ok: false as const, error: 'invalid' as const };
+    const already = blockedServers.includes(server);
+    if (!already) blockedServers = [server, ...blockedServers];
+    return { ok: true as const, server, already };
+  },
+  importBlockedServers: (d: { text: string }) => {
+    const p = parseBlocklist(d.text);
+    const fresh = p.domains.filter(x => !blockedServers.includes(x));
+    blockedServers = [...fresh, ...blockedServers];
+    return { ok: true as const, added: fresh.length, already: p.domains.length - fresh.length, overLimit: 0, skipped: { ...p.skipped, own: 0 } };
+  },
+  removeBlockedServers: (d: { servers: string[] | 'all' }) => {
+    blockedServers = d.servers === 'all' ? [] : blockedServers.filter(x => !d.servers.includes(x));
+    return { ok: true };
+  },
 };
 
 void NOW; void me;

@@ -210,7 +210,9 @@ export function lexicalHits(compiled: Compiled[], p: FilterablePost): LexicalHit
 /* ── What a feed does with a post ────────────────────────────────────────────────────────────── */
 
 /** Why a post was filtered, for the notice: the words that matched, or the AI model's judgment in context. */
-export type FilterReason = { by: 'words'; term: string } | { by: 'ai' } | { by: 'meaning' };
+export type FilterReason = { by: 'words'; term: string } | { by: 'ai' } | { by: 'meaning' }
+  /** From a server the person blocks in Atlas (server-blocklist.ts); the filter is that server. */
+  | { by: 'server'; host: string };
 export type Verdict = { state: 'clear' } | { state: 'pending' } | { state: 'filtered'; action: FilterAction; filter: ContentFilter; reason: FilterReason };
 
 const STRENGTH: Record<FilterAction, number> = { hide: 3, warn: 2, blur: 1 };

@@ -8,16 +8,19 @@ import { WarningPanel } from './ContentWarning';
 
 /** Why a post was filtered, in a few words: the words that matched, or the AI model that judged it in context. */
 export function filterReason(v: Extract<Verdict, { state: 'filtered' }>, product: string | null): string {
-  return v.reason.by === 'words' ? `matched “${v.reason.term}”` : v.reason.by === 'meaning' ? 'close in meaning' : `judged by ${product ?? 'your AI model'}`;
+  return v.reason.by === 'server' ? SERVER_BLOCKED : v.reason.by === 'words' ? `matched “${v.reason.term}”` : v.reason.by === 'meaning' ? 'close in meaning' : `judged by ${product ?? 'your AI model'}`;
 }
 
 export type GateView = { kind: 'show' } | { kind: 'none' } | { kind: 'notice'; filter: string; why: string; onShow: () => void } | { kind: 'blur'; filter: string; why: string; onShow: () => void };
 /** What a filtered post still shows above its notice: who posted it and when (as Bluesky clients do). */
 export type GatedPost = FilterablePost & { author?: string; handle?: string; avatar?: string; date?: string };
 
+/** `why` for a post from a server the person blocks in Atlas (its `filter` is the server). */
+const SERVER_BLOCKED = 'server-blocked';
+
 /** The notice's one line: which filter, and why it caught the post. */
 export const hiddenBy = (filter: string, why: string) =>
-  why.toLowerCase() === `matched “${filter.toLowerCase()}”` ? `Hidden by your filter “${filter}”` : `Hidden by your filter “${filter}” · ${why}`;
+  why === SERVER_BLOCKED ? `From ${filter}, a server you block` : why.toLowerCase() === `matched “${filter.toLowerCase()}”` ? `Hidden by your filter “${filter}”` : `Hidden by your filter “${filter}” · ${why}`;
 
 /** An orange warning triangle, the familiar mark for hidden content (iOS and Bluesky clients use the same). */
 export function WarningMark({ className = '' }: { className?: string }) {

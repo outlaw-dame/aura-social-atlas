@@ -49,11 +49,11 @@ export const getOriginReplies = createServerFn({ method: 'GET' }).middleware([re
     const replies = await readOrigin(data.host, data.id);
     if (!replies.length) return { replies: [] };
 
-    const [{ readSpotlightModeration }, { readOwnerNativeModeration, mergeVerifiedOwnerModeration }, { inPool }] = await Promise.all([
-      import('./spotlight-moderation.server'), import('./spotlight-native-moderation.server'), import('./in-pool'),
+    const [{ readSpotlightModeration }, { readOwnerNativeModeration, mergeVerifiedOwnerModeration }, { inPool }, { blockedServersOf, withAtlasServers }] = await Promise.all([
+      import('./spotlight-moderation.server'), import('./spotlight-native-moderation.server'), import('./in-pool'), import('./server-blocks.server'),
     ]);
     const authors = authorsToCheck(replies);
-    const [rest, native, looked] = await Promise.all([
+    const [rest, native, looked, atlasServers] = await Promise.all([
       readSpotlightModeration(path => fedizenGet(t.access_token, path, { requireCompleteModeration: true })),
       readOwnerNativeModeration(t.access_token, t.account_handle ?? ''),
       // Each author as Fedizen knows them: its id there, or not known to it (404), or no answer.
@@ -62,8 +62,10 @@ export const getOriginReplies = createServerFn({ method: 'GET' }).middleware([re
         const id = r?.status === 200 ? (r.data[0] as { id?: unknown } | undefined)?.id : undefined;
         return { acct, id: typeof id === 'string' ? id : undefined, unknown: r?.status === 404 };
       }).catch(() => null),
+      // The servers they block in Atlas (Fedizen gives apps no list of the ones blocked there).
+      blockedServersOf(context.userId),
     ]);
-    const moderation = mergeVerifiedOwnerModeration(rest, native);
+    const moderation = withAtlasServers(mergeVerifiedOwnerModeration(rest, native), atlasServers);
     if (!moderation || !looked) return { replies: [] };
 
     const known = looked.filter((l): l is typeof l & { id: string } => !!l.id);
