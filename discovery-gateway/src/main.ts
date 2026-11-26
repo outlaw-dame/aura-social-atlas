@@ -5,6 +5,7 @@ import { gatewayRole, superviseQueue } from './lifecycle.ts';
 import { storesFor } from './stores.ts';
 import { buildGateway, log } from './federation.ts';
 import { createHandler } from './http.ts';
+import { subscribeDeclared } from './subscribe.ts';
 
 assertSafeGatewayRuntime(process.versions.bun);
 const role = gatewayRole(process.env.GATEWAY_ROLE);
@@ -73,6 +74,12 @@ try {
       },
     });
     log('gateway.listening', { port: server.port, role });
+    // The relays set in GATEWAY_SUBSCRIPTIONS: subscribe to any not subscribed yet, in the background.
+    if (cfg.declaredSubscriptions.length) {
+      void subscribeDeclared(gateway, stores.sql!, cfg.origin, cfg.declaredSubscriptions)
+        .then(results => { for (const r of results) log('gateway.declared_subscription', r); })
+        .catch(error => log('gateway.declared_subscriptions_failed', { type: error instanceof Error ? error.name : 'unknown' }));
+    }
     log('gateway.private_admin_listening', { port: adminServer.port, role });
   } else {
     log('gateway.worker_started', { role });

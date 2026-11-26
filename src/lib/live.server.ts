@@ -104,7 +104,7 @@ export function openUpstream(userId: string, out: (e: Outgoing) => void, done: (
     // Node: Atlas's own WebSocket client (ws-client.server.ts), the token only in Sec-WebSocket-Protocol. If Fedizen
     // won't take it, SSE below.
     const load = liveDeps.openWs;
-    const open = load ? await load().catch(() => undefined) : undefined;
+    const open = load ? await load().catch(e => { console.warn('Fedizen WebSocket client failed to load', { name: (e as Error)?.name }); return undefined; }) : undefined;
     if (open) {
       // Listeners go on before the handshake ends, so nothing that arrives with it (or a close right after) is missed:
       // messages wait in `early` until the connection is taken, and a close before that is a failed open.
@@ -113,10 +113,16 @@ export function openUpstream(userId: string, out: (e: Outgoing) => void, done: (
       const opened = await new Promise<WsLike | null>(resolve => {
         let ws: WsLike;
         try { ws = open(`${STREAM.replace(/^https:/, 'wss:')}?stream=user`, t.access_token); } catch { resolve(null); return; }
-        const timer = setTimeout(() => { try { ws.close(); } catch { /* gone */ } resolve(null); }, WS_OPEN_MS);
-        const fail = () => { clearTimeout(timer); if (taken) finish(); else { gone = true; resolve(null); } };
+        const timer = setTimeout(() => { if (!gone) console.warn('Fedizen WebSocket not used; reading SSE', { why: 'no-open' }); gone = true; try { ws.close(); } catch { /* gone */ } resolve(null); }, WS_OPEN_MS);
+        const fail = (ev?: { data?: unknown }) => {
+          clearTimeout(timer);
+          if (taken) { finish(); return; }
+          // Why Fedizen's WebSocket wasn't used (status or error code only), so a fallback to SSE is visible in logs.
+          if (!gone) console.warn('Fedizen WebSocket not used; reading SSE', ev?.data ?? { why: 'closed' });
+          gone = true; resolve(null);
+        };
         ws.addEventListener('message', ev => { if (taken) onFrame(ev); else early.push(ev); });
-        ws.addEventListener('close', fail);
+        ws.addEventListener('close', () => fail());
         ws.addEventListener('error', fail);
         ws.addEventListener('open', () => { clearTimeout(timer); if (!gone) resolve(ws); });
       });

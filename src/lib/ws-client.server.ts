@@ -25,6 +25,8 @@ const MAX_MESSAGE = 4 * 1024 * 1024;
 const HANDSHAKE_MS = 10_000;
 
 export type WsEvent = 'open' | 'message' | 'close' | 'error';
+/** Why a connection failed, as an `error` event's data. */
+export type WsFailure = { why: 'refused'; status: number } | { why: 'network'; code: string } | { why: 'timeout' | 'bad-accept' | 'protocol' };
 export type MiniWs = { close(code?: number): void; addEventListener(t: WsEvent, l: (e: { data?: unknown }) => void): void };
 
 function frame(opcode: number, payload: Buffer = Buffer.alloc(0)): Buffer {
@@ -45,12 +47,13 @@ export function openWebSocket(url: string, protocol: string): MiniWs {
   let socket: Duplex | null = null;
   let ended = false;
   let handshake: ReturnType<typeof setTimeout> | undefined, idle: ReturnType<typeof setTimeout> | undefined, ping: ReturnType<typeof setInterval> | undefined;
-  const end = (why: 'close' | 'error') => {
+  /** `detail` (errors only) says why, for logs: never headers, bodies or the token. */
+  const end = (why: 'close' | 'error', detail?: WsFailure) => {
     if (ended) return;
     ended = true;
     clearTimeout(handshake); clearTimeout(idle); clearInterval(ping);
     try { socket?.destroy(); } catch { /* gone */ }
-    emit(why);
+    emit(why, detail);
   };
 
   const u = new URL(url);
@@ -63,15 +66,15 @@ export function openWebSocket(url: string, protocol: string): MiniWs {
       'Sec-WebSocket-Protocol': protocol, 'User-Agent': 'Atlas (live updates)',
     },
   });
-  handshake = setTimeout(() => { req.destroy(); end('error'); }, HANDSHAKE_MS);
-  req.on('error', () => end('error'));
-  req.on('response', res => { res.resume(); end('error'); }); // anything but 101: refused
+  handshake = setTimeout(() => { req.destroy(); end('error', { why: 'timeout' }); }, HANDSHAKE_MS);
+  req.on('error', (e: NodeJS.ErrnoException) => end('error', { why: 'network', code: String(e.code ?? e.name).slice(0, 40) }));
+  req.on('response', res => { res.resume(); end('error', { why: 'refused', status: res.statusCode ?? 0 }); }); // anything but 101
   req.on('upgrade', (res, sock, head) => {
     clearTimeout(handshake);
     // Closed (or timed out) while the handshake was on its way: don't keep the connection.
     if (ended) { sock.destroy(); return; }
     const accept = createHash('sha1').update(key + GUID).digest('base64');
-    if (res.statusCode !== 101 || res.headers['sec-websocket-accept'] !== accept) { sock.destroy(); end('error'); return; }
+    if (res.statusCode !== 101 || res.headers['sec-websocket-accept'] !== accept) { sock.destroy(); end('error', { why: 'bad-accept' }); return; }
     socket = sock;
     let buf: Buffer = head && head.length ? Buffer.from(head) : Buffer.alloc(0);
     let parts: Buffer[] = [], partsLen = 0;
