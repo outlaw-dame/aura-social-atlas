@@ -88,3 +88,29 @@ describe('where the list applies', () => {
       .toBe('Added 120 servers · 4 already listed · 2 limits skipped (only blocks are imported) · 1 hidden name skipped · 1 line that isn’t a server.');
   });
 });
+
+describe('reading the whole list', () => {
+  test('a page at a time past Supabase’s 1,000-row cap, in a fixed order; a failed page is no list', async () => {
+    const { blockDeps, blockedServersOf, PAGE } = await import('../src/lib/server-blocks.server');
+    const all = Array.from({ length: 2500 }, (_, i) => `s${i}.example`);
+    const calls: [number, number][] = [];
+    let failAt = -1;
+    const fake = (orders: string[] = []) => ({
+      order(c: string) { return fake([...orders, c]); },
+      async range(from: number, to: number) {
+        calls.push([from, to]);
+        expect(orders).toEqual(['added_at', 'domain']);
+        if (from === failAt) return { data: null, error: new Error('down') };
+        return { data: all.slice(from, Math.min(to + 1, from + PAGE)).map(domain => ({ domain })), error: null };
+      },
+    });
+    const real = blockDeps.db;
+    blockDeps.db = async () => ({ from: () => ({ select: () => ({ eq: () => fake() }) }) }) as never;
+    try {
+      expect(await blockedServersOf('u')).toEqual(all);
+      expect(calls).toEqual([[0, 999], [1000, 1999], [2000, 2999]]);
+      failAt = 1000;
+      expect(await blockedServersOf('u')).toBeNull();
+    } finally { blockDeps.db = real; }
+  });
+});

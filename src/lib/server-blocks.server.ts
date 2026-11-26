@@ -4,9 +4,13 @@
  */
 import { MAX_BLOCKED_SERVERS } from './server-blocklist';
 
+type Ordered = {
+  order(c: string, o: { ascending: boolean }): Ordered;
+  range(from: number, to: number): Promise<{ data: unknown; error: unknown }>;
+};
 type Db = {
   from(table: string): {
-    select(cols: string): { eq(c: string, v: string): { order(c: string, o: { ascending: boolean }): { limit(n: number): Promise<{ data: unknown; error: unknown }> } } };
+    select(cols: string): { eq(c: string, v: string): Ordered };
     upsert(rows: unknown[], o: { onConflict: string; ignoreDuplicates: boolean }): Promise<{ error: unknown }>;
     delete(): { eq(c: string, v: string): { in(c: string, v: string[]): Promise<{ error: unknown }> } & Promise<{ error: unknown }> };
   };
@@ -26,13 +30,26 @@ export function withAtlasServers<M extends { blockedDomains: string[] }>(moderat
   return atlas.length ? { ...moderation, blockedDomains: [...new Set([...moderation.blockedDomains, ...atlas])] } : moderation;
 }
 
-/** The person's blocked servers, newest first; null when they couldn't be read (callers decide what that means). */
+/** Rows a page: Supabase answers at most 1,000 rows a request by default (its API's max rows), whatever the limit. */
+export const PAGE = 1000;
+
+/**
+ * The person's blocked servers, newest first, all of them: read a page at a time in a fixed order (newest first, then
+ * by name) until a page comes back short. Null when any page couldn't be read: a partial list would let servers
+ * through, so callers treat null as "can't tell".
+ */
 export async function blockedServersOf(userId: string): Promise<string[] | null> {
   try {
     const db = await blockDeps.db();
-    const { data, error } = await db.from(TABLE).select('domain').eq('user_id', userId).order('added_at', { ascending: false }).limit(MAX_BLOCKED_SERVERS);
-    if (error || !Array.isArray(data)) return null;
-    return (data as { domain: unknown }[]).map(r => r.domain).filter((d): d is string => typeof d === 'string');
+    const out: string[] = [];
+    for (let from = 0; from < MAX_BLOCKED_SERVERS + PAGE; from += PAGE) {
+      const { data, error } = await db.from(TABLE).select('domain').eq('user_id', userId)
+        .order('added_at', { ascending: false }).order('domain', { ascending: true }).range(from, from + PAGE - 1);
+      if (error || !Array.isArray(data)) return null;
+      for (const r of data as { domain: unknown }[]) if (typeof r.domain === 'string') out.push(r.domain);
+      if (data.length < PAGE) return out;
+    }
+    return out;
   } catch { return null; }
 }
 
