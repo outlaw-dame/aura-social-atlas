@@ -120,9 +120,10 @@ export function useThread(statusId: string | null, seed?: FedizenPost) {
   // is built, never into what Fedizen sent, so a later read of Fedizen can't take them for deleted posts.
   const origin = originOf(current?.data.post.url ?? focus?.url);
   const fromOrigin = useQuery({
-    queryKey: ['origin-replies', origin?.host, origin?.id],
-    queryFn: () => originFn({ data: { url: (current?.data.post.url ?? focus?.url)! } }),
-    enabled: !!origin && origin.host !== 'fedizen.net' && !!current, staleTime: 2 * 60_000, retry: false,
+    // Per reader: their blocks and mutes are applied on the server.
+    queryKey: ['origin-replies', id, origin?.host, origin?.id],
+    queryFn: () => originFn({ data: { expectedAtlasUserId: id!, url: (current?.data.post.url ?? focus?.url)! } }),
+    enabled: !!id && !!origin && origin.host !== 'fedizen.net' && !!current, staleTime: 2 * 60_000, retry: false,
   });
   const originExtra = useMemo(() => (origin && current && fromOrigin.data?.replies.length
     ? repliesFedizenLacks(origin, current.data.post, [current.data.post, ...current.data.ancestors, ...current.data.descendants], fromOrigin.data.replies)
