@@ -124,17 +124,21 @@ async function inkwellWriters(): Promise<Voice[]> {
   return list;
 }
 
+/** Whether every source answered: only then is a list kept for the day (a partial one would hide a source that long). */
+const complete = (s: { fedidb?: boolean; castopodIndex?: boolean; inkwell?: boolean } | undefined) => !!s?.fedidb && !!s.castopodIndex && s.inkwell === true;
+
 /** Every voice, curated first within each category, without duplicates. */
 export async function allVoices(): Promise<{ voices: Voice[]; sources: { fedidb: boolean; castopodIndex: boolean; inkwell?: boolean } }> {
   // Memory empty (a fresh or woken server): the list kept in Supabase from earlier today (lookup-cache.server.ts).
   const { readLookups, writeLookup } = await import('./lookup-cache.server');
   if (!popularCache && !podcastCache) {
     const kept = (await readLookups<{ voices: Voice[]; sources: { fedidb: boolean; castopodIndex: boolean; inkwell?: boolean } }>('voices', ['all'])).get('all');
-    // A list kept before Inkwell was a source (no `inkwell` in it) is read fresh instead.
-    if (kept && Array.isArray(kept.voices) && kept.sources?.fedidb && kept.sources?.castopodIndex && typeof kept.sources.inkwell === 'boolean') return kept;
+    // Only a list every source answered for is reused: one kept while a source was down (or from before Inkwell
+    // was one) is read fresh.
+    if (kept && Array.isArray(kept.voices) && complete(kept.sources)) return kept;
   }
   const result = await allVoicesFresh();
-  if (result.sources.fedidb && result.sources.castopodIndex) writeLookup('voices', 'all', result, 24 * 3_600_000);
+  if (complete(result.sources)) writeLookup('voices', 'all', result, 24 * 3_600_000);
   return result;
 }
 

@@ -51,3 +51,12 @@ describe('Voices to know leaves out who you already follow', () => {
     expect(readFileSync('src/components/social/useFediProfile.ts', 'utf8')).toMatch(/invalidateQueries\(\{ queryKey: \['fedizen-followed-handles', id\] \}\)/);
   });
 });
+
+describe('the Voices list kept for a day', () => {
+  test('only a list every source answered for is kept or reused; one with Inkwell down is read fresh after a restart', () => {
+    const src = readFileSync('src/lib/voices.server.ts', 'utf8');
+    expect(src).toMatch(/const complete = \(s: [^)]*\) => !!s\?\.fedidb && !!s\.castopodIndex && s\.inkwell === true;/);
+    expect(src).toMatch(/if \(kept && Array\.isArray\(kept\.voices\) && complete\(kept\.sources\)\) return kept;/);
+    expect(src).toMatch(/if \(complete\(result\.sources\)\) writeLookup\('voices', 'all'/);
+  });
+});
