@@ -38,7 +38,7 @@ export function MobileFeeds({ visible = true }: { /** Whether the Feeds dock tab
     </div>
     {feed === 'following' && <MobileFedizenFeed />}
     {feed === 'foryou' && <MobileForYou />}
-    {feed === 'articles' && <MobileRecentArticles />}
+    {feed === 'articles' && <MobileRecentArticles full />}
     {feed === 'local' && <MobileLocalFeed />}
     {circleId && <MobileCircleFeed id={circleId} title={pinned.find(c => c.id === circleId)?.title ?? 'Circle'} />}
     <PinCirclesPopup opened={pinning} onClose={() => setPinning(false)} />

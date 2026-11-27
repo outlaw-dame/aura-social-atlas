@@ -42,7 +42,7 @@ export function FeedsView() {
     </div>
     {feed === 'following' && <FedizenFeed />}
     {feed === 'foryou' && <ForYouFeed />}
-    {feed === 'articles' && <RecentArticles />}
+    {feed === 'articles' && <RecentArticles full />}
     {feed === 'local' && <LocalFeed />}
     {circleId && <CircleFeed id={circleId} title={pinned.find(c => c.id === circleId)?.title ?? 'Circle'} />}
   </div>;

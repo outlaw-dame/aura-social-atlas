@@ -17,8 +17,12 @@ export const ACTIVITY_SELECTION = `id date canonicalUri verb{verb} boostCount li
   media{url mediaType}
   object{... on Post{id creator{... on User{character{username canonicalUri} profile{name icon}}}}}`;
 
-export const publicFeedDocument = (feed: PublicFeedName) =>
-  `{feedActivities(first:20,filter:{feedName:"${feed}"}){edges{node{${ACTIVITY_SELECTION}}}}}`;
+/** A public feed's page: 20 at a time, the next page after `after` (the endCursor of the one before). */
+export const publicFeedDocument = (feed: PublicFeedName, after?: string) =>
+  `{feedActivities(first:20${after ? `,after:${JSON.stringify(after)}` : ''},filter:{feedName:"${feed}"}){edges{node{${ACTIVITY_SELECTION}}} pageInfo{hasNextPage endCursor}}}`;
+
+/** A page cursor as Bonfire gives one: plain characters only, so it can't change the query it goes into. */
+export const isFeedCursor = (c: unknown): c is string => typeof c === 'string' && /^[A-Za-z0-9_=+/:.-]{1,200}$/.test(c);
 
 export const NATIVE_ME_DOCUMENT = `query AtlasNativeMe {
   me { accountId user { id character { username canonicalUri } profile { name icon } } }

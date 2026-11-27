@@ -11,10 +11,11 @@ import { openPost } from '@/lib/open-post';
 import { Segmented } from 'framework7-react';
 import { openTag } from '@/lib/hashtags';
 import { useQuery } from '@tanstack/react-query';
+import { useArticles } from '@/components/social/RecentArticles';
 import { useRef, useState } from 'react';
 import { Block, BlockFooter, BlockTitle, Button, Card, CardContent, CardFooter, Link, List, ListItem, Navbar, NavRight, Page, Popup, f7 } from 'framework7-react';
 import { useLiveAvatar } from '@/components/social/useLiveAvatar';
-import { getRecentArticles, getFedizenPublic } from '@/lib/bonfire.functions';
+import { getFedizenPublic } from '@/lib/bonfire.functions';
 import type { BonfireArticle } from '@/lib/spotlight';
 import { useFedizen, useFedizenMessages } from '@/components/social/useFedizen';
 import { openCollection } from '@/lib/collections';
@@ -34,20 +35,25 @@ import { PostBody } from '@/components/social/PostBody';
 
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 
-export function MobileRecentArticles() {
-  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ['bonfire-articles'], queryFn: () => getRecentArticles(), staleTime: 5 * 60_000 });
+export function MobileRecentArticles({ full = false }: { full?: boolean }) {
+  const a$ = useArticles(full);
   const [open, setOpen] = useState<BonfireArticle | null>(null);
-  const list = data?.articles ?? [];
+  const list = full ? a$.articles : a$.articles.slice(0, 6);
   return <>
-    <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:book" md="material:menu_book" /> Recent articles</span></BlockTitle>
-    {isLoading ? <Block strong inset>Loading articles from Fedizen…</Block>
-      : isError || data?.error ? <Block strong inset>Fedizen couldn’t be reached right now. <Link onClick={() => refetch()}>Try again</Link></Block>
+    <BlockTitle><span className="atlas-blocktitle-icon"><Icon ios="f7:book" md="material:menu_book" /> {full ? 'Articles' : 'Recent articles'}</span></BlockTitle>
+    {a$.isLoading ? <Block strong inset>Loading articles from Fedizen…</Block>
+      : a$.failed ? <Block strong inset>Fedizen couldn’t be reached right now. <Link onClick={() => a$.retry()}>Try again</Link></Block>
       : !list.length ? <Block strong inset>No articles on Fedizen yet.</Block>
-      : list.slice(0, 6).map(a => <div key={a.id} role="button" tabIndex={0} onClick={() => setOpen(a)} onKeyDown={e => e.key === 'Enter' && setOpen(a)} style={{ cursor: 'pointer' }}><Card outline>
+      : list.map(a => <div key={a.id} role="button" tabIndex={0} onClick={() => setOpen(a)} onKeyDown={e => e.key === 'Enter' && setOpen(a)} style={{ cursor: 'pointer' }}><Card outline>
         {a.image && <img src={a.image} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }} />}
         <CardContent><div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22, lineHeight: 1.2 }}>{a.title}</div>{a.summary && <p style={{ opacity: .7, fontSize: 14, marginBottom: 0 }}>{a.summary.slice(0, 140)}</p>}</CardContent>
         <CardFooter><span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>{a.avatar && <img src={a.avatar} alt="" width={20} height={20} className="atlas-avatar" style={{ objectFit: 'cover' }} />}{a.author} · {when(a.date)}</span></CardFooter>
       </Card></div>)}
+    {full && !a$.isLoading && !a$.failed && list.length > 0 && <Block style={{ textAlign: 'center' }}>
+      {a$.more ? <Button round outline disabled={a$.loadingMore} onClick={() => a$.more?.()}>{a$.loadingMore ? 'Loading…' : 'More articles'}</Button>
+        : a$.moreFailed ? <span>Fedizen couldn’t send more articles right now. <Link onClick={() => a$.retry()}>Try again</Link></span>
+        : a$.end ? <span style={{ opacity: .6 }}>That’s every article Fedizen knows of.</span> : null}
+    </Block>}
     <Popup opened={!!open} onPopupClosed={() => setOpen(null)} swipeToClose>
       <Page>
         <Navbar title={open?.author ?? ''}><NavRight><Link popupClose iconOnly aria-label="Close article"><Icon ios="f7:xmark" md="material:close" /></Link></NavRight></Navbar>
