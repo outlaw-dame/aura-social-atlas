@@ -315,6 +315,18 @@ export function articleTitle(name: string | null | undefined): string | undefine
 }
 
 /**
+ * An article's summary as a standfirst: plain text, without the "more" mark blogging software ends a generated excerpt
+ * with. WriteFreely's Article `summary` is its preview cut at <!--more--> or the first blank line, with " [...]"
+ * (posts.go, ActivityObject/PreviewObject); WordPress's ActivityPub plugin ends a generated excerpt with "[…]"
+ * (functions-post.php, generate_post_summary). The words are kept; only the trailing mark goes.
+ */
+export function standfirstText(summary: string | null | undefined): string {
+  // articleParagraphs also drops markup a server sent escaped (Bridgy Fed's card: article-escaped-markup.test.ts).
+  const t = articleParagraphs(summary ?? '').join(' ').replace(/\s+/g, ' ').trim();
+  return t.replace(/\s*(?:\[\s*(?:\.\.\.|\u2026)\s*\]|\(\s*(?:\.\.\.|\u2026)\s*\))$/u, '').trim();
+}
+
+/**
  * An article's body without the lead some servers put before it. Inkwell (FEDERATION.md, Article) sends `content` as
  * "a short lead (title, excerpt, link, hashtags), then an <hr>, then the full body", for readers like Mastodon that show
  * only the start; Atlas shows the whole article, so the lead only repeated the title and excerpt above it. The part
@@ -323,7 +335,7 @@ export function articleTitle(name: string | null | undefined): string | undefine
  * article's own (an introduction before an <hr>, or vsx.global's sections) is kept.
  */
 export function articleBody(html: string, title: string | undefined, excerpt: string | null | undefined): string {
-  const ex = decodeEntities((excerpt ?? '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  const ex = standfirstText(excerpt);
   if (!title || ex.length < 20) return html;
   const m = /<hr\b[^>]*>/i.exec(html);
   if (!m) return html;
@@ -347,7 +359,7 @@ export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticl
     const actorUrl = n.subject?.character?.canonicalUri;
     return [{
       authorUrl: isHttp(actorUrl) && actorUrl!.startsWith('https://') ? actorUrl : undefined,
-      id: n.id, title, summary: articleParagraphs(pc?.summary ?? '').join(' ') || paragraphs[0]?.slice(0, 220) || '', paragraphs,
+      id: n.id, title, summary: standfirstText(pc?.summary) || paragraphs[0]?.slice(0, 220) || '', paragraphs,
       url: isHttp(n.canonicalUri) ? n.canonicalUri! : `https://fedizen.net/post/${n.id}`, date: n.date,
       author: articleTitle(n.subject?.profile?.name) || n.subject?.character?.username || 'Fedizen author',
       handle: n.subject?.character?.username ? `@${n.subject.character.username.replace(/^@/, '')}` : undefined,

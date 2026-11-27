@@ -1,7 +1,7 @@
 /** Browser-safe Fedizen (Mastodon-compatible) feed types, normalizers and redirect allowlist. */
 import { relayFromAcct, type Relayed } from './fedibuzz';
 import { decodeEntities, emojiMap, htmlToRich, type EmojiMap, type RichBlock } from './rich-text';
-import { articleBody, htmlToParagraphs } from './spotlight';
+import { articleBody, htmlToParagraphs, standfirstText } from './spotlight';
 import { collectionLinksIn, mastodonCollectionApi } from './collections';
 import { isPublicHttpsUrl, parseHandle, type FediAuthor } from './article-author';
 import type { FediEpisode } from './podcast-episode';
@@ -151,7 +151,7 @@ export function titleOf(o: { name?: string | null }): string | undefined {
  * Fedizen's own posts keep `summary` as their warning.
  */
 export function longformOf(o: { name?: string | null; spoiler_text?: string | null; account?: { acct?: string } | null }): { title: string; lede: string } | undefined {
-  const title = titleOf(o), lede = decodeEntities((o.spoiler_text ?? '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  const title = titleOf(o), lede = standfirstText(o.spoiler_text);
   const at = (o.account?.acct ?? '').lastIndexOf('@');
   const host = at > 0 ? (o.account!.acct!).slice(at + 1).toLowerCase() : '';
   if (!title || !lede || !host || host === 'fedizen.net') return undefined;
