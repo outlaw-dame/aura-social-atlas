@@ -2,7 +2,9 @@ import { forgetMicrocache, microcached, reuseFor } from './fedizen-microcache';
 import { BREAKER, mayAskFedizen, noteFedizenAnswered, noteFedizenTimeout, noteFedizenUnreached } from './fedizen-breaker';
 import { FEDIZEN_USER_AGENT, transportDetail, type FedizenTransportFailure } from './fedizen-http';
 import { FEDIZEN, FEDIZEN_API_SCOPE } from './fedizen-feed';
-import { accountKey, cachedStatus, forgetAccountReads, keepStatus, noteRateLimited, waitLeft } from './fedizen-rate-limit';
+import { accountKey, cachedStatus, forgetAccountReads, holdForLimit, keepStatus, noteRateLimited } from './fedizen-rate-limit';
+import { forgetModeration } from './moderation-cache.server';
+import { fedizenFetch } from './fedizen-connections';
 import { z } from 'zod';
 
 const b64url = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -71,7 +73,7 @@ export function parseFedizenOAuthApp(payload: unknown): { client_id: string; cli
 
 export async function registerFedizenOAuthApp(
   redirectUri: string,
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = fedizenFetch,
 ): Promise<{ client_id: string; client_secret: string }> {
   let response: Response;
   try {
@@ -201,7 +203,7 @@ async function readVerifiedFedizenPayload(token: string, fetcher: typeof fetch):
  * representation used when the connection was first persisted. */
 export async function verifyFedizenReadGrant(
   token: string,
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = fedizenFetch,
 ): Promise<string | null> {
   return parseFedizenAccount(await readVerifiedFedizenPayload(token, fetcher));
 }
@@ -209,7 +211,7 @@ export async function verifyFedizenReadGrant(
 /** UI-safe fields only, sourced directly from the authenticated social provider. */
 export async function readVerifiedFedizenViewer(
   token: string,
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = fedizenFetch,
 ) {
   const payload = await readVerifiedFedizenPayload(token, fetcher);
   if (!parseFedizenAccount(payload)) return null;
@@ -226,7 +228,7 @@ export async function redeemFedizenReadCode(
   redirectUri: string,
   codeVerifier: string,
   app: { client_id: string; client_secret: string },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = fedizenFetch,
 ): Promise<
   | { kind: 'ok'; grant: { access_token: string; scope: string } }
   | { kind: 'rejected' | 'invalid' | 'unavailable' }
@@ -317,7 +319,12 @@ export async function tokenFor(userId: string) {
   return value;
 }
 /** This person's connection changed: read it again next time. */
-export function forgetConnection(userId: string) { connections.delete(userId); }
+/** The connection changed (connected, reconnected, disconnected): its token and what was kept for it are read afresh. */
+export function forgetConnection(userId: string) {
+  connections.delete(userId);
+  // Block and mute lists kept for the old Fedizen account must never be used for a new one.
+  forgetModeration(userId);
+}
 
 /**
  * Asks Fedizen to revoke a token (RFC 7009: POST /oauth/revoke with the issuing client's credentials; Bonfire serves
@@ -327,7 +334,7 @@ export function forgetConnection(userId: string) { connections.delete(userId); }
 export async function revokeFedizenToken(
   token: string,
   apps: { client_id: string; client_secret: string }[],
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = fedizenFetch,
 ): Promise<boolean> {
   for (const app of apps) {
     try {
@@ -434,6 +441,8 @@ const status = z.object({
   uri: z.string().nullish(),
   created_at: z.string().nullish(),
   content: z.string().nullish(),
+  /** A titled post's title (Bonfire's non-standard `name`: Lemmy and PieFed posts, articles). */
+  name: z.string().max(500).nullish().catch(null),
   account: account.nullish(),
   media_attachments: z.array(media).nullish(),
   /** The author marked the media sensitive: shown behind a veil. */
@@ -710,7 +719,8 @@ export async function fedizenGet(token: string, path: string, opts: { requireCom
   if (!read) throw new Error('Unsupported Fedizen read path.');
   // Fedizen's rate limit (fedizen-rate-limit.ts): wait it out rather than ask again; a post read moments ago is reused.
   const account = await accountKey(token);
-  if (waitLeft(account) > 0) return { status: 429, data: [], failure: 'refused' };
+  // A short limit is waited out; a long one refuses at once (asking again only extends it).
+  if (!(await holdForLimit(account))) return { status: 429, data: [], failure: 'refused' };
   const isStatus = STATUS_PATH.test(path);
   if (isStatus) {
     const hit = cachedStatus(account, path);
@@ -731,7 +741,7 @@ async function sendRead(token: string, path: string, account: string, read: (typ
   const started = Date.now();
   let response: Response;
   try {
-    response = await fetch(`${FEDIZEN}${path}`, {
+    response = await fedizenFetch(`${FEDIZEN}${path}`, {
       method: 'GET',
       headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       signal: AbortSignal.timeout(10000),
@@ -907,12 +917,12 @@ export async function fedizenSend(token: string, method: 'POST' | 'PUT' | 'DELET
   const payload = route.body ? route.body.safeParse(body) : null;
   if (payload && !payload.success) throw new Error('Unsupported Fedizen write body.');
   const account = await accountKey(token);
-  if (waitLeft(account) > 0) return { status: 429, data: null };
+  if (!(await holdForLimit(account))) return { status: 429, data: null };
   // Whatever this account changes, its earlier reads may no longer be true (its own like, boost or reply).
   forgetAccountReads(account);
   let response: Response;
   try {
-    response = await fetch(`${FEDIZEN}${path}`, {
+    response = await fedizenFetch(`${FEDIZEN}${path}`, {
       method,
       headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT, ...(payload ? { 'content-type': 'application/json' } : {}) },
       body: payload ? JSON.stringify(payload.data) : undefined,
@@ -959,10 +969,10 @@ export async function fedizenUpload(token: string, file: Blob, name: string, des
   form.set('file', file, name.replace(/[^\w.-]+/g, '_').slice(0, 100) || 'upload');
   if (description.trim()) form.set('description', description.trim());
   const account = await accountKey(token);
-  if (waitLeft(account) > 0) return { status: 429 };
+  if (!(await holdForLimit(account))) return { status: 429 };
   let response: Response;
   try {
-    response = await fetch(`${FEDIZEN}/api/v2/media`, {
+    response = await fedizenFetch(`${FEDIZEN}/api/v2/media`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       body: form,

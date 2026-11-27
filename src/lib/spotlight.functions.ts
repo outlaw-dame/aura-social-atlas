@@ -80,7 +80,8 @@ export const getViewerSpotlight = createServerFn({ method: 'POST' })
     const { readOwnerNativeModeration, mergeVerifiedOwnerModeration } = await import('./spotlight-native-moderation.server');
     const { blockedServersOf, withAtlasServers } = await import('./server-blocks.server');
     const [restPolicy, response, local, nativePolicy, atlasServers] = await Promise.all([
-      readSpotlightModeration(path => fedizenGet(connected.access_token, path, { requireCompleteModeration: true })),
+      // Kept briefly per person, shared with replies from other servers (moderation-cache.server.ts).
+      (await import('./moderation-cache.server')).cachedModeration(await (await import('./moderation-cache.server')).moderationScope(context.userId, connected.access_token), () => readSpotlightModeration(path => fedizenGet(connected.access_token, path, { requireCompleteModeration: true }))),
       fedizenGet(connected.access_token, '/api/v1/timelines/public?limit=20'),
       fedizenGet(connected.access_token, '/api/v1/timelines/local?limit=20'),
       // Off by default. An unrecognized schema, incomplete provider snapshot,

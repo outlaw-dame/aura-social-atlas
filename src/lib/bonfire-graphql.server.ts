@@ -1,5 +1,6 @@
 import { FEDIZEN_USER_AGENT, transportDetail } from './fedizen-http';
 import { accountKey, forgetAccountReads, noteRateLimited, waitLeft } from './fedizen-rate-limit';
+import { fedizenFetch } from './fedizen-connections';
 /**
  * Server-only Bonfire GraphQL transport.
  *
@@ -121,7 +122,7 @@ async function readBoundedJson(response: Response): Promise<unknown> {
 export async function requestBonfireGraphQL<T>(request: BonfireGraphQLRequest<T>): Promise<T> {
   const {
     document, operation, variables, accessToken, validate, signal,
-    fetchImpl = fetch, waitImpl = wait, files,
+    fetchImpl = fedizenFetch, waitImpl = wait, files,
   } = request;
   if (!document.trim() || (operation !== 'query' && operation !== 'mutation')) {
     throw new BonfireGraphQLError('invalid-response');

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { fromBonfirePosts, type BonfireActivityNode } from './spotlight';
-import { isPlaceholderAvatar, type FediPerson, type FedizenPost } from './fedizen-feed';
+import { boostFields, isPlaceholderAvatar, type FediPerson, type FedizenPost } from './fedizen-feed';
 import { BonfireGraphQLError, requestBonfireGraphQL, type BonfireGraphQLRequest } from './bonfire-graphql.server';
 import {
   NATIVE_HOME_DOCUMENT, NATIVE_ME_DOCUMENT, NATIVE_NOTIFICATIONS_DOCUMENT,
@@ -255,18 +255,18 @@ export function nativeOnlyCard(node: BonfireActivityNode): FedizenPost[] {
     return {
       ...card,
       ...(statusId && STATUS_ID.test(statusId) ? { statusRef: statusId } : {}),
-      ...(booster ? { boostedBy: booster.name, booster } : {}),
+      ...boostFields(booster),
     };
   });
 }
 
 /** A post's REST card in place of its GraphQL-only one: the GraphQL id and booster stay. */
-export function withRestDetails(native: Pick<FedizenPost, 'id' | 'boostedBy' | 'booster'>, rest: FedizenPost): FedizenPost {
+export function withRestDetails(native: Pick<FedizenPost, 'id' | 'boostedBy' | 'booster' | 'relayed'>, rest: FedizenPost): FedizenPost {
   const { statusRef: _drop, ...card } = rest;
   return {
     ...card,
     id: native.id,
-    ...(native.booster ? { boostedBy: native.booster.name, booster: native.booster } : native.boostedBy ? { boostedBy: native.boostedBy } : {}),
+    ...(native.relayed ? { relayed: native.relayed } : boostFields(native.booster, native.boostedBy)),
   };
 }
 
@@ -289,7 +289,7 @@ export async function hydrateNativeBonfireHome(
   return nodes.flatMap((node): FedizenPost[] => {
     const rest = node.object?.id ? found.get(node.object.id) : undefined;
     const booster = isBoost(node) ? boosterOf(node) : undefined;
-    return rest ? [withRestDetails({ id: node.id, ...(booster ? { boostedBy: booster.name, booster } : {}) }, rest)] : nativeOnlyCard(node);
+    return rest ? [withRestDetails({ id: node.id, ...boostFields(booster) }, rest)] : nativeOnlyCard(node);
   });
 }
 

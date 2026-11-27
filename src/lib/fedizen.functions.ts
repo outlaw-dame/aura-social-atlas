@@ -290,10 +290,10 @@ const actorAvatars = async (...a: Parameters<typeof import('./feed-enrich.server
 
 /* ── Saved (Bonfire bookmarks) and Circles (Bonfire circles, as Mastodon Lists) ─────────────────────────── */
 
-type Problem = 'not-connected' | 'needs-permission' | 'expired' | 'unavailable';
+type Problem = 'not-connected' | 'needs-permission' | 'expired' | 'unavailable' | 'rate-limited';
 const me = z.object({ expectedAtlasUserId: z.string().uuid() });
 const ulid = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
-const problem = (status: number): Problem => (status === 401 ? 'expired' : status === 403 ? 'needs-permission' : 'unavailable');
+const problem = (status: number): Problem => (status === 401 ? 'expired' : status === 403 ? 'needs-permission' : status === 429 ? 'rate-limited' : 'unavailable');
 /** An older page's cursor (from Fedizen's Link header, sent back as it came). */
 const cursorInput = z.string().min(1).max(512);
 
@@ -558,6 +558,7 @@ export const changeFedizenBlock = createServerFn({ method: 'POST' }).middleware(
     }
     const r = await fedizenSend(c.token, 'POST', `/api/v1/accounts/${accountId}/${data.block ? 'block' : 'unblock'}`);
     if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
+    (await import('./moderation-cache.server')).forgetModeration(context.userId);
     return { ok: true, person };
   });
 
@@ -1260,7 +1261,9 @@ export const muteFedizenAccount = createServerFn({ method: 'POST' }).middleware(
     if (typeof id !== 'string') return { ok: false, error: id.error };
     const { fedizenSend } = await import('./fedizen.server');
     const r = await fedizenSend(c.token, 'POST', `/api/v1/accounts/${id}/${data.on ? 'mute' : 'unmute'}`);
-    return r.status >= 200 && r.status < 300 ? { ok: true } : { ok: false, error: problem(r.status) };
+    if (r.status < 200 || r.status >= 300) return { ok: false, error: problem(r.status) };
+    (await import('./moderation-cache.server')).forgetModeration(context.userId);
+    return { ok: true };
   });
 
 /** People you mute. */

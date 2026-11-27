@@ -1,6 +1,6 @@
 /** Browser-safe Fedizen (Mastodon-compatible) feed types, normalizers and redirect allowlist. */
 import { relayFromAcct, type Relayed } from './fedibuzz';
-import { emojiMap, htmlToRich, type EmojiMap, type RichBlock } from './rich-text';
+import { decodeEntities, emojiMap, htmlToRich, type EmojiMap, type RichBlock } from './rich-text';
 import { htmlToParagraphs } from './spotlight';
 import { collectionLinksIn, mastodonCollectionApi } from './collections';
 import { isPublicHttpsUrl, parseHandle, type FediAuthor } from './article-author';
@@ -59,7 +59,7 @@ export type FedizenNotice = { id: string; type: string; author: string; avatar?:
 export type FedizenConversation = { id: string; unread: boolean; people: { name: string; handle: string; avatar?: string }[]; text: string; date?: string; url?: string };
 
 type Acct = { id?: string; display_name?: string; acct?: string; username?: string; avatar?: string; url?: string | null; uri?: string | null };
-type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; emojis?: unknown; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; sensitive?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
+type Status = { id: string; url?: string | null; uri?: string; created_at?: string; content?: string; /** A titled post's title (Bonfire's `name`). */ name?: string | null; emojis?: unknown; account?: Acct; reblog?: Status | null; media_attachments?: { type?: string; url?: string; preview_url?: string; remote_url?: string | null; description?: string | null; meta?: unknown }[]; bookmarked?: boolean | null; sensitive?: boolean | null; card?: { url?: string | null; title?: string | null; provider_name?: string | null; author_name?: string | null; author_url?: string | null; description?: string | null; image?: string | null } | null;
   replies_count?: number | null; reblogs_count?: number | null; favourites_count?: number | null; favourited?: boolean | null; reblogged?: boolean | null; visibility?: FedizenPost['visibility'] | null; language?: string | null;
   in_reply_to_id?: string | null; in_reply_to_account_id?: string | null; spoiler_text?: string | null; tags?: { name?: string }[] | null; mentions?: { acct?: string | null; username?: string | null }[] | null; poll?: { id?: string; expires_at?: string | null; expired?: boolean | null; multiple?: boolean | null; votes_count?: number | null; voters_count?: number | null; voted?: boolean | null; own_votes?: number[] | null; options?: { title?: string; votes_count?: number | null }[] } | null; edited_at?: string | null;
   quote?: { quoted_status?: { content?: string | null; spoiler_text?: string | null; media_attachments?: { description?: string | null }[] | null } | null } | null };
@@ -128,21 +128,47 @@ export function languageTag(v: unknown): string | undefined {
   return typeof v === 'string' && /^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$/i.test(v.trim()) ? v.trim() : undefined;
 }
 
+/**
+ * A titled post's title: Lemmy and PieFed posts (ActivityPub `Page`) and articles carry one, which Bonfire gives apps
+ * as `name` beside `content` (bonfire_api_graphql mastodon_compat/mappers/status.ex, extract_content). A link post's
+ * text is often empty, so without it the post showed as blank. Plain text, one line, at most 300 characters.
+ */
+export function titleOf(o: { name?: string | null }): string | undefined {
+  const t = typeof o.name === 'string' ? decodeEntities(o.name.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim() : '';
+  return t ? t.slice(0, 300) : undefined;
+}
+
+/** A post's text with its title first, in bold; the text alone when the title only repeats its first line. */
+export function withTitle(title: string | undefined, paragraphs: string[], rich: RichBlock[] | undefined): { paragraphs: string[]; rich?: RichBlock[] } {
+  if (!title || paragraphs[0]?.trim() === title) return { paragraphs, ...(rich ? { rich } : {}) };
+  const heading: RichBlock = { t: 'p', c: [{ t: 'b', c: [{ t: 'text', v: title }] }] };
+  return { paragraphs: [title, ...paragraphs], rich: [heading, ...(rich ?? paragraphs.map((v): RichBlock => ({ t: 'p', c: [{ t: 'text', v }] })))] };
+}
+
+/**
+ * Who boosted a post, as a card shows it: a FediBuzz relay's boost is where the post came from (a hashtag, a server,
+ * a language), never "Relay for … boosted". Every feed that maps boosts uses this (REST and Fedizen's own Home).
+ */
+export function boostFields(booster: FediPerson | undefined, name?: string): Pick<FedizenPost, 'boostedBy' | 'booster' | 'relayed'> {
+  const relayed = relayFromAcct(booster?.acct);
+  if (relayed) return { relayed };
+  return booster ? { boostedBy: booster.name, booster } : name ? { boostedBy: name } : {};
+}
+
 export function fromStatuses(list: Status[]): FedizenPost[] {
   return list.map(s => {
     const o = s.reblog ?? s;
     return {
       id: s.id, statusId: o.id, bookmarked: o.bookmarked === true || s.bookmarked === true, author: name(o.account), handle: `@${o.account?.acct ?? ''}`, avatar: avatarOf(o.account),
-      paragraphs: htmlToParagraphs(o.content ?? ''), url: http(o.url) ?? http(o.uri) ?? FEDIZEN, ...(http(o.uri) ? { uri: http(o.uri) } : {}), date: o.created_at,
-      ...(() => { const r = htmlToRich(o.content); return r ? { rich: r } : {}; })(),
+      ...withTitle(titleOf(o), htmlToParagraphs(o.content ?? ''), htmlToRich(o.content)),
+      url: http(o.url) ?? http(o.uri) ?? FEDIZEN, ...(http(o.uri) ? { uri: http(o.uri) } : {}), date: o.created_at,
       ...(() => { const e = emojiMap(o.emojis); return e ? { emojis: e } : {}; })(),
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
       ...(() => { const size = imageSizeOf(o.media_attachments?.find(m => m.type === 'image')?.meta); return size ? { imageSize: size } : {}; })(),
       // A FediBuzz relay's boost is where the post came from (a hashtag, a server), not someone who boosted it.
       ...(() => {
         if (!s.reblog) return {};
-        const relayed = relayFromAcct(s.account?.acct);
-        return relayed ? { relayed } : { boostedBy: name(s.account), booster: person(s.account) };
+        return boostFields(person(s.account), name(s.account));
       })(),
       ...(() => { const a = person(o.account); return { ...(a.acct ? { acct: a.acct } : {}), ...(a.actor ? { actor: a.actor } : {}) }; })(),
       ...(() => { const m = mentionsOf(o); return m.length ? { mentions: m } : {}; })(),

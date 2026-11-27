@@ -49,18 +49,24 @@ export const getOriginReplies = createServerFn({ method: 'GET' }).middleware([re
     const replies = await readOrigin(data.host, data.id);
     if (!replies.length) return { replies: [] };
 
-    const [{ readSpotlightModeration }, { readOwnerNativeModeration, mergeVerifiedOwnerModeration }, { inPool }, { blockedServersOf, withAtlasServers }] = await Promise.all([
-      import('./spotlight-moderation.server'), import('./spotlight-native-moderation.server'), import('./in-pool'), import('./server-blocks.server'),
+    const [{ readSpotlightModeration }, { readOwnerNativeModeration, mergeVerifiedOwnerModeration }, { inPool }, { blockedServersOf, withAtlasServers }, mc] = await Promise.all([
+      import('./spotlight-moderation.server'), import('./spotlight-native-moderation.server'), import('./in-pool'), import('./server-blocks.server'), import('./moderation-cache.server'),
     ]);
+    const uid = await mc.moderationScope(context.userId, t.access_token);
     const authors = authorsToCheck(replies);
     const [rest, native, looked, atlasServers] = await Promise.all([
-      readSpotlightModeration(path => fedizenGet(t.access_token, path, { requireCompleteModeration: true })),
+      // Kept briefly per person (moderation-cache.server.ts), so each conversation doesn't read the lists again.
+      mc.cachedModeration(uid, () => readSpotlightModeration(path => fedizenGet(t.access_token, path, { requireCompleteModeration: true }))),
       readOwnerNativeModeration(t.access_token, t.account_handle ?? ''),
-      // Each author as Fedizen knows them: its id there, or not known to it (404), or no answer.
+      // Each author as Fedizen knows them: its id there, or not known to it (404), or no answer. Looked up once a while.
       inPool(authors, LOOKUPS_AT_ONCE, async acct => {
+        const kept = mc.knownAuthor(uid, acct);
+        if (kept) return { acct, ...kept };
         const r = await fedizenGet(t.access_token, `/api/v1/accounts/lookup?acct=${encodeURIComponent(acct)}`).catch(() => null);
         const id = r?.status === 200 ? (r.data[0] as { id?: unknown } | undefined)?.id : undefined;
-        return { acct, id: typeof id === 'string' ? id : undefined, unknown: r?.status === 404 };
+        const found = { id: typeof id === 'string' ? id : undefined, unknown: r?.status === 404 };
+        mc.keepAuthor(uid, acct, found);
+        return { acct, ...found };
       }).catch(() => null),
       // The servers they block in Atlas (Fedizen gives apps no list of the ones blocked there).
       blockedServersOf(context.userId),
@@ -70,11 +76,16 @@ export const getOriginReplies = createServerFn({ method: 'GET' }).middleware([re
 
     const known = looked.filter((l): l is typeof l & { id: string } => !!l.id);
     const relations = new Map<string, { blocking?: boolean | null; muting?: boolean | null; domain_blocking?: boolean | null }>();
-    if (known.length) {
-      const q = known.map(l => `id%5B%5D=${encodeURIComponent(l.id)}`).join('&');
+    for (const l of known) { const kept = mc.knownRelation(uid, l.id); if (kept) relations.set(l.id, kept); }
+    const ask = known.filter(l => !relations.has(l.id));
+    if (ask.length) {
+      const q = ask.map(l => `id%5B%5D=${encodeURIComponent(l.id)}`).join('&');
       const r = await fedizenGet(t.access_token, `/api/v1/accounts/relationships?${q}`).catch(() => null);
       if (r?.status !== 200) return { replies: [] };
-      for (const rel of r.data as { id: string; blocking?: boolean | null; muting?: boolean | null; domain_blocking?: boolean | null }[]) relations.set(rel.id, rel);
+      for (const rel of r.data as { id: string; blocking?: boolean | null; muting?: boolean | null; domain_blocking?: boolean | null }[]) {
+        relations.set(rel.id, rel);
+        mc.keepRelation(uid, rel.id, rel);
+      }
     }
     const checks = new Map<string, AuthorCheck>(looked.map(l => {
       if (l.id) {
