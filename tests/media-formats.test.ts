@@ -23,3 +23,20 @@ describe("GIFs Mastodon transcoded to video play like GIFs", () => {
     expect(gif).toContain("if (!e.isIntersecting) el.pause(); else if (!reduced) void el.play()");
   });
 });
+
+describe("videos Fedizen couldn't type (Loops)", () => {
+  // Shaped like a Loops file address (loopsusercontent.com); the paths are invented.
+  test('an "unknown" attachment whose file is a video plays as one', () => {
+    const v = videoFromAttachment({ type: 'unknown', url: 'https://loopsusercontent.com/videos/1/2/abc.720p.mp4', preview_url: '' }, 'https://loops.example/v/2');
+    expect(v?.sources).toEqual([{ src: 'https://loopsusercontent.com/videos/1/2/abc.720p.mp4' }]);
+    expect(v?.gif).toBeUndefined();
+    expect(videoFromAttachment({ type: 'unknown', url: '', remote_url: 'https://loopsusercontent.com/a.webm' }, 'https://x.example/1')?.sources[0]?.src).toBe('https://loopsusercontent.com/a.webm');
+    expect(videoFromAttachment({ url: 'https://loopsusercontent.com/live/index.m3u8' }, 'https://x.example/1')?.hls).toBe('https://loopsusercontent.com/live/index.m3u8');
+  });
+  test('anything else unknown stays out: a page, an image, a name that only mentions mp4', () => {
+    expect(videoFromAttachment({ type: 'unknown', url: 'https://loopsusercontent.com/file.pdf' }, 'https://x.example/1')).toBeNull();
+    expect(videoFromAttachment({ type: 'unknown', url: 'https://loopsusercontent.com/mp4/photo.jpg' }, 'https://x.example/1')).toBeNull();
+    expect(videoFromAttachment({ type: 'unknown', url: 'https://loopsusercontent.com/a?f=x.mp4' }, 'https://x.example/1')).toBeNull();
+    expect(videoFromAttachment({ type: 'image', url: 'https://loopsusercontent.com/a.mp4' }, 'https://x.example/1')).toBeNull();
+  });
+});
