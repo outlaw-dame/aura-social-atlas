@@ -717,6 +717,7 @@ export async function fedizenGet(token: string, path: string, opts: { requireCom
   const read = READS.find(r => r.match.test(path));
   if (!read) throw new Error('Unsupported Fedizen read path.');
   // Fedizen's rate limit (fedizen-rate-limit.ts): wait it out rather than ask again; a post read moments ago is reused.
+  void import('./fedizen-request-stages.server').then(m => m.watchFedizenRequests());
   const account = await accountKey(token);
   // A short limit is waited out; a long one refuses at once (asking again only extends it).
   if (!(await holdForLimit(account))) return { status: 429, data: [], failure: 'refused' };
@@ -751,7 +752,11 @@ async function sendRead(token: string, path: string, account: string, read: (typ
     const why = transportDetail(e);
     console.error('Fedizen read unreachable', { route: readRoute(path), why });
     if (why === 'timeout') {
-      if (noteFedizenTimeout(readRoute(path))) console.warn('Fedizen not answering: reads paused', { seconds: BREAKER.pauseMs / 1000 });
+      if (noteFedizenTimeout(readRoute(path))) {
+        // Once per pause: where Atlas's pending Fedizen requests are stuck (fedizen-request-stages.server.ts).
+        const { fedizenRequestStages } = await import('./fedizen-request-stages.server');
+        console.warn('Fedizen not answering: reads paused', { seconds: BREAKER.pauseMs / 1000, stages: fedizenRequestStages() });
+      }
     } else noteFedizenUnreached();
     return { status: 503, data: [], failure: 'unreachable' };
   }
