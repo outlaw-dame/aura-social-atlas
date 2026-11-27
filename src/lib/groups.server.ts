@@ -9,6 +9,7 @@ import { FEDIZEN } from './fedizen-feed';
 import { fromBonfirePosts, type BonfireActivityNode } from './spotlight';
 import { groupFromBonfire, groupsFromBonfire, membershipFrom, problemFromStatus, type Group, type GroupAction, type GroupPost, type Membership, type MembershipProblem } from './groups';
 import { hasScope } from './fedizen-feed';
+import { fedizenFetch } from './fedizen-connections';
 
 const GRAPHQL = `${FEDIZEN}/api/graphql`;
 const GROUP_FIELDS = 'id name summary type membersCount isDisabled parentCategoryId boundaries{key slug} character{username canonicalUri} profile{name summary icon image}';
@@ -26,7 +27,7 @@ export const net: { fetch?: typeof fetch } = {};
 type GqlResult<T> = { data?: T; errors?: { message?: string }[] };
 async function gqlRaw<T>(query: string, variables: Record<string, unknown> = {}): Promise<GqlResult<T> | null> {
   try {
-    const res = await (net.fetch ?? fetch)(GRAPHQL, {
+    const res = await (net.fetch ?? fedizenFetch)(GRAPHQL, {
       method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(10000),
     });
@@ -37,7 +38,7 @@ async function gqlRaw<T>(query: string, variables: Record<string, unknown> = {})
 
 async function gql<T>(query: string, variables: Record<string, unknown> = {}): Promise<T | null> {
   try {
-    const res = await (net.fetch ?? fetch)(GRAPHQL, {
+    const res = await (net.fetch ?? fedizenFetch)(GRAPHQL, {
       method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(10000),
     });
