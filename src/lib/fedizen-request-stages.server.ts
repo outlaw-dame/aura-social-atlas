@@ -21,7 +21,8 @@ const failed: { at: number; stage: Stage; waitedMs: number }[] = [];
 const FAILED_KEEP_MS = 60_000, FAILED_MAX = 50;
 const stageOf = (r: Req): Stage => !r.sent ? 'waiting for a connection' : !r.answered ? 'sent, waiting for an answer' : 'answered, still reading';
 let connecting = 0, connectedTotal = 0, connectErrors = 0, lastConnectAt = 0;
-let started = false;
+let started: Promise<void> | null = null;
+const channels: unknown[] = [];
 let loop: { percentile(p: number): number; max: number; reset(): void } | null = null;
 
 const isFedizen = (origin: unknown) => {
@@ -29,12 +30,20 @@ const isFedizen = (origin: unknown) => {
 };
 
 /** Starts listening (Node only; nothing on runtimes without these modules). Safe to call more than once. */
-export async function watchFedizenRequests(): Promise<void> {
-  if (started) return;
-  started = true;
+export function watchFedizenRequests(): Promise<void> {
+  // The same promise to every caller, so none goes on before the listeners are in place.
+  return started ??= listen();
+}
+
+async function listen(): Promise<void> {
   try {
     const dc = await import('node:diagnostics_channel');
-    const on = (name: string, fn: (m: Record<string, unknown>) => void) => dc.subscribe(name, m => { try { fn(m as Record<string, unknown>); } catch { /* never break a request */ } });
+    // Each channel held here: a channel nobody holds can be collected with its subscribers (Bun does).
+    const on = (name: string, fn: (m: Record<string, unknown>) => void) => {
+      const ch = dc.channel(name);
+      ch.subscribe(m => { try { fn(m as Record<string, unknown>); } catch { /* never break a request */ } });
+      channels.push(ch);
+    };
     const req = (m: Record<string, unknown>) => m.request as { origin?: unknown } | undefined;
     on('undici:request:create', m => { const r = req(m); if (r && isFedizen(r.origin)) requests.set(r, { at: Date.now(), sent: false, answered: false }); });
     on('undici:client:sendHeaders', m => { const s = requests.get(req(m) as object); if (s) s.sent = true; });
