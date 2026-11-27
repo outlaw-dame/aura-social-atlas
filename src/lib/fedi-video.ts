@@ -99,10 +99,19 @@ export function videoFromObject(obj: unknown, creator?: FediAuthor): FediVideo |
 const score = (h?: number) => (h == null ? 0 : h <= 1080 ? h : 1080 - (h - 1080));
 
 /** A video attached to a Mastodon-API status (Bonfire maps a federated PeerTube Video to one). */
+/** A video file by its name: what an attachment Fedizen couldn't type is, when its address says so. */
+const VIDEO_FILE = /\.(mp4|m4v|webm|mov|ogv|m3u8)$/i;
+const isVideoFile = (u: string) => { try { return VIDEO_FILE.test(new URL(u).pathname); } catch { return false; } };
+
 export function videoFromAttachment(a: { type?: string | null; url?: string | null; preview_url?: string | null; remote_url?: string | null; meta?: unknown; description?: string | null }, pageUrl: string): FediVideo | null {
-  if (a.type !== 'video' && a.type !== 'gifv') return null;
   const src = isPublicHttpsUrl(a.url) ? a.url : isPublicHttpsUrl(a.remote_url) ? a.remote_url : undefined;
   if (!src) return null;
+  // Bonfire types an attachment from its MIME type and calls it "unknown" without one
+  // (bonfire_api_graphql mastodon_compat/mappers/media_attachment.ex, categorize_media_type): Loops videos reach
+  // Fedizen that way, and Fedizen's own page can't preview them either. Such an attachment is played when its file
+  // is a video by name (.mp4 and the like); otherwise only attachments typed video or gifv are.
+  const typed = a.type === 'video' || a.type === 'gifv';
+  if (!typed && !((a.type === 'unknown' || !a.type) && isVideoFile(src))) return null;
   const meta = isObj(a.meta) ? a.meta : {};
   const original = isObj(meta.original) ? meta.original : {};
   const w = num(original.width), h = num(original.height);
