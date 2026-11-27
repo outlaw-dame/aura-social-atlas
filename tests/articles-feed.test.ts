@@ -9,6 +9,12 @@ describe('the Articles feed', () => {
     expect(publicFeedDocument('articles')).toContain('pageInfo{hasNextPage endCursor}');
     expect(publicFeedDocument('articles', '01KB2Y8Z3Q5RJ6M7N8P9T0VWXY')).toContain('feedActivities(first:20,after:"01KB2Y8Z3Q5RJ6M7N8P9T0VWXY",');
   });
+  test('the Articles dot follows what the Articles tab shows', () => {
+    const src = readFileSync('src/components/social/useFeeds.ts', 'utf8');
+    expect(src).toMatch(/queryKey: \['bonfire-articles', 'feed'\], enabled: false/);
+    expect(src).toContain('articles: newestOf(shownArticles)');
+    expect(readFileSync('src/components/social/RecentArticles.tsx', 'utf8')).toContain("queryKey: ['bonfire-articles', 'feed']");
+  });
   test('a cursor can’t change the query it goes into', () => {
     expect(isFeedCursor('01KB2Y8Z3Q5RJ6M7N8P9T0VWXY')).toBe(true);
     expect(isFeedCursor('x"){__typename}#')).toBe(false);

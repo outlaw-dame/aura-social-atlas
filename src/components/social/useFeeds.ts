@@ -6,7 +6,7 @@ import { getCircleFeed, getFedizenHome, getFedizenLocal, getFedizenTagFeed, getF
 import { useOlderPages } from './useOlderPages';
 import type { NativeBonfireSnapshot } from '@/lib/bonfire-private.functions';
 import { mergeNativeBonfirePages, selectBonfireHome } from '@/lib/bonfire-native-presentation';
-import { getFedizenPublic, getRecentArticles } from '@/lib/bonfire.functions';
+import { getFedizenPublic, getRecentArticles, type RecentArticlesResult } from '@/lib/bonfire.functions';
 import type { FedizenPost } from '@/lib/fedizen-feed';
 import { followedTagsIn } from '@/lib/hashtags';
 import { BASE_FEEDS, circleFeed, hasNew, markFeedSeen, newestOf, useFeedsSeen, usePinnedCircles, type FeedKind, type ForYouReason } from '@/lib/feed-types';
@@ -148,6 +148,10 @@ export function useFeedTabs(active: FeedKind | null, { nativeFollowing = false }
     : undefined;
   const forYou = useForYou(!!uid);
   const articles = useQuery({ queryKey: ['bonfire-articles'], queryFn: () => getRecentArticles(), staleTime: 5 * 60_000 });
+  // The Articles tab shows its own paged query (useArticles): once it has loaded, the dot follows what that tab shows,
+  // so a newer preview never marks unseen articles as seen. This only observes the query the view starts.
+  const articlesFeed = useQuery<InfiniteData<RecentArticlesResult>>({ queryKey: ['bonfire-articles', 'feed'], enabled: false });
+  const shownArticles = articlesFeed.data?.pages[0] && !articlesFeed.data.pages[0].error ? articlesFeed.data.pages[0].articles : articles.data?.articles;
   const local = useQuery({ queryKey: ['fedizen-public'], queryFn: () => getFedizenPublic(), staleTime: 60_000 });
   // Connected, Local shows Fedizen's local timeline read through the person's account (useLocalFeed): its dot follows
   // that. This only observes the query the view starts.
@@ -160,7 +164,7 @@ export function useFeedTabs(active: FeedKind | null, { nativeFollowing = false }
   })) });
   const newest: Record<string, string | undefined> = {
     following: newestOf(followingPosts), foryou: newestOf(forYou.data?.posts),
-    articles: newestOf(articles.data?.articles), local: newestOf(localPosts),
+    articles: newestOf(shownArticles), local: newestOf(localPosts),
     ...Object.fromEntries(pinned.map((c, i) => [circleFeed(c.id), newestOf(circles[i]?.data?.posts)])),
   };
   const key = JSON.stringify(newest);
