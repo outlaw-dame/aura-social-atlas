@@ -38,7 +38,7 @@ function SavedPostCard({ p, save }: { p: FedizenPost; save: ReturnType<typeof us
     <div className="atlas-saved-head">{canOpen(p)
       ? <button type="button" className="atlas-author-button" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} />}<span><b>{p.author}</b> <span>{p.handle} · {when(p.date)}</span></span></button>
       : <>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} />}<span><b>{p.author}</b> <span>{p.handle} · {when(p.date)}</span></span></>}</div>
-    <AuthorWarning cw={p.cw} phone><PostBody post={p} onTag={openTag} />
+    <AuthorWarning cw={p.cw} article={p.longform} phone><PostBody post={p} onTag={openTag} />
       <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-saved-image" src={p.image} alt="" loading="lazy" />}</SensitiveMedia>
       <ArticleCard article={p.article} /></AuthorWarning>
     <div className="atlas-saved-actions"><SaveLink post={p} save={save} /><Link external target="_blank" href={p.url}>Open</Link></div>

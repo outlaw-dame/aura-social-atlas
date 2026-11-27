@@ -140,7 +140,7 @@ export function PostContent({ post: original, large = false }: { post: FedizenPo
   const tr = usePostTranslation(original);
   const p = tr.shown;
   return <div ref={tr.ref} lang={tr.shownLang} className="atlas-post-content">
-    <AuthorWarning cw={p.cw}>
+    <AuthorWarning cw={p.cw} article={p.longform}>
       <div className={cn('mt-3 space-y-2 leading-relaxed', large ? 'text-base' : 'text-sm')}><PostBody post={p} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} /></div>
       <TranslationLineView line={tr.line} onSettings={() => void navigate({ to: '/settings/intelligence' })} />
       <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl bg-muted object-cover" {...reserve(p.imageSize)} />}</SensitiveMedia>

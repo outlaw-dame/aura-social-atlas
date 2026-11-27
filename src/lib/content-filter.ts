@@ -45,7 +45,7 @@ export type ContentFilter = {
 
 /** What a filter needs from a post. */
 export type FilterablePost = {
-  id: string; statusId?: string; paragraphs: string[]; cw?: string; tags?: string[]; alt?: string[]; linkTitle?: string; visibility?: string;
+  id: string; statusId?: string; paragraphs: string[]; cw?: string; longform?: { lede: string }; tags?: string[]; alt?: string[]; linkTitle?: string; visibility?: string;
   linkDescription?: string; poll?: string[];
   /** The quoted post's text and image descriptions. */ quote?: string;
   /** Fedizen account id of the author, for "except people I follow". */ authorId?: string;
@@ -149,7 +149,7 @@ const compact = (t: string) => t.replace(/(?<=[\p{L}\p{N}])[.\-_·•*'’](?=[\
 /** Everything a filter reads in a post, as folded strings: text, content warning, image descriptions, link preview,
  *  poll options, the quoted post, and hashtags written out as words. */
 export function postFields(p: FilterablePost): string[] {
-  const fields = [...p.paragraphs, p.cw ?? '', ...(p.alt ?? []), p.linkTitle ?? '', p.linkDescription ?? '', ...(p.poll ?? []), p.quote ?? '', ...postTags(p).map(hashtagWords)];
+  const fields = [...p.paragraphs, p.cw ?? '', p.longform?.lede ?? '', ...(p.alt ?? []), p.linkTitle ?? '', p.linkDescription ?? '', ...(p.poll ?? []), p.quote ?? '', ...postTags(p).map(hashtagWords)];
   const out: string[] = [];
   for (const f of fields) {
     if (!f) continue;
@@ -163,7 +163,7 @@ export function postFields(p: FilterablePost): string[] {
 
 /** The plain text an AI model sees for a post, capped. */
 export function postText(p: FilterablePost, max = 1500): string {
-  const parts = [p.cw ? `Content warning: ${p.cw}` : '', ...p.paragraphs, ...(p.alt ?? []).map(a => `Image: ${a}`), ...(p.poll ?? []).map(o => `Poll option: ${o}`),
+  const parts = [p.cw ? `Content warning: ${p.cw}` : '', p.longform ? `Summary: ${p.longform.lede}` : '', ...p.paragraphs, ...(p.alt ?? []).map(a => `Image: ${a}`), ...(p.poll ?? []).map(o => `Poll option: ${o}`),
     p.linkTitle ? `Link: ${p.linkTitle}${p.linkDescription ? ` — ${p.linkDescription}` : ''}` : '', p.quote ? `Quoting: ${p.quote}` : ''];
   const text = parts.filter(Boolean).join('\n').trim();
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;

@@ -1,7 +1,7 @@
 /** Browser-safe Fedizen (Mastodon-compatible) feed types, normalizers and redirect allowlist. */
 import { relayFromAcct, type Relayed } from './fedibuzz';
 import { decodeEntities, emojiMap, htmlToRich, type EmojiMap, type RichBlock } from './rich-text';
-import { htmlToParagraphs } from './spotlight';
+import { articleBody, htmlToParagraphs } from './spotlight';
 import { collectionLinksIn, mastodonCollectionApi } from './collections';
 import { isPublicHttpsUrl, parseHandle, type FediAuthor } from './article-author';
 import type { FediEpisode } from './podcast-episode';
@@ -46,7 +46,9 @@ export type FedizenPost = { /** Deleted, or gone from the conversation, while it
    *  options, the quoted post's words, and the author's account id (for "except people I follow"). */
   cw?: string; tags?: string[]; alt?: string[]; linkTitle?: string; linkDescription?: string; poll?: string[]; quote?: string; authorId?: string;
   /** The poll itself: options with counts, and whether the reader voted (Mastodon Poll). */ pollState?: FediPoll;
-  /** When its author last edited it. */ editedAt?: string };
+  /** When its author last edited it. */ editedAt?: string;
+  /** A long-form article from another server (longformOf): its title and standfirst, shown before the body opens. */
+  longform?: { title: string; lede: string } };
 /** A poll as Fedizen reports it (Mastodon Poll). Counts may be absent while a poll hides them. */
 export type FediPoll = { id: string; options: { title: string; votes?: number }[]; multiple: boolean; expired: boolean; expiresAt?: string; votes?: number; voters?: number; voted: boolean; ownVotes: number[] };
 /** Someone shown beside a post (who boosted it), with what opens their profile. */
@@ -138,6 +140,24 @@ export function titleOf(o: { name?: string | null }): string | undefined {
   return t ? t.slice(0, 300) : undefined;
 }
 
+/**
+ * A long-form article from another server, told apart from a note with a content warning. Bonfire gives apps an
+ * object's `summary` as `spoiler_text` whatever the object is (extract_content), and marks it sensitive whenever there
+ * is one, so the Mastodon API can't say which. On a Note `summary` is the content warning; on an Article it is the
+ * standfirst or excerpt (Inkwell, WordPress's ActivityPub plugin, FEP-b2b8), and on a sensitive Inkwell entry the
+ * warning again (FEDERATION.md: "Check `sensitive` before treating summary as an excerpt"), which Bonfire doesn't pass
+ * on. A titled post from another server with a summary is treated as an article, shown as its title and that summary
+ * until opened: a standfirst reads as one, and a warning still stands before the body. Notes have no title, and
+ * Fedizen's own posts keep `summary` as their warning.
+ */
+export function longformOf(o: { name?: string | null; spoiler_text?: string | null; account?: { acct?: string } | null }): { title: string; lede: string } | undefined {
+  const title = titleOf(o), lede = decodeEntities((o.spoiler_text ?? '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  const at = (o.account?.acct ?? '').lastIndexOf('@');
+  const host = at > 0 ? (o.account!.acct!).slice(at + 1).toLowerCase() : '';
+  if (!title || !lede || !host || host === 'fedizen.net') return undefined;
+  return { title, lede: lede.slice(0, 600) };
+}
+
 /** A post's text with its title first, in bold; the text alone when the title only repeats its first line. */
 export function withTitle(title: string | undefined, paragraphs: string[], rich: RichBlock[] | undefined): { paragraphs: string[]; rich?: RichBlock[] } {
   if (!title || paragraphs[0]?.trim() === title) return { paragraphs, ...(rich ? { rich } : {}) };
@@ -158,9 +178,11 @@ export function boostFields(booster: FediPerson | undefined, name?: string): Pic
 export function fromStatuses(list: Status[]): FedizenPost[] {
   return list.map(s => {
     const o = s.reblog ?? s;
+    const title = titleOf(o), longform = longformOf(o);
+    const html = articleBody(o.content ?? '', title);
     return {
       id: s.id, statusId: o.id, bookmarked: o.bookmarked === true || s.bookmarked === true, author: name(o.account), handle: `@${o.account?.acct ?? ''}`, avatar: avatarOf(o.account),
-      ...withTitle(titleOf(o), htmlToParagraphs(o.content ?? ''), htmlToRich(o.content)),
+      ...withTitle(title, htmlToParagraphs(html), htmlToRich(html)),
       url: http(o.url) ?? http(o.uri) ?? FEDIZEN, ...(http(o.uri) ? { uri: http(o.uri) } : {}), date: o.created_at,
       ...(() => { const e = emojiMap(o.emojis); return e ? { emojis: e } : {}; })(),
       image: http(o.media_attachments?.find(m => m.type === 'image')?.preview_url ?? o.media_attachments?.find(m => m.type === 'image')?.url),
@@ -179,7 +201,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
       ...(o.favourited === true ? { liked: true } : {}), ...(o.reblogged === true ? { boosted: true } : {}),
       ...(o.visibility ? { visibility: o.visibility } : {}),
       ...(() => { const l = languageTag(o.language); return l ? { language: l } : {}; })(),
-      ...(o.spoiler_text?.trim() ? { cw: o.spoiler_text.trim() } : {}),
+      ...(longform ? { longform } : o.spoiler_text?.trim() ? { cw: o.spoiler_text.trim() } : {}),
       ...(() => { const t = (o.tags ?? []).map(x => x.name).filter((n): n is string => !!n); return t.length ? { tags: t } : {}; })(),
       ...(() => { const a = (o.media_attachments ?? []).map(m => m.description?.trim()).filter((d): d is string => !!d); return a.length ? { alt: a } : {}; })(),
       ...(o.card?.title ? { linkTitle: o.card.title } : {}),

@@ -314,11 +314,30 @@ export function articleTitle(name: string | null | undefined): string | undefine
   return (bookwyrm ? bookwyrm[1] : t) || undefined;
 }
 
+/**
+ * An article's body without the lead some servers put before it. Inkwell (FEDERATION.md, Article) sends `content` as
+ * "a short lead (title, excerpt, link, hashtags), then an <hr>, then the full body", for readers like Mastodon that show
+ * only the start; Atlas shows the whole article, so the lead only repeated the title and excerpt above it. The part
+ * before the first rule is dropped only when it is short, starts with the article's title and something follows the
+ * rule: an <hr> that divides an article's own sections (vsx.global's do) is kept.
+ */
+export function articleBody(html: string, title: string | undefined): string {
+  if (!title) return html;
+  const m = /<hr\b[^>]*>/i.exec(html);
+  if (!m) return html;
+  const text = (h: string) => decodeEntities(h.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  const lead = text(html.slice(0, m.index)), rest = html.slice(m.index + m[0].length);
+  const norm = (t: string) => t.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"');
+  if (lead.length > 1500 || !norm(lead).startsWith(norm(title)) || !text(rest)) return html;
+  return rest;
+}
+
 export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticle[] {
   return nodes.map(withAuthor).flatMap(n => {
     const pc = n.objectPostContent; const title = articleTitle(pc?.name);
     if (!title) return [];
-    const paragraphs = articleParagraphs(pc?.htmlBody ?? '');
+    const body = articleBody(pc?.htmlBody ?? '', title);
+    const paragraphs = articleParagraphs(body);
     if (paragraphs[0]?.toLowerCase() === title.toLowerCase()) paragraphs.shift();
     const image = n.media?.find(m => m.mediaType?.startsWith('image/') && isHttp(m.url))?.url ?? firstImageIn(pc?.htmlBody ?? '') ?? firstImageIn(pc?.summary ?? '');
     const avatar = n.subject?.profile?.icon;

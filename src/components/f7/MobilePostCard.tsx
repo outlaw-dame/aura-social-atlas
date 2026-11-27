@@ -82,7 +82,7 @@ export function MobilePostContent({ post: original }: { post: FedizenPost }) {
   const tr = usePostTranslation(original);
   const p = tr.shown;
   return <div ref={tr.ref} lang={tr.shownLang} className="atlas-post-content">
-      <AuthorWarning cw={p.cw} phone>
+      <AuthorWarning cw={p.cw} article={p.longform} phone>
     <PostBody post={p} onTag={openTag} pClassName="atlas-post-text" />
     <TranslationLineView line={tr.line} onSettings={() => pushPage('/intelligence/')} className="is-phone" />
     <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" {...(p.imageSize ? { width: p.imageSize.w, height: p.imageSize.h, style: { aspectRatio: `${p.imageSize.w} / ${p.imageSize.h}` } } : {})} />}</SensitiveMedia>
