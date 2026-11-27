@@ -1,5 +1,5 @@
 /** Browser-safe Spotlight types/normalizers: provider-relative links, real ActivityPub articles and media. */
-import { htmlToRich, type RichBlock } from './rich-text';
+import { decodeEntities, htmlToRich, type RichBlock } from './rich-text';
 import { isPublicHttpsUrl, type FediAuthor } from './article-author';
 
 export type SpotlightItem = {
@@ -304,9 +304,19 @@ export function firstImageIn(html = ''): string | undefined {
   return (html.match(IMG_SRC) ?? decode(html).match(IMG_SRC))?.[1];
 }
 
+/**
+ * An article's title as text: Fedizen passes remote titles with their HTML entities (`&quot;`), and BookWyrm's review
+ * titles end in ": None" when the review has no title of its own (Python's None, written out), which says nothing.
+ */
+export function articleTitle(name: string | null | undefined): string | undefined {
+  const t = decodeEntities((name ?? '').replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+  const bookwyrm = /^(Review of .+\(\d+(?:\.\d+)? stars?\)): None$/.exec(t);
+  return (bookwyrm ? bookwyrm[1] : t) || undefined;
+}
+
 export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticle[] {
   return nodes.map(withAuthor).flatMap(n => {
-    const pc = n.objectPostContent; const title = pc?.name?.trim();
+    const pc = n.objectPostContent; const title = articleTitle(pc?.name);
     if (!title) return [];
     const paragraphs = articleParagraphs(pc?.htmlBody ?? '');
     if (paragraphs[0]?.toLowerCase() === title.toLowerCase()) paragraphs.shift();
@@ -317,7 +327,7 @@ export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticl
       authorUrl: isHttp(actorUrl) && actorUrl!.startsWith('https://') ? actorUrl : undefined,
       id: n.id, title, summary: articleParagraphs(pc?.summary ?? '').join(' ') || paragraphs[0]?.slice(0, 220) || '', paragraphs,
       url: isHttp(n.canonicalUri) ? n.canonicalUri! : `https://fedizen.net/post/${n.id}`, date: n.date,
-      author: n.subject?.profile?.name || n.subject?.character?.username || 'Fedizen author',
+      author: articleTitle(n.subject?.profile?.name) || n.subject?.character?.username || 'Fedizen author',
       handle: n.subject?.character?.username ? `@${n.subject.character.username.replace(/^@/, '')}` : undefined,
       avatar: isHttp(avatar) ? avatar : undefined, image,
       likes: n.likeCount ?? 0, boosts: n.boostCount ?? 0, replies: n.repliesCount ?? 0,
