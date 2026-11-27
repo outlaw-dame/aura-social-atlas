@@ -4,7 +4,6 @@ import { FEDIZEN_USER_AGENT, transportDetail, type FedizenTransportFailure } fro
 import { FEDIZEN, FEDIZEN_API_SCOPE } from './fedizen-feed';
 import { accountKey, cachedStatus, forgetAccountReads, holdForLimit, keepStatus, noteRateLimited } from './fedizen-rate-limit';
 import { forgetModeration } from './moderation-cache.server';
-import { fedizenFetch } from './fedizen-connections';
 import { z } from 'zod';
 
 const b64url = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -73,7 +72,7 @@ export function parseFedizenOAuthApp(payload: unknown): { client_id: string; cli
 
 export async function registerFedizenOAuthApp(
   redirectUri: string,
-  fetcher: typeof fetch = fedizenFetch,
+  fetcher: typeof fetch = fetch,
 ): Promise<{ client_id: string; client_secret: string }> {
   let response: Response;
   try {
@@ -203,7 +202,7 @@ async function readVerifiedFedizenPayload(token: string, fetcher: typeof fetch):
  * representation used when the connection was first persisted. */
 export async function verifyFedizenReadGrant(
   token: string,
-  fetcher: typeof fetch = fedizenFetch,
+  fetcher: typeof fetch = fetch,
 ): Promise<string | null> {
   return parseFedizenAccount(await readVerifiedFedizenPayload(token, fetcher));
 }
@@ -211,7 +210,7 @@ export async function verifyFedizenReadGrant(
 /** UI-safe fields only, sourced directly from the authenticated social provider. */
 export async function readVerifiedFedizenViewer(
   token: string,
-  fetcher: typeof fetch = fedizenFetch,
+  fetcher: typeof fetch = fetch,
 ) {
   const payload = await readVerifiedFedizenPayload(token, fetcher);
   if (!parseFedizenAccount(payload)) return null;
@@ -228,7 +227,7 @@ export async function redeemFedizenReadCode(
   redirectUri: string,
   codeVerifier: string,
   app: { client_id: string; client_secret: string },
-  fetcher: typeof fetch = fedizenFetch,
+  fetcher: typeof fetch = fetch,
 ): Promise<
   | { kind: 'ok'; grant: { access_token: string; scope: string } }
   | { kind: 'rejected' | 'invalid' | 'unavailable' }
@@ -334,7 +333,7 @@ export function forgetConnection(userId: string) {
 export async function revokeFedizenToken(
   token: string,
   apps: { client_id: string; client_secret: string }[],
-  fetcher: typeof fetch = fedizenFetch,
+  fetcher: typeof fetch = fetch,
 ): Promise<boolean> {
   for (const app of apps) {
     try {
@@ -741,7 +740,7 @@ async function sendRead(token: string, path: string, account: string, read: (typ
   const started = Date.now();
   let response: Response;
   try {
-    response = await fedizenFetch(`${FEDIZEN}${path}`, {
+    response = await fetch(`${FEDIZEN}${path}`, {
       method: 'GET',
       headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       signal: AbortSignal.timeout(10000),
@@ -922,7 +921,7 @@ export async function fedizenSend(token: string, method: 'POST' | 'PUT' | 'DELET
   forgetAccountReads(account);
   let response: Response;
   try {
-    response = await fedizenFetch(`${FEDIZEN}${path}`, {
+    response = await fetch(`${FEDIZEN}${path}`, {
       method,
       headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT, ...(payload ? { 'content-type': 'application/json' } : {}) },
       body: payload ? JSON.stringify(payload.data) : undefined,
@@ -972,7 +971,7 @@ export async function fedizenUpload(token: string, file: Blob, name: string, des
   if (!(await holdForLimit(account))) return { status: 429 };
   let response: Response;
   try {
-    response = await fedizenFetch(`${FEDIZEN}/api/v2/media`, {
+    response = await fetch(`${FEDIZEN}/api/v2/media`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'user-agent': FEDIZEN_USER_AGENT },
       body: form,

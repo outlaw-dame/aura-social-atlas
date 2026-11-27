@@ -15,7 +15,6 @@
  */
 import { FEDIZEN, fromStatuses } from './fedizen-feed';
 import { fromBonfireSse, fromMastoFrame, readSse, toSse, type LiveEvent } from './live-events';
-import { fedizenFetch } from './fedizen-connections';
 
 const MAX_MS = 25 * 60_000, HEARTBEAT_MS = 25_000;
 const STREAM = `${FEDIZEN}/api/v1/streaming`;
@@ -87,7 +86,7 @@ export function openUpstream(userId: string, out: (e: Outgoing) => void, done: (
     try {
       // Bonfire reads the token from Sec-WebSocket-Protocol, as many Mastodon clients send it (its Authorization lookup
       // only sees x- headers: MastoStreamingWebSocket.resolve_token); never from the URL, where it would be logged.
-      const res = await fedizenFetch(`${STREAM}?stream=user`, { headers: { ...auth, Upgrade: 'websocket', 'Sec-WebSocket-Protocol': t.access_token }, redirect: 'manual' });
+      const res = await fetch(`${STREAM}?stream=user`, { headers: { ...auth, Upgrade: 'websocket', 'Sec-WebSocket-Protocol': t.access_token }, redirect: 'manual' });
       const ws = (res as Response & { webSocket?: CfSocket | null }).webSocket;
       if (res.status === 101 && ws) {
         ws.accept();
@@ -140,7 +139,7 @@ export function openUpstream(userId: string, out: (e: Outgoing) => void, done: (
     // Bonfire's own SSE stream: notifications, messages and the unread count.
     const up = new AbortController();
     cleanups.push(() => up.abort());
-    const res = await fedizenFetch(SSE_STREAM, { headers: { ...auth, Accept: 'text/event-stream' }, signal: up.signal, redirect: 'manual' }).catch(() => null);
+    const res = await fetch(SSE_STREAM, { headers: { ...auth, Accept: 'text/event-stream' }, signal: up.signal, redirect: 'manual' }).catch(() => null);
     if (closed) return;
     if (!res?.ok || !res.body) { out({ type: 'off', reason: res && (res.status === 401 || res.status === 403) ? 'expired' : 'unavailable' }); finish(); return; }
     out({ type: 'ready', posts: false });
