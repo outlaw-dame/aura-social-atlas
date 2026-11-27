@@ -16,6 +16,19 @@ describe('where pending Fedizen requests are when reads pause', () => {
     expect(_stagesInternals.requests.size).toBe(3);
     expect(s).toMatchObject({ connecting: 0, connectErrors: 0, secondsSinceLastConnect: null });
   });
+  test('the requests that timed out are kept by stage for a minute, so the pause log has them', async () => {
+    const dc = await import('node:diagnostics_channel');
+    const { watchFedizenRequests } = await import('../src/lib/fedizen-request-stages.server');
+    await watchFedizenRequests();
+    const a = { origin: 'https://fedizen.net' }, b = { origin: 'https://fedizen.net' }, other = { origin: 'https://elsewhere.example' };
+    for (const r of [a, b, other]) dc.channel('undici:request:create').publish({ request: r });
+    dc.channel('undici:client:sendHeaders').publish({ request: b });
+    for (const r of [a, b, other]) dc.channel('undici:request:error').publish({ request: r, error: new Error('timeout') });
+    const s = fedizenRequestStages();
+    expect(s.pending).toEqual({});
+    expect(Object.fromEntries(Object.entries(s.failedLastMinute).map(([k, v]) => [k, v!.count]))).toEqual({ 'waiting for a connection': 1, 'sent, waiting for an answer': 1 });
+    expect(fedizenRequestStages(Date.now() + 61_000).failedLastMinute).toEqual({});
+  });
   test('logged with each pause, never with paths or headers', () => {
     const src = readFileSync('src/lib/fedizen.server.ts', 'utf8');
     expect(src).toMatch(/console\.warn\('Fedizen not answering: reads paused', \{ seconds: BREAKER\.pauseMs \/ 1000, stages: fedizenRequestStages\(\) \}\)/);

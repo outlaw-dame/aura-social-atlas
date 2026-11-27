@@ -16,6 +16,10 @@ type Stage = 'waiting for a connection' | 'sent, waiting for an answer' | 'answe
 
 const HOST = 'fedizen.net';
 const requests = new Map<object, Req>();
+/** Requests that failed (timed out, aborted, refused) lately: the stage each was in and how long it had waited. */
+const failed: { at: number; stage: Stage; waitedMs: number }[] = [];
+const FAILED_KEEP_MS = 60_000, FAILED_MAX = 50;
+const stageOf = (r: Req): Stage => !r.sent ? 'waiting for a connection' : !r.answered ? 'sent, waiting for an answer' : 'answered, still reading';
 let connecting = 0, connectedTotal = 0, connectErrors = 0, lastConnectAt = 0;
 let started = false;
 let loop: { percentile(p: number): number; max: number; reset(): void } | null = null;
@@ -36,7 +40,15 @@ export async function watchFedizenRequests(): Promise<void> {
     on('undici:client:sendHeaders', m => { const s = requests.get(req(m) as object); if (s) s.sent = true; });
     on('undici:request:headers', m => { const s = requests.get(req(m) as object); if (s) s.answered = true; });
     on('undici:request:trailers', m => { requests.delete(req(m) as object); });
-    on('undici:request:error', m => { requests.delete(req(m) as object); });
+    // undici reports the error before fetch rejects, so before the pause is logged: keep where it failed.
+    on('undici:request:error', m => {
+      const key = req(m) as object, r = requests.get(key);
+      if (!r) return;
+      requests.delete(key);
+      const now = Date.now();
+      failed.push({ at: now, stage: stageOf(r), waitedMs: now - r.at });
+      if (failed.length > FAILED_MAX) failed.shift();
+    });
     const host = (m: Record<string, unknown>) => (m.connectParams as { hostname?: unknown } | undefined)?.hostname;
     on('undici:client:beforeConnect', m => { if (host(m) === HOST) connecting++; });
     on('undici:client:connected', m => { if (host(m) === HOST) { connecting = Math.max(0, connecting - 1); connectedTotal++; lastConnectAt = Date.now(); } });
@@ -48,23 +60,35 @@ export async function watchFedizenRequests(): Promise<void> {
   } catch { /* not Node: nothing to watch */ }
 }
 
-/** What's pending for Fedizen right now, by stage, with the oldest wait in each; and the event loop's delay. */
+/**
+ * What's pending for Fedizen right now, by stage, with the oldest wait in each; what failed in the last minute, by the
+ * stage it failed in (the timeouts that paused reads are already failed when this is logged); and the event loop's delay.
+ */
 export function fedizenRequestStages(now = Date.now()) {
   const stages: Partial<Record<Stage, { count: number; oldestMs: number }>> = {};
   for (const [key, r] of requests) {
     // A request never finished nor failed after 5 minutes is let go (its events were missed).
     if (now - r.at > 5 * 60_000) { requests.delete(key); continue; }
-    const stage: Stage = !r.sent ? 'waiting for a connection' : !r.answered ? 'sent, waiting for an answer' : 'answered, still reading';
+    const stage = stageOf(r);
     const s = stages[stage] ?? { count: 0, oldestMs: 0 };
     s.count++;
     s.oldestMs = Math.max(s.oldestMs, now - r.at);
     stages[stage] = s;
+  }
+  while (failed.length && now - failed[0]!.at > FAILED_KEEP_MS) failed.shift();
+  const failedLastMinute: Partial<Record<Stage, { count: number; longestMs: number }>> = {};
+  for (const f of failed) {
+    const s = failedLastMinute[f.stage] ?? { count: 0, longestMs: 0 };
+    s.count++;
+    s.longestMs = Math.max(s.longestMs, f.waitedMs);
+    failedLastMinute[f.stage] = s;
   }
   const ms = (ns: number) => Math.round(ns / 1e6);
   const eventLoop = loop ? { p99Ms: ms(loop.percentile(99)), maxMs: ms(loop.max) } : undefined;
   loop?.reset();
   return {
     pending: stages,
+    failedLastMinute,
     connecting,
     connected: connectedTotal,
     connectErrors,
@@ -73,5 +97,5 @@ export function fedizenRequestStages(now = Date.now()) {
   };
 }
 
-export function _resetFedizenRequestStages() { requests.clear(); connecting = connectedTotal = connectErrors = lastConnectAt = 0; }
-export const _stagesInternals = { requests };
+export function _resetFedizenRequestStages() { requests.clear(); failed.length = 0; connecting = connectedTotal = connectErrors = lastConnectAt = 0; }
+export const _stagesInternals = { requests, failed };
