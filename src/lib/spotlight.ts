@@ -318,17 +318,20 @@ export function articleTitle(name: string | null | undefined): string | undefine
  * An article's body without the lead some servers put before it. Inkwell (FEDERATION.md, Article) sends `content` as
  * "a short lead (title, excerpt, link, hashtags), then an <hr>, then the full body", for readers like Mastodon that show
  * only the start; Atlas shows the whole article, so the lead only repeated the title and excerpt above it. The part
- * before the first rule is dropped only when it is short, starts with the article's title and something follows the
- * rule: an <hr> that divides an article's own sections (vsx.global's do) is kept.
+ * before the first rule is dropped only when it is that preview: short, beginning with the article's title, holding
+ * its excerpt (the object's own `summary`) and a link, with the article after the rule. An opening section of an
+ * article's own (an introduction before an <hr>, or vsx.global's sections) is kept.
  */
-export function articleBody(html: string, title: string | undefined): string {
-  if (!title) return html;
+export function articleBody(html: string, title: string | undefined, excerpt: string | null | undefined): string {
+  const ex = decodeEntities((excerpt ?? '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  if (!title || ex.length < 20) return html;
   const m = /<hr\b[^>]*>/i.exec(html);
   if (!m) return html;
   const text = (h: string) => decodeEntities(h.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
   const lead = text(html.slice(0, m.index)), rest = html.slice(m.index + m[0].length);
   const norm = (t: string) => t.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"');
-  if (lead.length > 1500 || !norm(lead).startsWith(norm(title)) || !text(rest)) return html;
+  const head = html.slice(0, m.index);
+  if (lead.length > 1500 || !norm(lead).startsWith(norm(title)) || !norm(lead).includes(norm(ex.slice(0, 80))) || !/<a\s[^>]*href=/i.test(head) || !text(rest)) return html;
   return rest;
 }
 
@@ -336,7 +339,7 @@ export function fromBonfireArticles(nodes: BonfireActivityNode[]): BonfireArticl
   return nodes.map(withAuthor).flatMap(n => {
     const pc = n.objectPostContent; const title = articleTitle(pc?.name);
     if (!title) return [];
-    const body = articleBody(pc?.htmlBody ?? '', title);
+    const body = articleBody(pc?.htmlBody ?? '', title, pc?.summary);
     const paragraphs = articleParagraphs(body);
     if (paragraphs[0]?.toLowerCase() === title.toLowerCase()) paragraphs.shift();
     const image = n.media?.find(m => m.mediaType?.startsWith('image/') && isHttp(m.url))?.url ?? firstImageIn(pc?.htmlBody ?? '') ?? firstImageIn(pc?.summary ?? '');

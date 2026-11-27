@@ -179,7 +179,7 @@ export function fromStatuses(list: Status[]): FedizenPost[] {
   return list.map(s => {
     const o = s.reblog ?? s;
     const title = titleOf(o), longform = longformOf(o);
-    const html = articleBody(o.content ?? '', title);
+    const html = articleBody(o.content ?? '', title, o.spoiler_text);
     return {
       id: s.id, statusId: o.id, bookmarked: o.bookmarked === true || s.bookmarked === true, author: name(o.account), handle: `@${o.account?.acct ?? ''}`, avatar: avatarOf(o.account),
       ...withTitle(title, htmlToParagraphs(html), htmlToRich(html)),

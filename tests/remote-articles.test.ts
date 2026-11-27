@@ -29,11 +29,27 @@ describe('long-form articles from other servers', () => {
     expect(longformOf({ ...local })).toBeUndefined();
     expect(longformOf({ name: 'A Lemmy post', spoiler_text: '', account: { acct: 'x@lemmy.world' } })).toBeUndefined();
   });
-  test('only a short lead that starts with the title is dropped: a rule between sections stays', () => {
+  test('only a preview lead (title, excerpt, link) is dropped: an article’s own opening section stays', () => {
+    const ex = 'Some hard ideas from Hannah Arendt.';
     const sections = '<p>Phishing is common.</p><table><tr><td>a</td></tr></table><hr><p>Part two.</p>';
-    expect(articleBody(sections, 'Phishing: an attack on people')).toBe(sections);
-    expect(articleBody('<p>Title</p><hr>', 'Title')).toBe('<p>Title</p><hr>');
-    expect(articleBody(inkwell.content, 'Natural & Artificial')).toBe('<p>First paragraph of the essay.</p><p>Second.</p>');
+    expect(articleBody(sections, 'Phishing: an attack on people', 'Phishing is the most common way in.')).toBe(sections);
+    expect(articleBody('<p>Title</p><hr>', 'Title', ex)).toBe('<p>Title</p><hr>');
+    // An introduction that starts with the heading is the article's, not a preview (Codex review).
+    const intro = '<h1>Title</h1><p>Unique introduction.</p><hr><p>Next section.</p>';
+    expect(articleBody(intro, 'Title', 'A different summary of the whole piece.')).toBe(intro);
+    expect(articleBody('<h1>Title</h1><p>Some hard ideas from Hannah Arendt.</p><hr><p>Next.</p>', 'Title', ex)).toContain('<h1>Title</h1>');
+    expect(articleBody(inkwell.content, 'Natural & Artificial', undefined)).toBe(inkwell.content);
+    expect(articleBody(inkwell.content, 'Natural & Artificial', ex)).toBe('<p>First paragraph of the essay.</p><p>Second.</p>');
+  });
+  test('an article’s title and standfirst are translated with its body', async () => {
+    const { translationJob, detectionText } = await import('../src/lib/translation/segments');
+    const [p] = fromStatuses([inkwell as never]);
+    const job = translationJob(p!, 'plain');
+    expect(job.texts).toContain('Natural & Artificial');
+    expect(job.texts).toContain('Some hard ideas from Hannah Arendt.');
+    const out = job.build(job.texts.map(t => `FR ${t}`));
+    expect(out.longform).toEqual({ title: 'FR Natural & Artificial', lede: 'FR Some hard ideas from Hannah Arendt.' });
+    expect(detectionText(p!)).toContain('Hannah Arendt');
   });
   test('the standfirst stands before the body on every feed card, and keyword filters read it', () => {
     for (const f of ['src/components/social/FeedPostCard.tsx', 'src/components/f7/MobilePostCard.tsx', 'src/components/social/SavedAndCircles.tsx', 'src/components/f7/SavedAndCircles.tsx', 'src/components/f7/FedizenMobile.tsx']) {
