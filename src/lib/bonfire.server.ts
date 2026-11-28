@@ -53,5 +53,9 @@ export async function fetchPublicFeed(): Promise<PublicFeedResult> {
 export async function fetchRecentArticles(after?: string): Promise<RecentArticlesResult> {
   if (after !== undefined && !isFeedCursor(after)) return { articles: [], error: 'unavailable' };
   const page = await readPublicFeed('articles', fromBonfireArticles, after);
-  return page ? { articles: page.items, ...(page.next ? { next: page.next } : {}) } : { articles: [], error: 'unavailable' };
+  if (!page) return { articles: [], error: 'unavailable' };
+  // Where each was published and who wrote it, verified there (bounded; what isn't known in time is left out).
+  const { withOriginsAndAuthors } = await import('./article-origins.server');
+  const articles = await withOriginsAndAuthors(page.items).catch(() => page.items);
+  return { articles, ...(page.next ? { next: page.next } : {}) };
 }

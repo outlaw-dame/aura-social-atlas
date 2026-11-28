@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { Block, BlockFooter, BlockTitle, Button, Icon, Link, List, ListInput, ListItem, Navbar, NavRight, Page, Popup, Toggle, f7 } from 'framework7-react';
 import { pinCircle, unpinCircle, usePinnedCircles } from '@/lib/feed-types';
 import { useAtlasAuth } from '@/components/social/AuthState';
-import type { FedizenCircle, FedizenPost } from '@/lib/fedizen-feed';
+import { foldCredits, type FedizenCircle, type FedizenPost } from '@/lib/fedizen-feed';
 import { CIRCLE_NAME_MAX, CIRCLE_SUMMARY_MAX, circleReach } from '@/lib/fedizen-circles';
 import { openTag } from '@/lib/hashtags';
 import { BoostedBy, canOpen, openAuthor } from '@/components/social/PostPeople';
-import { ArticleCard } from './ArticleAuthors';
+import { ArticleCard, AuthorRows } from './ArticleAuthors';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { MobileFilterGate } from './FilterGate';
 import { SensitiveMedia } from '@/components/social/SensitiveMedia';
@@ -38,7 +38,7 @@ function SavedPostCard({ p, save }: { p: FedizenPost; save: ReturnType<typeof us
     <div className="atlas-saved-head">{canOpen(p)
       ? <button type="button" className="atlas-author-button" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} />}<span><b>{p.author}</b> <span>{p.handle} · {when(p.date)}</span></span></button>
       : <>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} />}<span><b>{p.author}</b> <span>{p.handle} · {when(p.date)}</span></span></>}</div>
-    <AuthorWarning cw={p.cw} article={p.longform} phone><PostBody post={p} onTag={openTag} />
+    <AuthorWarning cw={p.cw} article={p.longform} credits={foldCredits(p).length ? <div className="atlas-article"><AuthorRows authors={foldCredits(p)} /></div> : null} after={p.credits?.length ? <div className="atlas-article"><AuthorRows authors={p.credits} /></div> : null} phone><PostBody post={p} onTag={openTag} />
       <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-saved-image" src={p.image} alt="" loading="lazy" />}</SensitiveMedia>
       <ArticleCard article={p.article} /></AuthorWarning>
     <div className="atlas-saved-actions"><SaveLink post={p} save={save} /><Link external target="_blank" href={p.url}>Open</Link></div>

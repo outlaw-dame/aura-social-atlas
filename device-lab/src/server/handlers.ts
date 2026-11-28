@@ -179,7 +179,9 @@ const SPOTLIGHT: SpotlightItem[] = [
 ];
 const ARTICLES: BonfireArticle[] = [
   { id: 'a1', title: 'Welcoming groups to Fedizen', summary: 'What federated groups can do now, and what comes next.', paragraphs: ['Groups on Fedizen now federate with Lemmy, PieFed and Mobilizon.'], url: 'https://fedizen.net/post/a1', date: ago(900), author: 'Fedizen Development', handle: '@Fedizen_Development', image: architecture, likes: 42, boosts: 18, replies: 7 },
-  { id: 'a2', title: 'A field guide to circles', summary: 'Choosing who sees and replies to each post, without leaving anyone out by accident.', paragraphs: ['Circles group the people you know.'], url: 'https://fedizen.net/post/a2', date: ago(3000), author: 'Mara Quinn', handle: `@${PEOPLE.mara.acct}`, avatar: PEOPLE.mara.avatar, likes: 30, boosts: 11, replies: 4 },
+  { id: 'a2', title: 'A field guide to circles', summary: 'Choosing who sees and replies to each post, without leaving anyone out by accident.', paragraphs: ['Circles group the people you know.'], url: 'https://fedizen.net/post/a2', date: ago(3000), author: 'Mara Quinn', handle: `@${PEOPLE.mara.acct}`, avatar: PEOPLE.mara.avatar, likes: 30, boosts: 11, replies: 4,
+    // Published elsewhere, with its author verified there (article-origins.server.ts).
+    origin: 'https://notes.maraquinn.example/circles', authors: [{ name: 'Mara Quinn', acct: `@${PEOPLE.mara.acct}`, url: 'https://social.coop/@mara', avatar: PEOPLE.mara.avatar, verifiedBy: 'activitypub' as const }] },
 ];
 
 const ok = <T extends object>(x: T) => ({ ok: true as const, ...x });

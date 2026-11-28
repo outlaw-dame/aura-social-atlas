@@ -4,8 +4,10 @@ import { ArrowUpRight, BookOpen, Heart, MessageCircle, RefreshCw, X } from 'luci
 import { Button } from '@/components/ui/button';
 import { getRecentArticles } from '@/lib/bonfire.functions';
 import { openFediProfile } from '@/lib/fedi-profile';
+import { AuthorCards } from './ArticleAuthors';
 import type { BonfireArticle } from '@/lib/spotlight';
 
+const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return 'the web'; } };
 const when = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 
 /**
@@ -65,9 +67,11 @@ export function RecentArticles({ full = false }: { full?: boolean }) {
         <div className="overflow-y-auto px-6 py-6">
           {open.image && <img src={open.image} alt="" className="mb-5 w-full rounded-2xl object-cover" />}
           <h2 id="article-title" className="font-serif text-3xl leading-tight">{open.title}</h2>
+          {/* Its authors as Atlas verified them on the page it was published at (article-origins.server.ts). */}
+          <AuthorCards authors={open.authors} />
           <div className="mt-5 space-y-4 text-[15px] leading-relaxed">{open.paragraphs.map((p, i) => <p key={i}>{p}</p>)}</div>
         </div>
-        <div className="flex items-center justify-between border-t border-border px-5 py-3 text-xs text-muted-foreground"><span className="flex items-center gap-3"><span className="flex items-center gap-1"><Heart className="size-3.5" />{open.likes}</span><span className="flex items-center gap-1"><RefreshCw className="size-3.5" />{open.boosts}</span><span className="flex items-center gap-1"><MessageCircle className="size-3.5" />{open.replies}</span></span><Button asChild size="sm" variant="outline"><a href={open.url} target="_blank" rel="noopener noreferrer">Open on Fedizen<ArrowUpRight /></a></Button></div>
+        <div className="flex items-center justify-between border-t border-border px-5 py-3 text-xs text-muted-foreground"><span className="flex items-center gap-3"><span className="flex items-center gap-1"><Heart className="size-3.5" />{open.likes}</span><span className="flex items-center gap-1"><RefreshCw className="size-3.5" />{open.boosts}</span><span className="flex items-center gap-1"><MessageCircle className="size-3.5" />{open.replies}</span></span><Button asChild size="sm" variant="outline"><a href={open.origin ?? open.url} target="_blank" rel="noopener noreferrer">{open.origin ? `Open on ${hostOf(open.origin)}` : 'Open on Fedizen'}<ArrowUpRight /></a></Button></div>
       </section>
     </div>}
   </section>;

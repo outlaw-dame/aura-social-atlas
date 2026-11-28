@@ -263,6 +263,10 @@ export type BonfireArticle = {
   author: string; handle?: string; avatar?: string; image?: string; likes: number; boosts: number; replies: number;
   /** The author's actor/profile URL on the fediverse. */
   authorUrl?: string;
+  /** Where it was published, when that isn't Fedizen (article-origins.server.ts). */
+  origin?: string;
+  /** Its authors as Atlas verified them on that page (article-author.server.ts), for the "More from" cards. */
+  authors?: import('./article-author').FediAuthor[];
 };
 
 export type BonfireActivityNode = {

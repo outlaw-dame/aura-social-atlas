@@ -115,12 +115,16 @@ export async function actorAvatars(actors: string[], budgetMs: number): Promise<
 }
 
 async function withArticleAuthorsOnly(posts: FedizenPost[], budgetMs = 2000): Promise<FedizenPost[]> {
-  const urls = posts.map(p => p.article?.url).filter((u): u is string => !!u);
+  // A long-form article with no link card is resolved on its own page, so a publication's writers are credited too.
+  const page = (p: FedizenPost) => (p.longform && !p.article && p.url.startsWith('https://') ? p.url : undefined);
+  const urls = posts.flatMap(p => [p.article?.url, page(p)]).filter((u): u is string => !!u);
   if (!urls.length) return posts;
   const { resolveAuthorsFor, mediaFor } = await import('./article-author.server');
   const hints = Object.fromEntries(posts.flatMap(p => (p.article?.authorUrl ? [[p.article.url, { authorUrl: p.article.authorUrl }]] : [])));
   const found = await resolveAuthorsFor(urls, budgetMs, undefined, undefined, hints).catch(() => new Map<string, never[]>());
   return posts.map(p => {
+    const own = page(p);
+    if (own) { const c = creditsBesidesAuthor(p, found.get(own) ?? []); return c.length ? { ...p, credits: c } : p; }
     if (!p.article) return p;
     const a = creditsBesidesAuthor(p, found.get(p.article.url) ?? []);
     const m = mediaFor(p.article.url);

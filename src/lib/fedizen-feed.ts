@@ -48,7 +48,10 @@ export type FedizenPost = { /** Deleted, or gone from the conversation, while it
   /** The poll itself: options with counts, and whether the reader voted (Mastodon Poll). */ pollState?: FediPoll;
   /** When its author last edited it. */ editedAt?: string;
   /** A long-form article from another server (longformOf): its title and standfirst, shown before the body opens. */
-  longform?: { title: string; lede: string } };
+  longform?: { title: string; lede: string };
+  /** A long-form article's authors besides the account that posted it, verified on its own page (feed-enrich.server.ts),
+   *  when the post has no link card to carry them. */
+  credits?: FediAuthor[] };
 /** A poll as Fedizen reports it (Mastodon Poll). Counts may be absent while a poll hides them. */
 export type FediPoll = { id: string; options: { title: string; votes?: number }[]; multiple: boolean; expired: boolean; expiresAt?: string; votes?: number; voters?: number; voted: boolean; ownVotes: number[] };
 /** Someone shown beside a post (who boosted it), with what opens their profile. */
@@ -522,6 +525,11 @@ export function lookupAcct(handle: string): string | null {
  * Mentions, hashtags and Mastodon collection links are not articles. Only public https URLs.
  */
 /** Credits worth showing on a post: not the post's own author (a podcast sharing its own episode, say). */
+/** Who a folded long-form article credits besides its poster: its own page's verified authors, or its card's. */
+export function foldCredits(p: Pick<FedizenPost, 'longform' | 'credits' | 'article'>): FediAuthor[] {
+  return p.longform ? (p.credits ?? p.article?.authors ?? []) : [];
+}
+
 export function creditsBesidesAuthor(post: Pick<FedizenPost, 'handle'>, authors: FediAuthor[]): FediAuthor[] {
   const own = post.handle.toLowerCase();
   return own.includes('@', 1) ? authors.filter(a => a.acct.toLowerCase() !== own) : authors;
