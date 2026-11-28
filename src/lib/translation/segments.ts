@@ -134,6 +134,8 @@ export function translationJob(post: FedizenPost, mode: Mode): Job {
   const units: Unit[] = [];
   const add = (c: RichInline[]) => { const keep: RichInline[] = []; units.push({ text: inlineUnit(c, keep, mode), keep }); return units.length - 1; };
   const cwAt = post.cw ? add([{ t: 'text', v: post.cw }]) : -1;
+  // A long-form article's title and standfirst, shown before its body opens (fedizen-feed.ts longformOf).
+  const lf = post.longform ? { title: add([{ t: 'text', v: post.longform.title }]), lede: add([{ t: 'text', v: post.longform.lede }]) } : null;
   // Blocks: rich when the post has formatting, else its paragraphs.
   const blocks: RichBlock[] = post.rich?.length ? post.rich : post.paragraphs.map(p => ({ t: 'p', c: [{ t: 'text', v: p }] }));
   const plan = (b: RichBlock): unknown => b.t === 'p' ? add(b.c) : b.t === 'quote' || b.t === 'center' ? b.c.map(plan) : b.t === 'list' ? b.items.map(it => it.map(plan)) : null;
@@ -154,6 +156,7 @@ export function translationJob(post: FedizenPost, mode: Mode): Job {
         // Plain posts stay plain (their paragraphs); formatted ones keep their formatting.
         ...(post.rich?.length ? { rich } : {}),
         ...(cwAt >= 0 ? { cw: flat(nodes[cwAt]) } : {}),
+        ...(lf && post.longform ? { longform: { title: flat(nodes[lf.title]) || post.longform.title, lede: flat(nodes[lf.lede]) || post.longform.lede } } : {}),
         ...(post.pollState ? { pollState: { ...post.pollState, options: post.pollState.options.map((o, i) => ({ ...o, title: flat(nodes[options[i]]) || o.title })) } } : {}),
         ...(post.poll && options.length ? { poll: options.map((u, i) => flat(nodes[u]) || post.poll![i]) } : {}),
       };
@@ -163,5 +166,5 @@ export function translationJob(post: FedizenPost, mode: Mode): Job {
 
 /** A post's words for detecting its language: no addresses, mentions, hashtags or emoji codes. */
 export function detectionText(post: FedizenPost): string {
-  return [post.cw ?? '', ...post.paragraphs].join('\n').replace(KEEP, ' ').replace(/\s+/g, ' ').trim();
+  return [post.cw ?? '', post.longform?.lede ?? '', ...post.paragraphs].join('\n').replace(KEEP, ' ').replace(/\s+/g, ' ').trim();
 }

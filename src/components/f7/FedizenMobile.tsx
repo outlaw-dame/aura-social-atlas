@@ -2,7 +2,7 @@ import { useFollowRequests } from '@/components/social/useOwnPosts';
 import { NewPostFaces } from '@/components/social/NewPostFaces';
 import { newPostsLabel } from '@/lib/new-post-faces';
 import { useNotificationGroups } from '@/components/social/useNotificationGroups';
-import type { FedizenNotice } from '@/lib/fedizen-feed';
+import { foldCredits, type FedizenNotice } from '@/lib/fedizen-feed';
 import { singleNoticeTarget, type NoticeTarget } from '@/lib/notice-target';
 import { MobileGroupedActivity } from './MobileActivityList';
 import { pushPage } from './navigation';
@@ -21,7 +21,9 @@ import { useFedizen, useFedizenMessages } from '@/components/social/useFedizen';
 import { openCollection } from '@/lib/collections';
 import { openFediProfile } from '@/lib/fedi-profile';
 import { SaveLink } from './SavedAndCircles';
-import { ArticleCard } from './ArticleAuthors';
+import { ArticleCard, AuthorRows } from './ArticleAuthors';
+
+const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return 'the web'; } };
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { Icon } from './F7Extras';
 import { MobilePostCard, useMobilePostActions } from './MobilePostCard';
@@ -47,7 +49,7 @@ export function MobileRecentArticles({ full = false }: { full?: boolean }) {
       : list.map(a => <div key={a.id} role="button" tabIndex={0} onClick={() => setOpen(a)} onKeyDown={e => e.key === 'Enter' && setOpen(a)} style={{ cursor: 'pointer' }}><Card outline>
         {a.image && <img src={a.image} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }} />}
         <CardContent><div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22, lineHeight: 1.2 }}>{a.title}</div>{a.summary && <p style={{ opacity: .7, fontSize: 14, marginBottom: 0 }}>{a.summary.slice(0, 140)}</p>}</CardContent>
-        <CardFooter><span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>{a.avatar && <img src={a.avatar} alt="" width={20} height={20} className="atlas-avatar" style={{ objectFit: 'cover' }} />}{a.author} · {when(a.date)}</span></CardFooter>
+        <CardFooter><span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>{a.avatar && <img src={a.avatar} alt="" width={20} height={20} referrerPolicy="no-referrer" loading="lazy" onError={e => { e.currentTarget.style.display = 'none'; }} className="atlas-avatar" style={{ objectFit: 'cover' }} />}{a.author} · {when(a.date)}</span></CardFooter>
       </Card></div>)}
     {full && !a$.isLoading && !a$.failed && list.length > 0 && <Block style={{ textAlign: 'center' }}>
       {a$.more ? <Button round outline disabled={a$.loadingMore} onClick={() => a$.more?.()}>{a$.loadingMore ? 'Loading…' : 'More articles'}</Button>
@@ -60,15 +62,18 @@ export function MobileRecentArticles({ full = false }: { full?: boolean }) {
         {open && <Block>
           {open.image && <img src={open.image} alt="" style={{ width: '100%', borderRadius: 16 }} />}
           <h1 style={{ fontFamily: 'Instrument Serif, serif', fontWeight: 400, fontSize: 30, lineHeight: 1.15 }}>{open.title}</h1>
-          {open.authorUrl
+          {/* A verified "More from" row below stands in for the plain byline link when it is the same account. */}
+          {open.authorUrl && !open.authors?.some(a => a.acct.replace(/^@/, '').toLowerCase() === (open.handle ?? '').replace(/^@/, '').toLowerCase())
             ? <Link onClick={() => openFediProfile({ actor: open.authorUrl, acct: open.handle, name: open.author })} aria-label={`More from ${open.author}`} style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'inherit', margin: '4px 0 8px' }}>
-                {open.avatar && <img src={open.avatar} alt="" width={36} height={36} referrerPolicy="no-referrer" className="atlas-avatar" style={{ objectFit: 'cover' }} />}
+                {open.avatar && <img src={open.avatar} alt="" width={36} height={36} referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = 'none'; }} className="atlas-avatar" style={{ objectFit: 'cover' }} />}
                 <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}><b style={{ fontSize: 14 }}>{open.author}</b><span style={{ opacity: .6, fontSize: 12 }}>{open.handle}</span></span>
               </Link>
             : null}
           <p style={{ opacity: .6, fontSize: 12 }}>{open.authorUrl ? '' : `${open.handle ?? ''} · `}{when(open.date)} · ♥ {open.likes} · ↻ {open.boosts}</p>
+          {/* Its authors as Atlas verified them on the page it was published at (article-origins.server.ts). */}
+          {open.authors?.length ? <div className="atlas-article"><AuthorRows authors={open.authors} /></div> : null}
           {open.paragraphs.map((p, i) => <p key={i} style={{ lineHeight: 1.6 }}>{p}</p>)}
-          <Button fill round external target="_blank" href={open.url} style={{ marginTop: 16 }}>Open on Fedizen</Button>
+          <Button fill round external target="_blank" href={open.origin ?? open.url} style={{ marginTop: 16 }}>{open.origin ? `Open on ${hostOf(open.origin)}` : 'Open on Fedizen'}</Button>
         </Block>}
       </Page>
     </Popup>
@@ -202,7 +207,7 @@ export function MobilePublicFedizen() {
       : <FilterPlaceProvider place="public">{list.slice(0, 8).map(p => <MobileFilterGate key={p.id} post={p}><Card outline>
         <CardContent>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>{p.avatar && <img src={p.avatar} alt="" width={32} height={32} className="atlas-avatar" style={{ objectFit: 'cover' }} referrerPolicy="no-referrer" />}<span><b>{p.author}</b> <span style={{ opacity: .6 }}>{p.handle}</span></span></div>
-          <AuthorWarning cw={p.cw} phone><PostBody post={p} onTag={openTag} limit={5} pStyle={{ lineHeight: 1.5, overflowWrap: 'anywhere' }} />
+          <AuthorWarning cw={p.cw} article={p.longform} credits={foldCredits(p).length ? <div className="atlas-article"><AuthorRows authors={foldCredits(p)} /></div> : null} after={p.credits?.length ? <div className="atlas-article"><AuthorRows authors={p.credits} /></div> : null} phone><PostBody post={p} onTag={openTag} limit={5} pStyle={{ lineHeight: 1.5, overflowWrap: 'anywhere' }} />
           <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.image && <img src={p.image} alt="" loading="lazy" style={{ width: '100%', borderRadius: 12 }} referrerPolicy="no-referrer" />}</SensitiveMedia></AuthorWarning>
         </CardContent>
         <CardFooter><span style={{ fontSize: 12, opacity: .6 }}>{when(p.date)}</span><Link external target="_blank" href={p.url}>Open</Link></CardFooter>

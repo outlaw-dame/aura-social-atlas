@@ -79,6 +79,13 @@ export const HOME: FedizenPost[] = [
     by: 'ana', min: 4, mentions: [{ acct: PEOPLE.priya.acct, username: 'priya' }], counts: { replies: 2, boosts: 1, likes: 14 },
   }),
   ISS,
+  // A long-form article from another server (Inkwell, WordPress): its title and standfirst until it's opened.
+  post(['Why we still repair things', 'Most of what we throw away fails at one small part: a switch, a seam, a hinge. This is a short field guide to finding it.', 'Start with the part that moves. Hinges, switches and zips do the most work and wear first.', 'Then look at what joins: glue gives up before screws do, and stitching before the cloth it holds.'], {
+    by: 'studio', min: 40, counts: { replies: 2, boosts: 5, likes: 31 },
+    longform: { title: 'Why we still repair things', lede: 'A field guide to the one small part that fails first, and how to find it before you throw anything away.' },
+    // A writer the publication's page credits (feed-enrich.server.ts); her picture fails to load, so her initial shows.
+    credits: [{ name: 'Mara Quinn', acct: `@${PEOPLE.mara.acct}`, url: 'https://social.coop/@mara', avatar: 'https://broken.invalid/avatar.png', verifiedBy: 'fediverse-creator' }],
+  }),
   post('今夜の月。薄雲越しでも綺麗でした。#月 #astrophotography', { by: 'mika', min: 75, language: 'ja', ...img(space, 1200, 1200), alt: ['A crescent moon through thin cloud'], counts: { replies: 3, boosts: 12, likes: 96 } }),
   post('We repaired a 1960s lamp this week: new cloth flex, the original brass. The workshop notes are up. #design #repair', {
     by: 'studio', min: 96, counts: { replies: 4, boosts: 9, likes: 57 },

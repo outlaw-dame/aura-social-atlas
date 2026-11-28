@@ -27,11 +27,16 @@ export const AUTHOR_CW = 'Content warning from the author';
  * The author line and the post's actions stay outside it. Media marked sensitive stays veiled after the warning is
  * opened (SensitiveMedia), as on Mastodon, where a warning also marks the media sensitive.
  */
-export function AuthorWarning({ cw, phone = false, children }: { cw?: string; phone?: boolean; children: ReactNode }) {
+export function AuthorWarning({ cw, article, credits, after, phone = false, children }: {
+  cw?: string; /** A long-form article from another server (FedizenPost.longform). */ article?: { title: string; lede: string };
+  /** Its credited authors, shown with its title and standfirst (foldCredits), and those its body doesn't show (`after`). */
+  credits?: ReactNode; after?: ReactNode; phone?: boolean; children: ReactNode;
+}) {
   const { expandWarnings } = useReading();
   // Opened by default under "Always expand content warnings"; Hide still folds it.
   const [choice, setOpen] = useState<boolean | null>(null);
   const open = choice ?? expandWarnings;
+  if (article && !cw) return <ArticleFold article={article} credits={credits} open={open} onOpen={() => setOpen(true)} phone={phone}>{children}{after}</ArticleFold>;
   if (!cw) return <>{children}</>;
   if (!open) return <WarningPanel title={cw} detail={AUTHOR_CW} cta={phone ? 'Tap to view' : 'Show post'} onClick={() => setOpen(true)} phone={phone} />;
   return <>
@@ -40,4 +45,24 @@ export function AuthorWarning({ cw, phone = false, children }: { cw?: string; ph
       : <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><span className="min-w-0 flex-1 [overflow-wrap:anywhere]"><span className="font-semibold">Content warning:</span> {cw}</span><button type="button" onClick={() => setOpen(false)} className="shrink-0 font-medium hover:text-foreground">Hide</button></p>}
     {children}
   </>;
+}
+
+/**
+ * A long-form article from another server, as a reader opens one: its title and standfirst, then the whole article on
+ * Read. Its summary may be a standfirst or the author's warning (fedizen-feed.ts longformOf), so, like a warning, the
+ * body and media wait until it's opened; "Always expand content warnings" opens it too.
+ */
+function ArticleFold({ article, credits, open, onOpen, phone, children }: { article: { title: string; lede: string }; credits?: ReactNode; open: boolean; onOpen: () => void; phone: boolean; children: ReactNode }) {
+  if (open) return <>{children}</>;
+  if (phone) return <div className="atlas-article-fold">
+    <b>{article.title}</b><p>{article.lede}</p>
+    <button type="button" onClick={onOpen}>Read article</button>
+    {credits}
+  </div>;
+  return <div className="mt-3">
+    <p className="font-serif text-xl leading-snug [overflow-wrap:anywhere]">{article.title}</p>
+    <p className="mt-1 line-clamp-4 text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{article.lede}</p>
+    <button type="button" onClick={onOpen} className="mt-2 text-sm font-semibold text-accent hover:underline">Read article</button>
+    {credits}
+  </div>;
 }

@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { CIRCLE_NAME_MAX, CIRCLE_SUMMARY_MAX, circleReach } from '@/lib/fedizen-circles';
-import type { FedizenCircle, FedizenPost } from '@/lib/fedizen-feed';
-import { PostArticleCard } from './ArticleAuthors';
+import { foldCredits, type FedizenCircle, type FedizenPost } from '@/lib/fedizen-feed';
+import { AuthorCards, PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
 import { FilterGate } from './FilterGate';
 import { SensitiveMedia } from './SensitiveMedia';
@@ -44,7 +44,7 @@ function PostRow({ p, save }: { p: FedizenPost; save: ReturnType<typeof useSaveT
     <p className="flex items-center gap-2 text-xs">{canOpen(p)
       ? <ProfileHoverCard target={{ actor: p.actor, acct: p.acct, name: p.author }}><button type="button" className="atlas-author-button gap-2" onClick={() => openAuthor(p)} aria-label={`${p.author} ${p.handle}. Open their profile`}>{who}</button></ProfileHoverCard>
       : who}<span className="text-muted-foreground">{p.handle} · {when(p.date)}</span></p>
-    <AuthorWarning cw={p.cw}><div className="mt-3 space-y-2 text-sm leading-relaxed"><PostBody post={p} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} /></div>
+    <AuthorWarning cw={p.cw} article={p.longform} credits={<AuthorCards authors={foldCredits(p)} className="mt-3" />} after={<AuthorCards authors={p.credits} />}><div className="mt-3 space-y-2 text-sm leading-relaxed"><PostBody post={p} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} /></div>
     <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />}</SensitiveMedia>
     <PostArticleCard article={p.article} /></AuthorWarning>
     <div className="mt-2 flex items-center gap-2">

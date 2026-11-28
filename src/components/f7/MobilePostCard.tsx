@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { queueForIndex } from '@/components/social/useSemanticIndex';
 import { Card, CardContent, CardFooter, Link } from 'framework7-react';
-import type { FedizenPost } from '@/lib/fedizen-feed';
+import { foldCredits, type FedizenPost } from '@/lib/fedizen-feed';
 import { shortAgo, type ForYouReason } from '@/lib/feed-types';
 import { openCollection } from '@/lib/collections';
 import { openGroup } from '@/lib/groups';
@@ -14,7 +14,7 @@ import { useTagLine } from '@/components/social/useFeeds';
 import { VideoPlayer } from '@/components/social/VideoPlayer';
 import { useSaveToggle } from '@/components/social/useFedizenLibrary';
 import { useReactions } from '@/components/social/usePostActions';
-import { ArticleCard } from './ArticleAuthors';
+import { ArticleCard, AuthorRows } from './ArticleAuthors';
 import { MobilePostActions, ReplySheet } from './PostActions';
 import { Icon } from './F7Extras';
 import { MobileFilterGate } from './FilterGate';
@@ -82,7 +82,7 @@ export function MobilePostContent({ post: original }: { post: FedizenPost }) {
   const tr = usePostTranslation(original);
   const p = tr.shown;
   return <div ref={tr.ref} lang={tr.shownLang} className="atlas-post-content">
-      <AuthorWarning cw={p.cw} phone>
+      <AuthorWarning cw={p.cw} article={p.longform} credits={foldCredits(p).length ? <div className="atlas-article"><AuthorRows authors={foldCredits(p)} /></div> : null} after={p.credits?.length ? <div className="atlas-article"><AuthorRows authors={p.credits} /></div> : null} phone>
     <PostBody post={p} onTag={openTag} pClassName="atlas-post-text" />
     <TranslationLineView line={tr.line} onSettings={() => pushPage('/intelligence/')} className="is-phone" />
     <SensitiveMedia sensitive={p.sensitive} cta="Tap to view">{p.video ? <VideoPlayer video={p.video} /> : p.image && <img className="atlas-post-image" src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" {...(p.imageSize ? { width: p.imageSize.w, height: p.imageSize.h, style: { aspectRatio: `${p.imageSize.w} / ${p.imageSize.h}` } } : {})} />}</SensitiveMedia>

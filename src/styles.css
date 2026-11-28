@@ -733,6 +733,8 @@ html.atlas-rail .atlas-mini { left: calc(var(--f7-panel-width, 88px) + 8px); }
 .atlas-article-author b, .atlas-article-author small:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .atlas-article small { font-size: 11px; opacity: .6; }
 .atlas-article-author img { width: 36px; height: 36px; border-radius: var(--atlas-avatar-radius, 50%); object-fit: cover; flex: none; }
+/* The initial standing in for a missing or broken picture: the same size as the picture, not the stretching text column. */
+.atlas-article-author > .atlas-activity-initial { flex: none; width: 36px; height: 36px; display: grid; place-items: center; font-size: 16px; }
 .atlas-article > a > .icon { font-size: 16px; opacity: .5; }
 .atlas-article-note { margin: 0; font-size: 11px; opacity: .6; }
 .atlas-coll-link { display: flex; align-items: center; gap: 10px; width: 100%; margin: 10px 0 0; padding: 10px 12px; border: .5px solid var(--border); border-radius: 14px; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
@@ -772,6 +774,10 @@ html.atlas-rail .atlas-mini { left: calc(var(--f7-panel-width, 88px) + 8px); }
 .atlas-filter-warning:active { opacity: .7; }
 .atlas-filter-warning b { overflow-wrap: anywhere; }
 /* An author's content warning, once opened: the warning stays above what it covered, with Hide. */
+.atlas-article-fold { margin: 10px 0 0; }
+.atlas-article-fold > b { display: block; font-family: var(--font-serif); font-weight: 400; font-size: 22px; line-height: 1.25; overflow-wrap: anywhere; }
+.atlas-article-fold > p { margin: 6px 0 0; font-size: 15px; line-height: 1.45; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.atlas-article-fold > button { margin-top: 8px; width: auto; border: 0; background: none; padding: 0; font: inherit; font-size: 15px; font-weight: 600; color: var(--f7-theme-color); cursor: pointer; }
 .atlas-cw-open { display: flex; align-items: baseline; gap: 12px; margin: 12px 0 0; font-size: 13px; color: var(--f7-text-color-secondary, rgba(0,0,0,.55)); }
 .atlas-cw-open span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .atlas-cw-open button { flex: none; width: auto; border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--f7-theme-color); cursor: pointer; }

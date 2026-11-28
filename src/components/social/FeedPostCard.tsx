@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { queueForIndex } from './useSemanticIndex';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Globe2, Lock, Tag, AtSign } from 'lucide-react';
-import type { FedizenPost } from '@/lib/fedizen-feed';
+import { foldCredits, type FedizenPost } from '@/lib/fedizen-feed';
 import { shortAgo, type ForYouReason } from '@/lib/feed-types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -15,7 +15,7 @@ import { PollView } from './PollView';
 import { useIsDeleted, useIsMine } from './useOwnPosts';
 import { useTagLine } from './useFeeds';
 import { CollectionLinks } from './CollectionsDesktop';
-import { PostArticleCard } from './ArticleAuthors';
+import { AuthorCards, PostArticleCard } from './ArticleAuthors';
 import { VideoPlayer } from './VideoPlayer';
 import { useSaveToggle } from './useFedizenLibrary';
 import { FilterGate } from './FilterGate';
@@ -140,7 +140,7 @@ export function PostContent({ post: original, large = false }: { post: FedizenPo
   const tr = usePostTranslation(original);
   const p = tr.shown;
   return <div ref={tr.ref} lang={tr.shownLang} className="atlas-post-content">
-    <AuthorWarning cw={p.cw}>
+    <AuthorWarning cw={p.cw} article={p.longform} credits={<AuthorCards authors={foldCredits(p)} className="mt-3" />} after={<AuthorCards authors={p.credits} />}>
       <div className={cn('mt-3 space-y-2 leading-relaxed', large ? 'text-base' : 'text-sm')}><PostBody post={p} onTag={tag => void navigate({ to: '/tags/$tag', params: { tag } })} /></div>
       <TranslationLineView line={tr.line} onSettings={() => void navigate({ to: '/settings/intelligence' })} />
       <SensitiveMedia sensitive={p.sensitive}>{p.video ? <VideoPlayer video={p.video} /> : p.image && <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-3 max-h-80 w-full rounded-2xl bg-muted object-cover" {...reserve(p.imageSize)} />}</SensitiveMedia>
