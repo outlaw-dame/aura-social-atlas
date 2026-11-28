@@ -49,7 +49,7 @@ export function MobileRecentArticles({ full = false }: { full?: boolean }) {
       : list.map(a => <div key={a.id} role="button" tabIndex={0} onClick={() => setOpen(a)} onKeyDown={e => e.key === 'Enter' && setOpen(a)} style={{ cursor: 'pointer' }}><Card outline>
         {a.image && <img src={a.image} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }} />}
         <CardContent><div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22, lineHeight: 1.2 }}>{a.title}</div>{a.summary && <p style={{ opacity: .7, fontSize: 14, marginBottom: 0 }}>{a.summary.slice(0, 140)}</p>}</CardContent>
-        <CardFooter><span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>{a.avatar && <img src={a.avatar} alt="" width={20} height={20} className="atlas-avatar" style={{ objectFit: 'cover' }} />}{a.author} · {when(a.date)}</span></CardFooter>
+        <CardFooter><span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>{a.avatar && <img src={a.avatar} alt="" width={20} height={20} referrerPolicy="no-referrer" loading="lazy" onError={e => { e.currentTarget.style.display = 'none'; }} className="atlas-avatar" style={{ objectFit: 'cover' }} />}{a.author} · {when(a.date)}</span></CardFooter>
       </Card></div>)}
     {full && !a$.isLoading && !a$.failed && list.length > 0 && <Block style={{ textAlign: 'center' }}>
       {a$.more ? <Button round outline disabled={a$.loadingMore} onClick={() => a$.more?.()}>{a$.loadingMore ? 'Loading…' : 'More articles'}</Button>
@@ -65,7 +65,7 @@ export function MobileRecentArticles({ full = false }: { full?: boolean }) {
           {/* A verified "More from" row below stands in for the plain byline link when it is the same account. */}
           {open.authorUrl && !open.authors?.some(a => a.acct.replace(/^@/, '').toLowerCase() === (open.handle ?? '').replace(/^@/, '').toLowerCase())
             ? <Link onClick={() => openFediProfile({ actor: open.authorUrl, acct: open.handle, name: open.author })} aria-label={`More from ${open.author}`} style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'inherit', margin: '4px 0 8px' }}>
-                {open.avatar && <img src={open.avatar} alt="" width={36} height={36} referrerPolicy="no-referrer" className="atlas-avatar" style={{ objectFit: 'cover' }} />}
+                {open.avatar && <img src={open.avatar} alt="" width={36} height={36} referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = 'none'; }} className="atlas-avatar" style={{ objectFit: 'cover' }} />}
                 <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}><b style={{ fontSize: 14 }}>{open.author}</b><span style={{ opacity: .6, fontSize: 12 }}>{open.handle}</span></span>
               </Link>
             : null}
